@@ -1,0 +1,18 @@
+# trust-report: Verification result formatting
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-report"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+trust-convergence = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,27 @@
+# trust-crown: Neural network verification via gamma-crown
+#
+# Integrates the gamma-crown verification tool as a backend for neural network
+# property checking. Defines NN-specific property types (robustness, monotonicity,
+# Lipschitz) and implements VerificationBackend for router dispatch.
+#
+# The gamma-crown binary is detected at runtime; the crate compiles and runs
+# (returning Unknown results) even when gamma-crown is not installed.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-crown"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+trust-router = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

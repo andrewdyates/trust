@@ -1,0 +1,20 @@
+# trust-symex: Symbolic/concolic execution engine over MIR
+#
+# Provides symbolic state tracking, path constraint collection, and
+# exploration strategies for MIR-level verification. Converts path
+# constraints to trust-types Formula for z4 dispatch.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-symex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }

@@ -1,0 +1,31 @@
+# trust-backprop: Source rewriting engine for the prove-strengthen-backprop loop
+#
+# Takes proposals from trust-strengthen and applies them to source code:
+# inserting spec attributes, replacing unsafe arithmetic, adding runtime checks.
+# Part of Idea 3 from VISION.md.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-backprop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+trust-strengthen = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+syn = { workspace = true }
+tempfile = "3"
+thiserror = { workspace = true }
+
+[features]
+integration-tests = []
+

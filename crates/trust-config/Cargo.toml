@@ -1,0 +1,24 @@
+# trust-config: Configuration file parser for tRust verification
+#
+# Parses trust.toml files following Rust ecosystem conventions (like
+# clippy.toml, rustfmt.toml). Controls verification behavior per-project.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { path = "../trust-types" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = "3"

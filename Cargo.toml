@@ -1,0 +1,200 @@
+[workspace]
+resolver = "2"
+members = [
+# tidy-alphabetical-start
+  "compiler/rustc",
+  "src/build_helper",
+  "src/rustc-std-workspace/rustc-std-workspace-alloc",
+  "src/rustc-std-workspace/rustc-std-workspace-core",
+  "src/rustc-std-workspace/rustc-std-workspace-std",
+  "src/rustdoc-json-types",
+  "src/tools/build-manifest",
+  "src/tools/bump-stage0",
+  "src/tools/cargotest",
+  "src/tools/clippy",
+  "src/tools/clippy/clippy_dev",
+  "src/tools/collect-license-metadata",
+  "src/tools/compiletest",
+  "src/tools/coverage-dump",
+  "src/tools/features-status-dump",
+  "src/tools/generate-copyright",
+  "src/tools/generate-windows-sys",
+  "src/tools/html-checker",
+  "src/tools/jsondocck",
+  "src/tools/jsondoclint",
+  "src/tools/linkchecker",
+  "src/tools/lint-docs",
+  "src/tools/lld-wrapper",
+  "src/tools/llvm-bitcode-linker",
+  "src/tools/miri",
+  "src/tools/miri/cargo-miri",
+  "src/tools/miropt-test-tools",
+  "src/tools/opt-dist",
+  "src/tools/remote-test-client",
+  "src/tools/remote-test-server",
+  "src/tools/replace-version-placeholder",
+  "src/tools/run-make-support",
+  "src/tools/rust-installer",
+  "src/tools/rustdoc",
+  "src/tools/rustdoc-gui-test",
+  "src/tools/rustdoc-themes",
+  "src/tools/rustfmt",
+  "src/tools/test-float-parse",
+  "src/tools/tidy",
+  "src/tools/tier-check",
+  "src/tools/unicode-table-generator",
+  "src/tools/unstable-book-gen",
+  "src/tools/wasm-component-ld",
+  "src/tools/x",
+# tidy-alphabetical-end
+# tRust: verification pipeline crates (no rustc_private dependency)
+  "crates/trust-types",
+  "crates/trust-vcgen",
+  "crates/trust-router",
+  "crates/trust-report",
+  "crates/trust-config",
+  "crates/trust-cache",
+  "crates/trust-convergence",
+  "crates/trust-proof-cert",
+  "crates/trust-temporal",
+  "crates/trust-runtime",
+  "crates/trust-testgen",
+  "crates/trust-strengthen",
+  "crates/trust-debug",
+  "crates/trust-backprop",
+  "crates/trust-zani-lib",
+  "crates/trust-sunder-lib",
+  "crates/trust-llvm2-bridge",
+]
+
+exclude = [
+  "build",
+  "compiler/rustc_codegen_cranelift",
+  "compiler/rustc_codegen_gcc",
+  "src/bootstrap",
+  "tests/rustdoc-gui",
+  # HACK(eddyb) This hardcodes the fact that our CI uses `/checkout/obj`.
+  "obj",
+  # tRust: standalone workspace crates (need rustc_private/nightly)
+  "crates/trust-mir-extract",
+  "crates/trust-driver",  # deprecated standalone wrapper; kept for z4 backend
+  "crates/trust-lean5",
+]
+
+[profile.release.package.rustc_thread_pool]
+# The rustc fork of Rayon has deadlock detection code which intermittently
+# causes overflows in the CI (see https://github.com/rust-lang/rust/issues/90227)
+# so we turn overflow checks off for now.
+# FIXME: This workaround should be removed once #90227 is fixed.
+overflow-checks = false
+
+# These are very thin wrappers around executing lld with the right binary name.
+# Basically nothing within them can go wrong without having been explicitly logged anyway.
+# We ship these in every rustc tarball and even after compression they add up
+# to around 0.6MB of data every user needs to download (and 15MB on disk).
+[profile.release.package.lld-wrapper]
+debug = 0
+strip = true
+[profile.release.package.wasm-component-ld-wrapper]
+debug = 0
+strip = true
+
+# Bigint libraries are slow without optimization, speed up testing
+[profile.dev.package.test-float-parse]
+opt-level = 3
+
+# Speed up the binary as much as possible
+[profile.release.package.test-float-parse]
+opt-level = 3
+codegen-units = 1
+# FIXME: LTO cannot be enabled for binaries in a workspace
+# <https://github.com/rust-lang/cargo/issues/9330>
+# lto = true
+
+# If you want to use a crate with local modifications, you can set a path or git dependency here.
+# For git dependencies, also add your source to ALLOWED_SOURCES in src/tools/tidy/src/extdeps.rs.
+#[patch.crates-io]
+
+
+# tRust: workspace-level package metadata for verification pipeline crates
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["Andrew Yates <andrew@andrewdyates.com>"]
+
+# tRust: workspace-level dependencies shared by verification pipeline crates
+[workspace.dependencies]
+trust-types = { path = "crates/trust-types" }
+trust-cache = { path = "crates/trust-cache" }
+trust-vcgen = { path = "crates/trust-vcgen" }
+trust-router = { path = "crates/trust-router" }
+trust-report = { path = "crates/trust-report" }
+trust-temporal = { path = "crates/trust-temporal" }
+trust-convergence = { path = "crates/trust-convergence" }
+trust-proof-cert = { path = "crates/trust-proof-cert" }
+trust-config = { path = "crates/trust-config" }
+trust-runtime = { path = "crates/trust-runtime" }
+trust-testgen = { path = "crates/trust-testgen" }
+trust-strengthen = { path = "crates/trust-strengthen" }
+trust-cegar = { path = "crates/trust-cegar" }
+trust-debug = { path = "crates/trust-debug" }
+trust-symex = { path = "crates/trust-symex" }
+trust-mir-extract = { path = "crates/trust-mir-extract" }
+trust-lift = { path = "crates/trust-lift" }
+trust-binary-parse = { path = "crates/trust-binary-parse" }
+trust-disasm = { path = "crates/trust-disasm" }
+trust-machine-sem = { path = "crates/trust-machine-sem" }
+trust-type-recover = { path = "crates/trust-type-recover" }
+trust-decompile = { path = "crates/trust-decompile" }
+trust-backprop = { path = "crates/trust-backprop" }
+trust-zani-lib = { path = "crates/trust-zani-lib" }
+trust-sunder-lib = { path = "crates/trust-sunder-lib" }
+trust-loop = { path = "crates/trust-loop" }
+trust-lean5 = { path = "crates/trust-lean5" }
+trust-transval = { path = "crates/trust-transval" }
+trust-crown = { path = "crates/trust-crown" }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+syn = { version = "2", features = ["full", "visit", "extra-traits"] }
+rayon = "1.10"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+# tRust #837: Deterministic hashing for compilation reproducibility
+rustc-hash = "2.0.0"
+indexmap = "2.7"
+hmac = "0.12"
+toml = "0.8"
+num-bigint = "0.4"
+bincode = "1.3"
+proptest = "1.11"
+ed25519-dalek = { version = "2", features = ["serde", "rand_core"] }
+rand = "0.8"
+reqwest = { version = "0.12", features = ["json", "blocking"], default-features = false }
+# tRust: lean5 proof kernel for Lean5 backend
+lean5-kernel = { git = "https://github.com/andrewdyates/lean5" }
+# tRust: tla2 model-checking core for temporal verification backend
+tla-mc-core = { git = "https://github.com/andrewdyates/tla2" }
+# tRust: z4 SMT solver for verification backends
+# URL must NOT have .git suffix — zani uses bare URL, Cargo treats z4.git vs z4 as different sources.
+z4 = { git = "https://github.com/andrewdyates/z4" }
+# tRust: z4-bindings typed builder API for direct z4 integration
+z4-bindings = { git = "https://github.com/andrewdyates/z4" }
+# tRust: zani bounded model checker
+zani-verifier = { git = "https://github.com/andrewdyates/zani" }
+# tRust: zani_core VC IR for direct BMC/CHC integration
+zani_core = { git = "https://github.com/andrewdyates/zani" }
+# tRust: sunder deductive verification
+sunder-core = { git = "https://github.com/andrewdyates/sunder" }
+sunder-z4 = { git = "https://github.com/andrewdyates/sunder" }
+# tRust: certus ownership-aware verification
+certus-core = { git = "https://github.com/andrewdyates/certus" }
+# tRust #815: LLVM2 verified codegen backend
+# URL must NOT have .git suffix — Cargo treats them as different sources.
+llvm2-ir = { git = "https://github.com/andrewdyates/LLVM2" }
+llvm2-lower = { git = "https://github.com/andrewdyates/LLVM2" }
+llvm2-verify = { git = "https://github.com/andrewdyates/LLVM2" }
+llvm2-codegen = { git = "https://github.com/andrewdyates/LLVM2" }
+trust-llvm2-bridge = { path = "crates/trust-llvm2-bridge" }

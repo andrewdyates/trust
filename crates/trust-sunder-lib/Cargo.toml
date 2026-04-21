@@ -1,0 +1,33 @@
+# trust-sunder-lib: Library facade for sunder deductive verifier
+#
+# Exposes sunder's deductive verification as a library API callable from tRust's
+# verification pass. Phase 1 of Pipeline v2 (designs/2026-04-14-verification-pipeline-v2.md).
+#
+# Defines standalone types mirroring sunder's API (ContractSet, SunderResult,
+# LoopInvariant) and a SunderBackend trait. The initial CliBackend delegates to
+# the sunder subprocess; the trust-build feature will enable direct TyCtxt integration.
+#
+# Does NOT depend on sunder-core (which requires nightly #![feature(box_patterns)]).
+# Instead, defines its own types and bridges to trust-types for the router.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-sunder-lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# tRust #790: trust-build enables compilation against local rustc source tree.
+# When enabled, verify_with_contracts accepts TyCtxt + DefId directly (in-process).
+# When disabled (default), falls back to subprocess invocation via sunder CLI.
+trust-build = []
+
+[dependencies]
+trust-types = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

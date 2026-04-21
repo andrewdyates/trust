@@ -1,0 +1,24 @@
+# trust-debug: Binary black-box violation finder
+#
+# Takes compiled binaries as black boxes, lifts them to our verification IR,
+# runs all dMATH/dLANG tools to find security violations, and maps them back
+# to source. Completes the prove-strengthen-backprop loop backwards.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-debug"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+trust-vcgen = { workspace = true }
+trust-router = { workspace = true }
+trust-strengthen = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

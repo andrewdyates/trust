@@ -1,0 +1,26 @@
+# trust-lsp: LSP server for tRust verification diagnostics
+#
+# Provides real-time verification feedback in VS Code / Neovim via the
+# Language Server Protocol. Converts tRust verification results into
+# LSP Diagnostic messages.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "trust-lsp"
+path = "src/main.rs"
+
+[dependencies]
+trust-types = { workspace = true }
+trust-report = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

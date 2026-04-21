@@ -1,0 +1,22 @@
+# trust-machine-sem: ISA semantics formalization
+#
+# Maps decoded instructions to their logical effects on machine state.
+# Used by translation validation to verify compiled output matches source
+# semantics.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-machine-sem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+trust-disasm = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

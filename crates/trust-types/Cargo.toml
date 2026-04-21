@@ -1,0 +1,36 @@
+# trust-types: Verification IR for the tRust compiler
+#
+# Defines the data structures the entire verification pipeline operates on.
+# Decoupled from rustc internals — only trust-mir-extract touches rustc types.
+# Everything downstream (vcgen, router, report) operates on these types.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+test-utils = []
+# tRust #632: sunder-core PureExpr conversion bridge for native sunder integration.
+sunder-bridge = ["dep:sunder-core"]
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+# tRust #837: Deterministic hashing for compilation reproducibility
+rustc-hash = { workspace = true }
+indexmap = { workspace = true }
+# tRust #571: z4-bindings for Formula→Expr conversion bridge
+z4-bindings = { workspace = true }
+# tRust #632: sunder-core for Formula→PureExpr bridge (optional, behind sunder-bridge feature)
+sunder-core = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

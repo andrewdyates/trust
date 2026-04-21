@@ -1,0 +1,66 @@
+# trust-router: VC dispatch to verification backends
+#
+# The Router dispatches VCs to backends implementing VerificationBackend.
+# This crate provides the core routing logic and MockBackend. The Z4Backend
+# lives in trust-driver (separate workspace) to avoid dependency conflicts
+# with compiler-pinned crate versions.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-router"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# tRust #801: Pipeline v2 enabled by default — MIR-level router is the default code path.
+default = ["pipeline-v2"]
+# tRust #420: z4-backend gates the native z4 SMT backend module.
+# Disabled by default because z4's transitive deps (stacker, cc) conflict
+# with compiler-pinned versions in the main workspace. Enable when building
+# standalone or after dependency conflicts are resolved.
+z4-backend = ["dep:z4", "dep:num-bigint"]
+# tRust #798: z4-direct, sunder, sunder-direct features removed — Pipeline v2.
+zani-backend = ["dep:zani-verifier"]
+sunder-backend = ["dep:sunder-core"]
+certus-backend = ["dep:certus-core"]
+# tRust #798: sunder kept as no-op for trust-strengthen backward compat.
+sunder = []
+# tRust #791: Pipeline v2 enables MIR-level router dispatching functions to
+# zani-lib (BMC) and sunder-lib (deductive) before VC generation.
+pipeline-v2 = []
+
+[dependencies]
+trust-types = { workspace = true }
+trust-temporal = { workspace = true }
+trust-symex = { workspace = true }
+trust-cegar = { workspace = true }
+trust-cache = { workspace = true }
+trust-zani-lib = { workspace = true }
+trust-sunder-lib = { workspace = true }
+tla-mc-core = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rayon = { workspace = true }
+sha2 = { workspace = true }
+
+# tRust #420: Optional z4 dependency for the z4-backend feature.
+z4 = { workspace = true, optional = true }
+num-bigint = { workspace = true, optional = true }
+
+# tRust #442: Optional dMATH solver backends
+# tRust #798: z4-bindings, zani_core, sunder-z4 removed — Pipeline v2.
+zani-verifier = { workspace = true, optional = true }
+sunder-core = { workspace = true, optional = true }
+certus-core = { workspace = true, optional = true }
+
+[dev-dependencies]
+toml = { workspace = true }
+trust-config = { workspace = true }
+trust-proof-cert = { workspace = true }
+trust-vcgen = { workspace = true }
+trust-report = { workspace = true }

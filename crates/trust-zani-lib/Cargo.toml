@@ -1,0 +1,32 @@
+# trust-zani-lib: Library facade for zani bounded model checker
+#
+# Exposes zani's core MIR analysis as a library API callable from tRust's
+# verification pass. Phase 1 of Pipeline v2 (designs/2026-04-14-verification-pipeline-v2.md).
+#
+# Re-exports zani_core types (BmcVc, ChcVc, Violation, PropertyKind) and defines
+# the high-level verify_function / encode_function API. The initial implementation
+# delegates to subprocess; the trust-build feature will enable direct TyCtxt integration.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-zani-lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# tRust #789: trust-build enables compilation against local rustc source tree.
+# When enabled, verify_function accepts TyCtxt + DefId directly (in-process).
+# When disabled (default), falls back to subprocess invocation via zani CLI.
+trust-build = []
+
+[dependencies]
+trust-types = { workspace = true }
+zani_core = { workspace = true }
+z4-bindings = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

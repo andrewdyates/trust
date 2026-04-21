@@ -1,0 +1,23 @@
+# trust-cegar: Counterexample-guided abstraction refinement for tRust
+#
+# Ports CPAchecker's CEGAR approach: predicate abstraction, Craig interpolation,
+# and lazy refinement. Starts with coarse abstraction, uses z4 to find spurious
+# counterexamples, and refines predicates along counterexample paths.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-cegar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

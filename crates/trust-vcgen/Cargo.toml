@@ -1,0 +1,34 @@
+# trust-vcgen: Verification condition generation for tRust
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-vcgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# tRust #801: Pipeline v2 enabled by default — old Tier 2 modules excluded.
+default = ["pipeline-v2"]
+# tRust #792: Pipeline v2 feature-gates redundant Tier 2 modules whose
+# functionality has migrated to trust-zani-lib / trust-sunder-lib.
+pipeline-v2 = []
+
+[dependencies]
+trust-types = { workspace = true }
+# tRust #513: Binary verification bridge — lift adapter converts LiftedFunction to VCs.
+trust-lift = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# tRust #699: Parallel VC generation for independent basic blocks.
+rayon = { workspace = true }
+
+[dev-dependencies]
+trust-router = { workspace = true }
+trust-report = { workspace = true }
+# tRust #475: Property-based testing for Formula simplification correctness.
+proptest = { workspace = true }

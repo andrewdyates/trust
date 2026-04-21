@@ -1,0 +1,31 @@
+# cargo-trust: Cargo subcommand for tRust verification
+#
+# Usage: cargo trust check [options] [-- <rustc args>]
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: MIT OR Apache-2.0
+
+[workspace]
+
+[package]
+name = "cargo-trust"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Andrew Yates <andrew@andrewdyates.com>"]
+
+[[bin]]
+name = "cargo-trust"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+trust-backprop = { path = "../crates/trust-backprop" }
+trust-cache = { path = "../crates/trust-cache" }
+trust-driver = { path = "../crates/trust-driver" }
+trust-strengthen = { path = "../crates/trust-strengthen" }
+trust-report = { path = "../crates/trust-report" }
+trust-types = { path = "../crates/trust-types" }

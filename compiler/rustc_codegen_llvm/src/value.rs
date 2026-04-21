@@ -1,0 +1,30 @@
+use std::hash::{Hash, Hasher};
+use std::{fmt, ptr};
+
+use crate::llvm::{self, Value};
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self, other)
+    }
+}
+
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        (self as *const Self).hash(hasher);
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(
+            // SAFETY: The output function pointer is valid, and the LLVM value/type being printed is a valid reference.
+            &llvm::build_string(|s| unsafe {
+                llvm::LLVMRustWriteValueToString(self, s);
+            })
+            .expect("non-UTF8 value description from LLVM"),
+        )
+    }
+}

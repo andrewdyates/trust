@@ -1,0 +1,43 @@
+# trust-integration-tests: Cross-crate integration tests for the verification pipeline
+#
+# Exercises the full pipeline: vcgen -> router -> report, plus cache and CEGAR.
+# Test-only crate — not included in workspace default-members.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-integration-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# This crate has no library code — only integration tests.
+[lib]
+name = "trust_integration_tests"
+path = "src/lib.rs"
+
+[dependencies]
+trust-types = { workspace = true }
+trust-vcgen = { workspace = true }
+trust-router = { workspace = true }
+trust-report = { workspace = true }
+trust-cache = { workspace = true }
+trust-cegar = { workspace = true }
+trust-symex = { workspace = true }
+trust-strengthen = { workspace = true }
+trust-backprop = { workspace = true }
+trust-convergence = { workspace = true }
+trust-loop = { workspace = true }
+trust-lift = { workspace = true, features = ["elf"] }
+trust-decompile = { workspace = true }
+trust-disasm = { workspace = true }
+trust-binary-parse = { workspace = true }
+trust-type-recover = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = ["pipeline-v2"]
+pipeline-v2 = ["trust-router/pipeline-v2"]
+z4-backend = []

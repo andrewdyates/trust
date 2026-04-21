@@ -1,0 +1,38 @@
+# trust-lift: Proof-producing binary lifter
+#
+# Lifts binary code into tMIR functions with CFG recovery and SSA construction.
+# Each lifted statement links back to its binary offset for proof annotation.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-lift"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# Enable Mach-O binary loading via trust-binary-parse.
+# Disabled by default because trust-binary-parse has pre-existing compile issues.
+macho = ["dep:trust-binary-parse"]
+# Enable ELF binary loading via trust-binary-parse.
+elf = ["dep:trust-binary-parse"]
+# Enable z4 solver integration for verification of lifted code.
+z4-verify = ["dep:z4"]
+
+[dependencies]
+trust-binary-parse = { workspace = true, optional = true }
+trust-disasm = { workspace = true }
+trust-machine-sem = { workspace = true }
+trust-types = { workspace = true }
+thiserror = { workspace = true }
+z4 = { workspace = true, optional = true }
+
+[dev-dependencies]
+trust-decompile = { workspace = true }
+
+[[example]]
+name = "reverse_compile_poc"
+required-features = ["macho", "z4-verify"]

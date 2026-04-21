@@ -1,0 +1,30 @@
+# trust-lean5: Certificate pipeline for lean5 proof verification
+#
+# Bridges tRust verification conditions to lean5 proof certificates.
+# Provides canonical VC serialization, fingerprinting, and certificate
+# generation/verification stubs for the lean5 kernel integration.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-lean5"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+trust-types = { workspace = true }
+trust-proof-cert = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+lean5-kernel = { workspace = true }
+sha2 = { workspace = true }
+
+[features]
+lean5-integration = []
+
+[dev-dependencies]
