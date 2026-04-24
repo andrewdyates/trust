@@ -88,7 +88,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return;
         }
 
-        // NOTE(#73154): For now, we do leak check when coercing function
+        // FIXME(#73154): For now, we do leak check when coercing function
         // pointers in typeck, instead of only during borrowck. This can lead
         // to these `RegionsInsufficientlyPolymorphic` errors that aren't helpful.
         if matches!(error, Some(TypeError::RegionsInsufficientlyPolymorphic(..))) {
@@ -348,7 +348,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         ty::IntVar(_) => self.next_int_var(),
                         ty::FloatVar(_) => self.next_float_var(),
                         ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_) => {
-                            // tRust: invariant — fresh inference types are created only inside the trait solver and must not appear in this local fudging pass
                             bug!("unexpected fresh ty outside of the trait solver")
                         }
                     }
@@ -525,7 +524,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // blame arg, if possible. Don't do this if we're coming from
                     // arg mismatch code, because we'll possibly suggest a mutually
                     // incompatible fix at the original mismatch site.
-                    // tRust: known issue — We don't actually consider the implications (upstream HACK by compiler-errors)
+                    // HACK(compiler-errors): We don't actually consider the implications
                     // of our inference guesses in `emit_type_mismatch_suggestions`, so
                     // only suggest things when we know our type error is precisely due to
                     // a type mismatch, and not via some projection or something. See #116155.
@@ -1086,12 +1085,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // This special internal attribute is used to permit
                 // "identity-like" conversion methods to be suggested here.
                 //
-                // NOTE(#46459, #46460): ideally
+                // FIXME (#46459 and #46460): ideally
                 // `std::convert::Into::into` and `std::borrow:ToOwned` would
                 // also be `#[rustc_conversion_suggestion]`, if not for
                 // method-probing false-positives and -negatives (respectively).
                 //
-                // NOTE: Other potential candidate methods: `as_ref` and
+                // FIXME? Other potential candidate methods: `as_ref` and
                 // `as_mut`?
                 && find_attr!(self.tcx, m.def_id, RustcConversionSuggestion)
             },
@@ -1213,7 +1212,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                    callable: Ident,
                                    args: &[hir::Expr<'_>],
                                    kind: CallableKind| {
-            let arg_idx = args.iter().position(|a| a.hir_id == expr.hir_id).expect("invariant: element exists in collection");
+            let arg_idx = args.iter().position(|a| a.hir_id == expr.hir_id).unwrap();
             let fn_ty = self.tcx.type_of(def_id).skip_binder();
             if !fn_ty.is_fn() {
                 return;
@@ -1269,7 +1268,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else {
                     CallableKind::Function
                 };
-                maybe_emit_help(def_id, path.segments.last().expect("invariant: non-empty collection").ident, args, callable_kind);
+                maybe_emit_help(def_id, path.segments.last().unwrap().ident, args, callable_kind);
             }
             hir::ExprKind::MethodCall(method, _receiver, args, _span) => {
                 let Some(def_id) =

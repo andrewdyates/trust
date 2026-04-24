@@ -273,26 +273,76 @@ pub enum TrustAnnotationKind {
     Assumption,
 }
 
+// tRust: #828 — function signatures need structural hashing through nested types.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FnSig {
+    pub params: Vec<Ty>,
+    pub ret: Box<Ty>,
+}
+
 /// Simplified type representation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// tRust: #828 — MIR function-like types require `Ty` to participate in hashing.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum Ty {
     Bool,
-    Int { width: u32, signed: bool },
-    Float { width: u32 },
-    Ref { mutable: bool, inner: Box<Ty> },
+    Int {
+        width: u32,
+        signed: bool,
+    },
+    Float {
+        width: u32,
+    },
+    Ref {
+        mutable: bool,
+        inner: Box<Ty>,
+    },
     // tRust #432: Raw pointer type for provenance-aware pointer modeling.
     // Distinguishes `*const T` (mutable=false) from `*mut T` (mutable=true).
-    RawPtr { mutable: bool, pointee: Box<Ty> },
-    Slice { elem: Box<Ty> },
-    Array { elem: Box<Ty>, len: u64 },
+    RawPtr {
+        mutable: bool,
+        pointee: Box<Ty>,
+    },
+    Slice {
+        elem: Box<Ty>,
+    },
+    Array {
+        elem: Box<Ty>,
+        len: u64,
+    },
     Tuple(Vec<Ty>),
-    Adt { name: String, fields: Vec<(String, Ty)> },
+    Adt {
+        name: String,
+        fields: Vec<(String, Ty)>,
+    },
     /// Machine bitvector of given width (for binary-lifted code before type recovery).
     // tRust: #575 — return type analysis produces Bv(32) / Bv(64) for machine registers.
     Bv(u32),
     Unit,
     Never,
+    // tRust: #828 — preserve closure captures for full MIR type coverage.
+    Closure {
+        name: String,
+        upvars: Vec<Ty>,
+    },
+    // tRust: #828 — model named function items with their signature.
+    FnDef {
+        name: String,
+        sig: Box<FnSig>,
+    },
+    // tRust: #828 — model first-class function pointer types.
+    FnPtr {
+        sig: Box<FnSig>,
+    },
+    // tRust: #828 — represent trait objects as dynamic dispatch types.
+    Dynamic {
+        trait_name: String,
+    },
+    // tRust: #828 — preserve coroutine captures for full MIR type coverage.
+    Coroutine {
+        name: String,
+        upvars: Vec<Ty>,
+    },
 }
 
 impl Ty {
@@ -322,6 +372,26 @@ impl Ty {
     /// Returns true if this is a raw pointer type.
     pub fn is_raw_ptr(&self) -> bool {
         matches!(self, Ty::RawPtr { .. })
+    }
+
+    // tRust: #828 — identify closure types emitted by MIR lowering.
+    pub fn is_closure(&self) -> bool {
+        matches!(self, Ty::Closure { .. })
+    }
+
+    // tRust: #828 — treat function items and function pointers as callable pointer-like types.
+    pub fn is_fn_ptr(&self) -> bool {
+        matches!(self, Ty::FnPtr { .. } | Ty::FnDef { .. })
+    }
+
+    // tRust: #828 — detect trait object types for dynamic dispatch handling.
+    pub fn is_dynamic(&self) -> bool {
+        matches!(self, Ty::Dynamic { .. })
+    }
+
+    // tRust: #828 — identify coroutine types emitted by async/generator lowering.
+    pub fn is_coroutine(&self) -> bool {
+        matches!(self, Ty::Coroutine { .. })
     }
 
     /// Returns true if this is any pointer-like type (Ref or RawPtr).
@@ -463,6 +533,34 @@ pub enum Statement {
         rvalue: Rvalue,
         span: SourceSpan, // tRust: per-statement source location for diagnostics
     },
+    // tRust: #828 — track local storage lifetime boundaries from MIR.
+    StorageLive(usize),
+    // tRust: #828 — track local storage lifetime boundaries from MIR.
+    StorageDead(usize),
+    // tRust: #828 — represent discriminant writes on enum places.
+    SetDiscriminant {
+        place: Place,
+        variant_index: usize,
+    },
+    // tRust: #828 — model deinitialization effects in MIR.
+    Deinit {
+        place: Place,
+    },
+    // tRust: #828 — preserve Stacked Borrows retag statements.
+    Retag {
+        place: Place,
+    },
+    // tRust: #828 — preserve place mentions emitted as no-op statements.
+    PlaceMention(Place),
+    // tRust: #828 — support non-diverging intrinsic calls as statements.
+    Intrinsic {
+        name: String,
+        args: Vec<Operand>,
+    },
+    // tRust: #828 — carry coverage instrumentation without semantic effect.
+    Coverage,
+    // tRust: #828 — carry const-eval step counters without semantic effect.
+    ConstEvalCounter,
     Nop,
 }
 
@@ -491,9 +589,16 @@ pub enum Projection {
     Deref,
     Downcast(usize),
     /// Constant-offset indexing into a slice/array (e.g., `[2 from end]`).
-    ConstantIndex { offset: usize, from_end: bool },
+    ConstantIndex {
+        offset: usize,
+        from_end: bool,
+    },
     /// Subslice projection (e.g., `[2..5]` or `[2..-3]`).
-    Subslice { from: usize, to: usize, from_end: bool },
+    Subslice {
+        from: usize,
+        to: usize,
+        from_end: bool,
+    },
 }
 
 /// An operand — either a local or a constant.
@@ -528,7 +633,10 @@ pub enum Rvalue {
     BinaryOp(BinOp, Operand, Operand),
     CheckedBinaryOp(BinOp, Operand, Operand),
     UnaryOp(UnOp, Operand),
-    Ref { mutable: bool, place: Place },
+    Ref {
+        mutable: bool,
+        place: Place,
+    },
     Cast(Operand, Ty),
     Aggregate(AggregateKind, Vec<Operand>),
     Discriminant(Place),
@@ -595,6 +703,14 @@ pub enum AggregateKind {
     Tuple,
     Array,
     Adt { name: String, variant: usize },
+    // tRust: #828 — closure aggregates materialize captured environment state.
+    Closure { name: String },
+    // tRust: #828 — coroutine aggregates materialize generator state.
+    Coroutine { name: String },
+    // tRust: #828 — async closure aggregates have distinct MIR shape.
+    CoroutineClosure { name: String },
+    // tRust: #828 — raw pointer aggregates combine data pointer and metadata.
+    RawPtr { pointee_ty: Ty, mutable: bool },
 }
 
 /// Atomic memory ordering, following the C11/Rust memory model.
@@ -709,9 +825,9 @@ impl AtomicOrdering {
             (Acquire, Relaxed) | (Relaxed, Acquire) => Acquire,
             (Release, Relaxed) | (Relaxed, Release) => Release,
             // Remaining self==other cases handled above
-            _ => unreachable!(
-                "AtomicOrdering::join covers all unequal pairs in the current lattice"
-            ),
+            _ => {
+                unreachable!("AtomicOrdering::join covers all unequal pairs in the current lattice")
+            }
         }
     }
 
@@ -729,9 +845,9 @@ impl AtomicOrdering {
             // Acquire meet Release = Relaxed (they are incomparable)
             (Acquire, Release) | (Release, Acquire) => Relaxed,
             // Remaining self==other cases handled above
-            _ => unreachable!(
-                "AtomicOrdering::meet covers all unequal pairs in the current lattice"
-            ),
+            _ => {
+                unreachable!("AtomicOrdering::meet covers all unequal pairs in the current lattice")
+            }
         }
     }
 }
@@ -1945,10 +2061,17 @@ mod tests {
     #[test]
     fn test_atomic_rmw_op_serialization_roundtrip() {
         let ops = vec![
-            AtomicRmwOp::Xchg, AtomicRmwOp::Add, AtomicRmwOp::Sub,
-            AtomicRmwOp::And, AtomicRmwOp::Or, AtomicRmwOp::Xor,
-            AtomicRmwOp::Nand, AtomicRmwOp::Min, AtomicRmwOp::Max,
-            AtomicRmwOp::UMin, AtomicRmwOp::UMax,
+            AtomicRmwOp::Xchg,
+            AtomicRmwOp::Add,
+            AtomicRmwOp::Sub,
+            AtomicRmwOp::And,
+            AtomicRmwOp::Or,
+            AtomicRmwOp::Xor,
+            AtomicRmwOp::Nand,
+            AtomicRmwOp::Min,
+            AtomicRmwOp::Max,
+            AtomicRmwOp::UMin,
+            AtomicRmwOp::UMax,
         ];
         let json = serde_json::to_string(&ops).expect("serialize");
         let round: Vec<AtomicRmwOp> = serde_json::from_str(&json).expect("deserialize");

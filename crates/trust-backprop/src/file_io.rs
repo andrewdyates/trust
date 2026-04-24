@@ -7,11 +7,11 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::io::Write;
 use std::path::Path;
+use trust_types::fx::FxHashMap;
 
-use crate::proposal_converter::{convert_proposal, ConvertError};
+use crate::proposal_converter::{ConvertError, convert_proposal};
 use crate::rewriter::{RewriteEngine, RewriteError};
 use crate::{RewritePlan, SourceRewrite};
 use trust_strengthen::Proposal;
@@ -22,10 +22,7 @@ use trust_strengthen::Proposal;
 pub enum FileRewriteError {
     /// An I/O error reading or writing a file.
     #[error("I/O error on `{path}`: {source}")]
-    Io {
-        path: String,
-        source: std::io::Error,
-    },
+    Io { path: String, source: std::io::Error },
     /// A proposal conversion error (function not found, etc.).
     #[error(transparent)]
     Convert(#[from] ConvertError),
@@ -54,10 +51,8 @@ pub struct FileRewriteResult {
 /// Returns `FileRewriteError::Io` if the file cannot be read.
 pub fn read_source(path: impl AsRef<Path>) -> Result<String, FileRewriteError> {
     let path_ref = path.as_ref();
-    std::fs::read_to_string(path_ref).map_err(|e| FileRewriteError::Io {
-        path: path_ref.display().to_string(),
-        source: e,
-    })
+    std::fs::read_to_string(path_ref)
+        .map_err(|e| FileRewriteError::Io { path: path_ref.display().to_string(), source: e })
 }
 
 /// Write modified source back to disk atomically.
@@ -75,28 +70,20 @@ pub fn write_source(path: impl AsRef<Path>, content: &str) -> Result<(), FileRew
     let parent = path_ref.parent().unwrap_or(Path::new("."));
 
     // Create temp file in the same directory to ensure same-filesystem rename.
-    let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| FileRewriteError::Io {
-        path: path_ref.display().to_string(),
-        source: e,
-    })?;
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| FileRewriteError::Io { path: path_ref.display().to_string(), source: e })?;
 
     tmp.write_all(content.as_bytes())
-        .map_err(|e| FileRewriteError::Io {
-            path: path_ref.display().to_string(),
-            source: e,
-        })?;
+        .map_err(|e| FileRewriteError::Io { path: path_ref.display().to_string(), source: e })?;
 
-    tmp.flush().map_err(|e| FileRewriteError::Io {
-        path: path_ref.display().to_string(),
-        source: e,
-    })?;
+    tmp.flush()
+        .map_err(|e| FileRewriteError::Io { path: path_ref.display().to_string(), source: e })?;
 
     // Atomic rename into the target path.
-    tmp.persist(path_ref)
-        .map_err(|e| FileRewriteError::Io {
-            path: path_ref.display().to_string(),
-            source: e.error,
-        })?;
+    tmp.persist(path_ref).map_err(|e| FileRewriteError::Io {
+        path: path_ref.display().to_string(),
+        source: e.error,
+    })?;
 
     Ok(())
 }
@@ -159,10 +146,7 @@ pub fn apply_plan_to_files(plan: &RewritePlan) -> Result<Vec<FileRewriteResult>,
     // Group rewrites by file
     let mut by_file: FxHashMap<&str, Vec<&SourceRewrite>> = FxHashMap::default();
     for rewrite in &plan.rewrites {
-        by_file
-            .entry(rewrite.file_path.as_str())
-            .or_default()
-            .push(rewrite);
+        by_file.entry(rewrite.file_path.as_str()).or_default().push(rewrite);
     }
 
     let mut results = Vec::new();
@@ -197,10 +181,7 @@ pub fn apply_plan_to_files(plan: &RewritePlan) -> Result<Vec<FileRewriteResult>,
 /// # Errors
 ///
 /// Returns `RewriteError` on rewrite failures (wrapped in `FileRewriteError`).
-pub fn apply_plan_to_source(
-    source: &str,
-    plan: &RewritePlan,
-) -> Result<String, FileRewriteError> {
+pub fn apply_plan_to_source(source: &str, plan: &RewritePlan) -> Result<String, FileRewriteError> {
     let engine = RewriteEngine::new();
     Ok(engine.apply_plan_to_source(source, plan)?)
 }
@@ -210,18 +191,20 @@ mod tests {
     use super::*;
     use crate::{RewriteKind, SourceRewrite};
 
+    /// Create a unique, isolated temp directory for a test.
+    /// Returns a `TempDir` that auto-cleans on drop -- no manual cleanup needed.
+    fn isolated_temp_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("failed to create isolated temp dir")
+    }
+
     #[test]
     fn test_read_source_success() {
-        let dir = std::env::temp_dir().join("trust_backprop_test_read");
-        std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("test_read.rs");
+        let dir = isolated_temp_dir();
+        let file = dir.path().join("test_read.rs");
         std::fs::write(&file, "fn main() {}\n").unwrap();
 
         let content = read_source(&file).unwrap();
         assert_eq!(content, "fn main() {}\n");
-
-        std::fs::remove_file(&file).unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -233,40 +216,28 @@ mod tests {
 
     #[test]
     fn test_write_source_success() {
-        let dir = std::env::temp_dir().join("trust_backprop_test_write");
-        std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("test_write.rs");
+        let dir = isolated_temp_dir();
+        let file = dir.path().join("test_write.rs");
 
         write_source(&file, "fn modified() {}\n").unwrap();
 
         let content = std::fs::read_to_string(&file).unwrap();
         assert_eq!(content, "fn modified() {}\n");
-
-        std::fs::remove_file(&file).unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn test_write_source_creates_file() {
-        let dir = std::env::temp_dir().join("trust_backprop_test_create");
-        std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("new_file.rs");
-
-        // Remove if exists from prior test run
-        std::fs::remove_file(&file).ok();
+        let dir = isolated_temp_dir();
+        let file = dir.path().join("new_file.rs");
 
         write_source(&file, "fn new() {}\n").unwrap();
         assert!(file.exists());
-
-        std::fs::remove_file(&file).unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn test_apply_plan_to_files_roundtrip() {
-        let dir = std::env::temp_dir().join("trust_backprop_test_roundtrip");
-        std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("roundtrip.rs");
+        let dir = isolated_temp_dir();
+        let file = dir.path().join("roundtrip.rs");
         let source = "fn get_midpoint(a: u64, b: u64) -> u64 {\n    (a + b) / 2\n}\n";
         std::fs::write(&file, source).unwrap();
 
@@ -291,9 +262,6 @@ mod tests {
         let on_disk = std::fs::read_to_string(&file).unwrap();
         assert!(on_disk.contains("#[requires(\"a + b < u64::MAX\")]"));
         assert!(on_disk.contains("fn get_midpoint"));
-
-        std::fs::remove_file(&file).unwrap();
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -303,9 +271,7 @@ mod tests {
         plan.rewrites.push(SourceRewrite {
             file_path: "test.rs".into(),
             offset: 0,
-            kind: RewriteKind::InsertAttribute {
-                attribute: "#[ensures(\"true\")]".into(),
-            },
+            kind: RewriteKind::InsertAttribute { attribute: "#[ensures(\"true\")]".into() },
             function_name: "foo".into(),
             rationale: "test".into(),
         });
@@ -317,11 +283,10 @@ mod tests {
 
     #[test]
     fn test_proposals_to_plan_with_real_file() {
-        let dir = std::env::temp_dir().join("trust_backprop_test_proposals");
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = isolated_temp_dir();
 
         // Create a source file at the path matching proposal.function_path
-        let src_dir = dir.join("src");
+        let src_dir = dir.path().join("src");
         std::fs::create_dir_all(&src_dir).unwrap();
         let file = src_dir.join("lib.rs");
         std::fs::write(&file, "pub fn compute(x: u64) -> u64 {\n    x * 2\n}\n").unwrap();
@@ -336,35 +301,28 @@ mod tests {
             rationale: "overflow".into(),
         };
 
-        let plan = proposals_to_plan(&[proposal], &dir).unwrap();
+        let plan = proposals_to_plan(&[proposal], dir.path()).unwrap();
         assert_eq!(plan.len(), 1);
         assert!(matches!(
             &plan.rewrites[0].kind,
             RewriteKind::InsertAttribute { attribute } if attribute.contains("requires")
         ));
-
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn test_proposals_to_plan_file_not_found() {
-        let dir = std::env::temp_dir().join("trust_backprop_test_notfound");
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = isolated_temp_dir();
 
         let proposal = Proposal {
             function_path: "nonexistent.rs".into(),
             function_name: "foo".into(),
-            kind: trust_strengthen::ProposalKind::AddPrecondition {
-                spec_body: "true".into(),
-            },
+            kind: trust_strengthen::ProposalKind::AddPrecondition { spec_body: "true".into() },
             confidence: 0.9,
             rationale: "test".into(),
         };
 
-        let result = proposals_to_plan(&[proposal], &dir);
+        let result = proposals_to_plan(&[proposal], dir.path());
         assert!(result.is_err());
-
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

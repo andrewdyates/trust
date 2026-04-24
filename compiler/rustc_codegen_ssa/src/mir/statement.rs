@@ -1,6 +1,3 @@
-//! tRust: MIR statement codegen for lowering assignments, storage markers, and
-//! tRust: debug info updates.
-
 use rustc_middle::mir::{self, NonDivergingIntrinsic, StmtDebugInfo};
 use rustc_middle::{bug, span_bug, ty};
 use tracing::instrument;
@@ -20,7 +17,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         LocalRef::Place(cg_dest) => self.codegen_rvalue(bx, cg_dest, rvalue),
                         LocalRef::UnsizedPlace(cg_indirect_dest) => {
                             let ty = cg_indirect_dest.layout.ty;
-                            // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                             span_bug!(
                                 statement.source_info.span,
                                 "cannot reallocate from `UnsizedPlace({ty})` \
@@ -34,7 +30,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         }
                         LocalRef::Operand(op) => {
                             if !op.layout.is_zst() {
-                                // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                                 span_bug!(
                                     statement.source_info.span,
                                     "operand {:?} already assigned",
@@ -84,7 +79,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 let count = self.codegen_operand(bx, count).immediate();
 
                 let &ty::RawPtr(pointee, _) = dst_val.layout.ty.kind() else {
-                    // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                     bug!("expected pointer")
                 };
                 let pointee_layout = bx

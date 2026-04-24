@@ -43,7 +43,7 @@ fn prepare_lto(
 ) -> (Vec<CString>, Vec<(SerializedModule<ModuleBuffer>, CString)>) {
     let mut symbols_below_threshold = exported_symbols_for_lto
         .iter()
-        .map(|symbol| CString::new(symbol.to_owned()).expect("invariant: CString::new failed - input contains null byte"))
+        .map(|symbol| CString::new(symbol.to_owned()).unwrap())
         .collect::<Vec<CString>>();
 
     if cgcx.module_config.instrument_coverage || cgcx.module_config.pgo_gen.enabled() {
@@ -92,7 +92,6 @@ fn prepare_lto(
     let mut upstream_modules = Vec::new();
     if cgcx.lto != Lto::ThinLocal {
         for path in each_linked_rlib_for_lto {
-            // SAFETY: Memory-mapping the file is safe because the file was just opened successfully and the mapping will be valid for the scope of this function.
             let archive_data = unsafe {
                 Mmap::map(std::fs::File::open(&path).expect("couldn't open rlib"))
                     .expect("couldn't map rlib")
@@ -114,7 +113,7 @@ fn prepare_lto(
                 ) {
                     Ok(data) => {
                         let module = SerializedModule::FromRlib(data.to_vec());
-                        upstream_modules.push((module, CString::new(name).expect("invariant: CString::new failed - input contains null byte")));
+                        upstream_modules.push((module, CString::new(name).unwrap()));
                     }
                     Err(e) => dcx.emit_fatal(e),
                 }
@@ -138,7 +137,7 @@ fn get_bitcode_slice_from_object_data<'a>(
     // We drop the "__LLVM," prefix here because on Apple platforms there's a notion of "segment
     // name" which in the public API for sections gets treated as part of the section name, but
     // internally in MachOObjectFile.cpp gets treated separately.
-    let section_name = bitcode_section_name(cgcx).to_str().expect("invariant: string is valid UTF-8").trim_start_matches("__LLVM,");
+    let section_name = bitcode_section_name(cgcx).to_str().unwrap().trim_start_matches("__LLVM,");
 
     let obj =
         object::File::parse(obj).map_err(|err| LtoBitcodeFromRlib { err: err.to_string() })?;
@@ -229,7 +228,7 @@ fn fat_lto(
             FatLtoInput::InMemory(m) => in_memory.push(m),
             FatLtoInput::Serialized { name, buffer } => {
                 info!("pushing serialized module {:?}", name);
-                serialized_modules.push((buffer, CString::new(name).expect("invariant: CString::new failed - input contains null byte")));
+                serialized_modules.push((buffer, CString::new(name).unwrap()));
             }
         }
     }
@@ -248,7 +247,6 @@ fn fat_lto(
         .enumerate()
         .filter(|&(_, module)| module.kind == ModuleKind::Regular)
         .map(|(i, module)| {
-            // SAFETY: The module is a valid LLVM module reference.
             let cost = unsafe { llvm::LLVMRustModuleCost(module.module_llvm.llmod()) };
             (cost, i)
         })
@@ -266,7 +264,7 @@ fn fat_lto(
             let (buffer, name) = serialized_modules.remove(0);
             info!("no in-memory regular modules to choose from, parsing {:?}", name);
             let llvm_module = ModuleLlvm::parse(cgcx, tm_factory, &name, buffer.data(), dcx);
-            ModuleCodegen::new_regular(name.into_string().expect("invariant: string is valid UTF-8"), llvm_module)
+            ModuleCodegen::new_regular(name.into_string().unwrap(), llvm_module)
         }
     };
     {
@@ -294,7 +292,7 @@ fn fat_lto(
         // them later. Not great but hey, that's why it's "fat" LTO, right?
         for module in in_memory {
             let buffer = ModuleBuffer::new(module.module_llvm.llmod(), false);
-            let llmod_id = CString::new(&module.name[..]).expect("invariant: CString::new failed - input contains null byte");
+            let llmod_id = CString::new(&module.name[..]).unwrap();
             serialized_modules.push((SerializedModule::Local(buffer), llmod_id));
         }
         // Sort the modules to ensure we produce deterministic results.
@@ -318,7 +316,6 @@ fn fat_lto(
         save_temp_bitcode(cgcx, &module, "lto.input");
 
         // Internalize everything below threshold to help strip out more modules and such.
-        // SAFETY: `llmod` is a valid LLVM module, and the symbols array contains valid C string pointers with correct length.
         unsafe {
             let ptr = symbols_below_threshold.as_ptr();
             llvm::LLVMRustRunRestrictionPass(
@@ -337,12 +334,10 @@ pub(crate) struct Linker<'a>(&'a mut llvm::Linker<'a>);
 
 impl<'a> Linker<'a> {
     pub(crate) fn new(llmod: &'a llvm::Module) -> Self {
-        // SAFETY: The module is a valid LLVM module reference that will be owned by the linker.
         unsafe { Linker(llvm::LLVMRustLinkerNew(llmod)) }
     }
 
     pub(crate) fn add(&mut self, bytecode: &[u8]) -> Result<(), ()> {
-        // SAFETY: The linker is valid, and the bytecode buffer and length point to valid LLVM bitcode data.
         unsafe {
             if llvm::LLVMRustLinkerAdd(
                 self.0,
@@ -359,7 +354,6 @@ impl<'a> Linker<'a> {
 
 impl Drop for Linker<'_> {
     fn drop(&mut self) {
-        // SAFETY: The linker was created by `LLVMRustLinkerNew` and is exclusively owned. It will not be used after this call.
         unsafe {
             llvm::LLVMRustLinkerFree(&mut *(self.0 as *mut _));
         }
@@ -406,7 +400,6 @@ fn thin_lto(
     symbols_below_threshold: &[*const libc::c_char],
 ) -> (Vec<ThinModule<LlvmCodegenBackend>>, Vec<WorkProduct>) {
     let _timer = prof.generic_activity("LLVM_thin_lto_global_analysis");
-    // SAFETY: All module data, symbol arrays, and string buffers passed to the LLVM thin LTO API are valid. Module references remain live for the duration of the LTO operation.
     unsafe {
         info!("going for that thin, thin LTO");
 
@@ -420,7 +413,7 @@ fn thin_lto(
 
         for (i, (name, buffer)) in modules.into_iter().enumerate() {
             info!("local module: {} - {}", i, name);
-            let cname = CString::new(name.as_bytes()).expect("invariant: CString::new failed - input contains null byte");
+            let cname = CString::new(name.as_bytes()).unwrap();
             thin_modules.push(llvm::ThinLTOModule {
                 identifier: cname.as_ptr(),
                 data: buffer.data().as_ptr(),
@@ -430,7 +423,7 @@ fn thin_lto(
             module_names.push(cname);
         }
 
-        // tRust: known issue — All upstream crates are deserialized internally in the
+        // FIXME: All upstream crates are deserialized internally in the
         //        function below to extract their summary and modules. Note that
         //        unlike the loop above we *must* decode and/or read something
         //        here as these are all just serialized files on disk. An
@@ -449,7 +442,7 @@ fn thin_lto(
         let mut serialized = Vec::with_capacity(serialized_modules.len() + cached_modules.len());
 
         let cached_modules =
-            cached_modules.into_iter().map(|(sm, wp)| (sm, CString::new(wp.cgu_name).expect("invariant: CString::new failed - input contains null byte")));
+            cached_modules.into_iter().map(|(sm, wp)| (sm, CString::new(wp.cgu_name).unwrap()));
 
         for (module, name) in serialized_modules.into_iter().chain(cached_modules) {
             info!("upstream or cached module {:?}", name);
@@ -598,7 +591,7 @@ pub(crate) fn enable_autodiff_settings(ad: &[config::AutoDiff]) {
     }
     // This helps with handling enums for now.
     enzyme.set_strict_aliasing(false);
-    // tRust: known issue — (ZuseZ4): Test this, since it was added a long time ago.
+    // FIXME(ZuseZ4): Test this, since it was added a long time ago.
     enzyme.set_rust_rules(true);
 }
 
@@ -634,7 +627,6 @@ pub(crate) fn run_pass_manager(
         if enable_ad { write::AutodiffStage::DuringAD } else { write::AutodiffStage::PostAD }
     };
 
-    // SAFETY: The module, configuration, and optimization parameters are valid. The module will be modified in place by the optimization pipeline.
     unsafe {
         write::llvm_optimize(
             cgcx, prof, dcx, module, None, None, config, opt_level, opt_stage, stage,
@@ -645,7 +637,6 @@ pub(crate) fn run_pass_manager(
         let opt_stage = llvm::OptStage::FatLTO;
         let stage = write::AutodiffStage::PostAD;
         if !config.autodiff.contains(&config::AutoDiff::NoPostopt) {
-            // SAFETY: The module, configuration, and optimization parameters are valid. The module will be modified in place by the optimization pipeline.
             unsafe {
                 write::llvm_optimize(
                     cgcx, prof, dcx, module, None, None, config, opt_level, opt_stage, stage,
@@ -656,7 +647,6 @@ pub(crate) fn run_pass_manager(
         // This is the final IR, so people should be able to inspect the optimized autodiff output,
         // for manual inspection.
         if config.autodiff.contains(&config::AutoDiff::PrintModFinal) {
-            // SAFETY: The module is a valid LLVM module reference.
             unsafe { llvm::LLVMDumpModule(module.module_llvm.llmod()) };
         }
     }
@@ -672,7 +662,6 @@ unsafe impl Sync for Buffer {}
 
 impl Buffer {
     pub(crate) fn data(&self) -> &[u8] {
-        // SAFETY: The pointer is valid for `len` elements, the data is properly aligned, and the lifetime of the resulting slice does not exceed the source's.
         unsafe {
             let ptr = llvm::LLVMRustBufferPtr(self.0);
             let len = llvm::LLVMRustBufferLen(self.0);
@@ -683,7 +672,6 @@ impl Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        // SAFETY: The buffer was allocated by LLVM and is exclusively owned. It will not be used after this call.
         unsafe {
             llvm::LLVMRustBufferFree(&mut *(self.0 as *mut _));
         }
@@ -697,7 +685,6 @@ unsafe impl Sync for ThinData {}
 
 impl Drop for ThinData {
     fn drop(&mut self) {
-        // SAFETY: The thin LTO data pointer was allocated by a prior `LLVMRustPrepareThinLTO` call and is exclusively owned.
         unsafe {
             llvm::LLVMRustFreeThinLTOData(&mut *(self.0 as *mut _));
         }
@@ -710,7 +697,6 @@ pub struct ModuleBuffer {
 
 impl ModuleBuffer {
     pub(crate) fn new(m: &llvm::Module, is_thin: bool) -> ModuleBuffer {
-        // SAFETY: The module is a valid LLVM module reference. The returned buffer is owned by the caller.
         unsafe {
             let buffer = llvm::LLVMRustModuleSerialize(m, is_thin);
             ModuleBuffer { data: Buffer(buffer) }
@@ -762,7 +748,6 @@ pub(crate) fn optimize_and_codegen_thin_module(
         // bindings we've got (currently `PassWrapper.cpp`)
         {
             let _timer = prof.generic_activity_with_arg("LLVM_thin_lto_rename", thin_module.name());
-            // SAFETY: All module references and configuration parameters are valid.
             unsafe {
                 llvm::LLVMRustPrepareThinLTORename(thin_module.shared.data.0, llmod, target.raw())
             };
@@ -772,7 +757,6 @@ pub(crate) fn optimize_and_codegen_thin_module(
         {
             let _timer =
                 prof.generic_activity_with_arg("LLVM_thin_lto_resolve_weak", thin_module.name());
-            // SAFETY: All module references and configuration parameters are valid.
             if unsafe { !llvm::LLVMRustPrepareThinLTOResolveWeak(thin_module.shared.data.0, llmod) }
             {
                 write::llvm_err(dcx, LlvmError::PrepareThinLtoModule);
@@ -783,7 +767,6 @@ pub(crate) fn optimize_and_codegen_thin_module(
         {
             let _timer =
                 prof.generic_activity_with_arg("LLVM_thin_lto_internalize", thin_module.name());
-            // SAFETY: All module references and configuration parameters are valid.
             if unsafe { !llvm::LLVMRustPrepareThinLTOInternalize(thin_module.shared.data.0, llmod) }
             {
                 write::llvm_err(dcx, LlvmError::PrepareThinLtoModule);
@@ -793,7 +776,6 @@ pub(crate) fn optimize_and_codegen_thin_module(
 
         {
             let _timer = prof.generic_activity_with_arg("LLVM_thin_lto_import", thin_module.name());
-            // SAFETY: All module references and configuration parameters are valid.
             if unsafe {
                 !llvm::LLVMRustPrepareThinLTOImport(thin_module.shared.data.0, llmod, target.raw())
             } {
@@ -842,8 +824,8 @@ impl ThinLTOKeysMap {
         for line in file.lines() {
             let line = line?;
             let mut split = line.split(' ');
-            let module = split.next().expect("invariant: iterator has next element");
-            let key = split.next().expect("invariant: iterator has next element");
+            let module = split.next().unwrap();
+            let key = split.next().unwrap();
             assert_eq!(split.next(), None, "Expected two space-separated values, found {line:?}");
             keys.insert(module.to_string(), key.to_string());
         }
@@ -857,7 +839,6 @@ impl ThinLTOKeysMap {
     ) -> Self {
         let keys = iter::zip(modules, names)
             .map(|(module, name)| {
-                // SAFETY: The output string handle is valid, the module identifier is valid, and the thin LTO data reference is valid.
                 let key = build_string(|rust_str| unsafe {
                     llvm::LLVMRustComputeLTOCacheKey(rust_str, module.identifier, data.0);
                 })
@@ -871,7 +852,6 @@ impl ThinLTOKeysMap {
 
 fn module_name_to_str(c_str: &CStr) -> &str {
     c_str.to_str().unwrap_or_else(|e| {
-        // tRust: invariant — LLVM module names reaching Rust code are valid UTF-8
         bug!("Encountered non-utf8 LLVM module name `{}`: {}", c_str.to_string_lossy(), e)
     })
 }
@@ -882,7 +862,6 @@ pub(crate) fn parse_module<'a>(
     data: &[u8],
     dcx: DiagCtxtHandle<'_>,
 ) -> &'a llvm::Module {
-    // SAFETY: The data buffer, length, and module name are valid. The context is a valid LLVM context.
     unsafe {
         llvm::LLVMRustParseBitcodeForLTO(cx, data.as_ptr(), data.len(), name.as_ptr())
             .unwrap_or_else(|| write::llvm_err(dcx, LlvmError::ParseBitcode))

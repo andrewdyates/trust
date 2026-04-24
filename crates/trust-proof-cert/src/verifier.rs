@@ -53,10 +53,7 @@ impl VerificationResult {
 ///
 /// Returns `Ok(true)` if all checks pass, `Ok(false)` if any fail.
 /// Returns `Err` only for structural errors (e.g. corrupted certificate).
-pub fn verify_certificate(
-    cert: &ProofCertificate,
-    vc_bytes: &[u8],
-) -> Result<bool, CertError> {
+pub fn verify_certificate(cert: &ProofCertificate, vc_bytes: &[u8]) -> Result<bool, CertError> {
     let result = verify_certificate_detailed(cert, vc_bytes)?;
     Ok(result.valid)
 }
@@ -303,8 +300,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        CertificateChain, ChainStep, ChainStepType, FunctionHash, ProofStep, SolverInfo,
-        VcSnapshot,
+        CertificateChain, ChainStep, ChainStepType, FunctionHash, ProofStep, SolverInfo, VcSnapshot,
     };
 
     fn make_vc_bytes(kind: &str, formula: &str) -> Vec<u8> {

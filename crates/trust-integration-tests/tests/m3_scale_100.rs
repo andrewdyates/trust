@@ -33,8 +33,8 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::fx::FxHashMap;
 use std::fmt::Write;
+use trust_types::fx::FxHashMap;
 
 use trust_types::{
     AggregateKind, AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula,
@@ -444,10 +444,7 @@ fn make_cast(name: &str, from_ty: Ty, to_ty: Ty) -> VerifiableFunction {
                 stmts: vec![
                     Statement::Assign {
                         place: Place::local(2),
-                        rvalue: Rvalue::Cast(
-                            Operand::Copy(Place::local(1)),
-                            to_ty.clone(),
-                        ),
+                        rvalue: Rvalue::Cast(Operand::Copy(Place::local(1)), to_ty.clone()),
                         span: SourceSpan::default(),
                     },
                     Statement::Assign {
@@ -525,10 +522,7 @@ fn make_aggregate_tuple(name: &str) -> VerifiableFunction {
                     place: Place::local(0),
                     rvalue: Rvalue::Aggregate(
                         AggregateKind::Tuple,
-                        vec![
-                            Operand::Copy(Place::local(1)),
-                            Operand::Copy(Place::local(2)),
-                        ],
+                        vec![Operand::Copy(Place::local(1)), Operand::Copy(Place::local(2))],
                     ),
                     span: SourceSpan::default(),
                 }],
@@ -900,10 +894,7 @@ fn test_scale_vcgen_132_functions() {
         functions_with_vcs >= 50,
         "at least 50 functions should produce VCs, got {functions_with_vcs}"
     );
-    assert!(
-        total_vcs >= 50,
-        "should have >= 50 total VCs, got {total_vcs}"
-    );
+    assert!(total_vcs >= 50, "should have >= 50 total VCs, got {total_vcs}");
 
     // We expect multiple distinct VC kinds.
     assert!(
@@ -986,11 +977,7 @@ fn test_scale_full_pipeline_132_functions() {
 
     // Validate JSON round-trip.
     let json = serde_json::to_string_pretty(&report).expect("serialize report");
-    assert!(
-        json.len() > 500,
-        "JSON report should be substantial, got {} bytes",
-        json.len()
-    );
+    assert!(json.len() > 500, "JSON report should be substantial, got {} bytes", json.len());
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse JSON");
     assert!(parsed["functions"].is_array());
     assert!(parsed["summary"]["total_obligations"].is_number());
@@ -998,10 +985,7 @@ fn test_scale_full_pipeline_132_functions() {
     // Validate per-function entries exist in the report.
     let report_functions = parsed["functions"].as_array().expect("functions array");
     // Functions with 0 VCs may not appear in the report -- that's fine.
-    assert!(
-        !report_functions.is_empty(),
-        "report should have function-level entries"
-    );
+    assert!(!report_functions.is_empty(), "report should have function-level entries");
 
     // Each function entry should have required fields.
     for entry in report_functions {
@@ -1119,7 +1103,8 @@ fn test_scale_vc_kind_diversity() {
     assert!(has_bounds, "should have bounds check VCs, got kinds: {kind_names:?}");
 
     // At least one contract VC.
-    let has_contract = kind_names.iter().any(|k| k.contains("Postcondition") || k.contains("Precondition"));
+    let has_contract =
+        kind_names.iter().any(|k| k.contains("Postcondition") || k.contains("Precondition"));
     assert!(has_contract, "should have contract VCs, got kinds: {kind_names:?}");
 
     eprintln!("=== Scale VC Kind Diversity ===");
@@ -1150,10 +1135,8 @@ fn test_scale_per_function_report() {
     }
 
     // Build aggregate report.
-    let all_results: Vec<(VerificationCondition, VerificationResult)> = per_function
-        .values()
-        .flat_map(|v| v.iter().cloned())
-        .collect();
+    let all_results: Vec<(VerificationCondition, VerificationResult)> =
+        per_function.values().flat_map(|v| v.iter().cloned()).collect();
     let report = trust_report::build_json_report("per-function-132", &all_results);
 
     // Validate that the report has per-function entries with Level 0 results.
@@ -1171,10 +1154,7 @@ fn test_scale_per_function_report() {
                 "obligation for {func_name} missing proof_level"
             );
             // Each obligation should have an outcome.
-            assert!(
-                ob.get("outcome").is_some(),
-                "obligation for {func_name} missing outcome"
-            );
+            assert!(ob.get("outcome").is_some(), "obligation for {func_name} missing outcome");
         }
     }
 
@@ -1217,82 +1197,88 @@ fn test_scale_per_function_report() {
 #[test]
 fn test_scale_source_analysis_130_functions() {
     // Generate a realistic Rust source file with 130+ diverse function signatures.
-    let mut source = String::from(
-        "//! Scale test: 130+ function crate for verification.\n\n",
-    );
+    let mut source = String::from("//! Scale test: 130+ function crate for verification.\n\n");
 
     for i in 0..135 {
         match i % 13 {
             0 => {
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub fn checked_add_{i}(a: u64, b: u64) -> u64 {{ a.wrapping_add(b) }}\n\n"
                 );
             }
             1 => {
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "#[requires(divisor != 0)]\npub fn safe_div_{i}(n: u32, divisor: u32) -> u32 {{ n / divisor }}\n\n"
                 );
             }
             2 => {
-                let _ = write!(source, 
-                    "pub unsafe fn deref_ptr_{i}(p: *const u8) -> u8 {{ *p }}\n\n"
-                );
+                let _ =
+                    write!(source, "pub unsafe fn deref_ptr_{i}(p: *const u8) -> u8 {{ *p }}\n\n");
             }
             3 => {
-                let _ = write!(source, 
-                    "fn private_helper_{i}(x: i32) -> i32 {{ x.abs() }}\n\n"
-                );
+                let _ = write!(source, "fn private_helper_{i}(x: i32) -> i32 {{ x.abs() }}\n\n");
             }
             4 => {
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "#[ensures(result >= 0)]\npub fn abs_val_{i}(x: i32) -> i32 {{ if x < 0 {{ -x }} else {{ x }} }}\n\n"
                 );
             }
             5 => {
                 // Generic-like pattern (monomorphized)
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub fn identity_{i}<T: Clone>(val: T) -> T {{ val.clone() }}\n\n"
                 );
             }
             6 => {
                 // Iterator pattern
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub fn sum_iter_{i}(data: &[i32]) -> i32 {{ data.iter().sum() }}\n\n"
                 );
             }
             7 => {
                 // Match expression
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub fn classify_{i}(n: i32) -> &'static str {{ match n {{ 0 => \"zero\", _ if n > 0 => \"pos\", _ => \"neg\" }} }}\n\n"
                 );
             }
             8 => {
                 // Option unwrap pattern
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub fn safe_get_{i}(data: &[u8], idx: usize) -> Option<u8> {{ data.get(idx).copied() }}\n\n"
                 );
             }
             9 => {
                 // Closure-like pattern
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub fn apply_{i}(f: fn(i32) -> i32, x: i32) -> i32 {{ f(x) }}\n\n"
                 );
             }
             10 => {
                 // Const function
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub const fn const_add_{i}(a: u32, b: u32) -> u32 {{ a.wrapping_add(b) }}\n\n"
                 );
             }
             11 => {
                 // Async-like function
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "pub async fn async_fetch_{i}(url: &str) -> usize {{ url.len() }}\n\n"
                 );
             }
             12 => {
                 // Trait method with contract
-                let _ = write!(source, 
+                let _ = write!(
+                    source,
                     "#[requires(lo <= hi)]\n#[ensures(result >= lo)]\npub fn clamp_{i}(val: i32, lo: i32, hi: i32) -> i32 {{ val.clamp(lo, hi) }}\n\n"
                 );
             }
@@ -1314,31 +1300,13 @@ fn test_scale_source_analysis_130_functions() {
         })
         .count();
 
-    assert!(
-        fn_count >= 130,
-        "source should have >= 130 functions, found {fn_count}"
-    );
+    assert!(fn_count >= 130, "source should have >= 130 functions, found {fn_count}");
 
-    let requires_count = source
-        .lines()
-        .filter(|l| l.trim().starts_with("#[requires"))
-        .count();
-    let ensures_count = source
-        .lines()
-        .filter(|l| l.trim().starts_with("#[ensures"))
-        .count();
-    let unsafe_count = source
-        .lines()
-        .filter(|l| l.trim().contains("unsafe fn"))
-        .count();
-    let async_count = source
-        .lines()
-        .filter(|l| l.trim().contains("async fn"))
-        .count();
-    let const_count = source
-        .lines()
-        .filter(|l| l.trim().contains("const fn"))
-        .count();
+    let requires_count = source.lines().filter(|l| l.trim().starts_with("#[requires")).count();
+    let ensures_count = source.lines().filter(|l| l.trim().starts_with("#[ensures")).count();
+    let unsafe_count = source.lines().filter(|l| l.trim().contains("unsafe fn")).count();
+    let async_count = source.lines().filter(|l| l.trim().contains("async fn")).count();
+    let const_count = source.lines().filter(|l| l.trim().contains("const fn")).count();
 
     assert!(requires_count >= 10, "should have >= 10 #[requires], got {requires_count}");
     assert!(ensures_count >= 10, "should have >= 10 #[ensures], got {ensures_count}");

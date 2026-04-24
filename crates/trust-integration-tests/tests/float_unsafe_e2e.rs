@@ -1,4 +1,3 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/float_unsafe_e2e.rs: Float + Unsafe/FFI error detection E2E (#636)
 //
 // Tests that tRust's verification pipeline detects 4 Float + Unsafe/FFI VcKind variants:
@@ -16,7 +15,7 @@
 
 use std::process::Command;
 
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_types::*;
 
@@ -24,13 +23,13 @@ use trust_types::*;
 // z4 setup
 // ---------------------------------------------------------------------------
 
-fn require_z4() -> SmtLibBackend {
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH — install z4 to run these tests"),
     }
@@ -206,10 +205,8 @@ fn int_mul_no_float_overflow_safe() -> VerifiableFunction {
 /// Buggy: raw pointer dereference — conservative VC (always SAT).
 fn unsafe_raw_deref_buggy() -> VerificationCondition {
     VerificationCondition {
-        kind: VcKind::UnsafeOperation {
-            desc: "raw pointer dereference of `_2.*`".to_string(),
-        },
-        function: "unsafe_raw_deref".to_string(),
+        kind: VcKind::UnsafeOperation { desc: "raw pointer dereference of `_2.*`".to_string() },
+        function: "unsafe_raw_deref".into(),
         location: SourceSpan::default(),
         // Conservative: Formula::Bool(true) is always SAT — meaning
         // this unsafe operation exists and was not proved safe.
@@ -223,10 +220,8 @@ fn unsafe_raw_deref_buggy() -> VerificationCondition {
 /// reports UNSAT (i.e., "proved safe" — no counterexample).
 fn unsafe_safe_formula() -> VerificationCondition {
     VerificationCondition {
-        kind: VcKind::UnsafeOperation {
-            desc: "safe operation (no raw pointers)".to_string(),
-        },
-        function: "safe_function".to_string(),
+        kind: VcKind::UnsafeOperation { desc: "safe operation (no raw pointers)".to_string() },
+        function: "safe_function".into(),
         location: SourceSpan::default(),
         // Formula::Bool(false) is UNSAT — the negation is always true,
         // meaning there is no way to violate this VC.
@@ -245,10 +240,7 @@ fn unsafe_safe_formula() -> VerificationCondition {
 /// MIR: bb0: _0 = Call("libc::malloc", [_1]); goto bb1
 ///       bb1: return
 fn ffi_malloc_call_buggy() -> VerifiableFunction {
-    let ptr_ty = Ty::RawPtr {
-        mutable: true,
-        pointee: Box::new(Ty::u8()),
-    };
+    let ptr_ty = Ty::RawPtr { mutable: true, pointee: Box::new(Ty::u8()) };
     VerifiableFunction {
         name: "ffi_malloc_call".to_string(),
         def_path: "test::ffi_malloc_call".to_string(),
@@ -271,11 +263,7 @@ fn ffi_malloc_call_buggy() -> VerifiableFunction {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: ptr_ty,
@@ -312,11 +300,7 @@ fn safe_call_no_ffi() -> VerifiableFunction {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::Unit,
@@ -345,10 +329,8 @@ fn test_detect_float_div_by_zero_variable() {
         eprintln!("  VC: {:?} — {}", vc.kind, vc.function);
     }
 
-    let float_divzero_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::FloatDivisionByZero))
-        .collect();
+    let float_divzero_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::FloatDivisionByZero)).collect();
 
     assert!(
         !float_divzero_vcs.is_empty(),
@@ -380,10 +362,8 @@ fn test_detect_float_div_by_const_safe() {
         eprintln!("  VC: {:?} — {}", vc.kind, vc.function);
     }
 
-    let float_divzero_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::FloatDivisionByZero))
-        .collect();
+    let float_divzero_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::FloatDivisionByZero)).collect();
 
     assert!(
         float_divzero_vcs.is_empty(),
@@ -437,10 +417,8 @@ fn test_detect_float_overflow_to_infinity_safe_int() {
         eprintln!("  VC: {:?} — {}", vc.kind, vc.function);
     }
 
-    let float_overflow_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::FloatOverflowToInfinity { .. }))
-        .collect();
+    let float_overflow_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::FloatOverflowToInfinity { .. })).collect();
 
     assert!(
         float_overflow_vcs.is_empty(),
@@ -469,10 +447,7 @@ fn test_detect_unsafe_operation_raw_deref() {
     );
 
     // Verify no runtime fallback
-    assert!(
-        !vc.kind.has_runtime_fallback(true),
-        "UnsafeOperation must have no runtime fallback"
-    );
+    assert!(!vc.kind.has_runtime_fallback(true), "UnsafeOperation must have no runtime fallback");
 
     // Conservative formula Bool(true) is always SAT → z4 finds "counterexample"
     let result = z4.verify(&vc);
@@ -493,10 +468,7 @@ fn test_detect_unsafe_operation_safe() {
     let result = z4.verify(&vc);
     eprintln!("z4 result for safe (no unsafe ops): {:?}", result);
 
-    assert!(
-        result.is_proved(),
-        "z4 must prove safe formula (UNSAT). Got: {result:?}"
-    );
+    assert!(result.is_proved(), "z4 must prove safe formula (UNSAT). Got: {result:?}");
 }
 
 // --- Category 4: FfiBoundaryViolation ---
@@ -512,10 +484,8 @@ fn test_detect_ffi_boundary_violation_malloc() {
         eprintln!("  VC: {:?} — {}", vc.kind, vc.function);
     }
 
-    let ffi_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::FfiBoundaryViolation { .. }))
-        .collect();
+    let ffi_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::FfiBoundaryViolation { .. })).collect();
 
     assert!(
         !ffi_vcs.is_empty(),
@@ -530,10 +500,7 @@ fn test_detect_ffi_boundary_violation_malloc() {
                 if desc.contains("allocation") || desc.contains("null") || desc.contains("non-null")
         )
     });
-    assert!(
-        has_alloc_vc,
-        "malloc VCs should include allocation or null-check related VC"
-    );
+    assert!(has_alloc_vc, "malloc VCs should include allocation or null-check related VC");
 
     // All FFI VCs should be L0Safety
     for vc in &ffi_vcs {
@@ -554,10 +521,7 @@ fn test_detect_ffi_boundary_violation_malloc() {
         eprintln!("z4 result for FFI VC ({:?}): {:?}", vc.kind, result);
         result.is_failed()
     });
-    assert!(
-        any_failed,
-        "at least one FFI boundary VC should be SAT (unproved)"
-    );
+    assert!(any_failed, "at least one FFI boundary VC should be SAT (unproved)");
 }
 
 #[test]
@@ -570,10 +534,8 @@ fn test_detect_ffi_boundary_violation_safe_call() {
         eprintln!("  VC: {:?} — {}", vc.kind, vc.function);
     }
 
-    let ffi_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::FfiBoundaryViolation { .. }))
-        .collect();
+    let ffi_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::FfiBoundaryViolation { .. })).collect();
 
     assert!(
         ffi_vcs.is_empty(),

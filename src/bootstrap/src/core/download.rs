@@ -996,10 +996,55 @@ fn download_file<'a>(
             url,
             help_on_error,
         ),
+        Some("file") => copy_file_url(url, &tempfile),
         Some(other) => panic!("unsupported protocol {other} in {url}"),
         None => panic!("no protocol in {url}"),
     }
     t!(move_file(&tempfile, dest_path), format!("failed to rename {tempfile:?} to {dest_path:?}"));
+}
+
+fn copy_file_url(url: &str, dest_path: &Path) {
+    let Some(raw_path) = url.strip_prefix("file://") else {
+        panic!("not a file URL: {url}");
+    };
+    let raw_path = raw_path
+        .strip_prefix("localhost/")
+        .map(|path| format!("/{path}"))
+        .unwrap_or_else(|| raw_path.to_string());
+    let source = PathBuf::from(percent_decode_url_path(&raw_path));
+    t!(
+        fs::copy(&source, dest_path),
+        format!("failed to copy {} to {}", source.display(), dest_path.display())
+    );
+}
+
+fn percent_decode_url_path(path: &str) -> String {
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut idx = 0;
+    while idx < bytes.len() {
+        if bytes[idx] == b'%' && idx + 2 < bytes.len() {
+            let high = bytes[idx + 1];
+            let low = bytes[idx + 2];
+            if let (Some(high), Some(low)) = (hex_value(high), hex_value(low)) {
+                decoded.push(high << 4 | low);
+                idx += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[idx]);
+        idx += 1;
+    }
+    String::from_utf8(decoded).expect("file URL path is not valid UTF-8")
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 /// Create a temporary directory in `out` and return its path.

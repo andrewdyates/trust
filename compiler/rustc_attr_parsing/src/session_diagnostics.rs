@@ -181,7 +181,7 @@ pub(crate) struct MissingIssue {
     pub span: Span,
 }
 
-// tRust: known issue — Why is this the same error code as `InvalidReprHintNoParen` and `InvalidReprHintNoValue`?
+// FIXME: Why is this the same error code as `InvalidReprHintNoParen` and `InvalidReprHintNoValue`?
 // It is more similar to `IncorrectReprFormatGeneric`.
 #[derive(Diagnostic)]
 #[diag("incorrect `repr(packed)` attribute format: `packed` takes exactly one parenthesized argument, or no parentheses at all", code = E0552)]
@@ -382,7 +382,7 @@ pub(crate) struct UnknownVersionLiteral {
     pub span: Span,
 }
 
-// tRust: known issue — (jdonszelmann) duplicated from `rustc_passes`, remove once `check_attr` is integrated.
+// FIXME(jdonszelmann) duplicated from `rustc_passes`, remove once `check_attr` is integrated.
 #[derive(Diagnostic)]
 #[diag("multiple `{$name}` attributes")]
 pub(crate) struct UnusedMultiple {

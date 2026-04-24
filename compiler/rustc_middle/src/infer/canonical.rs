@@ -86,7 +86,7 @@ pub struct QueryRegionConstraints<'tcx> {
 impl QueryRegionConstraints<'_> {
     /// Represents an empty (trivially true) set of region constraints.
     ///
-    /// tRust: known issue (higher_ranked_auto) — This could still just be true if there are only assumptions?
+    /// FIXME(higher_ranked_auto): This could still just be true if there are only assumptions?
     /// Because I don't expect for us to get cases where an assumption from one query would
     /// discharge a requirement from another query, which is a potential problem if we did throw
     /// away these assumptions because there were no constraints.

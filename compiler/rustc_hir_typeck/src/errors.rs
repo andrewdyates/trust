@@ -618,7 +618,7 @@ pub(crate) enum OptionResultRefMismatch {
         span: Span,
         def_path: String,
     },
-    // NOTE: see upstream #114050
+    // FIXME: #114050
     // #[suggestion(
     //     "use `{$def_path}::as_ref` to convert `{$expected_ty}` to `{$expr_ty}`",
     //     code = ".as_ref()",

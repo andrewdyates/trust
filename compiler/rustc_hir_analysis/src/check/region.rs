@@ -471,7 +471,7 @@ fn resolve_local<'tcx>(
         LetKind::Regular => true,
         LetKind::Super
             if let Some(scope) =
-                visitor.extended_super_lets.remove(&pat.expect("invariant: value is present").hir_id.local_id) =>
+                visitor.extended_super_lets.remove(&pat.unwrap().hir_id.local_id) =>
         {
             // This expression was lifetime-extended by a parent let binding. E.g.
             //

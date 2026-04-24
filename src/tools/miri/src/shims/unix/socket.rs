@@ -292,16 +292,14 @@ pub trait EvalContextExt<'tcx>: crate::MiriInterpCxExt<'tcx> {
 
                 *state = SocketState::Bound(address);
             }
-            SocketState::Connecting(_) | SocketState::Connected(_) =>
-                throw_unsup_format!(
-                    "bind: socket is already connected and binding a
+            SocketState::Connecting(_) | SocketState::Connected(_) => throw_unsup_format!(
+                "bind: socket is already connected and binding a
                     connected socket is unsupported"
-                ),
-            SocketState::Bound(_) | SocketState::Listening(_) =>
-                throw_unsup_format!(
-                    "bind: socket is already bound and binding a socket \
+            ),
+            SocketState::Bound(_) | SocketState::Listening(_) => throw_unsup_format!(
+                "bind: socket is already bound and binding a socket \
                     multiple times is unsupported"
-                ),
+            ),
         }
 
         interp_ok(Scalar::from_i32(0))
@@ -329,11 +327,10 @@ pub trait EvalContextExt<'tcx>: crate::MiriInterpCxExt<'tcx> {
         let mut state = socket.state.borrow_mut();
 
         match *state {
-            SocketState::Bound(socket_addr) =>
-                match TcpListener::bind(socket_addr) {
-                    Ok(listener) => *state = SocketState::Listening(listener),
-                    Err(e) => return this.set_last_error_and_return_i32(e),
-                },
+            SocketState::Bound(socket_addr) => match TcpListener::bind(socket_addr) {
+                Ok(listener) => *state = SocketState::Listening(listener),
+                Err(e) => return this.set_last_error_and_return_i32(e),
+            },
             SocketState::Initial => {
                 throw_unsup_format!(
                     "listen: listening on a socket which isn't bound is unsupported"
@@ -463,16 +460,16 @@ pub trait EvalContextExt<'tcx>: crate::MiriInterpCxExt<'tcx> {
         match &*socket.state.borrow() {
             SocketState::Initial => { /* fall-through to below */ }
             // The socket is already in a connecting state.
-            SocketState::Connecting(_) =>
-                return this.set_last_error_and_return(LibcError("EALREADY"), dest),
+            SocketState::Connecting(_) => {
+                return this.set_last_error_and_return(LibcError("EALREADY"), dest);
+            }
             // We don't return EISCONN for already connected sockets, for which we're
             // sure that the connection is established, since TCP sockets are usually
             // allowed to be connected multiple times.
-            _ =>
-                throw_unsup_format!(
-                    "connect: connecting is only supported for sockets which are neither \
+            _ => throw_unsup_format!(
+                "connect: connecting is only supported for sockets which are neither \
                     bound, listening nor already connected"
-                ),
+            ),
         }
 
         // Mio returns a potentially unconnected stream.
@@ -605,11 +602,10 @@ pub trait EvalContextExt<'tcx>: crate::MiriInterpCxExt<'tcx> {
 
                 *address
             }
-            SocketState::Listening(listener) =>
-                match listener.local_addr() {
-                    Ok(address) => address,
-                    Err(e) => return this.set_last_error_and_return_i32(e),
-                },
+            SocketState::Listening(listener) => match listener.local_addr() {
+                Ok(address) => address,
+                Err(e) => return this.set_last_error_and_return_i32(e),
+            },
             // For non-bound sockets the POSIX manual says the returned address is unspecified.
             // Often this is 0.0.0.0:0 and thus we set it to this value.
             _ => SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)),

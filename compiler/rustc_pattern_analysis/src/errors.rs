@@ -33,7 +33,7 @@ impl Uncovered {
     where
         'tcx: 'p,
     {
-        let witness_1 = cx.print_witness_pat(witnesses.get(0).expect("invariant: non-exhaustiveness requires at least one witness pattern")); // tRust: unwrap -> expect
+        let witness_1 = cx.print_witness_pat(witnesses.get(0).unwrap());
         Self {
             span,
             count: witnesses.len(),
@@ -109,7 +109,7 @@ impl Subdiagnostic for GappedRange {
     fn add_to_diag<G: EmissionGuarantee>(self, diag: &mut Diag<'_, G>) {
         let GappedRange { span, gap, first_range } = self;
 
-        // tRust: known issue (mejrs) — Use `#[subdiagnostic(eager)]` instead
+        // FIXME(mejrs) Use `#[subdiagnostic(eager)]` instead
         let message = format!(
             "this could appear to continue range `{first_range}`, but `{gap}` isn't matched by \
             either of them"

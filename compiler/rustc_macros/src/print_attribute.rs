@@ -13,7 +13,7 @@ fn print_fields(name: &Ident, fields: &Fields) -> (TokenStream, TokenStream) {
             let mut field_names = Vec::new();
 
             for field in &fields_named.named {
-                let name = field.ident.as_ref().expect("invariant: named fields always have idents"); // tRust: unwrap -> expect
+                let name = field.ident.as_ref().unwrap();
                 let string_name = name.to_string();
                 disps.push(quote! {
                     if #name.should_render() {

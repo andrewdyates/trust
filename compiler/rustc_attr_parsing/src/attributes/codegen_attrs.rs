@@ -241,7 +241,7 @@ impl<S: Stage> AttributeParser<S> for NakedParser {
     ]);
 
     fn finalize(self, cx: &FinalizeContext<'_, '_, S>) -> Option<AttributeKind> {
-        // tRust: known issue — (jdonszelmann) upgrade this list to *parsed* attributes
+        // FIXME(jdonszelmann): upgrade this list to *parsed* attributes
         // once all of these have parsed forms. That'd make the check much nicer...
         //
         // many attributes don't make sense in combination with #[naked].
@@ -278,7 +278,7 @@ impl<S: Stage> AttributeParser<S> for NakedParser {
             sym::instruction_set,
             sym::repr,
             sym::rustc_std_internal_symbol,
-            // tRust: known issue — (#82232, #143834) temporarily renamed to mitigate `#[align]` nameres ambiguity
+            // FIXME(#82232, #143834): temporarily renamed to mitigate `#[align]` nameres ambiguity
             sym::rustc_align,
             sym::rustc_align_static,
             // obviously compatible with self
@@ -574,7 +574,7 @@ pub(crate) struct SanitizeParser;
 impl<S: Stage> SingleAttributeParser<S> for SanitizeParser {
     const PATH: &[Symbol] = &[sym::sanitize];
 
-    // tRust: known issue — still checked in check_attrs.rs
+    // FIXME: still checked in check_attrs.rs
     const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS);
 
     const TEMPLATE: AttributeTemplate = template!(List: &[

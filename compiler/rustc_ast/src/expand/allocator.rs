@@ -33,7 +33,7 @@ pub enum AllocatorTy {
 
 /// Some allocator methods are known to the compiler: they act more like
 /// intrinsics/language primitives than library-defined functions.
-/// tRust: known issue — ideally this would be derived from attributes like `#[rustc_allocator]`,
+/// FIXME: ideally this would be derived from attributes like `#[rustc_allocator]`,
 /// so we don't have two sources of truth.
 #[derive(Copy, Clone, Debug)]
 pub enum SpecialAllocatorMethod {

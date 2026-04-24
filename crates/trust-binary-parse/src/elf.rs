@@ -14,7 +14,7 @@ use crate::elf_relocation::{
     self, Elf64Dyn, Elf64Rel, Elf64Rela, ResolvedRelocation, SHT_DYNAMIC, SHT_REL, SHT_RELA,
 };
 use crate::error::{DwarfError, ParseError};
-use crate::read::{read_strtab_entry, Cursor};
+use crate::read::{Cursor, read_strtab_entry};
 
 // --- ELF magic and identification constants ---
 
@@ -239,9 +239,7 @@ impl<'a> Elf64<'a> {
             ELFDATA2LSB => false, // native LE on LE host
             ELFDATA2MSB => true,  // need swap on LE host
             other => {
-                return Err(ParseError::UnsupportedFormat(format!(
-                    "ELF data encoding {other}"
-                )));
+                return Err(ParseError::UnsupportedFormat(format!("ELF data encoding {other}")));
             }
         };
 
@@ -269,13 +267,7 @@ impl<'a> Elf64<'a> {
         // Parse section headers
         let sections = parse_section_headers(data, &header, swap)?;
 
-        Ok(Self {
-            data,
-            swap,
-            header,
-            sections,
-            segments,
-        })
+        Ok(Self { data, swap, header, sections, segments })
     }
 
     /// Check if the data starts with the ELF magic bytes.
@@ -294,9 +286,7 @@ impl<'a> Elf64<'a> {
     pub fn section_name(&self, sh: &Elf64SectionHeader) -> Result<&'a str, ParseError> {
         let shstrndx = self.header.e_shstrndx as usize;
         if shstrndx >= self.sections.len() {
-            return Err(ParseError::SectionNotFound(
-                ".shstrtab (invalid e_shstrndx)".into(),
-            ));
+            return Err(ParseError::SectionNotFound(".shstrtab (invalid e_shstrndx)".into()));
         }
         let strtab_sh = &self.sections[shstrndx];
         let strtab = self.section_data(strtab_sh)?;
@@ -320,11 +310,7 @@ impl<'a> Elf64<'a> {
     /// Find a section by name.
     #[must_use]
     pub fn find_section(&self, name: &str) -> Option<&Elf64SectionHeader> {
-        self.sections.iter().find(|sh| {
-            self.section_name(sh)
-                .map(|n| n == name)
-                .unwrap_or(false)
-        })
+        self.sections.iter().find(|sh| self.section_name(sh).map(|n| n == name).unwrap_or(false))
     }
 
     /// Parse symbols from the .symtab section.
@@ -355,11 +341,8 @@ impl<'a> Elf64<'a> {
         let strtab = self.section_data(strtab_sh)?;
 
         let sym_data = self.section_data(symtab_sh)?;
-        let entry_size = if symtab_sh.sh_entsize > 0 {
-            symtab_sh.sh_entsize as usize
-        } else {
-            ELF64_SYM_SIZE
-        };
+        let entry_size =
+            if symtab_sh.sh_entsize > 0 { symtab_sh.sh_entsize as usize } else { ELF64_SYM_SIZE };
 
         if entry_size < ELF64_SYM_SIZE {
             return Err(ParseError::InvalidHeader(format!(
@@ -367,11 +350,7 @@ impl<'a> Elf64<'a> {
             )));
         }
 
-        let count = if entry_size > 0 {
-            sym_data.len() / entry_size
-        } else {
-            0
-        };
+        let count = sym_data.len().checked_div(entry_size).unwrap_or(0);
 
         let mut symbols = Vec::with_capacity(count);
         let mut cursor = Cursor::new(sym_data, 0, self.swap);
@@ -417,10 +396,7 @@ impl<'a> Elf64<'a> {
     #[must_use]
     pub fn executable_segments(&self) -> Vec<&Elf64ProgramHeader> {
         // PT_LOAD = 1, PF_X = 0x1
-        self.segments
-            .iter()
-            .filter(|seg| seg.p_type == 1 && (seg.p_flags & 0x1) != 0)
-            .collect()
+        self.segments.iter().filter(|seg| seg.p_type == 1 && (seg.p_flags & 0x1) != 0).collect()
     }
 
     /// Find the first executable PT_LOAD segment (PF_X flag set).
@@ -431,9 +407,7 @@ impl<'a> Elf64<'a> {
     #[must_use]
     pub fn executable_segment(&self) -> Option<&Elf64ProgramHeader> {
         // PT_LOAD = 1, PF_X = 0x1
-        self.segments
-            .iter()
-            .find(|seg| seg.p_type == 1 && (seg.p_flags & 0x1) != 0)
+        self.segments.iter().find(|seg| seg.p_type == 1 && (seg.p_flags & 0x1) != 0)
     }
 
     /// Find the `.text` section header, if present.
@@ -461,9 +435,7 @@ impl<'a> Elf64<'a> {
             Some(sh) => self.section_data(sh).map_err(|_| DwarfError::InvalidUnit)?,
             None => &[],
         };
-        let debug_line = self
-            .find_section(".debug_line")
-            .and_then(|sh| self.section_data(sh).ok());
+        let debug_line = self.find_section(".debug_line").and_then(|sh| self.section_data(sh).ok());
 
         DwarfInfo::parse(debug_info, debug_abbrev, debug_str, debug_line).map(Some)
     }
@@ -523,10 +495,7 @@ impl<'a> Elf64<'a> {
         }
 
         // Find DT_STRTAB address
-        let strtab_addr = match dyn_entries
-            .iter()
-            .find(|d| d.d_tag == elf_relocation::DT_STRTAB)
-        {
+        let strtab_addr = match dyn_entries.iter().find(|d| d.d_tag == elf_relocation::DT_STRTAB) {
             Some(d) => d.d_val,
             None => return Ok(Vec::new()),
         };
@@ -606,9 +575,7 @@ impl<'a> Elf64<'a> {
                     // Read st_name (first 4 bytes of symbol entry)
                     let mut cursor = Cursor::new(sym_data, sym_off, self.swap);
                     let st_name = cursor.read_u32()?;
-                    read_strtab_entry(strtab, st_name)
-                        .unwrap_or("")
-                        .to_string()
+                    read_strtab_entry(strtab, st_name).unwrap_or("").to_string()
                 } else {
                     String::new()
                 };
@@ -780,36 +747,36 @@ mod tests {
         let shdr_off: u64 = 0xF0;
 
         // --- ELF Header (64 bytes) ---
-        buf.extend_from_slice(&ELF_MAGIC);    // e_ident[0..4]: magic
-        buf.push(ELFCLASS64);                  // e_ident[4]: class
-        buf.push(ELFDATA2LSB);                 // e_ident[5]: data
-        buf.push(1);                           // e_ident[6]: version (EV_CURRENT)
-        buf.push(0);                           // e_ident[7]: OS/ABI
-        buf.extend_from_slice(&[0u8; 8]);      // e_ident[8..16]: padding
-        buf.extend_from_slice(&2u16.to_le_bytes());    // e_type: ET_EXEC
+        buf.extend_from_slice(&ELF_MAGIC); // e_ident[0..4]: magic
+        buf.push(ELFCLASS64); // e_ident[4]: class
+        buf.push(ELFDATA2LSB); // e_ident[5]: data
+        buf.push(1); // e_ident[6]: version (EV_CURRENT)
+        buf.push(0); // e_ident[7]: OS/ABI
+        buf.extend_from_slice(&[0u8; 8]); // e_ident[8..16]: padding
+        buf.extend_from_slice(&2u16.to_le_bytes()); // e_type: ET_EXEC
         buf.extend_from_slice(&0x3Eu16.to_le_bytes()); // e_machine: EM_X86_64
-        buf.extend_from_slice(&1u32.to_le_bytes());    // e_version
+        buf.extend_from_slice(&1u32.to_le_bytes()); // e_version
         buf.extend_from_slice(&0x400000u64.to_le_bytes()); // e_entry
-        buf.extend_from_slice(&phdr_off.to_le_bytes());    // e_phoff
-        buf.extend_from_slice(&shdr_off.to_le_bytes());    // e_shoff
-        buf.extend_from_slice(&0u32.to_le_bytes());    // e_flags
-        buf.extend_from_slice(&64u16.to_le_bytes());   // e_ehsize
-        buf.extend_from_slice(&56u16.to_le_bytes());   // e_phentsize
-        buf.extend_from_slice(&1u16.to_le_bytes());    // e_phnum
-        buf.extend_from_slice(&64u16.to_le_bytes());   // e_shentsize
-        buf.extend_from_slice(&4u16.to_le_bytes());    // e_shnum
-        buf.extend_from_slice(&1u16.to_le_bytes());    // e_shstrndx (section 1)
+        buf.extend_from_slice(&phdr_off.to_le_bytes()); // e_phoff
+        buf.extend_from_slice(&shdr_off.to_le_bytes()); // e_shoff
+        buf.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        buf.extend_from_slice(&64u16.to_le_bytes()); // e_ehsize
+        buf.extend_from_slice(&56u16.to_le_bytes()); // e_phentsize
+        buf.extend_from_slice(&1u16.to_le_bytes()); // e_phnum
+        buf.extend_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        buf.extend_from_slice(&4u16.to_le_bytes()); // e_shnum
+        buf.extend_from_slice(&1u16.to_le_bytes()); // e_shstrndx (section 1)
         assert_eq!(buf.len(), 64);
 
         // --- Program Header (56 bytes at 0x40) ---
-        buf.extend_from_slice(&1u32.to_le_bytes());        // p_type: PT_LOAD
-        buf.extend_from_slice(&5u32.to_le_bytes());        // p_flags: PF_R | PF_X
-        buf.extend_from_slice(&0u64.to_le_bytes());        // p_offset
+        buf.extend_from_slice(&1u32.to_le_bytes()); // p_type: PT_LOAD
+        buf.extend_from_slice(&5u32.to_le_bytes()); // p_flags: PF_R | PF_X
+        buf.extend_from_slice(&0u64.to_le_bytes()); // p_offset
         buf.extend_from_slice(&0x400000u64.to_le_bytes()); // p_vaddr
         buf.extend_from_slice(&0x400000u64.to_le_bytes()); // p_paddr
-        buf.extend_from_slice(&0x200u64.to_le_bytes());    // p_filesz
-        buf.extend_from_slice(&0x200u64.to_le_bytes());    // p_memsz
-        buf.extend_from_slice(&0x1000u64.to_le_bytes());   // p_align
+        buf.extend_from_slice(&0x200u64.to_le_bytes()); // p_filesz
+        buf.extend_from_slice(&0x200u64.to_le_bytes()); // p_memsz
+        buf.extend_from_slice(&0x1000u64.to_le_bytes()); // p_align
         assert_eq!(buf.len(), 0x78);
 
         // --- .shstrtab data at 0x78 (27 bytes, pad to 0x98 = 32 bytes) ---
@@ -826,26 +793,26 @@ mod tests {
 
         // --- .symtab data at 0xA8 (3 entries * 24 bytes = 72 bytes) ---
         // Symbol 0: null
-        buf.extend_from_slice(&0u32.to_le_bytes());  // st_name
-        buf.push(0);                                  // st_info
-        buf.push(0);                                  // st_other
-        buf.extend_from_slice(&0u16.to_le_bytes());  // st_shndx
-        buf.extend_from_slice(&0u64.to_le_bytes());  // st_value
-        buf.extend_from_slice(&0u64.to_le_bytes());  // st_size
+        buf.extend_from_slice(&0u32.to_le_bytes()); // st_name
+        buf.push(0); // st_info
+        buf.push(0); // st_other
+        buf.extend_from_slice(&0u16.to_le_bytes()); // st_shndx
+        buf.extend_from_slice(&0u64.to_le_bytes()); // st_value
+        buf.extend_from_slice(&0u64.to_le_bytes()); // st_size
 
         // Symbol 1: _start (global func, section 1, addr 0x400000)
-        buf.extend_from_slice(&1u32.to_le_bytes());  // st_name => "_start"
-        buf.push((1 << 4) | 2);                      // st_info: STB_GLOBAL | STT_FUNC
-        buf.push(0);                                  // st_other: STV_DEFAULT
-        buf.extend_from_slice(&1u16.to_le_bytes());  // st_shndx
+        buf.extend_from_slice(&1u32.to_le_bytes()); // st_name => "_start"
+        buf.push((1 << 4) | 2); // st_info: STB_GLOBAL | STT_FUNC
+        buf.push(0); // st_other: STV_DEFAULT
+        buf.extend_from_slice(&1u16.to_le_bytes()); // st_shndx
         buf.extend_from_slice(&0x400000u64.to_le_bytes()); // st_value
         buf.extend_from_slice(&16u64.to_le_bytes()); // st_size
 
         // Symbol 2: main (global func, section 1, addr 0x400010)
-        buf.extend_from_slice(&8u32.to_le_bytes());  // st_name => "main"
-        buf.push((1 << 4) | 2);                      // st_info: STB_GLOBAL | STT_FUNC
-        buf.push(0);                                  // st_other
-        buf.extend_from_slice(&1u16.to_le_bytes());  // st_shndx
+        buf.extend_from_slice(&8u32.to_le_bytes()); // st_name => "main"
+        buf.push((1 << 4) | 2); // st_info: STB_GLOBAL | STT_FUNC
+        buf.push(0); // st_other
+        buf.extend_from_slice(&1u16.to_le_bytes()); // st_shndx
         buf.extend_from_slice(&0x400010u64.to_le_bytes()); // st_value
         buf.extend_from_slice(&32u64.to_le_bytes()); // st_size
 
@@ -859,46 +826,46 @@ mod tests {
         // Section 1: .shstrtab (sh_name=1, SHT_STRTAB)
         write_shdr(
             &mut buf,
-            1,                            // sh_name
-            SHT_STRTAB,                   // sh_type
-            0,                            // sh_flags
-            0,                            // sh_addr
-            shstrtab_off,                 // sh_offset
-            shstrtab.len() as u64,        // sh_size
-            0,                            // sh_link
-            0,                            // sh_info
-            1,                            // sh_addralign
-            0,                            // sh_entsize
+            1,                     // sh_name
+            SHT_STRTAB,            // sh_type
+            0,                     // sh_flags
+            0,                     // sh_addr
+            shstrtab_off,          // sh_offset
+            shstrtab.len() as u64, // sh_size
+            0,                     // sh_link
+            0,                     // sh_info
+            1,                     // sh_addralign
+            0,                     // sh_entsize
         );
 
         // Section 2: .symtab (sh_name=11, SHT_SYMTAB, sh_link=3 => .strtab)
         write_shdr(
             &mut buf,
-            11,                           // sh_name
-            SHT_SYMTAB,                   // sh_type
-            0,                            // sh_flags
-            0,                            // sh_addr
-            symtab_off,                   // sh_offset
-            (3 * ELF64_SYM_SIZE) as u64,  // sh_size (3 symbols)
-            3,                            // sh_link => .strtab section
-            1,                            // sh_info (first non-local symbol index)
-            8,                            // sh_addralign
-            ELF64_SYM_SIZE as u64,        // sh_entsize
+            11,                          // sh_name
+            SHT_SYMTAB,                  // sh_type
+            0,                           // sh_flags
+            0,                           // sh_addr
+            symtab_off,                  // sh_offset
+            (3 * ELF64_SYM_SIZE) as u64, // sh_size (3 symbols)
+            3,                           // sh_link => .strtab section
+            1,                           // sh_info (first non-local symbol index)
+            8,                           // sh_addralign
+            ELF64_SYM_SIZE as u64,       // sh_entsize
         );
 
         // Section 3: .strtab (sh_name=19, SHT_STRTAB)
         write_shdr(
             &mut buf,
-            19,                           // sh_name
-            SHT_STRTAB,                   // sh_type
-            0,                            // sh_flags
-            0,                            // sh_addr
-            strtab_off,                   // sh_offset
-            strtab.len() as u64,          // sh_size
-            0,                            // sh_link
-            0,                            // sh_info
-            1,                            // sh_addralign
-            0,                            // sh_entsize
+            19,                  // sh_name
+            SHT_STRTAB,          // sh_type
+            0,                   // sh_flags
+            0,                   // sh_addr
+            strtab_off,          // sh_offset
+            strtab.len() as u64, // sh_size
+            0,                   // sh_link
+            0,                   // sh_info
+            1,                   // sh_addralign
+            0,                   // sh_entsize
         );
 
         assert_eq!(buf.len(), 0x1F0);
@@ -989,11 +956,8 @@ mod tests {
         let data = build_test_elf();
         let elf = Elf64::parse(&data).expect("should parse test ELF");
 
-        let names: Vec<&str> = elf
-            .sections
-            .iter()
-            .map(|sh| elf.section_name(sh).unwrap_or(""))
-            .collect();
+        let names: Vec<&str> =
+            elf.sections.iter().map(|sh| elf.section_name(sh).unwrap_or("")).collect();
         assert_eq!(names, vec!["", ".shstrtab", ".symtab", ".strtab"]);
     }
 
@@ -1289,19 +1253,7 @@ mod tests {
         write_shdr(&mut buf, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
         // Section 1: .shstrtab
-        write_shdr(
-            &mut buf,
-            1,
-            SHT_STRTAB,
-            0,
-            0,
-            shstrtab_off,
-            shstrtab.len() as u64,
-            0,
-            0,
-            1,
-            0,
-        );
+        write_shdr(&mut buf, 1, SHT_STRTAB, 0, 0, shstrtab_off, shstrtab.len() as u64, 0, 0, 1, 0);
 
         // Section 2: .dynstr (sh_addr = dynstr_vaddr so needed_libraries can find it)
         write_shdr(
@@ -1378,10 +1330,7 @@ mod tests {
         assert_eq!(relocs.len(), 1);
         assert_eq!(relocs[0].r_offset, 0x601000);
         assert_eq!(relocs[0].sym(), 1);
-        assert_eq!(
-            relocs[0].reloc_type(),
-            elf_relocation::R_AARCH64_JUMP_SLOT
-        );
+        assert_eq!(relocs[0].reloc_type(), elf_relocation::R_AARCH64_JUMP_SLOT);
         assert_eq!(relocs[0].r_addend, 0);
     }
 
@@ -1430,10 +1379,7 @@ mod tests {
         assert_eq!(plt_relocs.len(), 1);
         assert_eq!(plt_relocs[0].r_offset, 0x601000);
         assert_eq!(plt_relocs[0].sym(), 1);
-        assert_eq!(
-            plt_relocs[0].reloc_type(),
-            elf_relocation::R_AARCH64_JUMP_SLOT
-        );
+        assert_eq!(plt_relocs[0].reloc_type(), elf_relocation::R_AARCH64_JUMP_SLOT);
     }
 
     #[test]
@@ -1445,10 +1391,7 @@ mod tests {
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].offset, 0x601000);
         assert_eq!(resolved[0].sym_name, "printf");
-        assert_eq!(
-            resolved[0].reloc_type,
-            elf_relocation::R_AARCH64_JUMP_SLOT
-        );
+        assert_eq!(resolved[0].reloc_type, elf_relocation::R_AARCH64_JUMP_SLOT);
         assert_eq!(resolved[0].addend, 0);
     }
 

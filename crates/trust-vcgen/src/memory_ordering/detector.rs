@@ -29,10 +29,7 @@ impl DataRaceDetector {
     /// Create a new empty detector.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            accesses: Vec::new(),
-            hb: HappensBefore::new(0),
-        }
+        Self { accesses: Vec::new(), hb: HappensBefore::new(0) }
     }
 
     /// Add a memory access and return its index.

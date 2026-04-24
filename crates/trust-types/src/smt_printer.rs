@@ -24,11 +24,7 @@ pub struct PrintConfig {
 
 impl Default for PrintConfig {
     fn default() -> Self {
-        Self {
-            indent_size: 2,
-            line_width: 80,
-            use_named_lets: false,
-        }
+        Self { indent_size: 2, line_width: 80, use_named_lets: false }
     }
 }
 
@@ -75,14 +71,14 @@ impl SmtPrinter {
 
     /// Emit a `(declare-fun name (param_sorts...) return_sort)` command.
     #[must_use]
-    pub fn print_declare_fun(&self, name: &str, param_sorts: &[Sort], return_sort: &Sort) -> String {
+    pub fn print_declare_fun(
+        &self,
+        name: &str,
+        param_sorts: &[Sort],
+        return_sort: &Sort,
+    ) -> String {
         let params: Vec<String> = param_sorts.iter().map(|s| s.to_smtlib()).collect();
-        format!(
-            "(declare-fun {} ({}) {})",
-            name,
-            params.join(" "),
-            return_sort.to_smtlib()
-        )
+        format!("(declare-fun {} ({}) {})", name, params.join(" "), return_sort.to_smtlib())
     }
 
     /// Emit an `(assert <formula>)` command with pretty-printed body.
@@ -186,10 +182,7 @@ impl SmtPrinter {
         }
         let indent = " ".repeat((depth + 1) * self.config.indent_size);
         let head = &parts[0];
-        let rest: Vec<String> = parts[1..]
-            .iter()
-            .map(|p| self.indent_sexp(p, depth + 1))
-            .collect();
+        let rest: Vec<String> = parts[1..].iter().map(|p| self.indent_sexp(p, depth + 1)).collect();
         format!("({head}\n{indent}{})", rest.join(&format!("\n{indent}")))
     }
 
@@ -265,10 +258,7 @@ mod tests {
     #[test]
     fn test_print_declare_fun_no_params() {
         let p = printer();
-        assert_eq!(
-            p.print_declare_fun("x", &[], &Sort::Int),
-            "(declare-fun x () Int)"
-        );
+        assert_eq!(p.print_declare_fun("x", &[], &Sort::Int), "(declare-fun x () Int)");
     }
 
     #[test]
@@ -353,11 +343,7 @@ mod tests {
     #[test]
     fn test_format_benchmark_bitvector_variables() {
         let p = printer();
-        let f = Formula::BvAdd(
-            Box::new(bv_var("x", 32)),
-            Box::new(bv_var("y", 32)),
-            32,
-        );
+        let f = Formula::BvAdd(Box::new(bv_var("x", 32)), Box::new(bv_var("y", 32)), 32);
         let bench = p.format_benchmark(Some("QF_BV"), &f);
         assert!(bench.contains("(declare-fun x () (_ BitVec 32))"));
         assert!(bench.contains("(declare-fun y () (_ BitVec 32))"));
@@ -464,7 +450,8 @@ mod tests {
         let sel = Formula::Select(Box::new(arr.clone()), Box::new(Formula::Int(0)));
         assert_eq!(p.to_smtlib2(&sel), "(select a 0)");
 
-        let st = Formula::Store(Box::new(arr), Box::new(Formula::Int(0)), Box::new(Formula::Int(42)));
+        let st =
+            Formula::Store(Box::new(arr), Box::new(Formula::Int(0)), Box::new(Formula::Int(42)));
         assert_eq!(p.to_smtlib2(&st), "(store a 0 42)");
     }
 }

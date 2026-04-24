@@ -74,7 +74,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     (if_then_scope, then_source_info),
                     LintLevel::Inherited,
                     |this| {
-                        // tRust: known issue — Does this need extra logic to handle let-chains?
+                        // FIXME: Does this need extra logic to handle let-chains?
                         let source_info = if this.is_let(cond) {
                             let variable_scope =
                                 this.new_source_scope(then_span, LintLevel::Inherited);
@@ -132,7 +132,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // expressions or `match` guards, possibly nested within a let-chain.
                 // In both cases they are specifically handled by the lowerings of
                 // those expressions, so this case is currently unreachable.
-                // tRust: invariant — THIR lowering handles every surviving `let` expression before generic expression lowering reaches this arm.
                 span_bug!(expr_span, "unexpected let expression outside of if or match-guard");
             }
             ExprKind::NeverToAny { source } => {
@@ -388,12 +387,10 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                         // Compile this to an assignment of the argument into the destination.
                         let [ptr, val] = **args else {
-                            // tRust: invariant — `write_via_move` is a two-argument intrinsic taking exactly a destination pointer and a value.
                             span_bug!(expr_span, "invalid write_via_move call")
                         };
                         let Some(ptr) = unpack!(block = this.as_local_operand(block, ptr)).place()
                         else {
-                            // tRust: invariant — the first `write_via_move` argument must lower to an addressable place so MIR can assign through `*ptr`.
                             span_bug!(expr_span, "invalid write_via_move call")
                         };
                         let ptr_deref = ptr.project_deeper(&[ProjectionElem::Deref], this.tcx);
@@ -414,12 +411,10 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                         // Extract the operands, compile `b`.
                         let [b, val] = **args else {
-                            // tRust: invariant — `write_box_via_move` is a two-argument intrinsic taking exactly a box place and a value.
                             span_bug!(expr_span, "invalid init_box_via_move call")
                         };
                         let Some(b) = unpack!(block = this.as_local_operand(block, b)).place()
                         else {
-                            // tRust: invariant — the box operand of `write_box_via_move` must lower to a place so MIR can project into its contents.
                             span_bug!(expr_span, "invalid init_box_via_move call")
                         };
                         let tcx = this.tcx;
@@ -449,7 +444,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         );
                         block.unit()
                     }
-                    // tRust: invariant — this intrinsic fast path is only entered for `write_via_move` and `write_box_via_move`.
                     _ => rustc_middle::bug!(),
                 }
             }
@@ -644,7 +638,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                     }
                                     None => {
                                         let name = variant.fields[n].name;
-                                        // tRust: invariant — `DefaultFields` lowering must synthesize every omitted field from a default, so no mandatory field may be missing here.
                                         span_bug!(
                                             expr_span,
                                             "missing mandatory field `{name}` of type `{ty}`",
@@ -873,7 +866,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | ExprKind::ThreadLocalRef(_)
             | ExprKind::StaticRef { .. }
             | ExprKind::WrapUnsafeBinder { .. } => {
-                debug_assert!(match Category::of(&expr.kind).expect("invariant: expression has a category") { // tRust: unwrap -> expect
+                debug_assert!(match Category::of(&expr.kind).unwrap() {
                     // should be handled above
                     Category::Rvalue(RvalueFunc::Into) => false,
 

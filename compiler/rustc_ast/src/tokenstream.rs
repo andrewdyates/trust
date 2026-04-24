@@ -361,7 +361,7 @@ fn make_attr_token_stream(
                         return AttrTokenStream::new(stack_top.inner);
                     };
                     let frame_data = mem::replace(&mut stack_top, frame);
-                    let (open_delim, open_sp, open_spacing) = frame_data.open_delim_sp.expect("invariant: frame pushed with open delimiter must have open_delim_sp set"); // tRust: unwrap -> expect
+                    let (open_delim, open_sp, open_spacing) = frame_data.open_delim_sp.unwrap();
                     assert!(
                         open_delim.eq_ignoring_invisible_origin(&delim),
                         "Mismatched open/close delims: open={open_delim:?} close={span:?}"
@@ -383,9 +383,9 @@ fn make_attr_token_stream(
     }
 
     if break_last_token > 0 {
-        let last_token = stack_top.inner.pop().expect("invariant: break_last_token > 0 requires non-empty token stream"); // tRust: unwrap -> expect
+        let last_token = stack_top.inner.pop().unwrap();
         if let AttrTokenTree::Token(last_token, spacing) = last_token {
-            let (unglued, _) = last_token.kind.break_two_token_op(break_last_token).expect("invariant: last token must be a multi-char op that can be broken"); // tRust: unwrap -> expect
+            let (unglued, _) = last_token.kind.break_two_token_op(break_last_token).unwrap();
 
             // Tokens are always ASCII chars, so we can use byte arithmetic here.
             let mut first_span = last_token.span.shrink_to_lo();
@@ -634,13 +634,8 @@ impl TokenStream {
         TokenStream::new(vec![TokenTree::token_alone(kind, span)])
     }
 
-    // tRust: fix for rust-lang#155333 — gracefully handle missing tokens instead
-    // of ICEing. Returns an empty TokenStream when the node has no tokens,
-    // allowing downstream passes to emit a proper diagnostic.
     pub fn from_ast(node: &(impl HasAttrs + HasTokens + fmt::Debug)) -> TokenStream {
-        let Some(tokens) = node.tokens() else {
-            return TokenStream::default();
-        };
+        let tokens = node.tokens().unwrap_or_else(|| panic!("missing tokens for node: {:?}", node));
         let mut tts = vec![];
         attrs_and_tokens_to_token_trees(node.attrs(), tokens, &mut tts);
         TokenStream::new(tts)
@@ -655,7 +650,7 @@ impl TokenStream {
         {
             // ...then overwrite the last token tree in `vec` with the
             // glued token, and skip the first token tree from `stream`.
-            *vec.last_mut().expect("invariant: vec is non-empty because vec.last() matched above") = TokenTree::Token(glued_tok, *spacing); // tRust: unwrap -> expect
+            *vec.last_mut().unwrap() = TokenTree::Token(glued_tok, *spacing);
             true
         } else {
             false
@@ -933,7 +928,7 @@ impl TokenCursor {
     #[inline(always)]
     pub fn inlined_next(&mut self) -> (Token, Spacing) {
         loop {
-            // tRust: known issue — we currently don't return `Delimiter::Invisible` open/close delims. To fix
+            // FIXME: we currently don't return `Delimiter::Invisible` open/close delims. To fix
             // #67062 we will need to, whereupon the `delim != Delimiter::Invisible` conditions
             // below can be removed.
             if let Some(tree) = self.curr.curr() {

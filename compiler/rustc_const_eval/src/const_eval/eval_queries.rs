@@ -128,7 +128,7 @@ fn intern_and_validate<'tcx, R: InterpretationResult<'tcx>>(
     const_validate_mplace(ecx, &ret, cid)?;
 
     // Only report this after validation, as validation produces much better diagnostics.
-    // tRust: known issue — ensure validation always reports this and stop making interning care about it.
+    // FIXME: ensure validation always reports this and stop making interning care about it.
 
     match intern_result {
         Ok(()) => {}
@@ -197,7 +197,7 @@ pub fn mk_eval_cx_for_const_val<'tcx>(
     ty: Ty<'tcx>,
 ) -> Option<(CompileTimeInterpCx<'tcx>, OpTy<'tcx>)> {
     let ecx = mk_eval_cx_to_read_const_val(tcx.tcx, tcx.span, typing_env, CanAccessMutGlobal::No);
-    // tRust: known issue — is it a problem to discard the error here?
+    // FIXME: is it a problem to discard the error here?
     let op = ecx.const_val_to_op(val, ty, None).discard_err()?;
     Some((ecx, op))
 }
@@ -256,7 +256,7 @@ pub(super) fn op_to_const<'tcx>(
     match immediate {
         Left(ref mplace) => {
             let (prov, offset) =
-                mplace.ptr().into_pointer_or_addr().expect("invariant: mplace ptr has provenance for a concrete const allocation").prov_and_relative_offset();
+                mplace.ptr().into_pointer_or_addr().unwrap().prov_and_relative_offset();
             let alloc_id = prov.alloc_id();
             ConstValue::Indirect { alloc_id, offset }
         }
@@ -268,7 +268,7 @@ pub(super) fn op_to_const<'tcx>(
                 // This codepath solely exists for `valtree_to_const_value` to not need to generate
                 // a `ConstValue::Indirect` for wide references, so it is tightly restricted to just
                 // that case.
-                let pointee_ty = imm.layout.ty.builtin_deref(false).expect("invariant: reference/pointer type has a deref target type"); // `false` = no raw ptrs
+                let pointee_ty = imm.layout.ty.builtin_deref(false).unwrap(); // `false` = no raw ptrs
                 debug_assert!(
                     matches!(
                         ecx.tcx.struct_tail_for_codegen(pointee_ty, ecx.typing_env()).kind(),
@@ -286,7 +286,6 @@ pub(super) fn op_to_const<'tcx>(
                 let meta = b.to_target_usize(ecx).expect(msg);
                 ConstValue::Slice { alloc_id, meta }
             }
-            // tRust: invariant — const eval results must be fully initialized, never Uninit
             Immediate::Uninit => bug!("`Uninit` is not a valid value for {}", op.layout.ty),
         },
     }
@@ -360,7 +359,7 @@ impl<'tcx> InterpretationResult<'tcx> for ConstAlloc<'tcx> {
         mplace: MPlaceTy<'tcx>,
         _ecx: &mut InterpCx<'tcx, CompileTimeMachine<'tcx>>,
     ) -> Self {
-        ConstAlloc { alloc_id: mplace.ptr().provenance.expect("invariant: const allocation pointer must have provenance with alloc_id").alloc_id(), ty: mplace.layout.ty }
+        ConstAlloc { alloc_id: mplace.ptr().provenance.unwrap().alloc_id(), ty: mplace.layout.ty }
     }
 }
 
@@ -424,7 +423,7 @@ fn const_validate_mplace<'tcx>(
     mplace: &MPlaceTy<'tcx>,
     cid: GlobalId<'tcx>,
 ) -> Result<(), ErrorHandled> {
-    let alloc_id = mplace.ptr().provenance.expect("invariant: const allocation pointer must have provenance with alloc_id").alloc_id();
+    let alloc_id = mplace.ptr().provenance.unwrap().alloc_id();
     let mut ref_tracking = RefTracking::new(mplace.clone(), mplace.layout.ty);
     let mut inner = false;
     while let Some((mplace, path)) = ref_tracking.next() {

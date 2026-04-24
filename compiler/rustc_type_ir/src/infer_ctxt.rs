@@ -108,7 +108,7 @@ impl<I: Interner> TypingMode<I> {
     /// While typechecking a body, we need to be able to define the opaque
     /// types defined by that body.
     ///
-    /// tRust: known issue -- This will be removed because it's generally not correct to define
+    /// FIXME: This will be removed because it's generally not correct to define
     /// opaques outside of HIR typeck.
     pub fn analysis_in_body(cx: I, body_def_id: I::LocalDefId) -> TypingMode<I> {
         TypingMode::Analysis {

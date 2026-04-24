@@ -90,11 +90,8 @@ pub(crate) fn generate_call_site_vcs(
             _ => vc.kind.description(),
         };
         vcs.push(VerificationCondition {
-            kind: VcKind::FfiBoundaryViolation {
-                callee: short_name.to_string(),
-                desc,
-            },
-            function: func_name.to_string(),
+            kind: VcKind::FfiBoundaryViolation { callee: short_name.to_string(), desc },
+            function: func_name.into(),
             location: span.clone(),
             formula: vc.formula,
             contract_metadata: None,
@@ -105,10 +102,7 @@ pub(crate) fn generate_call_site_vcs(
     let return_formula = apply_summary(summary, args);
     if return_formula != Formula::Bool(true) {
         // Substitute __ffi_ret with the actual dest variable.
-        let instantiated = return_formula.rename_var(
-            "__ffi_ret",
-            dest_var,
-        );
+        let instantiated = return_formula.rename_var("__ffi_ret", dest_var);
         // The return contract is an assumption (the caller can rely on it).
         // We generate a VC asserting the negation: if UNSAT, the contract holds.
         // For now, we add it as a FfiBoundaryViolation with descriptive text.
@@ -117,7 +111,7 @@ pub(crate) fn generate_call_site_vcs(
                 callee: short_name.to_string(),
                 desc: format!("return contract: {dest_var} satisfies summary"),
             },
-            function: func_name.to_string(),
+            function: func_name.into(),
             location: span.clone(),
             formula: Formula::Not(Box::new(instantiated)),
             contract_metadata: None,
@@ -137,7 +131,7 @@ pub(crate) fn generate_call_site_vcs(
                         callee: short_name.to_string(),
                         desc: "allocation may return null".to_string(),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Eq(
                         Box::new(Formula::Var(dest_var.to_string(), Sort::Int)),
@@ -156,7 +150,7 @@ pub(crate) fn generate_call_site_vcs(
                             callee: short_name.to_string(),
                             desc: "freed pointer must be valid allocation".to_string(),
                         },
-                        function: func_name.to_string(),
+                        function: func_name.into(),
                         location: span.clone(),
                         // Conservative: always SAT = "cannot verify allocation provenance"
                         formula: Formula::Bool(true),
@@ -172,7 +166,7 @@ pub(crate) fn generate_call_site_vcs(
                         callee: short_name.to_string(),
                         desc: format!("writes global `{name}` (state invalidated)"),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     // Informational: always SAT to flag the side effect.
                     formula: Formula::Bool(true),
@@ -186,7 +180,7 @@ pub(crate) fn generate_call_site_vcs(
                         callee: short_name.to_string(),
                         desc: "calls callback (non-local state havoced)".to_string(),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -286,14 +280,8 @@ mod tests {
             Formula::Var("src".into(), Sort::Int),
             Formula::Var("n".into(), Sort::Int),
         ];
-        let vcs = generate_call_site_vcs(
-            "test_fn",
-            "memcpy",
-            &args,
-            "_ret",
-            &SourceSpan::default(),
-            &db,
-        );
+        let vcs =
+            generate_call_site_vcs("test_fn", "memcpy", &args, "_ret", &SourceSpan::default(), &db);
 
         assert!(!vcs.is_empty(), "memcpy should produce VCs");
 
@@ -325,14 +313,8 @@ mod tests {
     fn test_generate_call_site_vcs_return_contract() {
         let db = FfiSummaryDb::new();
         let args = vec![Formula::Var("s".into(), Sort::Int)];
-        let vcs = generate_call_site_vcs(
-            "test_fn",
-            "strlen",
-            &args,
-            "_ret",
-            &SourceSpan::default(),
-            &db,
-        );
+        let vcs =
+            generate_call_site_vcs("test_fn", "strlen", &args, "_ret", &SourceSpan::default(), &db);
 
         // strlen: non-null param + return contract (ret >= 0)
         assert!(
@@ -348,14 +330,8 @@ mod tests {
     fn test_generate_call_site_vcs_free_side_effect() {
         let db = FfiSummaryDb::new();
         let args = vec![Formula::Var("ptr".into(), Sort::Int)];
-        let vcs = generate_call_site_vcs(
-            "test_fn",
-            "free",
-            &args,
-            "_ret",
-            &SourceSpan::default(),
-            &db,
-        );
+        let vcs =
+            generate_call_site_vcs("test_fn", "free", &args, "_ret", &SourceSpan::default(), &db);
 
         // free: nullable param (no null check) + FreesMemory side effect
         assert!(
@@ -369,10 +345,8 @@ mod tests {
 
     #[test]
     fn test_ffi_boundary_violation_proof_level() {
-        let kind = VcKind::FfiBoundaryViolation {
-            callee: "malloc".into(),
-            desc: "null check".into(),
-        };
+        let kind =
+            VcKind::FfiBoundaryViolation { callee: "malloc".into(), desc: "null check".into() };
         assert_eq!(
             kind.proof_level(),
             trust_types::ProofLevel::L0Safety,
@@ -393,10 +367,7 @@ mod tests {
 
     #[test]
     fn test_ffi_boundary_violation_no_runtime_fallback() {
-        let kind = VcKind::FfiBoundaryViolation {
-            callee: "malloc".into(),
-            desc: "test".into(),
-        };
+        let kind = VcKind::FfiBoundaryViolation { callee: "malloc".into(), desc: "test".into() };
         assert!(
             !kind.has_runtime_fallback(true),
             "FFI boundary violations have no runtime fallback"

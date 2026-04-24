@@ -126,7 +126,7 @@ impl RustcMirAttrs {
     /// "path/suffix.dot" -> "path/analysis_name_suffix.dot"
     fn output_path(&self, analysis_name: &str) -> Option<PathBuf> {
         let mut ret = self.basename_and_suffix.as_ref().cloned()?;
-        let suffix = ret.file_name().expect("invariant: path has file_name, checked when parsing attrs"); // tRust: unwrap -> expect
+        let suffix = ret.file_name().unwrap(); // Checked when parsing attrs
 
         let mut file_name: OsString = analysis_name.into();
         file_name.push("_");
@@ -198,11 +198,11 @@ where
 
     fn graph_id(&self) -> dot::Id<'_> {
         let name = graphviz_safe_def_name(self.body.source.def_id());
-        dot::Id::new(format!("graph_for_def_id_{name}")).expect("invariant: def_id names produce valid dot identifiers") // tRust: unwrap -> expect
+        dot::Id::new(format!("graph_for_def_id_{name}")).unwrap()
     }
 
     fn node_id(&self, n: &Self::Node) -> dot::Id<'_> {
-        dot::Id::new(format!("bb_{}", n.index())).expect("invariant: bb_ prefix with index produces valid dot identifier") // tRust: unwrap -> expect
+        dot::Id::new(format!("bb_{}", n.index())).unwrap()
     }
 
     fn node_label(&self, block: &Self::Node) -> dot::LabelText<'_> {
@@ -213,9 +213,9 @@ where
             style: self.style,
             bg: Background::Light,
         };
-        let label = fmt.write_node_label(*block, diffs).expect("invariant: writing node label to Vec<u8> should not fail"); // tRust: unwrap -> expect
+        let label = fmt.write_node_label(*block, diffs).unwrap();
 
-        dot::LabelText::html(String::from_utf8(label).expect("invariant: graphviz label is valid UTF-8")) // tRust: unwrap -> expect
+        dot::LabelText::html(String::from_utf8(label).unwrap())
     }
 
     fn node_shape(&self, _n: &Self::Node) -> Option<dot::LabelText<'_>> {
@@ -258,7 +258,7 @@ where
     }
 
     fn target(&self, edge: &Self::Edge) -> Self::Node {
-        self.body[edge.source].terminator().successors().nth(edge.index).expect("invariant: edge index is within successor count") // tRust: unwrap -> expect
+        self.body[edge.source].terminator().successors().nth(edge.index).unwrap()
     }
 }
 
@@ -364,7 +364,7 @@ where
 
         // Write any changes caused by terminator-specific effects.
         //
-        // tRust: known issue — These should really be printed as part of each outgoing edge rather than the node
+        // FIXME: These should really be printed as part of each outgoing edge rather than the node
         // for the basic block itself. That way, we could display terminator-specific effects for
         // backward dataflow analyses as well as effects for `SwitchInt` terminators.
         match terminator.kind {
@@ -533,7 +533,7 @@ where
         let mut diffs_after = diffs.after.into_iter();
 
         let next_in_dataflow_order = |it: &mut std::vec::IntoIter<_>| {
-            if A::Direction::IS_FORWARD { it.next().expect("invariant: forward iterator has next element") } else { it.next_back().expect("invariant: backward iterator has next_back element") } // tRust: unwrap -> expect
+            if A::Direction::IS_FORWARD { it.next().unwrap() } else { it.next_back().unwrap() }
         };
 
         for (i, statement) in self.cursor.body()[block].statements.iter().enumerate() {
@@ -560,7 +560,7 @@ where
 
         let terminator = self.cursor.body()[block].terminator();
         let mut terminator_str = String::new();
-        terminator.kind.fmt_head(&mut terminator_str).expect("invariant: formatting terminator to String should not fail"); // tRust: unwrap -> expect
+        terminator.kind.fmt_head(&mut terminator_str).unwrap();
 
         self.write_row(w, "T", &terminator_str, |_this, w, fmt| {
             if let Some(before) = before {
@@ -611,7 +611,7 @@ where
             let state = this.cursor.get();
             let analysis = this.cursor.analysis();
 
-            // tRust: known issue — The full state vector can be quite long. It would be nice to split on commas
+            // FIXME: The full state vector can be quite long. It would be nice to split on commas
             // and use some text wrapping algorithm.
             write!(
                 w,
@@ -724,7 +724,7 @@ where
 macro_rules! regex {
     ($re:literal $(,)?) => {{
         static RE: OnceLock<regex::Regex> = OnceLock::new();
-        RE.get_or_init(|| Regex::new($re).expect("invariant: static regex literal is valid")) // tRust: unwrap -> expect
+        RE.get_or_init(|| Regex::new($re).unwrap())
     }};
 }
 

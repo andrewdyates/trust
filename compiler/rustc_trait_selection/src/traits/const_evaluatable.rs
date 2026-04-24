@@ -62,7 +62,7 @@ pub fn is_const_evaluatable<'tcx>(
 
         match unexpanded_ct.kind() {
             ty::ConstKind::Expr(_) => {
-                // tRust: known issue (generic_const_exprs) — we have a fully concrete `ConstKind::Expr`, but
+                // FIXME(generic_const_exprs): we have a fully concrete `ConstKind::Expr`, but
                 // haven't implemented evaluating `ConstKind::Expr` yet, so we are unable to tell
                 // if it is evaluatable or not. As this is unreachable for now, we can simple ICE
                 // here.
@@ -83,7 +83,6 @@ pub fn is_const_evaluatable<'tcx>(
                     Ok(_) => Ok(()),
                 }
             }
-            // tRust: invariant — Unexpected constkind in `is_const_evalautable: `
             _ => bug!("unexpected constkind in `is_const_evalautable: {unexpanded_ct:?}`"),
         }
     } else if tcx.features().min_generic_const_args() {
@@ -96,10 +95,8 @@ pub fn is_const_evaluatable<'tcx>(
         let uv = match unexpanded_ct.kind() {
             ty::ConstKind::Unevaluated(uv) => uv,
             ty::ConstKind::Expr(_) => {
-                // tRust: invariant — crate::traits::try_evaluate_const(infcx, unexpanded_ct, param_env) should not be ty::ConstKind::Expr(_) at this point in processing
                 bug!("`ConstKind::Expr` without `feature(generic_const_exprs)` enabled")
             }
-            // tRust: invariant — Unexpected constkind in `is_const_evalautable: `
             _ => bug!("unexpected constkind in `is_const_evalautable: {unexpanded_ct:?}`"),
         };
 
@@ -191,7 +188,7 @@ fn satisfied_from_param_env<'tcx>(
             if let ty::ConstKind::Expr(e) = c.kind() {
                 e.visit_with(self);
             } else {
-                // tRust: known issue (generic_const_exprs) — This doesn't recurse into `<T as Trait<U>>::ASSOC`'s args.
+                // FIXME(generic_const_exprs): This doesn't recurse into `<T as Trait<U>>::ASSOC`'s args.
                 // This is currently unobservable as `<T as Trait<{ U + 1 }>>::ASSOC` creates an anon const
                 // with its own `ConstEvaluatable` bound in the param env which we will visit separately.
                 //

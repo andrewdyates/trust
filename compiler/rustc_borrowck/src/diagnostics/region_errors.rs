@@ -327,7 +327,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                             lower_bound_region,
                         ));
                     } else {
-                        // // NOTE: this case should be handled better. It. It
+                        // FIXME. We should handle this case better. It
                         // indicates that we have e.g., some region variable
                         // whose value is like `'a+'b` where `'a` and `'b` are
                         // distinct unrelated universal regions that are not
@@ -372,8 +372,8 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                         // We only report the first error, so as not to overwhelm the user. See
                         // `RegRegionErrorKind` docs.
                         //
-                        // // NOTE: currently we do nothing with these, but we could do better., but perhaps we can do better?
-                        // // NOTE: try collecting these constraints on the outlives suggestion on the outlives suggestion
+                        // FIXME: currently we do nothing with these, but perhaps we can do better?
+                        // FIXME: try collecting these constraints on the outlives suggestion
                         // builder. Does it make the suggestions any better?
                         debug!(
                             "Unreported region error: can't prove that {:?}: {:?}",
@@ -400,11 +400,10 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         let origin_longer = self.regioncx.definitions[longer_fr].origin;
 
         let Placeholder(placeholder) = origin_longer else {
-            // tRust: invariant — region inference guarantee — placeholder regions must be resolvable
             bug!("Expected {longer_fr:?} to come from placeholder!");
         };
 
-        // // NOTE: throwing away the existential region may not be ideal here. really the best here?
+        // FIXME: Is throwing away the existential region really the best here?
         let error_region = match self.regioncx.definitions[error_vid].origin {
             FreeRegion | Existential { .. } => None,
             Placeholder(other_placeholder) => Some(other_placeholder),
@@ -414,8 +413,8 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         let cause =
             self.regioncx.best_blame_constraint(longer_fr, origin_longer, error_vid).0.cause;
 
-        // // NOTE: these methods should have better names, and also probably not be this generic., and also probably not be this generic.
-        // // NOTE: we *throw away* the error element here. We probably want to here! We probably want to
+        // FIXME these methods should have better names, and also probably not be this generic.
+        // FIXME note that we *throw away* the error element here! We probably want to
         // thread it through the computation further down and use it, but there currently isn't
         // anything there to receive it.
         self.regioncx.universe_info(placeholder.universe).report_erroneous_element(
@@ -619,7 +618,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         if let ReturnConstraint::ClosureUpvar(upvar_field) = kind {
             let def_id = match self.regioncx.universal_regions().defining_ty {
                 DefiningTy::Closure(def_id, _) => def_id,
-                // tRust: invariant — type system guarantee
                 ty => bug!("unexpected DefiningTy {:?}", ty),
             };
 
@@ -631,15 +629,15 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             };
 
             if let Some(def_hir) = defined_hir {
-                let upvars_map = self.infcx.tcx.upvars_mentioned(def_id).expect("invariant: closure must have upvar mentions");
+                let upvars_map = self.infcx.tcx.upvars_mentioned(def_id).unwrap();
                 let upvar_def_span = self.infcx.tcx.hir_span(def_hir);
-                let upvar_span = upvars_map.get(&def_hir).expect("invariant: upvar must be found in upvars map").span;
+                let upvar_span = upvars_map.get(&def_hir).unwrap().span;
                 diag.subdiagnostic(VarHereDenote::Defined { span: upvar_def_span });
                 diag.subdiagnostic(VarHereDenote::Captured { span: upvar_span });
             }
         }
 
-        if let Some(fr_span) = self.give_region_a_name(*outlived_fr).expect("invariant: region must have a name").span() {
+        if let Some(fr_span) = self.give_region_a_name(*outlived_fr).unwrap().span() {
             diag.subdiagnostic(VarHereDenote::FnMutInferred { span: fr_span });
         }
 
@@ -731,9 +729,9 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             (Some(f), Some(o)) => {
                 self.maybe_suggest_constrain_dyn_trait_impl(&mut diag, f, o, category);
 
-                let fr_region_name = self.give_region_a_name(errci.fr).expect("invariant: region must have a name");
+                let fr_region_name = self.give_region_a_name(errci.fr).unwrap();
                 fr_region_name.highlight_region_name(&mut diag);
-                let outlived_fr_region_name = self.give_region_a_name(errci.outlived_fr).expect("invariant: region must have a name");
+                let outlived_fr_region_name = self.give_region_a_name(errci.outlived_fr).unwrap();
                 outlived_fr_region_name.highlight_region_name(&mut diag);
 
                 diag.span_label(
@@ -784,7 +782,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             source: RegionNameSource::Static,
         });
         fr_name.highlight_region_name(&mut diag);
-        let outlived_fr_name = self.give_region_a_name(*outlived_fr).expect("invariant: region must have a name");
+        let outlived_fr_name = self.give_region_a_name(*outlived_fr).unwrap();
         outlived_fr_name.highlight_region_name(&mut diag);
 
         let err_category = if matches!(category, ConstraintCategory::Return(_))

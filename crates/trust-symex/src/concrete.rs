@@ -35,19 +35,13 @@ impl ConcolicValue {
     /// Create a purely concrete value with no symbolic shadow.
     #[must_use]
     pub(crate) fn concrete(value: i128) -> Self {
-        Self {
-            concrete: value,
-            symbolic: None,
-        }
+        Self { concrete: value, symbolic: None }
     }
 
     /// Create a concolic value with both concrete and symbolic components.
     #[must_use]
     pub(crate) fn with_shadow(concrete: i128, symbolic: SymbolicValue) -> Self {
-        Self {
-            concrete,
-            symbolic: Some(symbolic),
-        }
+        Self { concrete, symbolic: Some(symbolic) }
     }
 
     /// Returns `true` if this value has a symbolic shadow.
@@ -59,9 +53,7 @@ impl ConcolicValue {
     /// Get the symbolic expression, falling back to a concrete literal.
     #[must_use]
     pub(crate) fn to_symbolic(&self) -> SymbolicValue {
-        self.symbolic
-            .clone()
-            .unwrap_or(SymbolicValue::Concrete(self.concrete))
+        self.symbolic.clone().unwrap_or(SymbolicValue::Concrete(self.concrete))
     }
 }
 
@@ -113,39 +105,20 @@ impl ConcreteExecutor {
         self.vars.insert(name.into(), value);
     }
 
-    /// Bind a symbolic input: the concrete seed plus a named symbolic variable.
-    pub(crate) fn set_symbolic_input(&mut self, name: impl Into<String>, concrete_seed: i128) {
-        let n: String = name.into();
-        let cv = ConcolicValue::with_shadow(concrete_seed, SymbolicValue::Symbol(n.clone()));
-        self.vars.insert(n, cv);
-    }
-
     /// Get the concolic value of a variable, returning a purely concrete 0 if absent.
     #[must_use]
     pub(crate) fn get(&self, name: &str) -> ConcolicValue {
-        self.vars
-            .get(name)
-            .cloned()
-            .unwrap_or(ConcolicValue::concrete(0))
-    }
-
-    /// Returns the symbolic branches collected so far.
-    #[must_use]
-    pub(crate) fn branches(&self) -> &[SymbolicBranchPoint] {
-        &self.symbolic_branches
-    }
-
-    /// Returns the accumulated path constraint.
-    #[must_use]
-    pub(crate) fn path_constraint(&self) -> &PathConstraint {
-        &self.path
+        self.vars.get(name).cloned().unwrap_or(ConcolicValue::concrete(0))
     }
 
     /// Execute a single basic block concretely.
     ///
     /// Returns the ID of the next block to execute, or `None` if the block
     /// terminates (return / unreachable).
-    pub(crate) fn execute_block(&mut self, block: &BasicBlock) -> Result<Option<usize>, SymexError> {
+    pub(crate) fn execute_block(
+        &mut self,
+        block: &BasicBlock,
+    ) -> Result<Option<usize>, SymexError> {
         if self.steps >= self.step_limit {
             return Err(SymexError::DepthLimitExceeded {
                 depth: self.steps,
@@ -163,10 +136,7 @@ impl ConcreteExecutor {
         self.execute_terminator(block.id, &block.terminator)
     }
 
-    fn execute_statement(
-        &mut self,
-        stmt: &trust_types::Statement,
-    ) -> Result<(), SymexError> {
+    fn execute_statement(&mut self, stmt: &trust_types::Statement) -> Result<(), SymexError> {
         match stmt {
             trust_types::Statement::Assign { place, rvalue, .. } => {
                 let val = self.eval_rvalue(rvalue)?;
@@ -175,9 +145,9 @@ impl ConcreteExecutor {
                 Ok(())
             }
             trust_types::Statement::Nop => Ok(()),
-            other => Err(SymexError::UnsupportedOperation(
-                format!("unhandled Statement variant: {other:?}"),
-            )),
+            other => Err(SymexError::UnsupportedOperation(format!(
+                "unhandled Statement variant: {other:?}"
+            ))),
         }
     }
 
@@ -190,12 +160,7 @@ impl ConcreteExecutor {
             Terminator::Goto(target) => Ok(Some(target.0)),
             Terminator::Return => Ok(None),
             Terminator::Unreachable => Err(SymexError::UnreachableReached),
-            Terminator::SwitchInt {
-                discr,
-                targets,
-                otherwise,
-                ..
-            } => {
+            Terminator::SwitchInt { discr, targets, otherwise, .. } => {
                 let discr_val = self.eval_operand(discr)?;
                 let concrete_discr = discr_val.concrete;
 
@@ -233,12 +198,7 @@ impl ConcreteExecutor {
                 }
                 Ok(Some(otherwise.0))
             }
-            Terminator::Assert {
-                cond,
-                expected,
-                target,
-                ..
-            } => {
+            Terminator::Assert { cond, expected, target, .. } => {
                 let cond_val = self.eval_operand(cond)?;
                 if cond_val.is_symbolic() {
                     let sym_cond = if *expected {
@@ -263,9 +223,9 @@ impl ConcreteExecutor {
                 }
             }
             Terminator::Drop { target, .. } => Ok(Some(target.0)),
-            other => Err(SymexError::UnsupportedOperation(
-                format!("unhandled Terminator variant: {other:?}"),
-            )),
+            other => Err(SymexError::UnsupportedOperation(format!(
+                "unhandled Terminator variant: {other:?}"
+            ))),
         }
     }
 
@@ -281,10 +241,7 @@ impl ConcreteExecutor {
                 } else {
                     None
                 };
-                Ok(ConcolicValue {
-                    concrete,
-                    symbolic,
-                })
+                Ok(ConcolicValue { concrete, symbolic })
             }
             Rvalue::UnaryOp(un_op, op) => {
                 let v = self.eval_operand(op)?;
@@ -296,8 +253,7 @@ impl ConcreteExecutor {
                     }
                     trust_types::UnOp::Not => {
                         let concrete = !v.concrete;
-                        let symbolic =
-                            v.symbolic.map(|s| SymbolicValue::BitwiseNot(Box::new(s)));
+                        let symbolic = v.symbolic.map(|s| SymbolicValue::BitwiseNot(Box::new(s)));
                         Ok(ConcolicValue { concrete, symbolic })
                     }
                     trust_types::UnOp::PtrMetadata | _ => {
@@ -305,9 +261,7 @@ impl ConcreteExecutor {
                         // concrete stand-in and a fresh symbol for the symbolic side.
                         Ok(ConcolicValue {
                             concrete: 0,
-                            symbolic: Some(SymbolicValue::Symbol(
-                                "ptrmeta_concolic".to_owned(),
-                            )),
+                            symbolic: Some(SymbolicValue::Symbol("ptrmeta_concolic".to_owned())),
                         })
                     }
                 }
@@ -326,17 +280,11 @@ impl ConcreteExecutor {
             }
             Rvalue::Discriminant(place) => {
                 let name = format!("discr_{}", place_to_name(place));
-                Ok(ConcolicValue::with_shadow(
-                    0,
-                    SymbolicValue::Symbol(name),
-                ))
+                Ok(ConcolicValue::with_shadow(0, SymbolicValue::Symbol(name)))
             }
             Rvalue::Len(place) => {
                 let name = format!("len_{}", place_to_name(place));
-                Ok(ConcolicValue::with_shadow(
-                    0,
-                    SymbolicValue::Symbol(name),
-                ))
+                Ok(ConcolicValue::with_shadow(0, SymbolicValue::Symbol(name)))
             }
             Rvalue::Repeat(op, _) => self.eval_operand(op),
             Rvalue::AddressOf(_, place) => {
@@ -347,9 +295,9 @@ impl ConcreteExecutor {
                 let name = place_to_name(place);
                 Ok(self.get(&name))
             }
-            other => Err(SymexError::UnsupportedOperation(
-                format!("unhandled Rvalue variant: {other:?}"),
-            )),
+            other => Err(SymexError::UnsupportedOperation(format!(
+                "unhandled Rvalue variant: {other:?}"
+            ))),
         }
     }
 
@@ -360,9 +308,9 @@ impl ConcreteExecutor {
                 Ok(self.get(&name))
             }
             Operand::Constant(cv) => const_to_concolic(cv),
-            other => Err(SymexError::UnsupportedOperation(
-                format!("unhandled Operand variant: {other:?}"),
-            )),
+            other => Err(SymexError::UnsupportedOperation(format!(
+                "unhandled Operand variant: {other:?}"
+            ))),
         }
     }
 }
@@ -374,10 +322,18 @@ fn eval_concrete_binop(l: i128, op: BinOp, r: i128) -> Result<i128, SymexError> 
         BinOp::Sub => Ok(l.wrapping_sub(r)),
         BinOp::Mul => Ok(l.wrapping_mul(r)),
         BinOp::Div => {
-            if r == 0 { Ok(0) } else { Ok(l.wrapping_div(r)) }
+            if r == 0 {
+                Ok(0)
+            } else {
+                Ok(l.wrapping_div(r))
+            }
         }
         BinOp::Rem => {
-            if r == 0 { Ok(0) } else { Ok(l.wrapping_rem(r)) }
+            if r == 0 {
+                Ok(0)
+            } else {
+                Ok(l.wrapping_rem(r))
+            }
         }
         BinOp::Eq => Ok(i128::from(l == r)),
         BinOp::Ne => Ok(i128::from(l != r)),
@@ -392,12 +348,16 @@ fn eval_concrete_binop(l: i128, op: BinOp, r: i128) -> Result<i128, SymexError> 
         BinOp::Shl => Ok(l.wrapping_shl(u32::try_from(r).unwrap_or(128).min(127))),
         BinOp::Shr => Ok(l.wrapping_shr(u32::try_from(r).unwrap_or(128).min(127))),
         // tRust #383: Three-way comparison returns -1 (Less), 0 (Equal), or 1 (Greater).
-        BinOp::Cmp => {
-            Ok(if l < r { -1 } else if l == r { 0 } else { 1 })
+        BinOp::Cmp => Ok(if l < r {
+            -1
+        } else if l == r {
+            0
+        } else {
+            1
+        }),
+        other => {
+            Err(SymexError::UnsupportedOperation(format!("unhandled BinOp variant: {other:?}")))
         }
-        other => Err(SymexError::UnsupportedOperation(
-            format!("unhandled BinOp variant: {other:?}"),
-        )),
     }
 }
 
@@ -409,9 +369,9 @@ fn const_to_concolic(cv: &ConstValue) -> Result<ConcolicValue, SymexError> {
         ConstValue::Uint(n, _) => Ok(ConcolicValue::concrete(*n as i128)),
         ConstValue::Float(f) => Ok(ConcolicValue::concrete(*f as i128)),
         ConstValue::Unit => Ok(ConcolicValue::concrete(0)),
-        other => Err(SymexError::UnsupportedOperation(
-            format!("unhandled ConstValue variant: {other:?}"),
-        )),
+        other => Err(SymexError::UnsupportedOperation(format!(
+            "unhandled ConstValue variant: {other:?}"
+        ))),
     }
 }
 
@@ -454,17 +414,15 @@ mod tests {
 
     #[test]
     fn test_concrete_pure_concrete_execution() {
-        let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![Statement::Assign {
-                    place: Place::local(1),
-                    rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(42))),
-                    span: span(),
-                }],
-                terminator: Terminator::Return,
-            },
-        ];
+        let blocks = vec![BasicBlock {
+            id: BlockId(0),
+            stmts: vec![Statement::Assign {
+                place: Place::local(1),
+                rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(42))),
+                span: span(),
+            }],
+            terminator: Terminator::Return,
+        }];
         let inputs = FxHashMap::default();
         let exec = run_concrete(&blocks, &inputs, 100).expect("should succeed");
         let val = exec.get("_local1");
@@ -475,7 +433,7 @@ mod tests {
     #[test]
     fn test_concrete_symbolic_input_tracking() {
         let mut executor = ConcreteExecutor::new(100);
-        executor.set_symbolic_input("x", 5);
+        executor.set_input("x", ConcolicValue::with_shadow(5, SymbolicValue::Symbol("x".into())));
         let val = executor.get("x");
         assert_eq!(val.concrete, 5);
         assert!(val.is_symbolic());
@@ -526,16 +484,8 @@ mod tests {
                     span: span(),
                 },
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
         ];
 
         let mut inputs = FxHashMap::default();
@@ -584,11 +534,7 @@ mod tests {
     #[test]
     fn test_concrete_goto_chain() {
         let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
             BasicBlock {
                 id: BlockId(1),
                 stmts: vec![Statement::Assign {

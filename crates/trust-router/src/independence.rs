@@ -78,10 +78,7 @@ pub fn partition(formula: &Formula) -> PartitionResult {
     let mut var_to_conjuncts: FxHashMap<String, Vec<usize>> = FxHashMap::default();
     for (i, vars) in conjunct_vars.iter().enumerate() {
         for var in vars {
-            var_to_conjuncts
-                .entry(var.clone())
-                .or_default()
-                .push(i);
+            var_to_conjuncts.entry(var.clone()).or_default().push(i);
         }
     }
 
@@ -113,10 +110,7 @@ pub fn partition(formula: &Formula) -> PartitionResult {
                     conjuncts[i].clone()
                 })
                 .collect();
-            IndependentPartition {
-                conjuncts: group_conjuncts,
-                variables: all_vars,
-            }
+            IndependentPartition { conjuncts: group_conjuncts, variables: all_vars }
         })
         .collect();
 
@@ -124,10 +118,7 @@ pub fn partition(formula: &Formula) -> PartitionResult {
     partitions.sort_by_key(|p| p.variables.len());
 
     let was_split = partitions.len() > 1;
-    PartitionResult {
-        partitions,
-        was_split,
-    }
+    PartitionResult { partitions, was_split }
 }
 
 /// Reconstruct a formula from partitions.
@@ -137,15 +128,15 @@ pub fn partition(formula: &Formula) -> PartitionResult {
 /// in a top-level And.
 #[must_use]
 pub fn reconstruct(partitions: &[IndependentPartition]) -> Formula {
-    let all_conjuncts: Vec<Formula> = partitions
-        .iter()
-        .flat_map(|p| p.conjuncts.iter().cloned())
-        .collect();
+    let all_conjuncts: Vec<Formula> =
+        partitions.iter().flat_map(|p| p.conjuncts.iter().cloned()).collect();
 
     match all_conjuncts.len() {
         0 => Formula::Bool(true),
         // SAFETY: match arm guarantees len == 1.
-        1 => all_conjuncts.into_iter().next()
+        1 => all_conjuncts
+            .into_iter()
+            .next()
             .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
         _ => Formula::And(all_conjuncts),
     }
@@ -186,10 +177,8 @@ pub fn partition_independent(formulas: &[Formula]) -> Vec<Vec<Formula>> {
     }
 
     // Collect free variables for each formula.
-    let formula_vars: Vec<FxHashSet<String>> = formulas
-        .iter()
-        .map(|f| f.free_variables())
-        .collect();
+    let formula_vars: Vec<FxHashSet<String>> =
+        formulas.iter().map(|f| f.free_variables()).collect();
 
     // Union-Find to group formulas sharing variables.
     let n = formulas.len();
@@ -199,10 +188,7 @@ pub fn partition_independent(formulas: &[Formula]) -> Vec<Vec<Formula>> {
     let mut var_to_formulas: FxHashMap<String, Vec<usize>> = FxHashMap::default();
     for (i, vars) in formula_vars.iter().enumerate() {
         for var in vars {
-            var_to_formulas
-                .entry(var.clone())
-                .or_default()
-                .push(i);
+            var_to_formulas.entry(var.clone()).or_default().push(i);
         }
     }
 
@@ -226,12 +212,7 @@ pub fn partition_independent(formulas: &[Formula]) -> Vec<Vec<Formula>> {
     // Build the result, sorted by group size (smallest first) for faster solving.
     let mut result: Vec<Vec<Formula>> = groups
         .into_values()
-        .map(|indices| {
-            indices
-                .into_iter()
-                .map(|i| formulas[i].clone())
-                .collect()
-        })
+        .map(|indices| indices.into_iter().map(|i| formulas[i].clone()).collect())
         .collect();
 
     result.sort_by_key(|group| group.len());
@@ -273,14 +254,8 @@ mod tests {
     fn test_partition_independent_conjuncts() {
         // (x > 0) AND (y < 10) — independent, no shared variables
         let formula = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
 
         let result = partition(&formula);
@@ -298,14 +273,8 @@ mod tests {
     fn test_partition_dependent_conjuncts() {
         // (x > 0) AND (x < 10) — share variable x, cannot split
         let formula = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
 
         let result = partition(&formula);
@@ -318,18 +287,9 @@ mod tests {
     fn test_partition_mixed_independence() {
         // (x > 0) AND (y < 10) AND (x < 5) — x-group and y-group
         let formula = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(5)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5))),
         ]);
 
         let result = partition(&formula);
@@ -355,10 +315,8 @@ mod tests {
     #[test]
     fn test_partition_non_conjunction() {
         // Single formula, not And — should return one partition
-        let formula = Formula::Gt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
 
         let result = partition(&formula);
         assert!(!result.was_split);
@@ -378,18 +336,9 @@ mod tests {
     fn test_partition_three_independent_groups() {
         // (x > 0) AND (y > 0) AND (z > 0) — three independent groups
         let formula = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("z".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Gt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Gt(Box::new(Formula::Var("z".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
 
         let result = partition(&formula);
@@ -409,10 +358,7 @@ mod tests {
                 Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Var("z".into(), Sort::Int)),
             ),
-            Formula::Gt(
-                Box::new(Formula::Var("a".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
 
         let result = partition(&formula);
@@ -489,10 +435,7 @@ mod tests {
                 Box::new(Formula::Var("b".into(), Sort::Int)),
             ),
             // Group with 1 var
-            Formula::Gt(
-                Box::new(Formula::Var("z".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("z".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
 
         let result = partition(&formula);

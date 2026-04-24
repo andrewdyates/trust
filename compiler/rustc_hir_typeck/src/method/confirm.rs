@@ -207,7 +207,6 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
                     let unsized_ty = if let ty::Array(elem_ty, _) = base_ty.kind() {
                         Ty::new_slice(self.tcx, *elem_ty)
                     } else {
-                        // tRust: invariant — the `unsize` autoref adjustment is only constructed when coercing an array receiver to a slice reference.
                         bug!(
                             "AutorefOrPtrAdjustment's unsize flag should only be set for array ty, found {}",
                             base_ty
@@ -242,12 +241,10 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
                     ty::Adt(pin, args) if self.tcx.is_lang_item(pin.did(), hir::LangItem::Pin) => {
                         let inner_ty = match args[0].expect_ty().kind() {
                             ty::Ref(_, ty, _) => *ty,
-                            // tRust: invariant — reborrowing `Pin` is only valid for `Pin<&T>` or `Pin<&mut T>`, so the first generic argument must be a reference type.
                             _ => bug!("Expected a reference type for argument to Pin"),
                         };
                         Ty::new_pinned_ref(self.tcx, region, inner_ty, mutbl)
                     }
-                    // tRust: invariant — probe only selects `ReborrowPin` for receivers whose adjusted target is the lang-item `Pin` ADT.
                     _ => bug!("Cannot adjust receiver type for reborrowing pin of {target:?}"),
                 };
 
@@ -376,14 +373,12 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
                     self,
                     ty,
                     data.principal().unwrap_or_else(|| {
-                        // tRust: invariant — an `ObjectPick` trait method candidate must come from a `dyn` object with a principal trait; empty existential objects have no callable trait method.
                         span_bug!(self.span, "calling trait method on empty object?")
                     }),
                 )),
                 _ => None,
             })
             .unwrap_or_else(|| {
-                // tRust: invariant — method probing only produces `ObjectPick` after some autoderef step reached a `ty::Dynamic` object for this receiver.
                 span_bug!(
                     self.span,
                     "self-type `{}` for ObjectPick never dereferenced to an object",
@@ -468,7 +463,6 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
                         self.cfcx.ct_infer(Some(param), inf.span).into()
                     }
                     (kind, arg) => {
-                        // tRust: invariant — turbofish arguments are zipped with the method's generic params by kind, so each supplied argument variant must match its parameter kind.
                         bug!("mismatched method arg kind {kind:?} in turbofish: {arg:?}")
                     }
                 }
@@ -614,7 +608,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
             sig, all_args, method_predicates, def_id
         );
 
-        // NOTE: could replace with the following, but we already calculated `method_predicates`,
+        // FIXME: could replace with the following, but we already calculated `method_predicates`,
         // so we just call `predicates_for_generics` directly to avoid redoing work.
         // `self.add_required_obligations(self.span, def_id, &all_args);`
         for obligation in traits::predicates_for_generics(
@@ -702,12 +696,12 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
         }
 
         let shadower_span = self.tcx.def_span(pick.item.def_id);
-        let subtrait = self.tcx.item_name(pick.item.trait_container(self.tcx).expect("invariant: value is present"));
+        let subtrait = self.tcx.item_name(pick.item.trait_container(self.tcx).unwrap());
         let shadower = SupertraitItemShadower { span: shadower_span, subtrait };
 
         let shadowee = if let [shadowee] = &pick.shadowed_candidates[..] {
             let shadowee_span = self.tcx.def_span(shadowee.def_id);
-            let supertrait = self.tcx.item_name(shadowee.trait_container(self.tcx).expect("invariant: value is present"));
+            let supertrait = self.tcx.item_name(shadowee.trait_container(self.tcx).unwrap());
             SupertraitItemShadowee::Labeled { span: shadowee_span, supertrait }
         } else {
             let (traits, spans): (Vec<_>, Vec<_>) = pick
@@ -715,7 +709,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
                 .iter()
                 .map(|item| {
                     (
-                        self.tcx.item_name(item.trait_container(self.tcx).expect("invariant: value is present")),
+                        self.tcx.item_name(item.trait_container(self.tcx).unwrap()),
                         self.tcx.def_span(item.def_id),
                     )
                 })
@@ -740,7 +734,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
             return;
         }
         let trait_name = self.tcx.item_name(pick.item.container_id(self.tcx));
-        let import_span = self.tcx.hir_span_if_local(pick.import_ids[0].to_def_id()).expect("invariant: value is present");
+        let import_span = self.tcx.hir_span_if_local(pick.import_ids[0].to_def_id()).unwrap();
 
         self.tcx.emit_node_lint(
             AMBIGUOUS_GLOB_IMPORTED_TRAITS,

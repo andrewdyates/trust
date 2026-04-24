@@ -56,7 +56,7 @@ impl FileEncoder {
             File::options().read(true).write(true).create(true).truncate(true).open(&path)?;
 
         Ok(FileEncoder {
-            buf: vec![0u8; BUF_SIZE].into_boxed_slice().try_into().expect("invariant: BUF_SIZE-length vec converts to fixed-size boxed array"), // tRust: unwrap -> expect
+            buf: vec![0u8; BUF_SIZE].into_boxed_slice().try_into().unwrap(),
             path: path.as_ref().into(),
             buffered: 0,
             flushed: 0,
@@ -154,7 +154,7 @@ impl FileEncoder {
         {
             self.finished = false;
         }
-        let flush_threshold = const { BUF_SIZE.checked_sub(N).expect("invariant: N does not exceed BUF_SIZE") }; // tRust: unwrap -> expect
+        let flush_threshold = const { BUF_SIZE.checked_sub(N).unwrap() };
         if std::intrinsics::unlikely(self.buffered > flush_threshold) {
             self.flush();
         }
@@ -301,7 +301,7 @@ impl<'a> MemDecoder<'a> {
 
     #[inline]
     pub fn read_array<const N: usize>(&mut self) -> [u8; N] {
-        self.read_raw_bytes(N).try_into().expect("invariant: N-byte slice converts to [u8; N] array") // tRust: unwrap -> expect
+        self.read_raw_bytes(N).try_into().unwrap()
     }
 
     /// While we could manually expose manipulation of the decoder position,

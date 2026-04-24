@@ -1,6 +1,3 @@
-//! tRust: MIR pass that inserts alignment checks for raw pointer dereferences
-//! tRust: when UB checks are enabled.
-
 use rustc_abi::Align;
 use rustc_hir::LangItem;
 use rustc_index::IndexVec;

@@ -117,7 +117,6 @@ fn typeck_with_inspect<'tcx>(
 
     // Figure out what primary body this item has.
     let body_id = node.body_id().unwrap_or_else(|| {
-        // tRust: invariant — `typeck_with_inspect` only runs on HIR owners that have a primary body to type-check
         span_bug!(span, "can't type-check body of {:?}", def_id);
     });
     let body = tcx.hir_body(body_id);
@@ -219,7 +218,7 @@ fn typeck_with_inspect<'tcx>(
     // fallback arbitrarily inferring something incompatible with `Copy` inference
     // side effects.
     //
-    // NOTE(#140855): This should also be forwards compatible with moving
+    // FIXME(#140855): This should also be forwards compatible with moving
     // repeat expr checks to a custom goal kind or using marker traits in
     // the future.
     fcx.check_repeat_exprs();
@@ -315,7 +314,7 @@ fn extend_err_with_const_context(
             // `[type; len]` in expr context.
             err.note("array length can only be `usize`");
         }
-        // NOTE: support method calls too.
+        // FIXME: support method calls too.
         hir::Node::AnonConst(anon)
             if let hir::Node::ConstArg(parent) = tcx.parent_hir_node(anon.hir_id)
                 && let hir::Node::Expr(expr) = tcx.parent_hir_node(parent.hir_id)
@@ -361,7 +360,7 @@ fn extend_err_with_const_context(
         hir::Node::AnonConst(anon)
             if let hir::Node::Variant(_variant) = tcx.parent_hir_node(anon.hir_id) =>
         {
-            // NOTE: point at `repr` when present in the type.
+            // FIXME: point at `repr` when present in the type.
             err.note(
                 "enum variant discriminant can only be of a primitive type compatible with the \
                  enum's `repr`",
@@ -487,7 +486,6 @@ pub struct EnclosingBreakables<'tcx> {
 impl<'tcx> EnclosingBreakables<'tcx> {
     fn find_breakable(&mut self, target_id: HirId) -> &mut BreakableCtxt<'tcx> {
         self.opt_find_breakable(target_id).unwrap_or_else(|| {
-            // tRust: invariant — every resolved break or continue target HirId must already be indexed in `by_id`
             bug!("could not find enclosing breakable with id {}", target_id);
         })
     }

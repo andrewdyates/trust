@@ -7,8 +7,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::time::{Duration, Instant};
+use trust_types::fx::FxHashMap;
 
 /// tRust: Health status of a solver backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -107,11 +107,7 @@ impl SolverTracker {
 
     fn error_rate(&self) -> f64 {
         let total = self.total();
-        if total == 0 {
-            0.0
-        } else {
-            self.failures as f64 / total as f64
-        }
+        if total == 0 { 0.0 } else { self.failures as f64 / total as f64 }
     }
 
     /// Compute the percentile from sorted latencies. Returns 0.0 if empty.
@@ -150,19 +146,13 @@ impl HealthMonitor {
     /// Create a health monitor with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            trackers: FxHashMap::default(),
-            config: HealthConfig::default(),
-        }
+        Self { trackers: FxHashMap::default(), config: HealthConfig::default() }
     }
 
     /// Create a health monitor with custom configuration.
     #[must_use]
     pub fn with_config(config: HealthConfig) -> Self {
-        Self {
-            trackers: FxHashMap::default(),
-            config,
-        }
+        Self { trackers: FxHashMap::default(), config }
     }
 
     /// Record a solver invocation result.
@@ -172,10 +162,7 @@ impl HealthMonitor {
     /// `success`: true if the solver returned a useful result (Proved, Failed, or Unknown
     ///            with a reason), false if it crashed, timed out, or returned an error.
     pub fn record_result(&mut self, solver: &str, duration: Duration, success: bool) {
-        let tracker = self
-            .trackers
-            .entry(solver.to_string())
-            .or_insert_with(SolverTracker::new);
+        let tracker = self.trackers.entry(solver.to_string()).or_insert_with(SolverTracker::new);
 
         let ms = duration.as_secs_f64() * 1000.0;
         tracker.add_latency(ms, self.config.max_samples);
@@ -263,10 +250,7 @@ impl HealthMonitor {
     /// Called internally when status transitions to Unavailable. Callers
     /// can also call this explicitly to force a solver offline.
     pub fn mark_unavailable(&mut self, solver: &str) {
-        let tracker = self
-            .trackers
-            .entry(solver.to_string())
-            .or_insert_with(SolverTracker::new);
+        let tracker = self.trackers.entry(solver.to_string()).or_insert_with(SolverTracker::new);
         tracker.unavailable_count += 1;
         tracker.unavailable_since = Some(Instant::now());
     }

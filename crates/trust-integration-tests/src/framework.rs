@@ -9,8 +9,7 @@
 use trust_types::fx::FxHashMap;
 
 use trust_types::{
-    Formula, SourceSpan, VcKind, VerificationCondition, VerificationResult,
-    ProofStrength,
+    Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -81,10 +80,7 @@ pub(crate) struct TestRunner {
 
 impl TestRunner {
     pub(crate) fn new() -> Self {
-        Self {
-            cases: Vec::new(),
-            mock_results: FxHashMap::default(),
-        }
+        Self { cases: Vec::new(), mock_results: FxHashMap::default() }
     }
 
     /// Register a test case.
@@ -127,20 +123,22 @@ impl TestRunner {
         let mut all_passed = true;
 
         for (i, (vc, expected)) in case.vcs.iter().zip(case.expected.iter()).enumerate() {
-            let actual = mock
-                .and_then(|m| m.get(i))
-                .cloned()
-                .unwrap_or_else(|| VerificationResult::Unknown {
+            let actual = mock.and_then(|m| m.get(i)).cloned().unwrap_or_else(|| {
+                VerificationResult::Unknown {
                     solver: "mock".into(),
                     time_ms: 0,
                     reason: "no mock result".into(),
-                });
+                }
+            });
 
             let matches = match expected {
                 ExpectedOutcome::Any => true,
                 ExpectedOutcome::Proved => matches!(actual, VerificationResult::Proved { .. }),
                 ExpectedOutcome::Failed => matches!(actual, VerificationResult::Failed { .. }),
-                ExpectedOutcome::Unknown => matches!(actual, VerificationResult::Unknown { .. } | VerificationResult::Timeout { .. }),
+                ExpectedOutcome::Unknown => matches!(
+                    actual,
+                    VerificationResult::Unknown { .. } | VerificationResult::Timeout { .. }
+                ),
             };
 
             if !matches {
@@ -156,11 +154,7 @@ impl TestRunner {
             });
         }
 
-        TestCaseResult {
-            name: case.name.clone(),
-            passed: all_passed,
-            vc_results,
-        }
+        TestCaseResult { name: case.name.clone(), passed: all_passed, vc_results }
     }
 
     /// Number of registered test cases.
@@ -233,7 +227,7 @@ pub struct VcResult {
 pub(crate) fn test_vc(kind: VcKind, function: &str) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -247,26 +241,18 @@ pub(crate) fn proved_result() -> VerificationResult {
         time_ms: 1,
         strength: ProofStrength::smt_unsat(),
         proof_certificate: None,
-                solver_warnings: None,
+        solver_warnings: None,
     }
 }
 
 /// Create a "failed" result.
 pub(crate) fn failed_result() -> VerificationResult {
-    VerificationResult::Failed {
-        solver: "test".into(),
-        time_ms: 1,
-        counterexample: None,
-    }
+    VerificationResult::Failed { solver: "test".into(), time_ms: 1, counterexample: None }
 }
 
 /// Create an "unknown" result.
 pub(crate) fn unknown_result() -> VerificationResult {
-    VerificationResult::Unknown {
-        solver: "test".into(),
-        time_ms: 1,
-        reason: "test".into(),
-    }
+    VerificationResult::Unknown { solver: "test".into(), time_ms: 1, reason: "test".into() }
 }
 
 // ---------------------------------------------------------------------------

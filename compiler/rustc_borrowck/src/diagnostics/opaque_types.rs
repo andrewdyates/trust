@@ -82,14 +82,14 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                 ),
             });
         }
-        let guar = guar.expect("invariant: opaque type error must have been reported");
+        let guar = guar.unwrap();
         self.root_cx.set_tainted_by_errors(guar);
         self.infcx.set_tainted_by_errors(guar);
     }
 
     /// Try to note when an opaque is involved in a borrowck error and that
     /// opaque captures lifetimes due to edition 2024.
-    // // NOTE: this code is somewhat general and could be adapted, and could easily be adapted
+    // FIXME: This code is otherwise somewhat general, and could easily be adapted
     // to explain why other things overcapture... like async fn and RPITITs.
     pub(crate) fn note_due_to_edition_2024_opaque_capture_rules(
         &self,
@@ -116,7 +116,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             };
 
             // If an opaque explicitly captures a lifetime, then no need to point it out.
-            // // NOTE: a better heuristic for `use<>` would improve suggestions. for `use<>`.
+            // FIXME: We should be using a better heuristic for `use<>`.
             if tcx.rendered_precise_capturing_args(opaque_def_id).is_some() {
                 continue;
             }

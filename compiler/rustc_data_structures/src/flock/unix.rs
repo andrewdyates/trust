@@ -19,8 +19,6 @@ impl Lock {
 
         let lock_type = if exclusive { libc::F_WRLCK } else { libc::F_RDLCK };
 
-        // SAFETY: The libc function is called with valid arguments
-        // that satisfy its documented preconditions.
         let mut flock: libc::flock = unsafe { mem::zeroed() };
         #[cfg(not(all(target_os = "hurd", target_arch = "x86")))]
         {
@@ -36,8 +34,6 @@ impl Lock {
         flock.l_len = 0;
 
         let cmd = if wait { libc::F_SETLKW } else { libc::F_SETLK };
-        // SAFETY: The libc function is called with valid arguments
-        // that satisfy its documented preconditions.
         let ret = unsafe { libc::fcntl(file.as_raw_fd(), cmd, &flock) };
         if ret == -1 { Err(io::Error::last_os_error()) } else { Ok(Lock { file }) }
     }
@@ -49,8 +45,6 @@ impl Lock {
 
 impl Drop for Lock {
     fn drop(&mut self) {
-        // SAFETY: The libc function is called with valid arguments
-        // that satisfy its documented preconditions.
         let mut flock: libc::flock = unsafe { mem::zeroed() };
         #[cfg(not(all(target_os = "hurd", target_arch = "x86")))]
         {
@@ -65,8 +59,6 @@ impl Drop for Lock {
         flock.l_start = 0;
         flock.l_len = 0;
 
-        // SAFETY: The libc function is called with valid arguments
-        // that satisfy its documented preconditions.
         unsafe {
             libc::fcntl(self.file.as_raw_fd(), libc::F_SETLK, &flock);
         }

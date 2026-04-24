@@ -3,8 +3,8 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::*;
 use trust_types::formula_arena::{FormulaArena, FormulaRef};
+use trust_types::*;
 
 use crate::BackendRole;
 

@@ -55,13 +55,13 @@ impl<'tcx> Const<'tcx> {
         *a
     }
 
-    // tRust: known issue (compiler-errors) — Think about removing this.
+    // FIXME(compiler-errors): Think about removing this.
     #[inline]
     pub fn flags(self) -> TypeFlags {
         self.0.flags
     }
 
-    // tRust: known issue (compiler-errors) — Think about removing this.
+    // FIXME(compiler-errors): Think about removing this.
     #[inline]
     pub fn outer_exclusive_binder(self) -> ty::DebruijnIndex {
         self.0.outer_exclusive_binder
@@ -230,7 +230,7 @@ impl<'tcx> Const<'tcx> {
             .size;
         ty::Const::new_value(
             tcx,
-            ty::ValTree::from_scalar_int(tcx, ScalarInt::try_from_uint(bits, size).expect("invariant: bits fit in scalar size")),
+            ty::ValTree::from_scalar_int(tcx, ScalarInt::try_from_uint(bits, size).unwrap()),
             ty,
         )
     }
@@ -257,7 +257,6 @@ impl<'tcx> Const<'tcx> {
     pub fn to_value(self) -> ty::Value<'tcx> {
         match self.kind() {
             ty::ConstKind::Value(cv) => cv,
-            // tRust: invariant: expected ConstKind::Value, got <...>
             _ => bug!("expected ConstKind::Value, got {:?}", self.kind()),
         }
     }

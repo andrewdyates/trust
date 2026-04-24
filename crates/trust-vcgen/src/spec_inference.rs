@@ -133,11 +133,7 @@ impl InferenceResult {
     /// The minimum confidence across all inferred specs.
     #[must_use]
     pub fn min_confidence(&self) -> InferenceConfidence {
-        self.specs
-            .iter()
-            .map(|s| s.confidence)
-            .min()
-            .unwrap_or(InferenceConfidence::Low)
+        self.specs.iter().map(|s| s.confidence).min().unwrap_or(InferenceConfidence::Low)
     }
 }
 
@@ -166,10 +162,7 @@ impl SpecInferenceEngine {
     /// Infer specifications for a verifiable function.
     #[must_use]
     pub fn infer(&self, func: &VerifiableFunction) -> InferenceResult {
-        let mut result = InferenceResult {
-            function_name: func.name.clone(),
-            specs: Vec::new(),
-        };
+        let mut result = InferenceResult { function_name: func.name.clone(), specs: Vec::new() };
 
         if self.type_based {
             self.infer_from_types(func, &mut result);
@@ -228,7 +221,11 @@ impl SpecInferenceEngine {
                                 Box::new(signed_max_formula(*width)),
                             ),
                         ]),
-                        reason: format!("i{width} parameter is bounded [-2^{}, 2^{}-1]", width - 1, width - 1),
+                        reason: format!(
+                            "i{width} parameter is bounded [-2^{}, 2^{}-1]",
+                            width - 1,
+                            width - 1
+                        ),
                         strategy: InferenceStrategy::TypeBased,
                         confidence: InferenceConfidence::High,
                         kind: InferredSpecKind::Precondition,
@@ -248,11 +245,11 @@ impl SpecInferenceEngine {
                 result.specs.push(InferredSpec {
                     formula: Formula::And(vec![
                         Formula::Ge(
-                            Box::new(Formula::Var("_0".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("_0".into(), Sort::Int)),
                             Box::new(Formula::Int(0)),
                         ),
                         Formula::Le(
-                            Box::new(Formula::Var("_0".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("_0".into(), Sort::Int)),
                             Box::new(unsigned_max_formula(*width)),
                         ),
                     ]),
@@ -267,11 +264,11 @@ impl SpecInferenceEngine {
                 result.specs.push(InferredSpec {
                     formula: Formula::Or(vec![
                         Formula::Eq(
-                            Box::new(Formula::Var("_0".to_string(), Sort::Bool)),
+                            Box::new(Formula::Var("_0".into(), Sort::Bool)),
                             Box::new(Formula::Bool(true)),
                         ),
                         Formula::Eq(
-                            Box::new(Formula::Var("_0".to_string(), Sort::Bool)),
+                            Box::new(Formula::Var("_0".into(), Sort::Bool)),
                             Box::new(Formula::Bool(false)),
                         ),
                     ]),
@@ -297,11 +294,11 @@ impl SpecInferenceEngine {
                 result.specs.push(InferredSpec {
                     formula: Formula::Or(vec![
                         Formula::Eq(
-                            Box::new(Formula::Var("_0".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("_0".into(), Sort::Int)),
                             Box::new(Formula::Int(0)),
                         ),
                         Formula::Eq(
-                            Box::new(Formula::Var("_0".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("_0".into(), Sort::Int)),
                             Box::new(Formula::Int(1)),
                         ),
                     ]),
@@ -321,7 +318,7 @@ impl SpecInferenceEngine {
         {
             result.specs.push(InferredSpec {
                 formula: Formula::Ge(
-                    Box::new(Formula::Var("_0".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("_0".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 reason: format!("'{name}' naming convention suggests non-negative return"),
@@ -337,18 +334,22 @@ impl SpecInferenceEngine {
                 continue;
             }
             if let Some(name) = &local.name
-                && (name == "index" || name == "idx" || name.ends_with("_index") || name.ends_with("_idx")) {
-                    result.specs.push(InferredSpec {
-                        formula: Formula::Ge(
-                            Box::new(Formula::Var(name.clone(), Sort::Int)),
-                            Box::new(Formula::Int(0)),
-                        ),
-                        reason: format!("parameter '{name}' naming suggests non-negative index"),
-                        strategy: InferenceStrategy::NameBased,
-                        confidence: InferenceConfidence::Medium,
-                        kind: InferredSpecKind::Precondition,
-                    });
-                }
+                && (name == "index"
+                    || name == "idx"
+                    || name.ends_with("_index")
+                    || name.ends_with("_idx"))
+            {
+                result.specs.push(InferredSpec {
+                    formula: Formula::Ge(
+                        Box::new(Formula::Var(name.clone(), Sort::Int)),
+                        Box::new(Formula::Int(0)),
+                    ),
+                    reason: format!("parameter '{name}' naming suggests non-negative index"),
+                    strategy: InferenceStrategy::NameBased,
+                    confidence: InferenceConfidence::Medium,
+                    kind: InferredSpecKind::Precondition,
+                });
+            }
         }
     }
 
@@ -376,9 +377,7 @@ impl SpecInferenceEngine {
                     AssertMessage::Overflow(op) => {
                         format!("lifted overflow check: {op:?}")
                     }
-                    AssertMessage::BoundsCheck => {
-                        "lifted bounds check".to_string()
-                    }
+                    AssertMessage::BoundsCheck => "lifted bounds check".to_string(),
                     _ => "lifted assertion".to_string(),
                 };
 
@@ -474,9 +473,7 @@ mod tests {
             def_path: "test::len".to_string(),
             span: SourceSpan::default(),
             body: VerifiableBody {
-                locals: vec![
-                    LocalDecl { index: 0, ty: Ty::usize(), name: None },
-                ],
+                locals: vec![LocalDecl { index: 0, ty: Ty::usize(), name: None }],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![],
@@ -517,11 +514,7 @@ mod tests {
                             span: SourceSpan::default(),
                         },
                     },
-                    BasicBlock {
-                        id: BlockId(1),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 2,
                 return_ty: Ty::u32(),
@@ -595,13 +588,18 @@ mod tests {
 
     #[test]
     fn test_type_based_unsigned_params() {
-        let engine = SpecInferenceEngine { type_based: true, name_based: false, assertion_based: false };
+        let engine =
+            SpecInferenceEngine { type_based: true, name_based: false, assertion_based: false };
         let func = unsigned_params_function();
         let result = engine.infer(&func);
 
         // Should infer bounds for a, b (unsigned params) and return type.
         let preconditions = result.preconditions();
-        assert!(preconditions.len() >= 2, "should infer bounds for 2 unsigned params, got {}", preconditions.len());
+        assert!(
+            preconditions.len() >= 2,
+            "should infer bounds for 2 unsigned params, got {}",
+            preconditions.len()
+        );
 
         let postconditions = result.postconditions();
         assert!(!postconditions.is_empty(), "should infer return type bounds");
@@ -614,7 +612,8 @@ mod tests {
 
     #[test]
     fn test_name_based_len_function() {
-        let engine = SpecInferenceEngine { type_based: false, name_based: true, assertion_based: false };
+        let engine =
+            SpecInferenceEngine { type_based: false, name_based: true, assertion_based: false };
         let func = len_function();
         let result = engine.infer(&func);
 
@@ -628,20 +627,25 @@ mod tests {
 
     #[test]
     fn test_name_based_index_param() {
-        let engine = SpecInferenceEngine { type_based: false, name_based: true, assertion_based: false };
+        let engine =
+            SpecInferenceEngine { type_based: false, name_based: true, assertion_based: false };
         let func = indexed_function();
         let result = engine.infer(&func);
 
         let preconditions = result.preconditions();
         assert!(!preconditions.is_empty(), "should infer non-negative for 'index' param");
 
-        let idx_spec = preconditions.iter().find(|s| s.reason.contains("index")).expect("should find index spec");
+        let idx_spec = preconditions
+            .iter()
+            .find(|s| s.reason.contains("index"))
+            .expect("should find index spec");
         assert_eq!(idx_spec.strategy, InferenceStrategy::NameBased);
     }
 
     #[test]
     fn test_assertion_based_inference() {
-        let engine = SpecInferenceEngine { type_based: false, name_based: false, assertion_based: true };
+        let engine =
+            SpecInferenceEngine { type_based: false, name_based: false, assertion_based: true };
         let func = asserted_function();
         let result = engine.infer(&func);
 
@@ -668,7 +672,8 @@ mod tests {
 
     #[test]
     fn test_is_valid_bool_return() {
-        let engine = SpecInferenceEngine { type_based: true, name_based: true, assertion_based: false };
+        let engine =
+            SpecInferenceEngine { type_based: true, name_based: true, assertion_based: false };
         let func = is_valid_function();
         let result = engine.infer(&func);
 
@@ -685,20 +690,24 @@ mod tests {
         let result = engine.infer(&func);
 
         let fspec = result.to_function_spec();
-        assert!(!fspec.requires.is_empty() || !fspec.ensures.is_empty(),
-            "should produce non-empty FunctionSpec");
+        assert!(
+            !fspec.requires.is_empty() || !fspec.ensures.is_empty(),
+            "should produce non-empty FunctionSpec"
+        );
     }
 
     #[test]
     fn test_inference_result_source() {
         // Type-based only => Heuristic (type inferences are lower confidence)
-        let engine = SpecInferenceEngine { type_based: true, name_based: false, assertion_based: false };
+        let engine =
+            SpecInferenceEngine { type_based: true, name_based: false, assertion_based: false };
         let func = unsigned_params_function();
         let result = engine.infer(&func);
         assert_eq!(result.source(), SpecSource::Heuristic);
 
         // Name-based only => Heuristic
-        let engine2 = SpecInferenceEngine { type_based: false, name_based: true, assertion_based: false };
+        let engine2 =
+            SpecInferenceEngine { type_based: false, name_based: true, assertion_based: false };
         let func2 = len_function();
         let result2 = engine2.infer(&func2);
         assert_eq!(result2.source(), SpecSource::Heuristic);
@@ -707,7 +716,8 @@ mod tests {
     #[test]
     fn test_assertion_based_source_is_inferred() {
         // Assertion-based => Inferred (higher confidence, lifted from explicit assertions)
-        let engine = SpecInferenceEngine { type_based: false, name_based: false, assertion_based: true };
+        let engine =
+            SpecInferenceEngine { type_based: false, name_based: false, assertion_based: true };
         let func = asserted_function();
         let result = engine.infer(&func);
         assert_eq!(result.source(), SpecSource::Inferred);
@@ -717,19 +727,24 @@ mod tests {
     fn test_assertion_based_vs_type_based_distinction() {
         // When both assertion-based and type-based specs are present,
         // the overall source should be Inferred (assertion-based dominates).
-        let engine = SpecInferenceEngine { type_based: true, name_based: false, assertion_based: true };
+        let engine =
+            SpecInferenceEngine { type_based: true, name_based: false, assertion_based: true };
         let func = asserted_function();
         let result = engine.infer(&func);
         assert_eq!(result.source(), SpecSource::Inferred);
 
         // When only type-based specs are present, source should be Heuristic.
-        let engine2 = SpecInferenceEngine { type_based: true, name_based: false, assertion_based: false };
+        let engine2 =
+            SpecInferenceEngine { type_based: true, name_based: false, assertion_based: false };
         let result2 = engine2.infer(&func);
         assert_eq!(result2.source(), SpecSource::Heuristic);
 
         // This verifies the AssertionBased vs TypeBased distinction is preserved.
-        assert_ne!(result.source(), result2.source(),
-            "AssertionBased and TypeBased must produce different SpecSource values");
+        assert_ne!(
+            result.source(),
+            result2.source(),
+            "AssertionBased and TypeBased must produce different SpecSource values"
+        );
     }
 
     #[test]
@@ -747,32 +762,21 @@ mod tests {
     fn test_formula_to_spec_expr_basic() {
         assert_eq!(formula_to_spec_expr(&Formula::Bool(true)), "true");
         assert_eq!(formula_to_spec_expr(&Formula::Int(42)), "42");
-        assert_eq!(
-            formula_to_spec_expr(&Formula::Var("x".to_string(), Sort::Int)),
-            "x"
-        );
+        assert_eq!(formula_to_spec_expr(&Formula::Var("x".into(), Sort::Int)), "x");
     }
 
     #[test]
     fn test_formula_to_spec_expr_comparison() {
-        let f = Formula::Ge(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         assert_eq!(formula_to_spec_expr(&f), "x >= 0");
     }
 
     #[test]
     fn test_formula_to_spec_expr_conjunction() {
         let f = Formula::And(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Le(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]);
         assert_eq!(formula_to_spec_expr(&f), "x >= 0 && x <= 100");
     }
@@ -805,7 +809,8 @@ mod tests {
 
     #[test]
     fn test_disabled_strategies_produce_nothing() {
-        let engine = SpecInferenceEngine { type_based: false, name_based: false, assertion_based: false };
+        let engine =
+            SpecInferenceEngine { type_based: false, name_based: false, assertion_based: false };
         let func = unsigned_params_function();
         let result = engine.infer(&func);
         assert!(result.is_empty(), "all strategies disabled should produce no specs");

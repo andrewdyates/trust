@@ -168,11 +168,7 @@ fn recursive_countdown_function() -> VerifiableFunction {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::u32(),
@@ -186,26 +182,20 @@ fn recursive_countdown_function() -> VerifiableFunction {
 
 fn proved_by(solver: &str, strength: ProofStrength) -> VerificationResult {
     VerificationResult::Proved {
-        solver: solver.to_string(),
+        solver: solver.into(),
         time_ms: 1,
-        strength, proof_certificate: None, solver_warnings: None,
+        strength,
+        proof_certificate: None,
+        solver_warnings: None,
     }
 }
 
 fn failed_by(solver: &str, counterexample: Option<Counterexample>) -> VerificationResult {
-    VerificationResult::Failed {
-        solver: solver.to_string(),
-        time_ms: 1,
-        counterexample,
-    }
+    VerificationResult::Failed { solver: solver.into(), time_ms: 1, counterexample }
 }
 
 fn unknown_by(solver: &str, reason: &str) -> VerificationResult {
-    VerificationResult::Unknown {
-        solver: solver.to_string(),
-        time_ms: 1,
-        reason: reason.to_string(),
-    }
+    VerificationResult::Unknown { solver: solver.into(), time_ms: 1, reason: reason.to_string() }
 }
 
 fn division_vc() -> VerificationCondition {
@@ -286,12 +276,7 @@ impl SpecialtyBackend {
         can_handle_fn: fn(&VerificationCondition) -> bool,
         result: VerificationResult,
     ) -> Self {
-        Self {
-            name,
-            role,
-            can_handle_fn,
-            result,
-        }
+        Self { name, role, can_handle_fn, result }
     }
 }
 
@@ -379,10 +364,7 @@ impl VerificationBackend for FunctionOutcomeBackend {
             "get_midpoint" => proved_by("portfolio", ProofStrength::smt_unsat()),
             "divide" => failed_by(
                 "portfolio",
-                Some(Counterexample::new(vec![(
-                    "y".into(),
-                    CounterexampleValue::Uint(0),
-                )])),
+                Some(Counterexample::new(vec![("y".into(), CounterexampleValue::Uint(0))])),
             ),
             _ => unknown_by("portfolio", "no configured function outcome"),
         }
@@ -396,8 +378,7 @@ fn test_full_pipeline_cegar_backend_with_vcgen_output() {
     // router handles it via the fallback mock backend.
     let vcs = generate_vcs(&recursive_countdown_function());
     assert!(
-        vcs.iter()
-            .any(|vc| matches!(vc.kind, VcKind::NonTermination { .. })),
+        vcs.iter().any(|vc| matches!(vc.kind, VcKind::NonTermination { .. })),
         "vcgen should emit a non-termination VC for recursion",
     );
 
@@ -425,9 +406,7 @@ fn test_full_pipeline_multi_backend_routing_by_proof_level() {
         contract_metadata: None,
     };
     let pre_vc = VerificationCondition {
-        kind: VcKind::Precondition {
-            callee: "callee".into(),
-        },
+        kind: VcKind::Precondition { callee: "callee".into() },
         function: "functional_pre".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
@@ -524,17 +503,10 @@ fn test_full_pipeline_replay_counterexample() {
     let (result, replay_result) =
         router.verify_and_replay(&vc, Some(&func.body.blocks), &replay::ReplayConfig::default());
 
-    assert!(matches!(
-        result,
-        VerificationResult::Failed {
-            counterexample: Some(_),
-            ..
-        }
-    ));
+    assert!(matches!(result, VerificationResult::Failed { counterexample: Some(_), .. }));
 
-    let replay_result = replay_result
-        .expect("counterexample replay should run")
-        .expect("replay should succeed");
+    let replay_result =
+        replay_result.expect("counterexample replay should run").expect("replay should succeed");
     match replay_result {
         replay::ReplayResult::RealBug(concrete) => {
             assert_eq!(concrete.trace, vec![0]);
@@ -556,10 +528,7 @@ fn test_full_pipeline_query_cache_hit() {
     let router = Router::with_backends(vec![Box::new(trust_router::mock_backend::MockBackend)]);
     let mut cache = query_cache::QueryCache::new(8);
 
-    assert!(matches!(
-        cache.lookup(&vc.formula),
-        query_cache::CacheLookupResult::Miss
-    ));
+    assert!(matches!(cache.lookup(&vc.formula), query_cache::CacheLookupResult::Miss));
 
     let first = router.verify_one(&vc);
     cache.store(&vc.formula, first.clone());
@@ -591,20 +560,12 @@ fn test_full_pipeline_enrichment_adds_context() {
         ("_local1".into(), CounterexampleValue::Uint(10)),
         ("_local2".into(), CounterexampleValue::Uint(0)),
     ]);
-    let adapter_result = replay_with_trace(
-        &counterexample,
-        &vc,
-        &func.body.blocks,
-        &AdapterConfig::default(),
-    )
-    .expect("adapter replay should succeed");
+    let adapter_result =
+        replay_with_trace(&counterexample, &vc, &func.body.blocks, &AdapterConfig::default())
+            .expect("adapter replay should succeed");
 
-    let diagnostic =
-        enrichment::enrich_counterexample(&vc, &counterexample, &adapter_result);
-    assert_eq!(
-        diagnostic.violation_kind,
-        enrichment::ViolationKind::DivisionByZero
-    );
+    let diagnostic = enrichment::enrich_counterexample(&vc, &counterexample, &adapter_result);
+    assert_eq!(diagnostic.violation_kind, enrichment::ViolationKind::DivisionByZero);
     assert!(diagnostic.violation_description.contains("Division by zero"));
     assert!(!diagnostic.relevant_variables.is_empty());
     assert!(diagnostic.closest_valid_state.is_some());
@@ -650,30 +611,16 @@ fn test_full_pipeline_aggregation_cross_function() {
 
     let router = Router::with_backends(vec![Box::new(FunctionOutcomeBackend)]);
     let results = router.verify_all(&vcs);
-    let midpoint_results: Vec<_> = results
-        .iter()
-        .filter(|(vc, _)| vc.function == midpoint.name)
-        .cloned()
-        .collect();
-    let division_results: Vec<_> = results
-        .iter()
-        .filter(|(vc, _)| vc.function == division.name)
-        .cloned()
-        .collect();
+    let midpoint_results: Vec<_> =
+        results.iter().filter(|(vc, _)| vc.function == midpoint.name).cloned().collect();
+    let division_results: Vec<_> =
+        results.iter().filter(|(vc, _)| vc.function == division.name).cloned().collect();
 
     let crate_result = crate_result(
         "multi_fn",
         vec![
-            function_result(
-                midpoint.def_path.clone(),
-                midpoint.name.clone(),
-                midpoint_results,
-            ),
-            function_result(
-                division.def_path.clone(),
-                division.name.clone(),
-                division_results,
-            ),
+            function_result(midpoint.def_path.clone(), midpoint.name.clone(), midpoint_results),
+            function_result(division.def_path.clone(), division.name.clone(), division_results),
         ],
     );
     let report = build_json_report("multi_fn", &crate_result.all_results());
@@ -682,7 +629,7 @@ fn test_full_pipeline_aggregation_cross_function() {
         results
             .iter()
             .map(|(vc, result)| SolverContribution {
-                solver: vc.function.clone(),
+                solver: vc.function.as_str().to_string(),
                 result: result.clone(),
                 time_ms: result.time_ms(),
             })
@@ -700,21 +647,13 @@ fn test_full_pipeline_aggregation_cross_function() {
 
 #[test]
 fn test_full_pipeline_fallback_chain() {
-    let vc = VerificationCondition {
-        formula: Formula::Bool(false),
-        ..division_vc()
-    };
-    let backends: Vec<Arc<dyn VerificationBackend>> = vec![
-        Arc::new(RejectingBackend),
-        Arc::new(trust_router::mock_backend::MockBackend),
-    ];
+    let vc = VerificationCondition { formula: Formula::Bool(false), ..division_vc() };
+    let backends: Vec<Arc<dyn VerificationBackend>> =
+        vec![Arc::new(RejectingBackend), Arc::new(trust_router::mock_backend::MockBackend)];
     let chain = fallback::FallbackChain::new(
         backends,
         fallback::FallbackPolicy::Sequential,
-        fallback::RetryPolicy {
-            max_retries: 0,
-            ..fallback::RetryPolicy::default()
-        },
+        fallback::RetryPolicy { max_retries: 0, ..fallback::RetryPolicy::default() },
     );
 
     let result = fallback::execute_with_fallback(&vc, &chain)
@@ -737,17 +676,11 @@ fn test_full_pipeline_batch_scheduling() {
         .into_iter()
         .find(|vc| matches!(vc.kind, VcKind::NonTermination { .. }))
         .expect("recursive function should produce a non-termination VC");
-    let strategies = vec![
-        Strategy::direct_smt(5_000),
-        Strategy::cegar(32),
-        Strategy::bounded_mc(16),
-    ];
+    let strategies =
+        vec![Strategy::direct_smt(5_000), Strategy::cegar(32), Strategy::bounded_mc(16)];
 
-    let safety_schedule = scheduler::build_schedule(
-        &safety_vc,
-        &strategies,
-        &scheduler::SchedulerConfig::default(),
-    );
+    let safety_schedule =
+        scheduler::build_schedule(&safety_vc, &strategies, &scheduler::SchedulerConfig::default());
     let cegar_schedule = scheduler::build_schedule(
         &non_termination_vc,
         &strategies,
@@ -774,14 +707,8 @@ fn test_full_pipeline_batch_scheduling() {
 fn test_full_pipeline_independence_optimization() {
     let vc = VerificationCondition {
         formula: Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]),
         ..division_vc()
     };

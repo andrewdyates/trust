@@ -1,6 +1,3 @@
-//! tRust: MIR lint that warns when const items are mutated even though only a
-//! tRust: temporary copy is affected.
-
 use rustc_hir::HirId;
 use rustc_middle::mir::visit::Visitor;
 use rustc_middle::mir::*;
@@ -49,13 +46,16 @@ impl<'tcx> ConstMutationChecker<'_, 'tcx> {
         //
         //     LOG.msg = "wow";  // prints "wow"
         //
-        // NOTE(#77425): Exception for types with Drop impls; a stable per-const
-        // lint suppression attribute would remove the need for this. Example:
+        // FIXME(https://github.com/rust-lang/rust/issues/77425):
+        // Drop this exception once there is a stable attribute to suppress the
+        // const item mutation lint for a single specific const only. Something
+        // equivalent to:
         //
         //     #[const_mutation_allowed]
         //     pub const LOG: Log = Log { msg: "" };
-        // NOTE: Checks has_dtor but should use needs_drop to catch
-        // field-level Drop impls that make mutation observable.
+        // FIXME: this should not be checking for `Drop` impls,
+        // but whether it or any field has a Drop impl (`needs_drop`)
+        // as fields' Drop impls may make this observable, too.
         match self.tcx.type_of(def_id).skip_binder().ty_adt_def().map(|adt| adt.has_dtor(self.tcx))
         {
             Some(true) => None,
@@ -75,7 +75,6 @@ impl<'tcx> ConstMutationChecker<'_, 'tcx> {
         // If we 'leave' the temporary via a dereference, we must
         // be modifying something else
         //
-        // SAFETY: These examples assume the dereference is valid; this lint only cares that a deref appears in the place.
         // `unsafe { *FOO = 0; *BAR.field = 1; }`
         // `unsafe { &mut *FOO }`
         // `unsafe { (*ARRAY)[0] = val; }`

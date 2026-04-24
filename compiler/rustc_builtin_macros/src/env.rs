@@ -104,7 +104,7 @@ pub(crate) fn expand_env<'cx>(
         Ok(exprs) => exprs.into_iter(),
     };
 
-    let var_expr = exprs.next().expect("invariant: env! macro must have at least one argument"); // tRust: unwrap -> expect
+    let var_expr = exprs.next().unwrap();
     let ExpandResult::Ready(mac) = expr_to_string(cx, var_expr.clone(), "expected string literal")
     else {
         return ExpandResult::Retry(());

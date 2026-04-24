@@ -40,10 +40,11 @@ impl FormulaArena {
                     free.insert(name.clone());
                 }
             }
+            // tRust #883: Quantifier bindings use Symbol; convert to String for tracking.
             FormulaNode::Forall(bindings, body) | FormulaNode::Exists(bindings, body) => {
                 let mut new_bound = bound.clone();
-                for (name, _) in bindings {
-                    new_bound.insert(name.clone());
+                for (sym, _) in bindings {
+                    new_bound.insert(sym.as_str().to_string());
                 }
                 self.free_variables_inner(*body, free, &new_bound);
             }
@@ -122,15 +123,11 @@ impl FormulaArena {
                 return;
             }
             match node {
-                FormulaNode::Int(n) => {
-                    if i64::try_from(*n).is_err() {
-                        found = true;
-                    }
+                FormulaNode::Int(n) if i64::try_from(*n).is_err() => {
+                    found = true;
                 }
-                FormulaNode::UInt(n) => {
-                    if i64::try_from(*n).is_err() {
-                        found = true;
-                    }
+                FormulaNode::UInt(n) if i64::try_from(*n).is_err() => {
+                    found = true;
                 }
                 _ => {}
             }

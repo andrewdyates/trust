@@ -1,6 +1,3 @@
-//! tRust: Liveness analysis for MIR locals, used by dead code detection and
-//! tRust: unused variable lints.
-
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::{FxHashSet, FxIndexMap, IndexEntry};
 use rustc_hir::def::{CtorKind, DefKind};
@@ -105,7 +102,6 @@ pub(crate) fn check_liveness<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> Den
             &ty::CoroutineClosure(_, args) => {
                 (CaptureKind::CoroutineClosure, ty::UpvarArgs::CoroutineClosure(args))
             }
-            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
             _ => bug!("expected closure or generator, found {:?}", self_ty),
         };
 
@@ -116,7 +112,7 @@ pub(crate) fn check_liveness<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> Den
         // modified values with them in subsequent calls. To model this behaviour,
         // we consider the `FnMut` closure as jumping to `bb0` upon return.
         if let CaptureKind::Closure(ty::ClosureKind::FnMut) = capture_kind {
-            // NOTE: Body is cloned for FnMut closures to enable re-entry analysis.
+            // FIXME: stop cloning the body.
             body_mem = body.clone();
             for bbdata in body_mem.basic_blocks_mut() {
                 // We can call a closure again, either after a normal return or an unwind.
@@ -1231,7 +1227,7 @@ impl<'tcx> Analysis<'tcx> for MaybeLivePlaces<'_, 'tcx> {
         _block: BasicBlock,
         _return_places: CallReturnPlaces<'_, 'tcx>,
     ) {
-        // NOTE: No liveness action needed for this case; intentionally empty.
+        // FIXME: what should happen here?
     }
 }
 

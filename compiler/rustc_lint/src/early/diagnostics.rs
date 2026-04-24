@@ -29,7 +29,7 @@ impl<'a> Diagnostic<'a, ()> for DecorateBuiltinLint<'_, '_> {
                 let (replacement, applicability) =
                     match self.sess.source_map().span_to_snippet(mod_span) {
                         Ok(ref s) => {
-                            // tRust: known issue — (Manishearth) ideally the emitting code
+                            // FIXME(Manishearth) ideally the emitting code
                             // can tell us whether or not this is global
                             let opt_colon =
                                 if s.trim_start().starts_with("::") { "" } else { "::" };

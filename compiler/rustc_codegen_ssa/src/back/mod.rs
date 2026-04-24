@@ -1,6 +1,3 @@
-//! tRust: Backend module root that re-exports linking, codegen writing, and
-//! tRust: platform support submodules used by `rustc_codegen_ssa`.
-
 use std::borrow::Cow;
 
 use rustc_session::Session;
@@ -26,7 +23,7 @@ pub fn versioned_llvm_target(sess: &Session) -> Cow<'_, str> {
         apple::add_version_to_llvm_target(&sess.target.llvm_target, sess.apple_deployment_target())
             .into()
     } else {
-        // NOTE(madsmtm): Some other targets also include version info in object metadata.
+        // FIXME(madsmtm): Certain other targets also include a version,
         // we might want to move that here as well.
         Cow::Borrowed(&sess.target.llvm_target)
     }

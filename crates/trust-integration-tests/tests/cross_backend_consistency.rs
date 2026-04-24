@@ -52,7 +52,7 @@ impl From<&VerificationResult> for Verdict {
 fn make_vc(kind: VcKind, formula: Formula, function: &str) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -259,8 +259,7 @@ fn cross_backend_arithmetic_neq() {
 #[cfg(feature = "z4-backend")]
 fn cross_backend_implies_true_true() {
     let backends = test_backends();
-    let formula =
-        Formula::Implies(Box::new(Formula::Bool(true)), Box::new(Formula::Bool(true)));
+    let formula = Formula::Implies(Box::new(Formula::Bool(true)), Box::new(Formula::Bool(true)));
     let vc = make_vc(VcKind::Postcondition, formula, "implies_tt");
     // Mock returns Unknown for Implies; Z4 returns Failed (SAT).
     let verdict = assert_backends_agree(&backends, &vc, "Implies(true,true)");
@@ -299,10 +298,8 @@ fn cross_backend_lt_false() {
 #[cfg(feature = "z4-backend")]
 fn cross_backend_variable_sat() {
     let backends = test_backends();
-    let formula = Formula::Eq(
-        Box::new(Formula::Var("x".into(), Sort::Int)),
-        Box::new(Formula::Int(0)),
-    );
+    let formula =
+        Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
     let vc = make_vc(VcKind::DivisionByZero, formula, "var_sat");
     let verdict = assert_backends_agree(&backends, &vc, "Var(x)==0");
     assert_eq!(verdict, Verdict::Failed);
@@ -328,10 +325,8 @@ fn cross_backend_ite_constant() {
 #[test]
 fn cross_backend_nested_not_and() {
     let backends = test_backends();
-    let formula = Formula::Not(Box::new(Formula::And(vec![
-        Formula::Bool(true),
-        Formula::Bool(true),
-    ])));
+    let formula =
+        Formula::Not(Box::new(Formula::And(vec![Formula::Bool(true), Formula::Bool(true)])));
     let vc = make_vc(VcKind::DivisionByZero, formula, "not_and");
     let verdict = assert_backends_agree(&backends, &vc, "Not(And(true,true))");
     assert_eq!(verdict, Verdict::Proved);

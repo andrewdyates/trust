@@ -35,8 +35,6 @@ impl UnwindModule<ObjectModule> {
 impl UnwindModule<cranelift_jit::JITModule> {
     pub(crate) fn finalize_definitions(mut self) -> cranelift_jit::JITModule {
         self.module.finalize_definitions().unwrap();
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `finalize_definitions()` made the JIT code stable, and `self.module` stays alive after registration.
         unsafe { self.unwind_context.register_jit(&self.module) };
         self.module
     }

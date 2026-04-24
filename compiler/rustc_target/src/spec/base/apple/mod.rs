@@ -107,7 +107,7 @@ impl TargetEnv {
     // https://github.com/rust-lang/rust/issues/133331
     //
     // But let's continue setting them for backwards compatibility.
-    // tRust: known issue (madsmtm) — Warn about using these in the future.
+    // FIXME(madsmtm): Warn about using these in the future.
     fn target_abi(self) -> CfgAbi {
         match self {
             Self::Normal => CfgAbi::Unspecified,

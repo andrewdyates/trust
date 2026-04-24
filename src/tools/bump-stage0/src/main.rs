@@ -5,9 +5,21 @@ use build_helper::stage0_parser::{Stage0Config, VersionMetadata, parse_stage0_fi
 use curl::easy::Easy;
 use indexmap::IndexMap;
 use sha2::{Digest, Sha256};
+use std::path::PathBuf;
 
 const PATH: &str = "src/stage0";
-const COMPILER_COMPONENTS: &[&str] = &["rustc", "rust-std", "cargo", "clippy-preview"];
+const COMPILER_COMPONENTS: &[&str] = &[
+    "rustc",
+    "rust-std",
+    "cargo",
+    "clippy-preview",
+    "rustfmt-preview",
+    "rust-docs",
+    "cargo-trust",
+    "rust-analyzer-preview",
+    "rust-src",
+    "llvm-tools-preview",
+];
 const RUSTFMT_COMPONENTS: &[&str] = &["rustfmt-preview", "rustc"];
 
 struct Tool {
@@ -71,6 +83,8 @@ impl Tool {
             artifacts_with_llvm_assertions_server,
             git_merge_commit_email,
             nightly_branch,
+            compiler_dist_channel,
+            rustfmt_dist_channel,
         } = &self.config;
 
         file_content.push_str(&format!("dist_server={}\n", dist_server));
@@ -81,6 +95,8 @@ impl Tool {
         ));
         file_content.push_str(&format!("git_merge_commit_email={}\n", git_merge_commit_email));
         file_content.push_str(&format!("nightly_branch={}\n", nightly_branch));
+        file_content.push_str(&format!("compiler_dist_channel={}\n", compiler_dist_channel));
+        file_content.push_str(&format!("rustfmt_dist_channel={}\n", rustfmt_dist_channel));
 
         file_content.push_str("\n");
         file_content.push_str(COMMENTS);
@@ -124,12 +140,17 @@ impl Tool {
     // at the beta or stable channel you'll likely see `1.x.0` as the version, with the previous
     // release's version number.
     fn detect_compiler(&mut self) -> Result<VersionMetadata, Error> {
-        let channel = match self.channel {
-            Channel::Stable | Channel::Beta => {
-                // The 1.XX manifest points to the latest point release of that minor release.
-                format!("{}.{}", self.version[0], self.version[1] - 1)
+        let configured_channel = self.config.compiler_dist_channel.trim();
+        let channel = if configured_channel.is_empty() {
+            match self.channel {
+                Channel::Stable | Channel::Beta => {
+                    // The 1.XX manifest points to the latest point release of that minor release.
+                    format!("{}.{}", self.version[0], self.version[1] - 1)
+                }
+                Channel::Nightly => "beta".to_string(),
             }
-            Channel::Nightly => "beta".to_string(),
+        } else {
+            configured_channel.to_string()
         };
 
         let (manifest, manifest_hash) =
@@ -143,17 +164,7 @@ impl Tool {
                 .expect("invalid git_commit_hash")
                 .into(),
             date: manifest.date,
-            version: if self.channel == Channel::Nightly {
-                "beta".to_string()
-            } else {
-                // The version field is like "1.42.0 (abcdef1234 1970-01-01)"
-                manifest.pkg["rust"]
-                    .version
-                    .split_once(' ')
-                    .expect("invalid version field")
-                    .0
-                    .to_string()
-            },
+            version: version_label_for_channel(&channel, &manifest.pkg["rust"].version),
         })
     }
 
@@ -161,12 +172,19 @@ impl Tool {
     /// with use of new syntax in this repo. For the beta/stable channels rustfmt is not provided,
     /// as we don't want to depend on rustfmt from nightly there.
     fn detect_rustfmt(&mut self) -> Result<Option<VersionMetadata>, Error> {
-        if self.channel != Channel::Nightly {
+        let configured_channel = self.config.rustfmt_dist_channel.trim();
+        if configured_channel.is_empty() && self.channel != Channel::Nightly {
             return Ok(None);
         }
 
+        let channel = if configured_channel.is_empty() {
+            "nightly".to_string()
+        } else {
+            configured_channel.to_string()
+        };
+
         let (manifest, manifest_hash) =
-            fetch_manifest(&self.config, "nightly", self.rustfmt_date.as_deref())?;
+            fetch_manifest(&self.config, &channel, self.rustfmt_date.as_deref())?;
         self.collect_checksums(&manifest, RUSTFMT_COMPONENTS)?;
         Ok(Some(VersionMetadata {
             channel_manifest_hash: manifest_hash,
@@ -176,7 +194,7 @@ impl Tool {
                 .expect("invalid git_commit_hash")
                 .into(),
             date: manifest.date,
-            version: "nightly".into(),
+            version: version_label_for_channel(&channel, &manifest.pkg["rust"].version),
         }))
     }
 
@@ -228,6 +246,24 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
+fn version_label_for_channel(channel: &str, manifest_version: &str) -> String {
+    if is_trust_channel(channel) {
+        channel.to_string()
+    } else {
+        match channel {
+            "beta" | "nightly" => channel.to_string(),
+            _ => manifest_version.split_once(' ').expect("invalid version field").0.to_string(),
+        }
+    }
+}
+
+fn is_trust_channel(channel: &str) -> bool {
+    matches!(channel, "trust" | "tRust" | "TRUST")
+        || channel.starts_with("trust-")
+        || channel.starts_with("tRust-")
+        || channel.starts_with("TRUST-")
+}
+
 fn fetch_manifest(
     config: &Stage0Config,
     channel: &str,
@@ -253,6 +289,10 @@ fn fetch_manifest(
 }
 
 fn http_get(url: &str) -> Result<Vec<u8>, Error> {
+    if let Some(path) = file_url_to_path(url)? {
+        return Ok(std::fs::read(path)?);
+    }
+
     let mut data = Vec::new();
     let mut handle = Easy::new();
     handle.fail_on_error(true)?;
@@ -268,6 +308,45 @@ fn http_get(url: &str) -> Result<Vec<u8>, Error> {
     Ok(data)
 }
 
+fn file_url_to_path(url: &str) -> Result<Option<PathBuf>, Error> {
+    let Some(raw_path) = url.strip_prefix("file://") else {
+        return Ok(None);
+    };
+    let raw_path = raw_path
+        .strip_prefix("localhost/")
+        .map(|path| format!("/{path}"))
+        .unwrap_or_else(|| raw_path.to_string());
+    Ok(Some(PathBuf::from(percent_decode_url_path(&raw_path)?)))
+}
+
+fn percent_decode_url_path(path: &str) -> Result<String, Error> {
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut idx = 0;
+    while idx < bytes.len() {
+        if bytes[idx] == b'%' && idx + 2 < bytes.len() {
+            if let (Some(high), Some(low)) = (hex_value(bytes[idx + 1]), hex_value(bytes[idx + 2]))
+            {
+                decoded.push(high << 4 | low);
+                idx += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[idx]);
+        idx += 1;
+    }
+    Ok(String::from_utf8(decoded)?)
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Channel {
     Stable,
@@ -279,6 +358,7 @@ enum Channel {
 struct Manifest {
     date: String,
     pkg: IndexMap<String, ManifestPackage>,
+    #[serde(default)]
     artifacts: IndexMap<String, ManifestArtifact>,
 }
 
@@ -308,4 +388,35 @@ struct ManifestArtifact {
 struct ManifestTargetArtifact {
     url: String,
     hash_sha256: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{percent_decode_url_path, version_label_for_channel};
+
+    #[test]
+    fn version_label_uses_channel_for_train_channels() {
+        assert_eq!(version_label_for_channel("beta", "1.96.0-beta.1 (hash date)"), "beta");
+        assert_eq!(version_label_for_channel("nightly", "1.96.0-nightly (hash date)"), "nightly");
+    }
+
+    #[test]
+    fn version_label_uses_channel_for_trust_channels() {
+        assert_eq!(version_label_for_channel("trust", "1.96.0-trust (hash date)"), "trust");
+        assert_eq!(
+            version_label_for_channel("trust-2026-04-24", "1.96.0-trust (hash date)"),
+            "trust-2026-04-24"
+        );
+        assert_eq!(version_label_for_channel("tRust", "1.96.0-trust (hash date)"), "tRust");
+    }
+
+    #[test]
+    fn version_label_uses_manifest_version_for_numbered_channels() {
+        assert_eq!(version_label_for_channel("1.95", "1.95.1 (hash date)"), "1.95.1");
+    }
+
+    #[test]
+    fn file_url_paths_are_percent_decoded() {
+        assert_eq!(percent_decode_url_path("/tmp/trust%20stage0").unwrap(), "/tmp/trust stage0");
+    }
 }

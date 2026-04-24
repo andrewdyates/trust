@@ -261,7 +261,7 @@ impl<'tcx> InherentOverlapChecker<'tcx> {
                     }
                     // Take the only id inside the list
                     &[id_to_set] => {
-                        let region = connected_regions[id_to_set].as_mut().expect("invariant: value is present");
+                        let region = connected_regions[id_to_set].as_mut().unwrap();
                         region.impl_blocks.insert(i);
                         region.idents.extend_from_slice(&idents_to_add);
                         // Update the connected region ids
@@ -276,7 +276,7 @@ impl<'tcx> InherentOverlapChecker<'tcx> {
                     // this is no issue as the final step to check
                     // for overlaps runs in O(n^2) as well.
                     &[id_to_set, ..] => {
-                        let mut region = connected_regions.remove(id_to_set).expect("invariant: value is present");
+                        let mut region = connected_regions.remove(id_to_set).unwrap();
                         region.impl_blocks.insert(i);
                         region.idents.extend_from_slice(&idents_to_add);
                         // Update the connected region ids
@@ -289,7 +289,7 @@ impl<'tcx> InherentOverlapChecker<'tcx> {
                             if id == id_to_set {
                                 continue;
                             }
-                            let r = connected_regions.remove(id).expect("invariant: value is present");
+                            let r = connected_regions.remove(id).unwrap();
                             for ident in r.idents.iter() {
                                 connected_region_ids.insert(*ident, id_to_set);
                             }
@@ -317,7 +317,7 @@ impl<'tcx> InherentOverlapChecker<'tcx> {
                         .sum::<usize>();
                     s / connected_regions.len()
                 },
-                connected_regions.iter().flatten().map(|r| r.impl_blocks.len()).max().expect("invariant: value is present")
+                connected_regions.iter().flatten().map(|r| r.impl_blocks.len()).max().unwrap()
             );
             // List of connected regions is built. Now, run the overlap check
             // for each pair of impl blocks in the same connected region.

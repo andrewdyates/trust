@@ -386,12 +386,10 @@ impl<'cx, 'tcx> LexicalResolver<'cx, 'tcx> {
                     ReError(_) => false,
 
                     ReBound(..) | ReErased => {
-                        // tRust: invariant — ReBound and ReErased must be eliminated before lexical region resolution
                         bug!("cannot relate region: {:?}", a);
                     }
 
                     ReVar(v_id) => {
-                        // tRust: invariant — ReVar must be resolved before expanding constraints in lexical resolver
                         span_bug!(
                             self.var_infos[v_id].origin.span(),
                             "lub_concrete_regions invoked with non-concrete region: {:?}",
@@ -421,12 +419,10 @@ impl<'cx, 'tcx> LexicalResolver<'cx, 'tcx> {
                     ReError(_) => false,
 
                     ReBound(..) | ReErased => {
-                        // tRust: invariant — ReBound and ReErased must be eliminated before lexical region resolution
                         bug!("cannot relate region: {:?}", b);
                     }
 
                     ReVar(v_id) => {
-                        // tRust: invariant — ReVar must be resolved before expanding constraints in lexical resolver
                         span_bug!(
                             self.var_infos[v_id].origin.span(),
                             "lub_concrete_regions invoked with non-concrete regions: {:?}",
@@ -488,12 +484,10 @@ impl<'cx, 'tcx> LexicalResolver<'cx, 'tcx> {
     fn lub_concrete_regions(&self, a: Region<'tcx>, b: Region<'tcx>) -> Region<'tcx> {
         match (a.kind(), b.kind()) {
             (ReBound(..), _) | (_, ReBound(..)) | (ReErased, _) | (_, ReErased) => {
-                // tRust: invariant — ReBound and ReErased regions cannot appear in LUB computation
                 bug!("cannot relate region: LUB({:?}, {:?})", a, b);
             }
 
             (ReVar(v_id), _) | (_, ReVar(v_id)) => {
-                // tRust: invariant — ReVar must be resolved before LUB computation in lexical resolver
                 span_bug!(
                     self.var_infos[v_id].origin.span(),
                     "lub_concrete_regions invoked with non-concrete \

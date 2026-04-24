@@ -73,7 +73,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // check that the dynamic type to which the vtable belongs satisfies all the expected
         // predicates, but that would likely be a lot slower and seems unnecessarily permissive.
 
-        // tRust: known issue — we are skipping auto traits for now, but might revisit this in the future.
+        // FIXME: we are skipping auto traits for now, but might revisit this in the future.
         let mut sorted_vtable: Vec<_> = vtable_dyn_type.without_auto_traits().collect();
         let mut sorted_expected: Vec<_> = expected_dyn_type.without_auto_traits().collect();
         // `skip_binder` here is okay because `stable_cmp` doesn't look at binders

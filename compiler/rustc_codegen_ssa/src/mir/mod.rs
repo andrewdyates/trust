@@ -1,6 +1,3 @@
-//! tRust: MIR codegen entry points for translating function bodies into backend IR
-//! tRust: through `FunctionCx`.
-
 use std::iter;
 
 use rustc_index::IndexVec;
@@ -74,8 +71,7 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// A backend `BasicBlock` for each MIR `BasicBlock`, created lazily
     /// as-needed (e.g. RPO reaching it or another block branching to it).
-    // NOTE(eddyb): `llbbs` and other `ll`-prefixed names are LLVM-centric;
-    // should use a backend-agnostic naming convention.
+    // FIXME(eddyb) rename `llbbs` and other `ll`-prefixed things to use a
     // more backend-agnostic prefix such as `cg` (i.e. this would be `cgbbs`).
     cached_llbbs: IndexVec<mir::BasicBlock, CachedLlbb<Bx::BasicBlock>>,
 
@@ -88,7 +84,7 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     funclets: IndexVec<mir::BasicBlock, Option<Bx::Funclet>>,
 
     /// This stores the cached landing/cleanup pad block for a given BB.
-    // NOTE(eddyb): Should be renamed to `eh_pads` for clarity.
+    // FIXME(eddyb) rename this to `eh_pads`.
     landing_pads: IndexVec<mir::BasicBlock, Option<Bx::BasicBlock>>,
 
     /// Cached unreachable block
@@ -151,7 +147,7 @@ enum LocalRef<'tcx, V> {
     /// MIR only supports unsized args, not dynamically-sized locals, so
     /// new unsized temps don't exist and we must reuse the referred-to place.
     ///
-    /// NOTE: Since the removal of unsized locals in <https://github.com/rust-lang/rust/pull/142911>,
+    /// FIXME: Since the removal of unsized locals in <https://github.com/rust-lang/rust/pull/142911>,
     /// can we maybe use `Place` here? Or refactor it in another way? There are quite a few
     /// `UnsizedPlace => bug` branches now.
     UnsizedPlace(PlaceRef<'tcx, V>),
@@ -317,7 +313,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         unreached_blocks.remove(bb);
     }
 
-    // NOTE: Empty unreachable blocks are mostly unnecessary but occasionally
+    // FIXME: These empty unreachable blocks are *mostly* a waste. They are occasionally
     // targets for a SwitchInt terminator, but the reimplementation of the mono-reachable
     // simplification in SwitchInt lowering sometimes misses cases that
     // mono_reachable_reverse_postorder manages to figure out.
@@ -328,7 +324,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 }
 
 /// Replace `clone` calls that come from `use` statements with direct copies if possible.
-// NOTE: Could move to mir::transform when post-mono MIR passes are implemented.
+// FIXME: Move this function to mir::transform when post-mono MIR passes land.
 fn optimize_use_clone<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     cx: &'a Bx::CodegenCx,
     mut mir: Body<'tcx>,
@@ -364,7 +360,7 @@ fn optimize_use_clone<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
             let Some(arg_place) = arg.node.place() else { continue };
 
-            let destination_block = target.expect("invariant: target must succeed");
+            let destination_block = target.unwrap();
 
             bb.statements.push(mir::Statement::new(
                 bb.terminator().source_info,
@@ -415,16 +411,13 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 // to reconstruct it into a tuple local variable, from multiple
                 // individual LLVM function arguments.
                 let ty::Tuple(tupled_arg_tys) = arg_ty.kind() else {
-                    // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                     bug!("spread argument isn't a tuple?!");
                 };
 
                 let layout = bx.layout_of(arg_ty);
 
-                // tRust: Upstream TODO -- unsized params in rust-call ABI not yet supported.
-                // TODO: Support unsized params in rust-call ABI.
+                // FIXME: support unsized params in "rust-call" ABI
                 if layout.is_unsized() {
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                     span_bug!(
                         arg_decl.source_info.span,
                         "\"rust-call\" ABI does not support unsized params",
@@ -469,7 +462,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
             if !memory_locals.contains(local) {
                 // We don't have to cast or keep the argument in the alloca.
-                // NOTE(eddyb): Should use llvm.dbg.value instead of alloca for debug info.
+                // FIXME(eddyb): We should figure out how to use llvm.dbg.value instead
                 // of putting everything in allocas just so we can use llvm.dbg.declare.
                 let local = |op| LocalRef::Operand(op);
                 match arg.mode {
@@ -502,7 +495,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 PassMode::Indirect { attrs, meta_attrs: None, on_stack: _ } => {
                     // Don't copy an indirect argument to an alloca, the caller already put it
                     // in a temporary alloca and gave it up.
-                    // NOTE: Lifetime tracking not implemented for this debug info path.
+                    // FIXME: lifetimes
                     if let Some(pointee_align) = attrs.pointee_align
                         && pointee_align < arg.layout.align.abi
                     {
@@ -554,10 +547,9 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             fx.instance
         );
 
-        let arg = fx.fn_abi.args.last().expect("invariant: collection must not be empty");
+        let arg = fx.fn_abi.args.last().unwrap();
         match arg.mode {
             PassMode::Direct(_) => (),
-            // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
             _ => bug!("caller location must be PassMode::Direct, found {:?}", arg.mode),
         }
 

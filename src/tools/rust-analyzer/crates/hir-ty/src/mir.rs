@@ -101,6 +101,7 @@ pub enum OperandKind {
     /// Creates a value by performing loading the place, just like the `Copy` operand.
     ///
     /// This *may* additionally overwrite the place with `uninit` bytes, depending on how we decide
+    
     /// place without first re-initializing it.
     ///
     /// [UCG#188]: https://github.com/rust-lang/unsafe-code-guidelines/issues/188

@@ -31,7 +31,7 @@ fn overflow_vc() -> VerificationCondition {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "get_midpoint".to_string(),
+        function: "get_midpoint".into(),
         location: SourceSpan {
             file: "src/math.rs".to_string(),
             line_start: 15,
@@ -63,7 +63,7 @@ fn overflow_vc() -> VerificationCondition {
 fn bounds_check_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::IndexOutOfBounds,
-        function: "get_element".to_string(),
+        function: "get_element".into(),
         location: SourceSpan {
             file: "src/container.rs".to_string(),
             line_start: 42,
@@ -83,7 +83,7 @@ fn bounds_check_vc() -> VerificationCondition {
 fn divzero_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_div".to_string(),
+        function: "safe_div".into(),
         location: SourceSpan::default(),
         formula: Formula::Not(Box::new(Formula::Eq(
             Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -97,7 +97,7 @@ fn divzero_vc() -> VerificationCondition {
 fn postcondition_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::Postcondition,
-        function: "sort_slice".to_string(),
+        function: "sort_slice".into(),
         location: SourceSpan::default(),
         formula: Formula::Forall(
             vec![("i".into(), Sort::Int)],
@@ -139,10 +139,12 @@ fn postcondition_vc() -> VerificationCondition {
 
 fn proved_result(solver: &str) -> VerificationResult {
     VerificationResult::Proved {
-        solver: solver.to_string(),
+        solver: solver.into(),
         time_ms: 8,
-        strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+        strength: ProofStrength::smt_unsat(),
+        proof_certificate: None,
+        solver_warnings: None,
+    }
 }
 
 fn mock_proof_term() -> Vec<u8> {
@@ -227,7 +229,7 @@ fn test_certify_bounds_check_vc() {
     // Verify staleness detection: change the formula, cert should be stale
     let mutated_vc = VerificationCondition {
         kind: VcKind::IndexOutOfBounds,
-        function: "get_element".to_string(),
+        function: "get_element".into(),
         location: SourceSpan::default(),
         formula: Formula::Le(
             Box::new(Formula::Var("index".into(), Sort::Int)),
@@ -291,11 +293,8 @@ fn test_certification_pipeline_batch() {
     }
 
     // Verify that a failed result is properly skipped
-    let failed = VerificationResult::Failed {
-        solver: "z4".to_string(),
-        time_ms: 3,
-        counterexample: None,
-    };
+    let failed =
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 3, counterexample: None };
     let skip_result = pipeline.certify_unchecked(&overflow_vc(), &failed, proof_term);
     assert!(skip_result.is_skipped(), "failed result should be skipped");
 }
@@ -337,9 +336,7 @@ fn test_certification_bridge_roundtrip() {
     assert_eq!(chain.steps[0].step_type, ChainStepType::VcGeneration);
     assert_eq!(chain.steps[1].step_type, ChainStepType::SolverProof);
     assert!(!chain.is_lean5_certified(), "unchecked path should not be lean5-certified");
-    chain
-        .verify_integrity()
-        .expect("chain integrity should hold");
+    chain.verify_integrity().expect("chain integrity should hold");
 
     // Step 4: JSON roundtrip of the ProofCertificate
     let json = proof_cert.to_json().expect("certificate should serialize to JSON");
@@ -354,11 +351,8 @@ fn test_certification_bridge_roundtrip() {
     assert_eq!(*chain, chain_restored, "CertificateChain should survive JSON roundtrip");
 
     // Step 6: Verify the bridge handles non-proved results correctly
-    let failed = VerificationResult::Failed {
-        solver: "z4".to_string(),
-        time_ms: 3,
-        counterexample: None,
-    };
+    let failed =
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 3, counterexample: None };
     let skip_output = bridge
         .certify_unchecked(&vc, &failed, vec![1], timestamp)
         .expect("bridge should return NoCertificate for failed result");
@@ -413,17 +407,12 @@ fn test_certificate_bundle_serialize_deserialize() {
 
     // Verify each recovered certificate is still valid for its VC
     for (vc, cert) in vcs.iter().zip(recovered.iter()) {
-        assert!(
-            cert.is_valid_for(vc),
-            "recovered certificate should still be valid for its VC"
-        );
+        assert!(cert.is_valid_for(vc), "recovered certificate should still be valid for its VC");
     }
 
     // File roundtrip
-    let path = std::env::temp_dir().join(format!(
-        "trust-lean5-e2e-bundle-{}.trust-cert",
-        std::process::id()
-    ));
+    let path = std::env::temp_dir()
+        .join(format!("trust-lean5-e2e-bundle-{}.trust-cert", std::process::id()));
     bundle.write_to_path(&path).expect("write should succeed");
     let file_recovered =
         TrustProofCertificateBundle::read_from_path(&path).expect("read should succeed");
@@ -483,10 +472,7 @@ fn test_bridge_checked_path_rejects_invalid() {
 
     assert!(!output.is_certified());
     if let PipelineOutput::NoCertificate { reason } = &output {
-        assert!(
-            reason.contains("rejected"),
-            "reason should mention rejection, got: {reason}"
-        );
+        assert!(reason.contains("rejected"), "reason should mention rejection, got: {reason}");
     }
 }
 
@@ -550,19 +536,13 @@ fn test_staleness_detection_across_pipeline() {
     };
 
     // Certificate fingerprint should match v1
-    assert!(
-        certificate.is_valid_for(&vc_v1),
-        "certificate fingerprint should match its source VC"
-    );
+    assert!(certificate.is_valid_for(&vc_v1), "certificate fingerprint should match its source VC");
 
     // verify_existing runs lean5 kernel validation, which rejects mock proof bytes.
     // This is correct behavior: unchecked certificates are Trusted, not Certified.
     // The verify_existing method is the full lean5 re-check.
     let v1_err = pipeline.verify_existing(&vc_v1, &certificate);
-    assert!(
-        v1_err.is_err(),
-        "verify_existing should reject mock proof bytes via lean5 kernel"
-    );
+    assert!(v1_err.is_err(), "verify_existing should reject mock proof bytes via lean5 kernel");
 
     // Simulate code change: different formula for same function
     let vc_v2 = VerificationCondition {
@@ -570,7 +550,7 @@ fn test_staleness_detection_across_pipeline() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "get_midpoint".to_string(),
+        function: "get_midpoint".into(),
         location: SourceSpan::default(),
         // Changed: uses saturating add check instead
         formula: Formula::Le(
@@ -613,31 +593,16 @@ fn test_lean5_translation_fidelity_complex() {
 
     // The theorem should contain the VC.holds wrapper
     assert!(debug.contains("holds"), "theorem should contain tRust.VC.holds");
-    assert!(
-        debug.contains("postcondition"),
-        "theorem should reference postcondition kind"
-    );
+    assert!(debug.contains("postcondition"), "theorem should reference postcondition kind");
     // Forall quantifier should appear in the translation
-    assert!(
-        debug.contains("forall"),
-        "theorem should contain forall quantifier"
-    );
+    assert!(debug.contains("forall"), "theorem should contain forall quantifier");
 
     // Translate the formula standalone and verify it's embeddable
     let formula_expr = lean5_bridge::translate_formula(&vc.formula);
     let formula_debug = format!("{formula_expr:?}");
-    assert!(
-        formula_debug.contains("forall"),
-        "formula translation should contain forall"
-    );
-    assert!(
-        formula_debug.contains("implies"),
-        "formula translation should contain implies"
-    );
-    assert!(
-        formula_debug.contains("select"),
-        "formula should contain array select operations"
-    );
+    assert!(formula_debug.contains("forall"), "formula translation should contain forall");
+    assert!(formula_debug.contains("implies"), "formula translation should contain implies");
+    assert!(formula_debug.contains("select"), "formula should contain array select operations");
 }
 
 // ---------------------------------------------------------------------------
@@ -649,8 +614,8 @@ fn test_proof_cert_serialization_through_bridge() {
     // Create a lean5 ProofCert, serialize via lean5_bridge, deserialize, verify equality
     let cert = ProofCert::Sort { level: LeanLevel::succ(LeanLevel::zero()) };
 
-    let bytes = lean5_bridge::serialize_proof_cert(&cert)
-        .expect("ProofCert serialization should succeed");
+    let bytes =
+        lean5_bridge::serialize_proof_cert(&cert).expect("ProofCert serialization should succeed");
     assert!(!bytes.is_empty());
 
     let recovered = lean5_bridge::deserialize_proof_cert(&bytes)
@@ -751,14 +716,8 @@ fn test_golden_reference_vc_to_lean5_export() {
     // Step 2: Translate the formula standalone
     let formula_expr = lean5_bridge::translate_formula(&vc.formula);
     let formula_debug = format!("{formula_expr:?}");
-    assert!(
-        formula_debug.contains("Not"),
-        "golden: standalone formula must contain Not"
-    );
-    assert!(
-        formula_debug.contains("\"eq\""),
-        "golden: standalone formula must contain eq"
-    );
+    assert!(formula_debug.contains("Not"), "golden: standalone formula must contain Not");
+    assert!(formula_debug.contains("\"eq\""), "golden: standalone formula must contain eq");
 
     // Step 3: Generate a certificate via the full pipeline
     let result = proved_result("z4");
@@ -899,10 +858,7 @@ fn test_golden_full_pipeline_chain_validation() {
 
         // Every chain must pass ChainValidator
         let validation = trust_proof_cert::ChainValidator::validate(chain);
-        assert!(
-            validation.valid,
-            "golden pipeline: {label} ChainValidator failed: {validation:?}"
-        );
+        assert!(validation.valid, "golden pipeline: {label} ChainValidator failed: {validation:?}");
     }
 }
 
@@ -954,8 +910,5 @@ fn test_lean5_binary_verifies_generated_proof() {
     // We expect rejection: Sort{level=0} is Prop, but it doesn't
     // prove the div-by-zero theorem. This confirms the kernel is
     // reachable and actively checking proofs.
-    assert!(
-        verify_result.is_err(),
-        "lean5 kernel should reject Sort cert for div-by-zero VC"
-    );
+    assert!(verify_result.is_err(), "lean5 kernel should reject Sort cert for div-by-zero VC");
 }

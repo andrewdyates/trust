@@ -8,8 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::visualization::FrontierSnapshot;
 use crate::ProofFrontier;
+use crate::visualization::FrontierSnapshot;
 
 /// Configuration for stagnation detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,13 +73,7 @@ impl StagnationDetector {
     /// Create a new detector with the given config.
     #[must_use]
     pub fn new(config: StagnationConfig) -> Self {
-        Self {
-            config,
-            best_proved: 0,
-            best_failed: u32::MAX,
-            stale_count: 0,
-            observation_count: 0,
-        }
+        Self { config, best_proved: 0, best_failed: u32::MAX, stale_count: 0, observation_count: 0 }
     }
 
     /// Create a detector with the default threshold of 3.
@@ -288,7 +282,9 @@ impl SnapshotStagnationDetector {
             format!(
                 "Stagnating: last {} snapshots show no improvement (threshold: {}). \
                  {} VCs have never been proved.",
-                stale_tail, self.threshold, stuck_vcs.len()
+                stale_tail,
+                self.threshold,
+                stuck_vcs.len()
             )
         } else if stale_tail > 0 {
             format!(
@@ -347,10 +343,8 @@ impl SnapshotStagnationDetector {
             }
         }
 
-        let mut stuck: Vec<String> = ever_failed
-            .difference(&ever_proved)
-            .map(|s| (*s).to_string())
-            .collect();
+        let mut stuck: Vec<String> =
+            ever_failed.difference(&ever_proved).map(|s| (*s).to_string()).collect();
         stuck.sort();
         stuck
     }

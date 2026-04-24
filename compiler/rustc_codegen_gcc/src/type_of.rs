@@ -85,10 +85,7 @@ fn uncached_gcc_type<'gcc, 'tcx>(
             );
         }
         BackendRepr::Memory { .. } => {}
-        // tRust: Scalable vectors are not yet supported in rustc_codegen_gcc
-        BackendRepr::SimdScalableVector { .. } => {
-            bug!("unimplemented: SimdScalableVector is not yet supported in rustc_codegen_gcc")
-        }
+        BackendRepr::SimdScalableVector { .. } => todo!(),
     }
 
     let name = match *layout.ty.kind() {
@@ -183,10 +180,8 @@ impl<'tcx> LayoutGccExt<'tcx> for TyAndLayout<'tcx> {
     fn is_gcc_immediate(&self) -> bool {
         match self.backend_repr {
             BackendRepr::Scalar(_) | BackendRepr::SimdVector { .. } => true,
-            // tRust: Scalable vectors are not yet supported in rustc_codegen_gcc
-            BackendRepr::SimdScalableVector { .. } => {
-                bug!("unimplemented: SimdScalableVector is not yet supported in rustc_codegen_gcc")
-            }
+            // FIXME(rustc_scalable_vector): Not yet implemented in rustc_codegen_gcc.
+            BackendRepr::SimdScalableVector { .. } => todo!(),
             BackendRepr::ScalarPair(..) | BackendRepr::Memory { .. } => false,
         }
     }

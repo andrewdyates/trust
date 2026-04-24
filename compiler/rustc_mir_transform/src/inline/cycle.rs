@@ -37,8 +37,9 @@ fn should_recurse<'tcx>(tcx: TyCtxt<'tcx>, callee: ty::Instance<'tcx>) -> bool {
         // This shim does not call any other functions, thus there can be no recursion.
         InstanceKind::FnPtrAddrShim(..) => return false,
 
-        // NOTE: Uninstantiated drop shims can ICE during MIR building due to incorrect
-        // ParamEnv handling. Skip them in cycle detection.
+        // FIXME: A not fully instantiated drop shim can cause ICEs if one attempts to
+        // have its MIR built. Likely oli-obk just screwed up the `ParamEnv`s, so this
+        // needs some more analysis.
         InstanceKind::DropGlue(..)
         | InstanceKind::FutureDropPollShim(..)
         | InstanceKind::AsyncDropGlue(..)
@@ -152,9 +153,10 @@ pub(crate) fn mir_callgraph_cyclic<'tcx>(
 ) -> Option<UnordSet<LocalDefId>> {
     assert!(
         !tcx.is_constructor(root.to_def_id()),
+        "you should not call `mir_callgraph_reachable` on enum/struct constructor functions"
     );
 
-    // NOTE(-Znext-solver): Reduced recursion limit to avoid fatal trait solver overflow.
+    // FIXME(-Znext-solver=no): Remove this hack when trait solver overflow can return an error.
     // In code like that pointed out in #128887, the type complexity we ask the solver to deal with
     // grows as we recurse into the call graph. If we use the same recursion limit here and in the
     // solver, the solver hits the limit first and emits a fatal error. But if we use a reduced

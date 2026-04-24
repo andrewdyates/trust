@@ -116,7 +116,7 @@ pub(crate) fn check_externally_implementable_items<'tcx>(tcx: TyCtxt<'tcx>, (): 
         }
 
         if default_impls.len() > 1 {
-            let decl_span = tcx.def_ident_span(foreign_item).expect("invariant: foreign item has an ident span"); // tRust: unwrap -> expect
+            let decl_span = tcx.def_ident_span(foreign_item).unwrap();
             tcx.dcx().span_delayed_bug(decl_span, "multiple not supported right now");
         }
 
@@ -139,7 +139,7 @@ pub(crate) fn check_externally_implementable_items<'tcx>(tcx: TyCtxt<'tcx>, (): 
                     tcx.dcx().emit_err(EiiWithoutImpl {
                         current_crate_name: tcx.crate_name(LOCAL_CRATE),
                         decl_crate_name: tcx.crate_name(decl_crate),
-                        // tRust: known issue — shouldn't call `item_name`
+                        // FIXME: shouldn't call `item_name`
                         name: decl.name.name,
                         span: decl.name.span,
                         help: (),

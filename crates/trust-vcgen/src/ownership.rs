@@ -65,33 +65,11 @@ pub struct BorrowState {
 #[non_exhaustive]
 pub enum BorrowViolation {
     /// A mutable borrow co-exists with another borrow on the same local.
-    AliasingViolation {
-        local: usize,
-        existing: BorrowKind,
-        attempted: BorrowKind,
-    },
+    AliasingViolation { local: usize, existing: BorrowKind, attempted: BorrowKind },
     /// A local was accessed (read/write/borrow) after being moved.
-    UseAfterMove {
-        local: usize,
-    },
+    UseAfterMove { local: usize },
     /// A borrow exists on a local that has been dropped or moved.
-    DanglingReference {
-        local: usize,
-        borrower: usize,
-    },
-}
-
-/// An operation that the borrow checker evaluates.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BorrowOp {
-    /// Create a shared reference: `_dst = &_src`.
-    CreateRef { src: usize, dst: usize, kind: BorrowKind },
-    /// Dereference a place (read through a borrow).
-    Deref { local: usize },
-    /// Move a value out of a local.
-    MovePlace { local: usize },
-    /// Drop a local.
-    DropPlace { local: usize },
+    DanglingReference { local: usize, borrower: usize },
 }
 
 // ---------------------------------------------------------------------------
@@ -119,10 +97,7 @@ impl BorrowState {
         }
         // Cannot borrow a dropped local.
         if self.dropped.get(&src).copied().unwrap_or(false) {
-            return Err(BorrowViolation::DanglingReference {
-                local: src,
-                borrower: dst,
-            });
+            return Err(BorrowViolation::DanglingReference { local: src, borrower: dst });
         }
 
         let existing = self.borrows.entry(src).or_default();
@@ -159,10 +134,7 @@ impl BorrowState {
             return Err(BorrowViolation::UseAfterMove { local });
         }
         if self.dropped.get(&local).copied().unwrap_or(false) {
-            return Err(BorrowViolation::DanglingReference {
-                local,
-                borrower: local,
-            });
+            return Err(BorrowViolation::DanglingReference { local, borrower: local });
         }
         Ok(())
     }
@@ -182,12 +154,10 @@ impl BorrowState {
     /// on the local (they would become dangling).
     pub fn drop_place(&mut self, local: usize) -> Result<(), BorrowViolation> {
         if let Some(records) = self.borrows.get(&local)
-            && let Some(first) = records.first() {
-                return Err(BorrowViolation::DanglingReference {
-                    local,
-                    borrower: first.borrower,
-                });
-            }
+            && let Some(first) = records.first()
+        {
+            return Err(BorrowViolation::DanglingReference { local, borrower: first.borrower });
+        }
         self.dropped.insert(local, true);
         self.borrows.remove(&local);
         Ok(())
@@ -209,29 +179,6 @@ impl BorrowState {
     #[must_use]
     pub fn borrows_on(&self, local: usize) -> &[BorrowRecord] {
         self.borrows.get(&local).map_or(&[], Vec::as_slice)
-    }
-}
-
-/// Check a single borrow operation against the current state.
-pub(crate) fn check_borrow_safety(
-    state: &BorrowState,
-    op: &BorrowOp,
-) -> Result<(), BorrowViolation> {
-    match op {
-        BorrowOp::CreateRef { src, dst, kind } => {
-            // Delegate to a temporary clone so we can probe without mutation.
-            let mut probe = state.clone();
-            probe.create_ref(*src, *dst, *kind)
-        }
-        BorrowOp::Deref { local } => state.deref(*local),
-        BorrowOp::MovePlace { local } => {
-            let mut probe = state.clone();
-            probe.move_place(*local)
-        }
-        BorrowOp::DropPlace { local } => {
-            let mut probe = state.clone();
-            probe.drop_place(*local)
-        }
     }
 }
 
@@ -299,17 +246,13 @@ fn scan_statement(
             Rvalue::Repeat(op, _) => {
                 check_operand(state, op, violations);
             }
-            _ => {},
+            _ => {}
         }
     }
 }
 
 /// Check an operand for moves or derefs.
-fn check_operand(
-    state: &mut BorrowState,
-    op: &Operand,
-    violations: &mut Vec<BorrowViolation>,
-) {
+fn check_operand(state: &mut BorrowState, op: &Operand, violations: &mut Vec<BorrowViolation>) {
     match op {
         Operand::Move(place) => {
             // Check if already moved.
@@ -331,7 +274,7 @@ fn check_operand(
             check_deref_projections(state, place, violations);
         }
         Operand::Constant(_) => {}
-        _ => {},
+        _ => {}
     }
 }
 
@@ -342,9 +285,10 @@ fn check_deref_projections(
     violations: &mut Vec<BorrowViolation>,
 ) {
     if place.projections.iter().any(|p| matches!(p, trust_types::Projection::Deref))
-        && let Err(v) = state.deref(place.local) {
-            violations.push(v);
-        }
+        && let Err(v) = state.deref(place.local)
+    {
+        violations.push(v);
+    }
 }
 
 /// Process a terminator for drop operations.
@@ -354,9 +298,10 @@ fn scan_terminator(
     violations: &mut Vec<BorrowViolation>,
 ) {
     if let Terminator::Drop { place, .. } = terminator
-        && let Err(v) = state.drop_place(place.local) {
-            violations.push(v);
-        }
+        && let Err(v) = state.drop_place(place.local)
+    {
+        violations.push(v);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -367,8 +312,8 @@ fn scan_terminator(
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BinOp, BlockId, LocalDecl, Operand, Place, Rvalue, SourceSpan,
-        Statement, Terminator, Ty, VerifiableBody, VerifiableFunction,
+        BasicBlock, BinOp, BlockId, LocalDecl, Operand, Place, Rvalue, SourceSpan, Statement,
+        Terminator, Ty, VerifiableBody, VerifiableFunction,
     };
 
     // -- BorrowState unit tests -----------------------------------------------
@@ -377,10 +322,8 @@ mod tests {
     fn test_shared_borrows_ok() {
         let mut state = BorrowState::new();
         // Two shared borrows on the same source local should succeed.
-        state.create_ref(0, 1, BorrowKind::Shared)
-            .expect("first shared borrow should succeed");
-        state.create_ref(0, 2, BorrowKind::Shared)
-            .expect("second shared borrow should succeed");
+        state.create_ref(0, 1, BorrowKind::Shared).expect("first shared borrow should succeed");
+        state.create_ref(0, 2, BorrowKind::Shared).expect("second shared borrow should succeed");
 
         assert_eq!(state.borrows_on(0).len(), 2);
     }
@@ -388,8 +331,7 @@ mod tests {
     #[test]
     fn test_mutable_alias_detected() {
         let mut state = BorrowState::new();
-        state.create_ref(0, 1, BorrowKind::Shared)
-            .expect("shared borrow should succeed");
+        state.create_ref(0, 1, BorrowKind::Shared).expect("shared borrow should succeed");
 
         let result = state.create_ref(0, 2, BorrowKind::Mutable);
         assert!(result.is_err(), "mutable borrow after shared should fail");
@@ -406,8 +348,7 @@ mod tests {
     #[test]
     fn test_shared_after_mutable_detected() {
         let mut state = BorrowState::new();
-        state.create_ref(0, 1, BorrowKind::Mutable)
-            .expect("mutable borrow should succeed");
+        state.create_ref(0, 1, BorrowKind::Mutable).expect("mutable borrow should succeed");
 
         let result = state.create_ref(0, 2, BorrowKind::Shared);
         assert!(result.is_err(), "shared borrow after mutable should fail");
@@ -457,8 +398,7 @@ mod tests {
     #[test]
     fn test_drop_with_active_borrow_detected() {
         let mut state = BorrowState::new();
-        state.create_ref(0, 1, BorrowKind::Shared)
-            .expect("borrow should succeed");
+        state.create_ref(0, 1, BorrowKind::Shared).expect("borrow should succeed");
 
         let result = state.drop_place(0);
         assert!(result.is_err());
@@ -478,15 +418,6 @@ mod tests {
         assert!(state.is_dropped(0));
     }
 
-    #[test]
-    fn test_check_borrow_safety_read_only() {
-        let state = BorrowState::new();
-
-        // CreateRef on fresh state should be fine.
-        let op = BorrowOp::CreateRef { src: 0, dst: 1, kind: BorrowKind::Shared };
-        assert!(check_borrow_safety(&state, &op).is_ok());
-    }
-
     // -- scan_body integration tests -------------------------------------------
 
     /// Helper: build a minimal function with given blocks.
@@ -495,12 +426,7 @@ mod tests {
             name: "test_fn".to_string(),
             def_path: "test::test_fn".to_string(),
             span: SourceSpan::default(),
-            body: VerifiableBody {
-                arg_count: 0,
-                return_ty: Ty::Unit,
-                locals,
-                blocks,
-            },
+            body: VerifiableBody { arg_count: 0, return_ty: Ty::Unit, locals, blocks },
             contracts: vec![],
             preconditions: vec![],
             postconditions: vec![],
@@ -545,10 +471,7 @@ mod tests {
         );
 
         let violations = scan_body(&func);
-        assert!(
-            violations.is_empty(),
-            "multiple shared borrows should be allowed: {violations:?}"
-        );
+        assert!(violations.is_empty(), "multiple shared borrows should be allowed: {violations:?}");
     }
 
     #[test]
@@ -590,10 +513,7 @@ mod tests {
         let violations = scan_body(&func);
         assert_eq!(violations.len(), 1, "should detect mutable aliasing: {violations:?}");
         assert!(
-            matches!(
-                &violations[0],
-                BorrowViolation::AliasingViolation { local: 1, .. }
-            ),
+            matches!(&violations[0], BorrowViolation::AliasingViolation { local: 1, .. }),
             "violation should be on local 1: {:?}",
             violations[0]
         );
@@ -663,21 +583,14 @@ mod tests {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
         );
 
         let violations = scan_body(&func);
         assert_eq!(violations.len(), 1, "should detect dangling reference: {violations:?}");
         assert!(
-            matches!(
-                &violations[0],
-                BorrowViolation::DanglingReference { local: 1, borrower: 2 }
-            ),
+            matches!(&violations[0], BorrowViolation::DanglingReference { local: 1, borrower: 2 }),
             "violation should be DanglingReference: {:?}",
             violations[0]
         );
@@ -777,10 +690,7 @@ mod tests {
         );
 
         let violations = scan_body(&func);
-        assert!(
-            violations.is_empty(),
-            "single mutable borrow should be allowed: {violations:?}"
-        );
+        assert!(violations.is_empty(), "single mutable borrow should be allowed: {violations:?}");
     }
 
     #[test]

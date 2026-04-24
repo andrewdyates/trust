@@ -134,7 +134,7 @@ trivially_parameterized_over_tcx! {
     // tidy-alphabetical-end
 }
 
-// tRust: known issue — This macro rule can only take a fake path, (upstream HACK by compiler-errors)
+// HACK(compiler-errors): This macro rule can only take a fake path,
 // not a real, due to parsing ambiguity reasons.
 macro_rules! parameterized_over_tcx {
     ($($( $fake_path:ident )::+ ),+ $(,)?) => {

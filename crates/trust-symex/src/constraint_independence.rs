@@ -32,11 +32,7 @@ pub struct PartitionConfig {
 
 impl Default for PartitionConfig {
     fn default() -> Self {
-        Self {
-            max_partition_size: 1024,
-            merge_small_partitions: false,
-            min_partition_size: 2,
-        }
+        Self { max_partition_size: 1024, merge_small_partitions: false, min_partition_size: 2 }
     }
 }
 
@@ -121,14 +117,9 @@ impl ConstraintPartitioner {
         let result_partitions: Vec<ConstraintPartition> = raw_partitions
             .iter()
             .map(|group| {
-                let vars: Vec<Vec<String>> = group
-                    .iter()
-                    .map(|c| self.extract_variables(c))
-                    .collect();
-                ConstraintPartition {
-                    partitions: vec![group.clone()],
-                    variable_groups: vars,
-                }
+                let vars: Vec<Vec<String>> =
+                    group.iter().map(|c| self.extract_variables(c)).collect();
+                ConstraintPartition { partitions: vec![group.clone()], variable_groups: vars }
             })
             .collect();
 
@@ -158,10 +149,8 @@ impl ConstraintPartitioner {
     /// constraints that share at least one variable.
     #[must_use]
     pub fn build_dependency_graph(&self, constraints: &[&str]) -> IndependenceGraph {
-        let per_constraint_vars: Vec<FxHashSet<String>> = constraints
-            .iter()
-            .map(|c| self.extract_variables(c).into_iter().collect())
-            .collect();
+        let per_constraint_vars: Vec<FxHashSet<String>> =
+            constraints.iter().map(|c| self.extract_variables(c).into_iter().collect()).collect();
 
         // Map variable -> set of constraint indices that mention it.
         let mut var_to_constraints: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
@@ -197,11 +186,10 @@ impl ConstraintPartitioner {
     #[must_use]
     pub fn extract_variables(&self, constraint: &str) -> Vec<String> {
         let keywords: FxHashSet<&str> = [
-            "and", "or", "not", "true", "false", "ite", "let", "forall", "exists",
-            "assert", "check", "sat", "unsat", "define", "declare", "bvadd",
-            "bvsub", "bvmul", "bvand", "bvor", "bvxor", "bvshl", "bvlshr",
-            "bvashr", "bvnot", "bvneg", "bvult", "bvslt", "bvugt", "bvsgt",
-            "bvule", "bvsle", "bvuge", "bvsge", "concat", "extract", "select",
+            "and", "or", "not", "true", "false", "ite", "let", "forall", "exists", "assert",
+            "check", "sat", "unsat", "define", "declare", "bvadd", "bvsub", "bvmul", "bvand",
+            "bvor", "bvxor", "bvshl", "bvlshr", "bvashr", "bvnot", "bvneg", "bvult", "bvslt",
+            "bvugt", "bvsgt", "bvule", "bvsle", "bvuge", "bvsge", "concat", "extract", "select",
             "store", "iff", "xor", "implies", "distinct", "if", "then", "else",
         ]
         .into_iter()
@@ -408,10 +396,7 @@ mod tests {
     #[test]
     fn test_connected_components_singleton() {
         let p = default_partitioner();
-        let graph = IndependenceGraph {
-            nodes: vec!["a".into()],
-            edges: vec![],
-        };
+        let graph = IndependenceGraph { nodes: vec!["a".into()], edges: vec![] };
         let comps = p.connected_components(&graph);
         assert_eq!(comps.len(), 1);
         assert_eq!(comps[0], vec![0]);
@@ -445,10 +430,7 @@ mod tests {
     #[test]
     fn test_connected_components_empty() {
         let p = default_partitioner();
-        let graph = IndependenceGraph {
-            nodes: vec![],
-            edges: vec![],
-        };
+        let graph = IndependenceGraph { nodes: vec![], edges: vec![] };
         let comps = p.connected_components(&graph);
         assert!(comps.is_empty());
     }
@@ -483,8 +465,7 @@ mod tests {
     #[test]
     fn test_partition_constraints_mixed() {
         let p = default_partitioner();
-        let result =
-            p.partition_constraints(&["x > 0", "x < 10", "y > 5", "z + w == 3", "w < 7"]);
+        let result = p.partition_constraints(&["x > 0", "x < 10", "y > 5", "z + w == 3", "w < 7"]);
         assert_eq!(result.total_constraints, 5);
         // x-group: {x > 0, x < 10}, y-group: {y > 5}, zw-group: {z+w==3, w<7}
         assert_eq!(result.num_partitions, 3);
@@ -497,10 +478,7 @@ mod tests {
             min_partition_size: 2,
             ..Default::default()
         });
-        let parts = vec![
-            vec!["a".into(), "b".into()],
-            vec!["c".into(), "d".into()],
-        ];
+        let parts = vec![vec!["a".into(), "b".into()], vec!["c".into(), "d".into()]];
         let merged = p.merge_small(parts.clone());
         assert_eq!(merged, parts);
     }
@@ -512,10 +490,7 @@ mod tests {
             min_partition_size: 2,
             ..Default::default()
         });
-        let parts = vec![
-            vec!["a".into(), "b".into()],
-            vec!["c".into()],
-        ];
+        let parts = vec![vec!["a".into(), "b".into()], vec!["c".into()]];
         let merged = p.merge_small(parts);
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].len(), 3);
@@ -560,8 +535,7 @@ mod tests {
     fn test_transitive_dependency() {
         let p = default_partitioner();
         // a shares x with b, b shares y with c => all in one partition
-        let result =
-            p.partition_constraints(&["x > 0", "x + y < 10", "y > 1"]);
+        let result = p.partition_constraints(&["x > 0", "x + y < 10", "y > 1"]);
         assert_eq!(result.num_partitions, 1);
     }
 

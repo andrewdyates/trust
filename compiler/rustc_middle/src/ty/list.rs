@@ -97,16 +97,9 @@ impl<H, T> RawList<H, T> {
         assert!(!slice.is_empty());
 
         let (layout, _offset) =
-            Layout::new::<ListSkeleton<H, T>>().extend(Layout::for_value::<[T]>(slice)).expect("invariant: layout extension succeeds");
+            Layout::new::<ListSkeleton<H, T>>().extend(Layout::for_value::<[T]>(slice)).unwrap();
 
         let mem = arena.dropless.alloc_raw(layout) as *mut RawList<H, T>;
-        // SAFETY: `arena.dropless.alloc_raw(layout)` returns a pointer to memory of the
-        // correct size and alignment for `RawList<H, T>` with `slice.len()` trailing
-        // elements. We initialize all fields (header, len, data) before creating the
-        // reference. The arena guarantees the memory lives for 'tcx. `T: Copy` (asserted
-        // above) ensures no drop glue is needed.
-        // SAFETY: `mem` points at freshly reserved arena storage for this `RawList`, and
-        // this block fully initializes that storage before returning `&*mem`.
         unsafe {
             // Write the header
             (&raw mut (*mem).skel.header).write(header);
@@ -249,8 +242,6 @@ impl<H, T> AsRef<[T]> for RawList<H, T> {
         // access the `self.skel.len` elements stored at `self.skel.data`.
         // Note that we specifically don't reborrow `&self.skel.data`, because that
         // would give us a pointer with provenance over 0 bytes.
-        // SAFETY: `data_ptr` addresses `self.skel.len` initialized trailing elements of
-        // this allocation with the correct provenance and alignment.
         unsafe { slice::from_raw_parts(data_ptr, self.skel.len) }
     }
 }

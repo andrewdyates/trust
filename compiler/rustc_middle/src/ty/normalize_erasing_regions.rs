@@ -102,7 +102,7 @@ impl<'tcx> TyCtxt<'tcx> {
     /// N.B., currently, higher-ranked type bounds inhibit
     /// normalization. Therefore, each time we erase them in
     /// codegen, we need to normalize the contents.
-    // tRust: known issue (@lcnr) — This method should not be necessary, we now normalize
+    // FIXME(@lcnr): This method should not be necessary, we now normalize
     // inside of binders. We should be able to only use
     // `tcx.instantiate_bound_regions_with_erased`.
     #[tracing::instrument(level = "debug", skip(self, typing_env))]
@@ -168,7 +168,6 @@ impl<'tcx> NormalizeAfterErasingRegionsFolder<'tcx> {
     ) -> ty::GenericArg<'tcx> {
         let arg = self.typing_env.as_query_input(arg);
         self.tcx.try_normalize_generic_arg_after_erasing_regions(arg).unwrap_or_else(|_| {
-            // tRust: invariant: expected value must exist in normalize_generic_arg_after_erasing_regions
             bug!(
                 "Failed to normalize {:?} in typing_env={:?}, \
                 maybe try to call `try_normalize_erasing_regions` instead",

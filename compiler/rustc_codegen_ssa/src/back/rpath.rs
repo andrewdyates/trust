@@ -1,6 +1,3 @@
-//! tRust: RPATH computation and linker argument generation for locating shared
-//! tRust: libraries at runtime.
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -69,15 +66,15 @@ fn get_rpath_relative_to_output(config: &RPathConfig<'_>, lib: &Path) -> OsStrin
     let prefix = if config.is_like_darwin { "@loader_path" } else { "$ORIGIN" };
 
     // Strip filenames
-    let lib = lib.parent().expect("invariant: item must have parent");
-    let output = config.out_filename.parent().expect("invariant: item must have parent");
+    let lib = lib.parent().unwrap();
+    let output = config.out_filename.parent().unwrap();
 
     // If output or lib is empty, just assume it locates in current path
     let lib = if lib == Path::new("") { Path::new(".") } else { lib };
     let output = if output == Path::new("") { Path::new(".") } else { output };
 
-    let lib = try_canonicalize(lib).expect("invariant: try_canonicalize(lib) must succeed");
-    let output = try_canonicalize(output).expect("invariant: try_canonicalize(output) must succeed");
+    let lib = try_canonicalize(lib).unwrap();
+    let output = try_canonicalize(output).unwrap();
     let relative = path_relative_from(&lib, &output)
         .unwrap_or_else(|| panic!("couldn't create relative path from {output:?} to {lib:?}"));
 

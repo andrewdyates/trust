@@ -1,6 +1,3 @@
-//! tRust: Apple platform utilities for SDK name resolution, deployment target handling,
-//! tRust: and Xcode toolchain integration.
-
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::Command;
@@ -115,7 +112,7 @@ pub(super) fn add_data_and_relocation(
             r_length: 3,
         }
     } else if target.arch == Arch::Arm {
-        // NOTE(madsmtm): Workaround until `object` crate supports 32-bit ARM relocations.
+        // FIXME(madsmtm): Remove once `object` supports 32-bit ARM relocations:
         // https://github.com/gimli-rs/object/pull/757
         object::write::RelocationFlags::MachO {
             r_type: object::macho::ARM_RELOC_VANILLA,
@@ -185,8 +182,7 @@ pub(super) fn get_sdk_root(sess: &Session) -> Option<PathBuf> {
             // Though we still warn, since such cases are uncommon, and it is very hard to debug if
             // you do not know the details.
             //
-            // tRust: Upstream TODO -- tracked by rust-lang/rust#21204.
-            // TODO(madsmtm): Convert to a lint so deny(warnings) works correctly.
+            // FIXME(madsmtm): Make this a lint, to allow deny warnings to work.
             // (Or fix <https://github.com/rust-lang/rust/issues/21204>).
             let mut diag = sess.dcx().create_warn(err);
             diag.note(msg!("the SDK is needed by the linker to know where to find symbols in system libraries and for embedding the SDK version in the final object file"));
@@ -298,7 +294,7 @@ fn xcode_select_developer_dir() -> Option<PathBuf> {
 fn stdout_to_path(mut stdout: Vec<u8>) -> PathBuf {
     // Remove trailing newline.
     if let Some(b'\n') = stdout.last() {
-        let _ = stdout.pop().expect("invariant: pop() must succeed");
+        let _ = stdout.pop().unwrap();
     }
     #[cfg(unix)]
     let path = <OsString as std::os::unix::ffi::OsStringExt>::from_vec(stdout);

@@ -164,7 +164,7 @@ pub trait ValueVisitor<'tcx, M: Machine<'tcx>>: Sized {
             FieldsShape::Array { .. } => {
                 let mut iter = self.ecx().project_array_fields(v)?;
                 while let Some((idx, field)) = iter.next(self.ecx())? {
-                    self.visit_field(v, idx.try_into().expect("invariant: field index fits in usize for visit_field projection"), &field)?;
+                    self.visit_field(v, idx.try_into().unwrap(), &field)?;
                 }
             }
         }

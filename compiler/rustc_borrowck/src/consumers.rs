@@ -33,7 +33,6 @@ impl<'tcx> BorrowckConsumer<'tcx> {
 
     pub(crate) fn insert_body(&mut self, def_id: LocalDefId, body: BodyWithBorrowckFacts<'tcx>) {
         if self.bodies.insert(def_id, body).is_some() {
-            // tRust: invariant: uniqueness invariant — each LocalDefId is analyzed exactly once by borrowck
             bug!("unexpected previous body for {def_id:?}");
         }
     }
@@ -129,5 +128,5 @@ pub fn get_bodies_with_borrowck_facts(
     let mut root_cx =
         BorrowCheckRootCtxt::new(tcx, root_def_id, Some(BorrowckConsumer::new(options)));
     root_cx.do_mir_borrowck();
-    root_cx.consumer.expect("invariant: borrowck consumer must be set").bodies
+    root_cx.consumer.unwrap().bodies
 }

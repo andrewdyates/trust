@@ -25,7 +25,6 @@ fn make_array() -> [u8; 3] {
 extern "C" fn main(argc: i32, _argv: *const *const u8) -> i32 {
     let array = [42, 7, 5];
     let array2 = make_array();
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, array[ONE - 1]);
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, array[ONE]);

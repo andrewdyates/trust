@@ -339,7 +339,7 @@ fn visit_implementation_of_dispatch_from_dyn(checker: &Checker<'_>) -> Result<()
                     let ty_a = field.ty(tcx, args_a);
                     let ty_b = field.ty(tcx, args_b);
 
-                    // tRust: known issue — We could do normalization here, but is it really worth it?
+                    // FIXME: We could do normalization here, but is it really worth it?
                     if ty_a == ty_b {
                         // Allow 1-ZSTs that don't mention type params.
                         //
@@ -676,7 +676,7 @@ fn infringing_fields_error<'tcx>(
                     // Only note if it's not the root obligation, otherwise it's trivial and
                     // should be self-explanatory (i.e. a field literally doesn't implement Copy).
 
-                    // tRust: known issue — This error could be more descriptive, especially if the error_predicate
+                    // FIXME: This error could be more descriptive, especially if the error_predicate
                     // contains a foreign type or if it's a deeply nested type...
                     if error_predicate != error.root_obligation.predicate {
                         errors

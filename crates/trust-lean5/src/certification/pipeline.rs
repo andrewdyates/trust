@@ -80,7 +80,7 @@ impl CertificationPipeline {
             };
         }
 
-        let prover_version = self.make_prover_version(solver, strength);
+        let prover_version = self.make_prover_version(solver.as_str(), strength);
 
         // tRust: Run the full certification pipeline with lean5 kernel validation
         let start = std::time::Instant::now();
@@ -123,7 +123,7 @@ impl CertificationPipeline {
             return CertificationResult::Skipped { reason: "empty proof term".to_string() };
         }
 
-        let prover_version = self.make_prover_version(solver, strength);
+        let prover_version = self.make_prover_version(solver.as_str(), strength);
 
         let start = std::time::Instant::now();
         match generate_certificate_unchecked(vc, result, proof_term, &prover_version) {
@@ -208,7 +208,7 @@ impl CertificationPipeline {
         // Use the lean5 bridge serialization for kernel-compatible bytes.
         let proof_bytes = lean5_bridge::serialize_proof_cert_from_lean_term(&proof_term);
 
-        let prover_version = self.make_prover_version(solver, strength);
+        let prover_version = self.make_prover_version(solver.as_str(), strength);
 
         // tRust #429: Use kernel-checked path (generate_certificate) instead of
         // generate_certificate_unchecked. This means the lean5 kernel validates
@@ -267,20 +267,14 @@ impl CertificationPipeline {
                         result_status_name(result)
                     ),
                 },
-                CertificationScope::Uncertified {
-                    reason: "result is not Proved".to_string(),
-                },
+                CertificationScope::Uncertified { reason: "result is not Proved".to_string() },
             );
         };
 
         if solver_proof.steps.is_empty() {
             return (
-                CertificationResult::Skipped {
-                    reason: "solver proof has no steps".to_string(),
-                },
-                CertificationScope::Uncertified {
-                    reason: "solver proof has no steps".to_string(),
-                },
+                CertificationResult::Skipped { reason: "solver proof has no steps".to_string() },
+                CertificationScope::Uncertified { reason: "solver proof has no steps".to_string() },
             );
         }
 
@@ -301,10 +295,13 @@ impl CertificationPipeline {
                 let cert_result = self.certify_from_solver_proof(vc, result, solver_proof);
                 // Even if reconstruction succeeds, the scope records what
                 // parts could not be certified
-                (cert_result, CertificationScope::PartiallyCertified {
-                    logic: logic.clone(),
-                    reason: reason.clone(),
-                })
+                (
+                    cert_result,
+                    CertificationScope::PartiallyCertified {
+                        logic: logic.clone(),
+                        reason: reason.clone(),
+                    },
+                )
             }
             CertificationScope::Uncertified { reason } => {
                 // Not certifiable: skip gracefully instead of failing

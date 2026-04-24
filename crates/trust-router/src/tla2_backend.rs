@@ -9,10 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::io::Write as _;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::OnceLock;
-use std::time::Instant;
 
 use tla_mc_core::{NoopObserver, explore_bfs};
 use trust_temporal::ctl::{CtlModelChecker, parse_ctl};
@@ -23,15 +21,11 @@ use trust_temporal::fairness::{
 use trust_temporal::liveness::{self, LivenessProperty as TemporalLivenessProp};
 use trust_temporal::ltl::parse_ltl;
 // tRust #574: Re-export the adapter from trust-temporal's tla2_bridge module.
+use trust_temporal::StateMachine;
 pub(crate) use trust_temporal::tla2_bridge::StateMachineAdapter;
-use trust_temporal::tla_spec_gen as spec_gen;
-use trust_temporal::{State, StateId, StateMachine, StateMachineBuilder, Transition};
 use trust_types::*;
 
 use crate::{BackendRole, VerificationBackend};
-
-/// Default timeout for tla2 subprocess in milliseconds.
-const DEFAULT_TIMEOUT_MS: u64 = 60_000;
 
 /// Cached tla2 binary path, probed once per process.
 static TLA2_PATH: OnceLock<Option<String>> = OnceLock::new();
@@ -63,40 +57,13 @@ fn probe_tla2_path() -> Option<String> {
 
 /// Get the cached tla2 path, probing only once.
 fn get_tla2_path() -> Option<&'static str> {
-    TLA2_PATH
-        .get_or_init(probe_tla2_path)
-        .as_deref()
+    TLA2_PATH.get_or_init(probe_tla2_path).as_deref()
 }
 
 /// tRust #574: Check if the tla2 binary is available on the system.
 #[must_use]
 pub fn tla2_available() -> bool {
     get_tla2_path().is_some()
-}
-
-/// tRust: Convert `StateMachineMetadata` to `trust_temporal::StateMachine` (#182).
-///
-/// Bridges the serializable metadata format to the runtime model-checking model.
-#[must_use]
-pub(crate) fn metadata_to_temporal(meta: &StateMachineMetadata) -> StateMachine {
-    let initial = meta.init_states.first().copied().unwrap_or(0);
-    let mut builder = StateMachineBuilder::new(StateId(initial));
-
-    for (idx, name) in meta.states.iter().enumerate() {
-        let mut state = State::new(StateId(idx), name.as_str());
-        if let Some(labels) = meta.labels.get(&idx) {
-            for label in labels {
-                state = state.with_label(label.as_str());
-            }
-        }
-        builder = builder.add_state(state);
-    }
-
-    for (from, event, to) in &meta.transitions {
-        builder = builder.add_transition(Transition::new(StateId(*from), StateId(*to), event.as_str()));
-    }
-
-    builder.build()
 }
 
 /// tRust #435: Choose between ExhaustiveFinite and bounded ProofStrength
@@ -155,7 +122,7 @@ impl Tla2Backend {
 
                 if deadlocked.is_empty() {
                     VerificationResult::Proved {
-                        solver: "tla2".to_string(),
+                        solver: "tla2".into(),
                         time_ms: 0,
                         // tRust #435: ExplicitStateModel when BFS is complete
                         strength: tla2_proof_strength(
@@ -163,7 +130,7 @@ impl Tla2Backend {
                             outcome.completed,
                         ),
                         proof_certificate: None,
-                solver_warnings: None,
+                        solver_warnings: None,
                     }
                 } else {
                     // Encode deadlocked state IDs as counterexample assignments
@@ -175,14 +142,14 @@ impl Tla2Backend {
                         })
                         .collect();
                     VerificationResult::Failed {
-                        solver: "tla2".to_string(),
+                        solver: "tla2".into(),
                         time_ms: 0,
                         counterexample: Some(Counterexample::new(assignments)),
                     }
                 }
             }
             Err(e) => VerificationResult::Unknown {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 reason: format!("BFS exploration failed: {e}"),
             },
@@ -205,7 +172,7 @@ impl Tla2Backend {
 
                 if found {
                     VerificationResult::Failed {
-                        solver: "tla2".to_string(),
+                        solver: "tla2".into(),
                         time_ms: 0,
                         counterexample: Some(Counterexample::new(vec![(
                             "dead_state_reachable".to_string(),
@@ -214,7 +181,7 @@ impl Tla2Backend {
                     }
                 } else {
                     VerificationResult::Proved {
-                        solver: "tla2".to_string(),
+                        solver: "tla2".into(),
                         time_ms: 0,
                         // tRust #435: ExplicitStateModel when BFS is complete
                         strength: tla2_proof_strength(
@@ -222,12 +189,12 @@ impl Tla2Backend {
                             outcome.completed,
                         ),
                         proof_certificate: None,
-                solver_warnings: None,
+                        solver_warnings: None,
                     }
                 }
             }
             Err(e) => VerificationResult::Unknown {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 reason: format!("BFS exploration failed: {e}"),
             },
@@ -250,7 +217,7 @@ impl Tla2Backend {
                         // where possible (G phi -> AG phi, F phi -> EF phi).
                         // For full LTL, use VcKind::Liveness.
                         return VerificationResult::Unknown {
-                            solver: "tla2".to_string(),
+                            solver: "tla2".into(),
                             time_ms: 0,
                             reason: format!(
                                 "property `{property}` parses as LTL but not CTL; \
@@ -260,7 +227,7 @@ impl Tla2Backend {
                     }
                     Err(_) => {
                         return VerificationResult::Unknown {
-                            solver: "tla2".to_string(),
+                            solver: "tla2".into(),
                             time_ms: 0,
                             reason: format!(
                                 "failed to parse temporal property `{property}` as CTL: {e}"
@@ -276,7 +243,7 @@ impl Tla2Backend {
 
         if result.holds_at_initial(machine.initial) {
             VerificationResult::Proved {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 // tRust #435: CTL labeling explores all states exhaustively
                 strength: tla2_proof_strength(machine.states.len() as u64, true),
@@ -299,11 +266,7 @@ impl Tla2Backend {
                     .collect();
                 Counterexample::new(assignments)
             });
-            VerificationResult::Failed {
-                solver: "tla2".to_string(),
-                time_ms: 0,
-                counterexample,
-            }
+            VerificationResult::Failed { solver: "tla2".into(), time_ms: 0, counterexample }
         }
     }
 
@@ -332,7 +295,7 @@ impl Tla2Backend {
                     // tRust #734: non-panicking fallback for #[non_exhaustive] forward compat
                     _ => {
                         return VerificationResult::Unknown {
-                            solver: "tla2".to_string(),
+                            solver: "tla2".into(),
                             time_ms: 0,
                             reason: "unhandled variant".to_string(),
                         };
@@ -364,7 +327,7 @@ impl Tla2Backend {
             // tRust #734: non-panicking fallback for #[non_exhaustive] forward compat
             _ => {
                 return VerificationResult::Unknown {
-                    solver: "tla2".to_string(),
+                    solver: "tla2".into(),
                     time_ms: 0,
                     reason: "unhandled variant".to_string(),
                 };
@@ -386,22 +349,17 @@ impl Tla2Backend {
 
                 // tRust: Use a synthetic liveness property: "eventually action_name"
                 // Under the fairness constraint, this should be satisfiable
-                let prop = TemporalLivenessProp::new(
-                    format!("fair_{action_name}"),
-                    action_name,
-                );
+                let prop = TemporalLivenessProp::new(format!("fair_{action_name}"), action_name);
                 let result = check_under_fairness(machine, &prop, &[temporal_constraint]);
 
                 match result {
-                    trust_temporal::LivenessResult::Satisfied => {
-                        VerificationResult::Proved {
-                            solver: "tla2".to_string(),
-                            time_ms: 0,
-                            strength: ProofStrength::bounded(machine.states.len() as u64),
-                            proof_certificate: None,
-                solver_warnings: None,
-                        }
-                    }
+                    trust_temporal::LivenessResult::Satisfied => VerificationResult::Proved {
+                        solver: "tla2".into(),
+                        time_ms: 0,
+                        strength: ProofStrength::bounded(machine.states.len() as u64),
+                        proof_certificate: None,
+                        solver_warnings: None,
+                    },
                     trust_temporal::LivenessResult::Violated { .. } => {
                         let assignments: Vec<_> = witness
                             .avoiding_cycle
@@ -415,22 +373,26 @@ impl Tla2Backend {
                             })
                             .collect();
                         VerificationResult::Failed {
-                            solver: "tla2".to_string(),
+                            solver: "tla2".into(),
                             time_ms: 0,
                             counterexample: Some(Counterexample::new(assignments)),
                         }
                     }
-                    _ => VerificationResult::Unknown { solver: "tla2".to_string(), time_ms: 0, reason: "unexpected liveness result".to_string() },
+                    _ => VerificationResult::Unknown {
+                        solver: "tla2".into(),
+                        time_ms: 0,
+                        reason: "unexpected liveness result".to_string(),
+                    },
                 }
             }
             None => {
                 // No starvation detected for this action
                 VerificationResult::Proved {
-                    solver: "tla2".to_string(),
+                    solver: "tla2".into(),
                     time_ms: 0,
                     strength: ProofStrength::bounded(machine.states.len() as u64),
                     proof_certificate: None,
-                solver_warnings: None,
+                    solver_warnings: None,
                 }
             }
         }
@@ -443,16 +405,13 @@ impl Tla2Backend {
     ) -> VerificationResult {
         match result {
             trust_temporal::LivenessResult::Satisfied => VerificationResult::Proved {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 strength: ProofStrength::bounded(machine.states.len() as u64),
                 proof_certificate: None,
                 solver_warnings: None,
             },
-            trust_temporal::LivenessResult::Violated {
-                lasso_trace,
-                cycle_start,
-            } => {
+            trust_temporal::LivenessResult::Violated { lasso_trace, cycle_start } => {
                 let mut assignments: Vec<_> = lasso_trace
                     .iter()
                     .enumerate()
@@ -461,10 +420,7 @@ impl Tla2Backend {
                         let _state_name = machine
                             .state(*sid)
                             .map_or_else(|| format!("state_{}", sid.0), |s| s.name.clone());
-                        (
-                            format!("{label}_step_{i}"),
-                            CounterexampleValue::Bool(true),
-                        )
+                        (format!("{label}_step_{i}"), CounterexampleValue::Bool(true))
                     })
                     .collect();
                 assignments.push((
@@ -472,12 +428,16 @@ impl Tla2Backend {
                     CounterexampleValue::Int(*cycle_start as i128),
                 ));
                 VerificationResult::Failed {
-                    solver: "tla2".to_string(),
+                    solver: "tla2".into(),
                     time_ms: 0,
                     counterexample: Some(Counterexample::new(assignments)),
                 }
             }
-            _ => VerificationResult::Unknown { solver: "tla2".to_string(), time_ms: 0, reason: "unexpected liveness result variant".to_string() },
+            _ => VerificationResult::Unknown {
+                solver: "tla2".into(),
+                time_ms: 0,
+                reason: "unexpected liveness result variant".to_string(),
+            },
         }
     }
 
@@ -498,21 +458,21 @@ impl Tla2Backend {
             VcKind::Liveness { property } => Self::check_liveness(machine, property),
             VcKind::Fairness { constraint } => Self::check_fairness(machine, constraint),
             VcKind::RefinementViolation { spec_file, action } => VerificationResult::Unknown {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 reason: format!(
                     "refinement checking for spec {spec_file} action {action} not yet implemented"
                 ),
             },
             VcKind::ProtocolViolation { protocol, violation } => VerificationResult::Unknown {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 reason: format!(
                     "protocol violation checking for {protocol}: {violation} not yet implemented"
                 ),
             },
             _ => VerificationResult::Unknown {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 0,
                 reason: format!("VcKind {:?} not handled by tla2 backend", vc.kind.description()),
             },
@@ -555,7 +515,7 @@ impl VerificationBackend for Tla2Backend {
                 // tRust: Handle refinement/protocol specially (no SM needed for message)
                 if let VcKind::RefinementViolation { spec_file, action } = &vc.kind {
                     return VerificationResult::Unknown {
-                        solver: "tla2".to_string(),
+                        solver: "tla2".into(),
                         time_ms: 0,
                         reason: format!(
                             "refinement checking for spec {spec_file} action {action} \
@@ -564,7 +524,7 @@ impl VerificationBackend for Tla2Backend {
                     };
                 }
                 VerificationResult::Unknown {
-                    solver: "tla2".to_string(),
+                    solver: "tla2".into(),
                     time_ms: 0,
                     reason: "no StateMachine metadata in VC; \
                              use Tla2Backend::verify_with_machine() or populate metadata \
@@ -630,94 +590,13 @@ pub fn verify_fairness(
 /// `tla_mc_core` library). Use `Tla2SubprocessBackend` when you want the
 /// full tla2 tool capabilities (symmetry reduction, TLC-style exploration)
 /// beyond what tla_mc_core provides.
-pub struct Tla2SubprocessBackend {
-    timeout_ms: u64,
-}
+pub struct Tla2SubprocessBackend;
 
 impl Tla2SubprocessBackend {
-    /// Create a new subprocess backend with the default timeout.
+    /// Create a new subprocess backend.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            timeout_ms: DEFAULT_TIMEOUT_MS,
-        }
-    }
-
-    /// Create a subprocess backend with a custom timeout.
-    #[must_use]
-    pub fn with_timeout(timeout_ms: u64) -> Self {
-        Self { timeout_ms }
-    }
-
-    /// tRust #574: Generate TLA+ spec and invoke tla2 binary.
-    ///
-    /// Returns `Unknown` with a descriptive reason if the binary is not
-    /// available or the spec generation fails.
-    fn run_tla2_subprocess(
-        &self,
-        machine: &StateMachine,
-        property: &trust_temporal::TemporalProperty,
-    ) -> VerificationResult {
-        let tla2_path = match get_tla2_path() {
-            Some(p) => p,
-            None => {
-                return VerificationResult::Unknown {
-                    solver: "tla2-subprocess".to_string(),
-                    time_ms: 0,
-                    reason: "tla2 binary not found on PATH; \
-                             set TLA2_PATH env var or install tla2"
-                        .to_string(),
-                };
-            }
-        };
-
-        let spec = spec_gen::generate_full_spec(machine, property, "TrustVerify");
-        let start = Instant::now();
-
-        // tRust #574: Invoke tla2 with the generated spec on stdin
-        let child = Command::new(tla2_path)
-            .arg("check")
-            .arg("--stdin")
-            .arg("--property")
-            .arg("Property")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
-
-        let mut child = match child {
-            Ok(c) => c,
-            Err(e) => {
-                return VerificationResult::Unknown {
-                    solver: "tla2-subprocess".to_string(),
-                    time_ms: start.elapsed().as_millis() as u64,
-                    reason: format!("failed to spawn tla2: {e}"),
-                };
-            }
-        };
-
-        // Write spec to stdin
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(spec.as_bytes());
-        }
-
-        // Wait for result with timeout
-        let output = match child.wait_with_output() {
-            Ok(o) => o,
-            Err(e) => {
-                return VerificationResult::Unknown {
-                    solver: "tla2-subprocess".to_string(),
-                    time_ms: start.elapsed().as_millis() as u64,
-                    reason: format!("tla2 process error: {e}"),
-                };
-            }
-        };
-
-        let elapsed = start.elapsed().as_millis() as u64;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        parse_tla2_output(&stdout, &stderr, output.status.success(), elapsed)
+        Self
     }
 }
 
@@ -759,7 +638,7 @@ impl VerificationBackend for Tla2SubprocessBackend {
         // tRust #574: Without a state machine, we cannot generate a TLA+ spec.
         // Fall back to informative Unknown.
         VerificationResult::Unknown {
-            solver: "tla2-subprocess".to_string(),
+            solver: "tla2-subprocess".into(),
             time_ms: 0,
             reason: "no StateMachine metadata in VC; \
                      use verify_with_machine() or populate metadata \
@@ -769,65 +648,12 @@ impl VerificationBackend for Tla2SubprocessBackend {
     }
 }
 
-/// tRust #574: Parse tla2 subprocess output into a VerificationResult.
-///
-/// The tla2 binary outputs structured results. This parser handles the
-/// common output patterns.
-fn parse_tla2_output(
-    stdout: &str,
-    stderr: &str,
-    success: bool,
-    time_ms: u64,
-) -> VerificationResult {
-    let output = stdout.trim();
-
-    // tRust #574: Parse known tla2 output patterns
-    if output.contains("no violation found") || output.contains("Model checking complete. No error") {
-        return VerificationResult::Proved {
-            solver: "tla2-subprocess".to_string(),
-            time_ms,
-            strength: ProofStrength {
-                reasoning: ReasoningKind::ExplicitStateModel,
-                assurance: AssuranceLevel::Sound,
-            },
-            proof_certificate: None,
-                solver_warnings: None,
-        };
-    }
-
-    if output.contains("violation found") || output.contains("Error:") || output.contains("counterexample") {
-        return VerificationResult::Failed {
-            solver: "tla2-subprocess".to_string(),
-            time_ms,
-            counterexample: None, // tRust: Future work: parse counterexample trace
-        };
-    }
-
-    if !success {
-        return VerificationResult::Unknown {
-            solver: "tla2-subprocess".to_string(),
-            time_ms,
-            reason: format!(
-                "tla2 exited with error; stderr: {}",
-                stderr.chars().take(500).collect::<String>()
-            ),
-        };
-    }
-
-    VerificationResult::Unknown {
-        solver: "tla2-subprocess".to_string(),
-        time_ms,
-        reason: format!(
-            "could not parse tla2 output: {}",
-            output.chars().take(200).collect::<String>()
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tla_mc_core::TransitionSystem;
+    use trust_temporal::tla_spec_gen as spec_gen;
+    use trust_temporal::{State, StateId, StateMachineBuilder, Transition};
 
     #[test]
     fn tla2_handles_temporal_kinds_only() {
@@ -1020,11 +846,7 @@ mod tests {
     #[test]
     fn tla2_rejects_l0_safety_vcs() {
         let backend = Tla2Backend;
-        let safety_kinds = [
-            VcKind::DivisionByZero,
-            VcKind::IndexOutOfBounds,
-            VcKind::Unreachable,
-        ];
+        let safety_kinds = [VcKind::DivisionByZero, VcKind::IndexOutOfBounds, VcKind::Unreachable];
         for kind in safety_kinds {
             let vc = VerificationCondition {
                 kind,
@@ -1051,32 +873,6 @@ mod tests {
             .add_transition(Transition::new(StateId(1), StateId(1), "work"))
             .add_transition(Transition::new(StateId(1), StateId(2), "finish"))
             .build()
-    }
-
-    #[test]
-    fn test_extract_state_machine_from_metadata() {
-        let meta = StateMachineMetadata {
-            states: vec!["Idle".into(), "Running".into(), "Done".into()],
-            init_states: vec![0],
-            transitions: vec![
-                (0, "start".into(), 1),
-                (1, "complete".into(), 2),
-            ],
-            labels: [
-                (0, vec!["idle".into()]),
-                (1, vec!["running".into()]),
-                (2, vec!["done".into()]),
-            ]
-            .into_iter()
-            .collect(),
-        };
-
-        let machine = metadata_to_temporal(&meta);
-        assert_eq!(machine.initial, StateId(0));
-        assert_eq!(machine.states.len(), 3);
-        assert_eq!(machine.transitions.len(), 2);
-        assert!(machine.state(StateId(0)).is_some_and(|s| s.name == "Idle"));
-        assert!(machine.state(StateId(2)).is_some_and(|s| s.labels.contains(&"done".to_string())));
     }
 
     #[test]
@@ -1196,10 +992,8 @@ mod tests {
             .add_transition(Transition::new(StateId(1), StateId(0), "back"))
             .build();
 
-        let constraint = trust_types::FairnessConstraint::Weak {
-            action: "go".into(),
-            vars: vec![],
-        };
+        let constraint =
+            trust_types::FairnessConstraint::Weak { action: "go".into(), vars: vec![] };
 
         let result = verify_fairness(&machine, &constraint);
         assert!(result.is_proved(), "no starvation expected: {result:?}");
@@ -1215,10 +1009,8 @@ mod tests {
             .add_transition(Transition::new(StateId(0), StateId(1), "slow"))
             .build();
 
-        let constraint = trust_types::FairnessConstraint::Weak {
-            action: "slow".into(),
-            vars: vec![],
-        };
+        let constraint =
+            trust_types::FairnessConstraint::Weak { action: "slow".into(), vars: vec![] };
 
         let result = verify_fairness(&machine, &constraint);
         // Under weak fairness on "slow", the unfair spin cycle is filtered,
@@ -1254,65 +1046,6 @@ mod tests {
         assert!(result.is_proved(), "EF(done) should hold: {result:?}");
     }
 
-    #[test]
-    fn test_metadata_to_temporal_conversion() {
-        let meta = StateMachineMetadata {
-            states: vec!["A".into(), "B".into()],
-            init_states: vec![0],
-            transitions: vec![(0, "go".into(), 1), (1, "back".into(), 0)],
-            labels: [(0, vec!["start".into()]), (1, vec!["end".into()])]
-                .into_iter()
-                .collect(),
-        };
-
-        let machine = metadata_to_temporal(&meta);
-        assert_eq!(machine.initial, StateId(0));
-        assert_eq!(machine.states.len(), 2);
-        assert!(machine.state(StateId(0)).unwrap().labels.contains(&"start".to_string()));
-        assert!(machine.state(StateId(1)).unwrap().labels.contains(&"end".to_string()));
-
-        // Verify deadlock freedom on cycle
-        let result = verify_deadlock_freedom(&machine);
-        assert!(result.is_proved(), "A<->B cycle should be deadlock-free: {result:?}");
-    }
-
-    #[test]
-    fn test_metadata_from_trust_types_sm() {
-        let sm = trust_types::StateMachine {
-            enum_name: "ConnState".into(),
-            state_local: 1,
-            states: vec![
-                trust_types::StateInfo { name: "Idle".into(), discriminant: 0 },
-                trust_types::StateInfo { name: "Active".into(), discriminant: 1 },
-            ],
-            transitions: vec![
-                trust_types::Transition {
-                    from: 0,
-                    to: 1,
-                    source_block: BlockId(0),
-                    target_block: BlockId(1),
-                },
-                trust_types::Transition {
-                    from: 1,
-                    to: 0,
-                    source_block: BlockId(1),
-                    target_block: BlockId(0),
-                },
-            ],
-            initial_state: Some(0),
-        };
-
-        let meta = StateMachineMetadata::from_trust_types_sm(&sm);
-        assert_eq!(meta.states, vec!["Idle", "Active"]);
-        assert_eq!(meta.init_states, vec![0]);
-        assert_eq!(meta.transitions.len(), 2);
-
-        // Convert to temporal and verify
-        let temporal_machine = metadata_to_temporal(&meta);
-        let result = verify_deadlock_freedom(&temporal_machine);
-        assert!(result.is_proved(), "Idle<->Active should be deadlock-free: {result:?}");
-    }
-
     // ---- tRust #574: TLA+ spec generation and subprocess backend tests ----
 
     #[test]
@@ -1329,39 +1062,11 @@ mod tests {
     #[test]
     fn test_tla_full_spec_with_property() {
         let machine = test_machine();
-        let property = trust_temporal::TemporalProperty::Eventually {
-            condition: "done".into(),
-        };
+        let property = trust_temporal::TemporalProperty::Eventually { condition: "done".into() };
         let spec = spec_gen::generate_full_spec(&machine, &property, "PropTest");
         assert!(spec.contains("Property == <>done"), "should have property definition");
         assert!(spec.contains("Init =="), "should have init");
         assert!(spec.contains("===="), "should have module footer");
-    }
-
-    #[test]
-    fn test_parse_tla2_output_proved() {
-        let result = parse_tla2_output("no violation found", "", true, 42);
-        assert!(result.is_proved(), "should parse as proved: {result:?}");
-        assert_eq!(result.solver_name(), "tla2-subprocess");
-        assert_eq!(result.time_ms(), 42);
-    }
-
-    #[test]
-    fn test_parse_tla2_output_failed() {
-        let result = parse_tla2_output("violation found at step 3", "", true, 10);
-        assert!(result.is_failed(), "should parse as failed: {result:?}");
-    }
-
-    #[test]
-    fn test_parse_tla2_output_error() {
-        let result = parse_tla2_output("", "syntax error line 5", false, 5);
-        assert!(matches!(result, VerificationResult::Unknown { .. }));
-    }
-
-    #[test]
-    fn test_parse_tla2_output_unknown() {
-        let result = parse_tla2_output("some other output", "", true, 1);
-        assert!(matches!(result, VerificationResult::Unknown { .. }));
     }
 
     #[test]
@@ -1386,19 +1091,9 @@ mod tests {
 
         // Verify always returns Unknown without state machine
         let result = backend.verify(&vc);
-        assert!(matches!(result, VerificationResult::Unknown { solver, .. } if solver == "tla2-subprocess"));
-    }
-
-    #[test]
-    fn test_subprocess_backend_default() {
-        let backend = Tla2SubprocessBackend::default();
-        assert_eq!(backend.timeout_ms, DEFAULT_TIMEOUT_MS);
-    }
-
-    #[test]
-    fn test_subprocess_backend_custom_timeout() {
-        let backend = Tla2SubprocessBackend::with_timeout(5000);
-        assert_eq!(backend.timeout_ms, 5000);
+        assert!(
+            matches!(result, VerificationResult::Unknown { solver, .. } if solver == "tla2-subprocess")
+        );
     }
 
     #[test]
@@ -1429,8 +1124,7 @@ mod tests {
             .add_transition(Transition::new(StateId(1), StateId(2), "bc"))
             .build();
 
-        let outcome = trust_temporal::tla2_bridge::explore(&machine)
-            .expect("BFS should succeed");
+        let outcome = trust_temporal::tla2_bridge::explore(&machine).expect("BFS should succeed");
         assert!(outcome.completed);
         assert_eq!(outcome.states_discovered, 3);
     }

@@ -95,6 +95,7 @@ struct LineState {
 }
 
 /// Parse a line number program contribution from `.debug_line`.
+#[cfg(test)]
 pub fn parse_line_program(data: &[u8]) -> Result<(LineProgramHeader, Vec<LineRow>), DwarfError> {
     parse_line_program_with_size(data).map(|(program, _)| program)
 }

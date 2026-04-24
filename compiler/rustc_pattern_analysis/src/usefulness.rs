@@ -500,8 +500,6 @@
 //! enum Void {}
 //! let x: u8 = 0;
 //! let ptr: *const Void = &x as *const u8 as *const Void;
-//! # // SAFETY: `ptr` comes from `&x`, so it is aligned and in bounds, and `_` does
-//! # // not load an invalid `Void` value from that place.
 //! unsafe {
 //!     match *ptr {
 //!         _ => println!("Reachable!"),
@@ -519,8 +517,6 @@
 //! # enum Void {}
 //! # let x: u8 = 0;
 //! # let ptr: *const Void = &x as *const u8 as *const Void;
-//! # // SAFETY: This example is intentionally unsound; it shows that binding `_a`
-//! # // would read invalid `Void` data from `ptr` and therefore cause UB.
 //! # unsafe {
 //! match *ptr {
 //!     _a => println!("Unreachable!"),
@@ -1081,7 +1077,7 @@ impl<'p, Cx: PatCx> PatStack<'p, Cx> {
             // Arity can be smaller in case of variable-length slices, but mustn't be larger.
             return Err(cx.bug(format_args!(
                 "uncaught type error: pattern {:?} has inconsistent arity (expected arity <= {ctor_arity})",
-                head_pat.as_pat().expect("invariant: is_some_and guard ensures as_pat() is Some") // tRust: unwrap -> expect
+                head_pat.as_pat().unwrap()
             )));
         }
         // We pop the head pattern and push the new fields extracted from the arguments of
@@ -1396,7 +1392,7 @@ impl<'p, Cx: PatCx> fmt::Debug for Matrix<'p, Cx> {
 ///
 /// This mirrors `PatStack`: they function similarly, except `PatStack` contains user patterns we
 /// are inspecting, and `WitnessStack` contains witnesses we are constructing.
-/// tRust: known issue (Nadrieril) — use the same order of patterns for both.
+/// FIXME(Nadrieril): use the same order of patterns for both.
 ///
 /// A `WitnessStack` should have the same types and length as the `PatStack`s we are inspecting
 /// (except we store the patterns in reverse order). The same way `PatStack` starts with length 1,
@@ -1457,7 +1453,7 @@ impl<Cx: PatCx> WitnessStack<Cx> {
     /// Asserts that the witness contains a single pattern, and returns it.
     fn single_pattern(self) -> WitnessPat<Cx> {
         assert_eq!(self.0.len(), 1);
-        self.0.into_iter().next().expect("invariant: assert_eq above guarantees exactly one pattern") // tRust: unwrap -> expect
+        self.0.into_iter().next().unwrap()
     }
 
     /// Reverses specialization by the `Missing` constructor by pushing a whole new pattern.
@@ -1500,7 +1496,7 @@ impl<Cx: PatCx> WitnessStack<Cx> {
                 .map(|(i, p)| {
                     let mut ret = self.clone();
                     // Fill the `i`th field of the union with `p`.
-                    ret.0.last_mut().expect("invariant: ret.0 is non-empty since it was cloned from self which has elements").fields[i] = p; // tRust: unwrap -> expect
+                    ret.0.last_mut().unwrap().fields[i] = p;
                     ret
                 })
                 .collect()
@@ -1863,7 +1859,7 @@ pub fn compute_match_usefulness<'p, Cx: PatCx>(
         .copied()
         .map(|arm| {
             debug!(?arm);
-            let usefulness = cx.branch_usefulness.get(&arm.pat.uid).expect("invariant: every arm pattern uid must have been recorded during usefulness analysis"); // tRust: unwrap -> expect
+            let usefulness = cx.branch_usefulness.get(&arm.pat.uid).unwrap();
             let usefulness = if let Some(explanation) = usefulness.is_redundant() {
                 Usefulness::Redundant(explanation)
             } else {

@@ -51,18 +51,13 @@ impl Strategy {
     /// Create a `DirectSmt` strategy with the given timeout in milliseconds.
     #[must_use]
     pub fn direct_smt(timeout_ms: u64) -> Self {
-        Strategy::DirectSmt {
-            timeout: Duration::from_millis(timeout_ms),
-        }
+        Strategy::DirectSmt { timeout: Duration::from_millis(timeout_ms) }
     }
 
     /// Create a `Cegar` strategy with defaults.
     #[must_use]
     pub fn cegar(max_refinements: usize) -> Self {
-        Strategy::Cegar {
-            max_refinements,
-            ic3_fallback: true,
-        }
+        Strategy::Cegar { max_refinements, ic3_fallback: true }
     }
 
     /// Create a `BoundedMc` strategy with the given depth.
@@ -128,8 +123,7 @@ impl Strategy {
             }
             Strategy::BoundedMc { .. } => {
                 // BMC is good for safety properties and counterexample finding.
-                matches!(level, trust_types::ProofLevel::L0Safety)
-                    || classification.score < 50
+                matches!(level, trust_types::ProofLevel::L0Safety) || classification.score < 50
             }
             Strategy::Combined { strategies } => {
                 // Combined is suitable if any sub-strategy is suitable.
@@ -196,49 +190,31 @@ impl StrategyCatalog {
     /// Default strategy set for L0 Safety properties.
     #[must_use]
     pub fn safety_default() -> Vec<Strategy> {
-        vec![
-            Strategy::direct_smt(5_000),
-            Strategy::bounded_mc(100),
-            Strategy::cegar(50),
-        ]
+        vec![Strategy::direct_smt(5_000), Strategy::bounded_mc(100), Strategy::cegar(50)]
     }
 
     /// Default strategy set for L1 Functional properties.
     #[must_use]
     pub fn functional_default() -> Vec<Strategy> {
-        vec![
-            Strategy::cegar(100),
-            Strategy::direct_smt(10_000),
-            Strategy::bounded_mc(50),
-        ]
+        vec![Strategy::cegar(100), Strategy::direct_smt(10_000), Strategy::bounded_mc(50)]
     }
 
     /// Default strategy set for L2 Domain properties.
     #[must_use]
     pub fn domain_default() -> Vec<Strategy> {
-        vec![
-            Strategy::cegar(200),
-            Strategy::direct_smt(30_000),
-        ]
+        vec![Strategy::cegar(200), Strategy::direct_smt(30_000)]
     }
 
     /// Aggressive strategy set: all strategies with high limits.
     #[must_use]
     pub fn aggressive() -> Vec<Strategy> {
-        vec![
-            Strategy::direct_smt(60_000),
-            Strategy::cegar(500),
-            Strategy::bounded_mc(1000),
-        ]
+        vec![Strategy::direct_smt(60_000), Strategy::cegar(500), Strategy::bounded_mc(1000)]
     }
 
     /// Quick strategy set: short timeouts for fast feedback.
     #[must_use]
     pub fn quick() -> Vec<Strategy> {
-        vec![
-            Strategy::direct_smt(1_000),
-            Strategy::bounded_mc(10),
-        ]
+        vec![Strategy::direct_smt(1_000), Strategy::bounded_mc(10)]
     }
 
     /// Select the appropriate catalog based on proof level.
@@ -288,7 +264,7 @@ mod tests {
     fn test_vc(kind: VcKind) -> VerificationCondition {
         VerificationCondition {
             kind,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -299,7 +275,9 @@ mod tests {
     fn test_strategy_constructors() {
         let smt = Strategy::direct_smt(5000);
         assert_eq!(smt.name(), "direct-smt");
-        assert!(matches!(smt, Strategy::DirectSmt { timeout } if timeout == Duration::from_millis(5000)));
+        assert!(
+            matches!(smt, Strategy::DirectSmt { timeout } if timeout == Duration::from_millis(5000))
+        );
 
         let cegar = Strategy::cegar(100);
         assert_eq!(cegar.name(), "cegar");
@@ -312,20 +290,14 @@ mod tests {
 
     #[test]
     fn test_combined_strategy() {
-        let combined = Strategy::combined(vec![
-            Strategy::direct_smt(1000),
-            Strategy::cegar(50),
-        ]);
+        let combined = Strategy::combined(vec![Strategy::direct_smt(1000), Strategy::cegar(50)]);
         assert_eq!(combined.name(), "combined");
         assert_eq!(combined.leaf_count(), 2);
     }
 
     #[test]
     fn test_flatten_nested_combined() {
-        let inner = Strategy::combined(vec![
-            Strategy::direct_smt(1000),
-            Strategy::bounded_mc(10),
-        ]);
+        let inner = Strategy::combined(vec![Strategy::direct_smt(1000), Strategy::bounded_mc(10)]);
         let outer = Strategy::combined(vec![inner, Strategy::cegar(50)]);
         assert_eq!(outer.leaf_count(), 3);
 
@@ -345,9 +317,9 @@ mod tests {
     #[test]
     fn test_combined_proof_strength_picks_strongest() {
         let combined = Strategy::combined(vec![
-            Strategy::direct_smt(1000),   // SmtUnsat (rank 2)
-            Strategy::cegar(50),          // Inductive (rank 3)
-            Strategy::bounded_mc(10),     // Bounded (rank 1)
+            Strategy::direct_smt(1000), // SmtUnsat (rank 2)
+            Strategy::cegar(50),        // Inductive (rank 3)
+            Strategy::bounded_mc(10),   // Bounded (rank 1)
         ]);
         assert_eq!(combined.proof_strength(), ProofStrength::inductive());
     }
@@ -380,10 +352,8 @@ mod tests {
         let x_next = Formula::Var("x_next_step".into(), Sort::Int);
         let formula = Formula::Lt(Box::new(x_next), Box::new(x));
         let vc = VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "loop invariant: counter decreases".to_string(),
-            },
-            function: "test".to_string(),
+            kind: VcKind::Assertion { message: "loop invariant: counter decreases".to_string() },
+            function: "test".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -440,8 +410,7 @@ mod tests {
 
     #[test]
     fn test_bound_strategy_debug() {
-        let backend: Arc<dyn VerificationBackend> =
-            Arc::new(crate::mock_backend::MockBackend);
+        let backend: Arc<dyn VerificationBackend> = Arc::new(crate::mock_backend::MockBackend);
         let bound = BoundStrategy::new(Strategy::direct_smt(1000), backend);
         let debug = format!("{:?}", bound);
         assert!(debug.contains("DirectSmt"));
@@ -450,8 +419,7 @@ mod tests {
 
     #[test]
     fn test_bound_strategy_execute() {
-        let backend: Arc<dyn VerificationBackend> =
-            Arc::new(crate::mock_backend::MockBackend);
+        let backend: Arc<dyn VerificationBackend> = Arc::new(crate::mock_backend::MockBackend);
         let bound = BoundStrategy::new(Strategy::direct_smt(1000), backend);
         let vc = test_vc(VcKind::DivisionByZero);
         let result = bound.execute(&vc);

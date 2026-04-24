@@ -53,7 +53,7 @@ pub enum HasChanged {
     No,
 }
 
-// tRust: known issue (trait-system-refactor-initiative#117) — we don't detect whether a response
+// FIXME(trait-system-refactor-initiative#117): we don't detect whether a response
 // ended up pulling down any universes.
 fn has_no_inference_or_external_constraints<I: Interner>(
     response: ty::Canonical<I, Response<I>>,
@@ -178,7 +178,7 @@ where
                 // evaluation failures are allowed to impact selection, e.g. generic const
                 // expressions in impl headers or `where`-clauses.
 
-                // tRust: known issue (generic_const_exprs) — Implement handling for generic
+                // FIXME(generic_const_exprs): Implement handling for generic
                 // const expressions here.
                 if let Some(_normalized) = self.evaluate_const(param_env, uv) {
                     self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)

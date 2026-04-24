@@ -7,8 +7,8 @@ use trust_types::fx::FxHashSet;
 
 use trust_types::{Formula, Sort, SourceSpan, VcKind};
 
+use super::unsafe_ops::UnsafeOpKind;
 use super::*;
-use crate::unsafe_vc::UnsafeOpKind;
 
 fn addr(name: &str) -> Formula {
     Formula::Var(name.to_string(), Sort::Int)
@@ -69,7 +69,8 @@ fn test_sep_formula_cell_count() {
         SepFormula::star(
             SepFormula::points_to(addr("x"), val(1)),
             SepFormula::points_to(addr("y"), val(2)),
-        ).cell_count(),
+        )
+        .cell_count(),
         2
     );
     assert_eq!(SepFormula::pure(Formula::Bool(true)).cell_count(), 0);
@@ -142,10 +143,7 @@ fn test_sep_to_formula_star_produces_conjunction_with_disjointness() {
         Formula::And(terms) => {
             assert_eq!(terms.len(), 3, "star should produce 3-element And");
             // Third element is the disjointness constraint
-            assert!(
-                matches!(&terms[2], Formula::Not(_)),
-                "disjointness should be Not(Eq(p, q))"
-            );
+            assert!(matches!(&terms[2], Formula::Not(_)), "disjointness should be Not(Eq(p, q))");
         }
         other => panic!("expected And, got: {other:?}"),
     }
@@ -159,23 +157,22 @@ fn test_sep_to_formula_wand_produces_implication() {
     );
     let result = sep_to_formula(&sep, "heap");
 
-    assert!(
-        matches!(&result, Formula::Implies(_, _)),
-        "wand should produce Implies"
-    );
+    assert!(matches!(&result, Formula::Implies(_, _)), "wand should produce Implies");
 }
 
 // ── encode_heap_disjointness tests ───────────────────────────────────
 
 #[test]
 fn test_disjointness_empty_lhs() {
-    let result = encode_heap_disjointness(&SepFormula::Emp, &SepFormula::points_to(addr("p"), val(1)));
+    let result =
+        encode_heap_disjointness(&SepFormula::Emp, &SepFormula::points_to(addr("p"), val(1)));
     assert_eq!(result, Formula::Bool(true), "empty LHS means trivially disjoint");
 }
 
 #[test]
 fn test_disjointness_empty_rhs() {
-    let result = encode_heap_disjointness(&SepFormula::points_to(addr("p"), val(1)), &SepFormula::Emp);
+    let result =
+        encode_heap_disjointness(&SepFormula::points_to(addr("p"), val(1)), &SepFormula::Emp);
     assert_eq!(result, Formula::Bool(true), "empty RHS means trivially disjoint");
 }
 
@@ -292,7 +289,9 @@ fn test_raw_write_vc_write_permission() {
     // Formula: Not(writable_p)
     match &write_perm.formula {
         Formula::Not(inner) => {
-            assert!(matches!(inner.as_ref(), Formula::Var(name, Sort::Bool) if name == "writable_p"));
+            assert!(
+                matches!(inner.as_ref(), Formula::Var(name, Sort::Bool) if name == "writable_p")
+            );
         }
         other => panic!("expected Not(writable_p), got: {other:?}"),
     }
@@ -409,14 +408,12 @@ fn test_star_same_address_produces_unsatisfiable_disjointness() {
             assert_eq!(terms.len(), 3);
             // Third term: Not(Eq(p, p))
             match &terms[2] {
-                Formula::Not(inner) => {
-                    match inner.as_ref() {
-                        Formula::Eq(lhs, rhs) => {
-                            assert_eq!(lhs, rhs, "same address: p != p is unsatisfiable");
-                        }
-                        other => panic!("expected Eq, got: {other:?}"),
+                Formula::Not(inner) => match inner.as_ref() {
+                    Formula::Eq(lhs, rhs) => {
+                        assert_eq!(lhs, rhs, "same address: p != p is unsatisfiable");
                     }
-                }
+                    other => panic!("expected Eq, got: {other:?}"),
+                },
                 other => panic!("expected Not, got: {other:?}"),
             }
         }
@@ -531,8 +528,8 @@ fn test_symbolic_pointer_in_bounds_unknown_provenance() {
 #[test]
 fn test_symbolic_pointer_provenance_matches() {
     let ptr = SymbolicPointer::new("p", ProvenanceId(1), PointerPermission::ReadOnly);
-    let base = Formula::Var("alloc_base".to_string(), Sort::Int);
-    let size = Formula::Var("alloc_size".to_string(), Sort::Int);
+    let base = Formula::Var("alloc_base".into(), Sort::Int);
+    let size = Formula::Var("alloc_size".into(), Sort::Int);
     let formula = ptr.provenance_matches(&base, &size);
 
     let vars = formula.free_variables();
@@ -741,14 +738,8 @@ fn test_encode_framed_unsafe_block() {
     let post = SepFormula::points_to(addr("p"), val(2));
     let frame = SepFormula::points_to(addr("q"), val(99));
 
-    let vcs = encode_framed_unsafe_block(
-        "test_fn",
-        &pre,
-        &post,
-        &frame,
-        &SourceSpan::default(),
-        "heap",
-    );
+    let vcs =
+        encode_framed_unsafe_block("test_fn", &pre, &post, &frame, &SourceSpan::default(), "heap");
 
     // Should have: pre VC + post VC + frame preservation VC
     assert_eq!(vcs.len(), 3, "framed block should produce 3 VCs");
@@ -792,10 +783,7 @@ fn test_frame_rule_preserves_disjointness() {
         Formula::And(terms) => {
             assert_eq!(terms.len(), 3, "star should produce 3-element And");
             // Third element should enforce p != q
-            assert!(
-                matches!(&terms[2], Formula::Not(_)),
-                "disjointness should be Not(Eq(p, q))"
-            );
+            assert!(matches!(&terms[2], Formula::Not(_)), "disjointness should be Not(Eq(p, q))");
         }
         other => panic!("expected And, got: {other:?}"),
     }
@@ -805,9 +793,7 @@ fn test_frame_rule_preserves_disjointness() {
 
 #[test]
 fn test_vcs_from_unsafe_op_raw_deref() {
-    let op = UnsafeOpKind::RawPointerDeref {
-        pointer_name: "raw_ptr".to_string(),
-    };
+    let op = UnsafeOpKind::RawPointerDeref { pointer_name: "raw_ptr".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert_eq!(vcs.len(), 3, "raw deref should produce 3 VCs");
     assert!(vcs.iter().any(|vc| {
@@ -820,9 +806,7 @@ fn test_vcs_from_unsafe_op_raw_deref() {
 
 #[test]
 fn test_vcs_from_unsafe_op_transmute() {
-    let op = UnsafeOpKind::Transmute {
-        callee: "std::mem::transmute".to_string(),
-    };
+    let op = UnsafeOpKind::Transmute { callee: "std::mem::transmute".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert_eq!(vcs.len(), 3, "transmute should produce 3 VCs");
     assert!(vcs.iter().any(|vc| {
@@ -835,9 +819,7 @@ fn test_vcs_from_unsafe_op_transmute() {
 
 #[test]
 fn test_vcs_from_unsafe_op_ffi_call() {
-    let op = UnsafeOpKind::FfiCall {
-        callee: "libc::ffi::write".to_string(),
-    };
+    let op = UnsafeOpKind::FfiCall { callee: "libc::ffi::write".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert!(vcs.len() >= 2, "FFI call should produce at least 2 VCs");
     assert!(vcs.iter().any(|vc| {
@@ -850,27 +832,21 @@ fn test_vcs_from_unsafe_op_ffi_call() {
 
 #[test]
 fn test_vcs_from_unsafe_op_unsafe_fn_call_ptr_read() {
-    let op = UnsafeOpKind::UnsafeFnCall {
-        callee: "std::ptr::read".to_string(),
-    };
+    let op = UnsafeOpKind::UnsafeFnCall { callee: "std::ptr::read".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert_eq!(vcs.len(), 3, "ptr::read should produce 3 deref VCs");
 }
 
 #[test]
 fn test_vcs_from_unsafe_op_unsafe_fn_call_ptr_write() {
-    let op = UnsafeOpKind::UnsafeFnCall {
-        callee: "std::ptr::write".to_string(),
-    };
+    let op = UnsafeOpKind::UnsafeFnCall { callee: "std::ptr::write".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert_eq!(vcs.len(), 5, "ptr::write should produce 5 VCs (deref + write)");
 }
 
 #[test]
 fn test_vcs_from_unsafe_op_unsafe_fn_call_generic() {
-    let op = UnsafeOpKind::UnsafeFnCall {
-        callee: "std::alloc::alloc".to_string(),
-    };
+    let op = UnsafeOpKind::UnsafeFnCall { callee: "std::alloc::alloc".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert_eq!(vcs.len(), 1, "generic unsafe fn should produce 1 conservative VC");
     assert!(matches!(vcs[0].formula, Formula::Bool(true)));
@@ -878,10 +854,7 @@ fn test_vcs_from_unsafe_op_unsafe_fn_call_generic() {
 
 #[test]
 fn test_vcs_from_unsafe_op_address_of() {
-    let op = UnsafeOpKind::RawAddressOf {
-        mutable: true,
-        place_name: "_2".to_string(),
-    };
+    let op = UnsafeOpKind::RawAddressOf { mutable: true, place_name: "_2".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert_eq!(vcs.len(), 1, "address_of should produce 1 VC");
     assert!(vcs.iter().any(|vc| {
@@ -894,10 +867,7 @@ fn test_vcs_from_unsafe_op_address_of() {
 
 #[test]
 fn test_vcs_from_unsafe_op_address_of_const() {
-    let op = UnsafeOpKind::RawAddressOf {
-        mutable: false,
-        place_name: "_3".to_string(),
-    };
+    let op = UnsafeOpKind::RawAddressOf { mutable: false, place_name: "_3".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     assert!(vcs.iter().any(|vc| {
         matches!(
@@ -909,9 +879,7 @@ fn test_vcs_from_unsafe_op_address_of_const() {
 
 #[test]
 fn test_vcs_from_unsafe_op_slice_from_raw_parts() {
-    let op = UnsafeOpKind::UnsafeFnCall {
-        callee: "std::slice::from_raw_parts".to_string(),
-    };
+    let op = UnsafeOpKind::UnsafeFnCall { callee: "std::slice::from_raw_parts".to_string() };
     let vcs = vcs_from_unsafe_op(&op, "test_fn", &SourceSpan::default());
     // 3 deref VCs + 1 length overflow = 4
     assert_eq!(vcs.len(), 4, "from_raw_parts should produce 4 VCs");

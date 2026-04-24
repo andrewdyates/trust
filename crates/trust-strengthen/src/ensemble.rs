@@ -6,11 +6,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 use crate::confidence::ProposalSource;
 use crate::proposer::{Proposal, ProposalKind};
-use trust_types::fx::FxHashSet;
 
 /// Configuration for ensemble generator weights.
 #[derive(Debug, Clone, PartialEq)]
@@ -27,12 +26,7 @@ pub struct GeneratorConfig {
 
 impl Default for GeneratorConfig {
     fn default() -> Self {
-        Self {
-            heuristic_weight: 0.3,
-            wp_weight: 0.35,
-            llm_weight: 0.15,
-            pattern_weight: 0.2,
-        }
+        Self { heuristic_weight: 0.3, wp_weight: 0.35, llm_weight: 0.15, pattern_weight: 0.2 }
     }
 }
 
@@ -136,9 +130,7 @@ impl EnsembleGenerator {
         // Sort by confidence descending and assign ranks
         let mut final_proposals = deduped;
         final_proposals.sort_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
         for (i, sp) in final_proposals.iter_mut().enumerate() {
             sp.rank = i + 1;
@@ -162,11 +154,7 @@ impl EnsembleGenerator {
 
         let consensus_count = proposals.iter().filter(|p| p.confidence > 0.8).count();
 
-        EnsembleResult {
-            proposals,
-            per_source_counts,
-            consensus_count,
-        }
+        EnsembleResult { proposals, per_source_counts, consensus_count }
     }
 
     /// Apply voting boost to proposals that appear across multiple sources.
@@ -178,8 +166,7 @@ impl EnsembleGenerator {
         // Count how many sources proposed each spec body
         let mut spec_source_count: FxHashMap<String, usize> = FxHashMap::default();
         for proposals in by_source.values() {
-            let mut seen_in_source: FxHashSet<String> =
-                FxHashSet::default();
+            let mut seen_in_source: FxHashSet<String> = FxHashSet::default();
             for p in proposals {
                 let key = spec_body_key(&p.kind);
                 if seen_in_source.insert(key.clone()) {
@@ -227,7 +214,8 @@ pub fn vote(
     config: &GeneratorConfig,
 ) -> Vec<ScoredProposal> {
     let config = config.normalized();
-    let mut aggregated: FxHashMap<String, (Proposal, f64, ProposalSource, usize)> = FxHashMap::default();
+    let mut aggregated: FxHashMap<String, (Proposal, f64, ProposalSource, usize)> =
+        FxHashMap::default();
 
     for (source, proposals) in proposals_by_source {
         let weight = config.weight_for(*source);
@@ -249,11 +237,8 @@ pub fn vote(
         .into_values()
         .map(|(proposal, score, source, count)| {
             // Normalize score and add consensus bonus
-            let consensus_bonus = if count > 1 {
-                0.1 * (count as f64 / source_count as f64)
-            } else {
-                0.0
-            };
+            let consensus_bonus =
+                if count > 1 { 0.1 * (count as f64 / source_count as f64) } else { 0.0 };
             ScoredProposal {
                 proposal,
                 confidence: (score + consensus_bonus).clamp(0.0, 1.0),
@@ -264,9 +249,7 @@ pub fn vote(
         .collect();
 
     results.sort_by(|a, b| {
-        b.confidence
-            .partial_cmp(&a.confidence)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
     });
     for (i, sp) in results.iter_mut().enumerate() {
         sp.rank = i + 1;
@@ -277,9 +260,7 @@ pub fn vote(
 
 /// Find proposals that all sources agree on (appear in every source).
 #[must_use]
-pub fn consensus(
-    proposals_by_source: &FxHashMap<ProposalSource, Vec<Proposal>>,
-) -> Vec<Proposal> {
+pub fn consensus(proposals_by_source: &FxHashMap<ProposalSource, Vec<Proposal>>) -> Vec<Proposal> {
     if proposals_by_source.is_empty() {
         return Vec::new();
     }
@@ -350,9 +331,7 @@ pub fn diversity_bonus(proposal: &Proposal, existing: &[Proposal]) -> f64 {
 pub fn dedup_proposals(mut proposals: Vec<ScoredProposal>) -> Vec<ScoredProposal> {
     // Sort by confidence descending so we keep the best
     proposals.sort_by(|a, b| {
-        b.confidence
-            .partial_cmp(&a.confidence)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
     });
 
     let mut seen: FxHashSet<String> = FxHashSet::default();
@@ -375,10 +354,9 @@ fn spec_body_key(kind: &ProposalKind) -> String {
         ProposalKind::AddPrecondition { spec_body }
         | ProposalKind::AddPostcondition { spec_body }
         | ProposalKind::AddInvariant { spec_body } => spec_body.clone(),
-        ProposalKind::SafeArithmetic {
-            original,
-            replacement,
-        } => format!("{original}->{replacement}"),
+        ProposalKind::SafeArithmetic { original, replacement } => {
+            format!("{original}->{replacement}")
+        }
         ProposalKind::AddBoundsCheck { check_expr }
         | ProposalKind::AddNonZeroCheck { check_expr } => check_expr.clone(),
     }
@@ -416,11 +394,7 @@ fn has_significant_overlap(a: &str, b: &str) -> bool {
     if min_len == 0 {
         return false;
     }
-    let shared = a
-        .chars()
-        .zip(b.chars())
-        .take_while(|(ca, cb)| ca == cb)
-        .count();
+    let shared = a.chars().zip(b.chars()).take_while(|(ca, cb)| ca == cb).count();
     shared as f64 / min_len as f64 > 0.6
 }
 
@@ -440,23 +414,11 @@ mod tests {
     }
 
     fn precondition(spec: &str, confidence: f64) -> Proposal {
-        make_proposal(
-            ProposalKind::AddPrecondition {
-                spec_body: spec.into(),
-            },
-            confidence,
-            "f",
-        )
+        make_proposal(ProposalKind::AddPrecondition { spec_body: spec.into() }, confidence, "f")
     }
 
     fn postcondition(spec: &str, confidence: f64) -> Proposal {
-        make_proposal(
-            ProposalKind::AddPostcondition {
-                spec_body: spec.into(),
-            },
-            confidence,
-            "f",
-        )
+        make_proposal(ProposalKind::AddPostcondition { spec_body: spec.into() }, confidence, "f")
     }
 
     // --- GeneratorConfig ---
@@ -533,14 +495,8 @@ mod tests {
     fn test_ensemble_multiple_sources() {
         let generator = EnsembleGenerator::default();
         let mut by_source = FxHashMap::default();
-        by_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.9)],
-        );
-        by_source.insert(
-            ProposalSource::WeakestPrecondition,
-            vec![precondition("x > 0", 0.85)],
-        );
+        by_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.9)]);
+        by_source.insert(ProposalSource::WeakestPrecondition, vec![precondition("x > 0", 0.85)]);
 
         let result = generator.generate_ensemble(&by_source);
         assert!(result.len() >= 2);
@@ -555,14 +511,8 @@ mod tests {
         let generator = EnsembleGenerator::default();
         let mut by_source = FxHashMap::default();
         // Same proposal from two sources
-        by_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.8)],
-        );
-        by_source.insert(
-            ProposalSource::WeakestPrecondition,
-            vec![precondition("x != 0", 0.8)],
-        );
+        by_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.8)]);
+        by_source.insert(ProposalSource::WeakestPrecondition, vec![precondition("x != 0", 0.8)]);
 
         let result = generator.generate_ensemble(&by_source);
         // The consensus proposal should have a boost
@@ -588,10 +538,7 @@ mod tests {
             ProposalSource::Heuristic,
             vec![precondition("x != 0", 0.9), precondition("y > 0", 0.7)],
         );
-        by_source.insert(
-            ProposalSource::Llm,
-            vec![postcondition("result >= 0", 0.6)],
-        );
+        by_source.insert(ProposalSource::Llm, vec![postcondition("result >= 0", 0.6)]);
 
         let result = generator.generate_result(&by_source);
         assert_eq!(result.per_source_counts[&ProposalSource::Heuristic], 2);
@@ -609,10 +556,7 @@ mod tests {
     #[test]
     fn test_vote_single_source() {
         let mut by_source = FxHashMap::default();
-        by_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.9)],
-        );
+        by_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.9)]);
 
         let result = vote(&by_source, &GeneratorConfig::default());
         assert_eq!(result.len(), 1);
@@ -623,21 +567,12 @@ mod tests {
     fn test_vote_consensus_gets_higher_score() {
         let mut by_source = FxHashMap::default();
         // Same spec from two sources
-        by_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.8)],
-        );
-        by_source.insert(
-            ProposalSource::WeakestPrecondition,
-            vec![precondition("x != 0", 0.8)],
-        );
+        by_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.8)]);
+        by_source.insert(ProposalSource::WeakestPrecondition, vec![precondition("x != 0", 0.8)]);
 
         // Unique proposal from one source
         let mut unique_source = FxHashMap::default();
-        unique_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.8)],
-        );
+        unique_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.8)]);
 
         let consensus_result = vote(&by_source, &GeneratorConfig::default());
         let unique_result = vote(&unique_source, &GeneratorConfig::default());
@@ -656,10 +591,7 @@ mod tests {
         let mut by_source = FxHashMap::default();
         by_source.insert(
             ProposalSource::Heuristic,
-            vec![
-                precondition("x != 0", 0.9),
-                precondition("y > 0", 0.5),
-            ],
+            vec![precondition("x != 0", 0.9), precondition("y > 0", 0.5)],
         );
 
         let result = vote(&by_source, &GeneratorConfig::default());
@@ -679,10 +611,7 @@ mod tests {
     #[test]
     fn test_consensus_single_source() {
         let mut by_source = FxHashMap::default();
-        by_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.9)],
-        );
+        by_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.9)]);
 
         let result = consensus(&by_source);
         // Single source: everything is consensus
@@ -696,10 +625,7 @@ mod tests {
             ProposalSource::Heuristic,
             vec![precondition("x != 0", 0.9), precondition("y > 0", 0.7)],
         );
-        by_source.insert(
-            ProposalSource::WeakestPrecondition,
-            vec![precondition("x != 0", 0.85)],
-        );
+        by_source.insert(ProposalSource::WeakestPrecondition, vec![precondition("x != 0", 0.85)]);
 
         let result = consensus(&by_source);
         assert_eq!(result.len(), 1);
@@ -713,14 +639,8 @@ mod tests {
     #[test]
     fn test_consensus_no_agreement() {
         let mut by_source = FxHashMap::default();
-        by_source.insert(
-            ProposalSource::Heuristic,
-            vec![precondition("x != 0", 0.9)],
-        );
-        by_source.insert(
-            ProposalSource::Llm,
-            vec![precondition("y > 0", 0.7)],
-        );
+        by_source.insert(ProposalSource::Heuristic, vec![precondition("x != 0", 0.9)]);
+        by_source.insert(ProposalSource::Llm, vec![precondition("y > 0", 0.7)]);
 
         let result = consensus(&by_source);
         assert!(result.is_empty());
@@ -879,26 +799,17 @@ mod tests {
         // Heuristic proposals
         by_source.insert(
             ProposalSource::Heuristic,
-            vec![
-                precondition("x != 0", 0.9),
-                precondition("y > 0", 0.7),
-            ],
+            vec![precondition("x != 0", 0.9), precondition("y > 0", 0.7)],
         );
 
         // WP proposals (one overlaps with heuristic)
         by_source.insert(
             ProposalSource::WeakestPrecondition,
-            vec![
-                precondition("x != 0", 0.85),
-                postcondition("result >= 0", 0.8),
-            ],
+            vec![precondition("x != 0", 0.85), postcondition("result >= 0", 0.8)],
         );
 
         // LLM proposals
-        by_source.insert(
-            ProposalSource::Llm,
-            vec![precondition("x >= 0 && y >= 0", 0.6)],
-        );
+        by_source.insert(ProposalSource::Llm, vec![precondition("x >= 0 && y >= 0", 0.6)]);
 
         let result = generator.generate_result(&by_source);
 
@@ -912,10 +823,7 @@ mod tests {
 
         // Per-source counts should be correct
         assert_eq!(result.per_source_counts[&ProposalSource::Heuristic], 2);
-        assert_eq!(
-            result.per_source_counts[&ProposalSource::WeakestPrecondition],
-            2
-        );
+        assert_eq!(result.per_source_counts[&ProposalSource::WeakestPrecondition], 2);
         assert_eq!(result.per_source_counts[&ProposalSource::Llm], 1);
 
         // Consensus proposal "x != 0" should rank high

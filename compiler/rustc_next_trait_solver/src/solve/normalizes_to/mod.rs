@@ -43,7 +43,7 @@ where
                     proven_via,
                     goal,
                     |ecx| {
-                        // tRust: known issue (generic_associated_types) — Addresses aggressive inference in #92917.
+                        // FIXME(generic_associated_types): Addresses aggressive inference in #92917.
                         //
                         // If this type is a GAT with currently unconstrained arguments, we do not
                         // want to normalize it via a candidate which only applies for a specific
@@ -173,7 +173,7 @@ where
         ecx.instantiate_normalizes_to_term(goal, assumption_projection_pred.term);
 
         // Add GAT where clauses from the trait's definition
-        // tRust: known issue — We don't need these, since these are the type's own WF obligations.
+        // FIXME: We don't need these, since these are the type's own WF obligations.
         ecx.add_goals(
             GoalSource::AliasWellFormed,
             cx.own_predicates_of(goal.predicate.def_id())
@@ -185,7 +185,7 @@ where
     }
 
     // Hack for trait-system-refactor-initiative#245.
-    // tRust: known issue (-Zhigher-ranked-assumptions) — this impl differs from trait goals and we should unify
+    // FIXME(-Zhigher-ranked-assumptions): this impl differs from trait goals and we should unify
     // them again once we properly support binders.
     fn probe_and_consider_object_bound_candidate(
         ecx: &mut EvalCtxt<'_, D>,
@@ -457,7 +457,7 @@ where
         let (inputs, output) = ecx.instantiate_binder_with_infer(tupled_inputs_and_output);
 
         // A built-in `Fn` impl only holds if the output is sized.
-        // (tRust: known issue — technically we only need to check this if the type is a fn ptr...)
+        // (FIXME: technically we only need to check this if the type is a fn ptr...)
         let output_is_sized_pred =
             ty::TraitRef::new(cx, cx.require_trait_lang_item(SolverTraitLangItem::Sized), [output]);
 
@@ -506,7 +506,7 @@ where
         } = ecx.instantiate_binder_with_infer(tupled_inputs_and_output_and_coroutine);
 
         // A built-in `AsyncFn` impl only holds if the output is sized.
-        // (tRust: known issue — technically we only need to check this if the type is a fn ptr...)
+        // (FIXME: technically we only need to check this if the type is a fn ptr...)
         let output_is_sized_pred = ty::TraitRef::new(
             cx,
             cx.require_trait_lang_item(SolverTraitLangItem::Sized),
@@ -656,7 +656,7 @@ where
             ty::Alias(_, _) | ty::Param(_) | ty::Placeholder(..) => {
                 // This is the "fallback impl" for type parameters, unnormalizable projections
                 // and opaque types: If the `self_ty` is `Sized`, then the metadata is `()`.
-                // tRust: known issue (ptr_metadata) — This impl overlaps with the other impls and shouldn't
+                // FIXME(ptr_metadata): This impl overlaps with the other impls and shouldn't
                 // exist. Instead, `Pointee<Metadata = ()>` should be a supertrait of `Sized`.
                 let alias_bound_result =
                     ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc).enter(|ecx| {
@@ -695,9 +695,9 @@ where
                 Some(tail_ty) => Ty::new_projection(cx, metadata_def_id, [tail_ty]),
             },
 
-            // tRust: UnsafeBinder is an experimental feature; pointee metadata not yet defined
             ty::UnsafeBinder(_) => {
-                bug!("unimplemented: UnsafeBinder pointee metadata is not yet supported")
+                // FIXME(unsafe_binder): Figure out how to handle pointee for unsafe binders.
+                todo!()
             }
 
             ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_))
@@ -902,9 +902,9 @@ where
             | ty::Tuple(_)
             | ty::Error(_) => self_ty.discriminant_ty(ecx.cx()),
 
-            // tRust: UnsafeBinder discriminant normalization is not yet implemented
             ty::UnsafeBinder(_) => {
-                bug!("unimplemented: UnsafeBinder discriminant normalization is not yet supported")
+                // FIXME(unsafe_binders): instantiate this with placeholders?? i guess??
+                todo!("discr subgoal...")
             }
 
             // Given an alias, parameter, or placeholder we add an impl candidate normalizing to a rigid

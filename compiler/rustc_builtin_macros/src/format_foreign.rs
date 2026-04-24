@@ -383,13 +383,13 @@ pub(crate) mod printf {
         let fallback = move || {
             Some((
                 Substitution::Format(Format {
-                    span: start.slice_between(next).expect("invariant: start cursor must precede next cursor"), // tRust: unwrap -> expect
+                    span: start.slice_between(next).unwrap(),
                     parameter: None,
                     flags: "",
                     width: None,
                     precision: None,
                     length: None,
-                    type_: at.slice_between(next).expect("invariant: at cursor must precede next cursor"), // tRust: unwrap -> expect
+                    type_: at.slice_between(next).unwrap(),
                     position: InnerSpan::new(start.at, next.at),
                 }),
                 next.slice_after(),
@@ -416,7 +416,7 @@ pub(crate) mod printf {
                         // Yes, this *is* the parameter.
                         Some(('$', end2)) => {
                             state = Flags;
-                            parameter = at.slice_between(end).expect("invariant: at cursor must precede end cursor for parameter").parse().ok(); // tRust: unwrap -> expect
+                            parameter = at.slice_between(end).unwrap().parse().ok();
                             move_to!(end2);
                         }
                         // Wait, no, actually, it's the width.
@@ -445,7 +445,7 @@ pub(crate) mod printf {
         if let Flags = state {
             let end = at_next_cp_while(at, is_flag);
             state = Width;
-            flags = at.slice_between(end).expect("invariant: at cursor must precede end cursor for flags"); // tRust: unwrap -> expect
+            flags = at.slice_between(end).unwrap();
             move_to!(end);
         }
 
@@ -534,13 +534,13 @@ pub(crate) mod printf {
             match (c, c1_next1) {
                 ('h', Some(('h', next1))) | ('l', Some(('l', next1))) => {
                     state = Type;
-                    length = Some(at.slice_between(next1).expect("invariant: at cursor must precede next1 cursor for length")); // tRust: unwrap -> expect
+                    length = Some(at.slice_between(next1).unwrap());
                     move_to!(next1);
                 }
 
                 ('h' | 'l' | 'L' | 'z' | 'j' | 't' | 'q', _) => {
                     state = Type;
-                    length = Some(at.slice_between(next).expect("invariant: at cursor must precede next cursor for length")); // tRust: unwrap -> expect
+                    length = Some(at.slice_between(next).unwrap());
                     move_to!(next);
                 }
 
@@ -548,13 +548,13 @@ pub(crate) mod printf {
                     let end = next
                         .at_next_cp()
                         .and_then(|end| end.at_next_cp())
-                        .map(|end| (next.slice_between(end).expect("invariant: next cursor must precede end cursor for I-length"), end)); // tRust: unwrap -> expect
+                        .map(|end| (next.slice_between(end).unwrap(), end));
                     let end = match end {
                         Some(("32" | "64", end)) => end,
                         _ => next,
                     };
                     state = Type;
-                    length = Some(at.slice_between(end).expect("invariant: at cursor must precede end cursor for length")); // tRust: unwrap -> expect
+                    length = Some(at.slice_between(end).unwrap());
                     move_to!(end);
                 }
 
@@ -567,7 +567,7 @@ pub(crate) mod printf {
         }
 
         if let Type = state {
-            type_ = at.slice_between(next).expect("invariant: at cursor must precede next cursor for type"); // tRust: unwrap -> expect
+            type_ = at.slice_between(next).unwrap();
 
             // Don't use `move_to!` here, as we *can* be at the end of the input.
             at = next;
@@ -579,7 +579,7 @@ pub(crate) mod printf {
         let position = InnerSpan::new(start.at, end.at);
 
         let f = Format {
-            span: start.slice_between(end).expect("invariant: start cursor must precede end cursor for format span"), // tRust: unwrap -> expect
+            span: start.slice_between(end).unwrap(),
             parameter,
             flags,
             width,
@@ -707,7 +707,7 @@ pub(crate) mod shell {
             None
         } else {
             let end = at_next_cp_while(inner, is_ident_tail);
-            let slice = at.slice_between(end).expect("invariant: at cursor must precede end cursor for shell substitution name"); // tRust: unwrap -> expect
+            let slice = at.slice_between(end).unwrap();
             let start = at.at - 1;
             let end_pos = at.at + slice.len();
             Some((Substitution::Name(slice, (start, end_pos)), end.slice_after()))

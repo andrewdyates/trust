@@ -45,7 +45,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             user_provided_sig,
         );
 
-        // // NOTE(async_closures): It's kind of wacky that we must apply this that we must apply this
+        // FIXME(async_closures): It's kind of wacky that we must apply this
         // transformation here, since we do the same thing in HIR typeck.
         // Maybe we could just fix up the canonicalized signature during HIR typeck?
         if let DefiningTy::CoroutineClosure(_, args) = self.universal_regions.defining_ty {
@@ -127,7 +127,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         );
     }
 
-    //  //  NOTE(BoxyUwU): This should probably be part of a larger borrowck dev-guide chapter borrowck dev-guide chapter
+    //  FIXME(BoxyUwU): This should probably be part of a larger borrowck dev-guide chapter
     //
     /// Enforce that the types of the locals corresponding to the inputs and output of
     /// the body are equal to those of the (normalized) signature.
@@ -155,7 +155,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
     #[instrument(skip(self), level = "debug")]
     pub(super) fn equate_inputs_and_outputs(&mut self, normalized_inputs_and_output: &[Ty<'tcx>]) {
         let (&normalized_output_ty, normalized_input_tys) =
-            normalized_inputs_and_output.split_last().expect("invariant: inputs_and_output must have at least one element");
+            normalized_inputs_and_output.split_last().unwrap();
 
         debug!(?normalized_output_ty);
         debug!(?normalized_input_tys);
@@ -184,7 +184,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         if let Some(mir_yield_ty) = self.body.yield_ty() {
             let yield_span = self.body.local_decls[RETURN_PLACE].source_info.span;
             self.equate_normalized_input_or_output(
-                self.universal_regions.yield_ty.expect("invariant: coroutine must have yield type"),
+                self.universal_regions.yield_ty.unwrap(),
                 mir_yield_ty,
                 yield_span,
             );
@@ -193,7 +193,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         if let Some(mir_resume_ty) = self.body.resume_ty() {
             let yield_span = self.body.local_decls[RETURN_PLACE].source_info.span;
             self.equate_normalized_input_or_output(
-                self.universal_regions.resume_ty.expect("invariant: coroutine must have resume type"),
+                self.universal_regions.resume_ty.unwrap(),
                 mir_resume_ty,
                 yield_span,
             );
@@ -211,7 +211,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             return self
                 .eq_types(a, b, Locations::All(span), ConstraintCategory::BoringNoLocation)
                 .unwrap_or_else(|terr| {
-                    // tRust: invariant — region inference guarantee — region constraints must be satisfiable
                     span_mirbug!(
                         self,
                         Location::START,
@@ -232,7 +231,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             let b = self.normalize(b, Locations::All(span));
             self.eq_types(a, b, Locations::All(span), ConstraintCategory::BoringNoLocation)
                 .unwrap_or_else(|terr| {
-                    // tRust: invariant — MIR validation — type check detected inconsistency in MIR
                     span_mirbug!(
                         self,
                         Location::START,

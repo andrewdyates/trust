@@ -74,14 +74,14 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
         // the body satisfies the condition of two nodes being different have different
         // `hash_stable` results.
         let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
-        opt_hash_including_bodies.expect("invariant: OwnerNodes hash must be pre-computed before hashing").hash_stable(hcx, hasher); // tRust: unwrap -> expect
+        opt_hash_including_bodies.unwrap().hash_stable(hcx, hasher);
     }
 }
 
 impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
     fn hash_stable(&self, hcx: &mut HirCtx, hasher: &mut StableHasher) {
         let DelayedLints { opt_hash, .. } = *self;
-        opt_hash.expect("invariant: DelayedLints hash must be pre-computed before hashing").hash_stable(hcx, hasher); // tRust: unwrap -> expect
+        opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 }
 
@@ -90,7 +90,7 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
         // We ignore the `map` since it refers to information included in `opt_hash` which is
         // hashed in the collector and used for the crate hash.
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
-        opt_hash.expect("invariant: AttributeMap hash must be pre-computed before hashing").hash_stable(hcx, hasher); // tRust: unwrap -> expect
+        opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 }
 

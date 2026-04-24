@@ -1,6 +1,3 @@
-//! tRust: Coverage instrumentation codegen for emitting counters and expression
-//! tRust: metadata consumed by coverage tooling.
-
 use rustc_middle::mir::SourceScope;
 use rustc_middle::mir::coverage::CoverageKind;
 

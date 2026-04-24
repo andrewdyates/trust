@@ -260,7 +260,7 @@ impl<'tcx> CompilerInterface<'tcx> {
 
     /// Return registered tool attributes with the given attribute name.
     ///
-    /// tRust: known issue (jdonszelmann) — may panic on non-tool attributes. After more attribute work, non-tool
+    /// FIXME(jdonszelmann): may panic on non-tool attributes. After more attribute work, non-tool
     /// attributes will simply return an empty list.
     ///
     /// Single segmented name like `#[clippy]` is specified as `&["clippy".to_string()]`.
@@ -886,8 +886,6 @@ pub(crate) fn with<R>(f: impl for<'tcx> FnOnce(&CompilerInterface<'tcx>) -> R) -
     TLV.with(|tlv| {
         let ptr = tlv.get();
         assert!(!ptr.is_null());
-        // SAFETY: The pointer is non-null and properly aligned, derived
-        // from a valid reference or allocation that outlives this use.
         f(unsafe { *(ptr as *const &CompilerInterface<'_>) })
     })
 }

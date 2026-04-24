@@ -28,7 +28,7 @@ pub(crate) fn options() -> TargetOptions {
                 // stack overflow will be guaranteed to trap as it underflows instead of
                 // corrupting static data.
                 concat!($prefix, "--stack-first"),
-                // tRust: known issue — we probably shouldn't pass this but instead pass an explicit list
+                // FIXME we probably shouldn't pass this but instead pass an explicit list
                 // of symbols we'll allow to be undefined. We don't currently have a
                 // mechanism of knowing, however, which symbols are intended to be imported
                 // from the environment and which are intended to be imported from other
@@ -87,7 +87,7 @@ pub(crate) fn options() -> TargetOptions {
 
         pre_link_args,
 
-        // tRust: known issue — Figure out cases in which WASM needs to link with a native toolchain.
+        // FIXME: Figure out cases in which WASM needs to link with a native toolchain.
         //
         // rust-lang/rust#104137: cannot blindly remove this without putting in
         // some other way to compensate for lack of `-nostartfiles` in linker

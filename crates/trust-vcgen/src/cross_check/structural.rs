@@ -30,21 +30,12 @@ pub(crate) fn check_variable_scope(
         .body
         .locals
         .iter()
-        .map(|decl| {
-            decl.name
-                .as_deref()
-                .unwrap_or(&format!("_{}", decl.index))
-                .to_string()
-        })
+        .map(|decl| decl.name.as_deref().unwrap_or(&format!("_{}", decl.index)).to_string())
         .collect();
 
     // Also accept `_N` fallback names and `__slice_len` suffixed names.
-    let fallback_names: FxHashSet<String> = func
-        .body
-        .locals
-        .iter()
-        .map(|decl| format!("_{}", decl.index))
-        .collect();
+    let fallback_names: FxHashSet<String> =
+        func.body.locals.iter().map(|decl| format!("_{}", decl.index)).collect();
 
     for var in &free_vars {
         // Accept known names, fallback _N names, and slice-len auxiliary vars
@@ -71,7 +62,7 @@ pub(crate) fn check_variable_scope(
 
         warnings.push(CrossCheckWarning::UnknownVariable {
             var_name: var.clone(),
-            function: vc.function.clone(),
+            function: vc.function.as_str().to_string(),
         });
     }
 }
@@ -104,11 +95,7 @@ pub(crate) fn check_overflow_bounds(
         // For unsigned, cap at i128::MAX for comparison purposes.
         // u128::MAX cannot be represented as i128.
         let umax = unsigned_max(width);
-        if umax > i128::MAX as u128 {
-            i128::MAX
-        } else {
-            umax as i128
-        }
+        if umax > i128::MAX as u128 { i128::MAX } else { umax as i128 }
     };
 
     // Scan the formula for Int/UInt literals that should be the bounds.
@@ -125,12 +112,11 @@ pub(crate) fn check_overflow_bounds(
                     found_max = true;
                 }
             }
-            Formula::UInt(n) => {
+            Formula::UInt(n) if !signed && *n == unsigned_max(width) => {
                 // Handle u128::MAX case.
-                if !signed && *n == unsigned_max(width) {
-                    found_max = true;
-                }
+                found_max = true;
             }
+            Formula::UInt(_) => {}
             _ => {}
         }
     });
@@ -168,8 +154,8 @@ pub(crate) fn check_divzero_structure(
         }
         if let Formula::Eq(lhs, rhs) = f {
             // Check for `var == 0` or `0 == var`.
-            let has_zero = matches!(lhs.as_ref(), Formula::Int(0))
-                || matches!(rhs.as_ref(), Formula::Int(0));
+            let has_zero =
+                matches!(lhs.as_ref(), Formula::Int(0)) || matches!(rhs.as_ref(), Formula::Int(0));
             let has_var = matches!(lhs.as_ref(), Formula::Var(..))
                 || matches!(rhs.as_ref(), Formula::Var(..));
             if has_zero && has_var {
@@ -180,7 +166,7 @@ pub(crate) fn check_divzero_structure(
 
     if !found_eq_zero {
         warnings.push(CrossCheckWarning::DivZeroMissingDivisorCheck {
-            function: vc.function.clone(),
+            function: vc.function.as_str().to_string(),
         });
     }
 }
@@ -190,10 +176,7 @@ pub(crate) fn check_divzero_structure(
 ///
 /// We classify each sub-formula into a SortClass and check that binary
 /// arithmetic and comparison operators have matching operand sorts.
-pub(crate) fn check_sort_consistency(
-    formula: &Formula,
-    warnings: &mut Vec<CrossCheckWarning>,
-) {
+pub(crate) fn check_sort_consistency(formula: &Formula, warnings: &mut Vec<CrossCheckWarning>) {
     formula.visit(&mut |f| {
         match f {
             // Integer arithmetic — both sides should be Int-domain.
@@ -213,10 +196,7 @@ pub(crate) fn check_sort_consistency(
                 }
             }
             // Comparison operators.
-            Formula::Lt(a, b)
-            | Formula::Le(a, b)
-            | Formula::Gt(a, b)
-            | Formula::Ge(a, b) => {
+            Formula::Lt(a, b) | Formula::Le(a, b) | Formula::Gt(a, b) | Formula::Ge(a, b) => {
                 let lhs_sort = classify_sort(a);
                 let rhs_sort = classify_sort(b);
                 if !sorts_compatible(lhs_sort, rhs_sort) {
@@ -228,9 +208,7 @@ pub(crate) fn check_sort_consistency(
                 }
             }
             // BV operations — both sides should be BitVec with same width.
-            Formula::BvAdd(a, b, w)
-            | Formula::BvSub(a, b, w)
-            | Formula::BvMul(a, b, w) => {
+            Formula::BvAdd(a, b, w) | Formula::BvSub(a, b, w) | Formula::BvMul(a, b, w) => {
                 let lhs_sort = classify_sort(a);
                 let rhs_sort = classify_sort(b);
                 let expected = SortClass::BitVec(*w);
@@ -259,22 +237,20 @@ pub(crate) fn check_degenerate_connectives(
     formula: &Formula,
     warnings: &mut Vec<CrossCheckWarning>,
 ) {
-    formula.visit(&mut |f| {
-        match f {
-            Formula::And(terms) if terms.len() < 2 => {
-                warnings.push(CrossCheckWarning::DegenerateConnective {
-                    connective: "And".to_string(),
-                    child_count: terms.len(),
-                });
-            }
-            Formula::Or(terms) if terms.len() < 2 => {
-                warnings.push(CrossCheckWarning::DegenerateConnective {
-                    connective: "Or".to_string(),
-                    child_count: terms.len(),
-                });
-            }
-            _ => {}
+    formula.visit(&mut |f| match f {
+        Formula::And(terms) if terms.len() < 2 => {
+            warnings.push(CrossCheckWarning::DegenerateConnective {
+                connective: "And".to_string(),
+                child_count: terms.len(),
+            });
         }
+        Formula::Or(terms) if terms.len() < 2 => {
+            warnings.push(CrossCheckWarning::DegenerateConnective {
+                connective: "Or".to_string(),
+                child_count: terms.len(),
+            });
+        }
+        _ => {}
     });
 }
 
@@ -285,7 +261,7 @@ pub(crate) fn check_trivial_formula(
 ) {
     if let Formula::Bool(val) = &vc.formula {
         warnings.push(CrossCheckWarning::TrivialFormula {
-            function: vc.function.clone(),
+            function: vc.function.as_str().to_string(),
             value: *val,
         });
     }

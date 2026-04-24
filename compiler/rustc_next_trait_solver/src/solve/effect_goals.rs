@@ -62,7 +62,7 @@ where
         assumption: I::Clause,
         then: impl FnOnce(&mut EvalCtxt<'_, D>) -> QueryResult<I>,
     ) -> QueryResult<I> {
-        let host_clause = assumption.as_host_effect_clause().expect("invariant: assumption pre-filtered as host effect clause"); // tRust: unwrap -> expect
+        let host_clause = assumption.as_host_effect_clause().unwrap();
 
         let assumption_trait_pred = ecx.instantiate_binder_with_infer(host_clause);
         ecx.eq(goal.param_env, goal.predicate.trait_ref, assumption_trait_pred.trait_ref)?;
@@ -269,8 +269,7 @@ where
         _ecx: &mut EvalCtxt<'_, D>,
         _goal: Goal<I, Self>,
     ) -> Result<Candidate<I>, NoSolution> {
-        // tRust: Fn* traits are not yet const-evaluable
-        Err(NoSolution)
+        todo!("Fn* are not yet const")
     }
 
     #[instrument(level = "trace", skip_all, ret)]
@@ -287,7 +286,7 @@ where
         let (inputs, output) = ecx.instantiate_binder_with_infer(inputs_and_output);
 
         // A built-in `Fn` impl only holds if the output is sized.
-        // (tRust: known issue — technically we only need to check this if the type is a fn ptr...)
+        // (FIXME: technically we only need to check this if the type is a fn ptr...)
         let output_is_sized_pred =
             ty::TraitRef::new(cx, cx.require_trait_lang_item(SolverTraitLangItem::Sized), [output]);
         let requirements = cx
@@ -322,8 +321,7 @@ where
         _goal: Goal<I, Self>,
         _kind: rustc_type_ir::ClosureKind,
     ) -> Result<Candidate<I>, NoSolution> {
-        // tRust: AsyncFn* traits are not yet const-evaluable
-        Err(NoSolution)
+        todo!("AsyncFn* are not yet const")
     }
 
     fn consider_builtin_async_fn_kind_helper_candidate(
@@ -358,8 +356,7 @@ where
         _ecx: &mut EvalCtxt<'_, D>,
         _goal: Goal<I, Self>,
     ) -> Result<Candidate<I>, NoSolution> {
-        // tRust: Iterator trait is not yet const-evaluable
-        Err(NoSolution)
+        todo!("Iterator is not yet const")
     }
 
     fn consider_builtin_fused_iterator_candidate(

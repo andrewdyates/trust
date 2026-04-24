@@ -136,7 +136,7 @@ impl TargetModifier {
     // Custom consistency check for target modifiers (or default `l.tech_value == r.tech_value`)
     // When other is None, consistency with default value is checked
     pub fn consistent(&self, sess: &Session, other: Option<&TargetModifier>) -> bool {
-        assert!(other.is_none() || self.opt == other.expect("invariant: other is Some per is_none check").opt); // tRust: unwrap -> expect
+        assert!(other.is_none() || self.opt == other.unwrap().opt);
         match self.opt {
             OptionsTargetModifiers::UnstableOptions(unstable) => match unstable {
                 UnstableOptionsTargetModifiers::sanitizer => {
@@ -1316,7 +1316,7 @@ pub mod parse {
         if v.is_some() {
             let mut bool_arg = None;
             if parse_opt_bool(&mut bool_arg, v) {
-                *slot = if bool_arg.expect("invariant: parse_opt_bool returned true so bool_arg is Some") // tRust: unwrap -> expect { CFGuard::Checks } else { CFGuard::Disabled };
+                *slot = if bool_arg.unwrap() { CFGuard::Checks } else { CFGuard::Disabled };
                 return true;
             }
         }
@@ -1334,7 +1334,7 @@ pub mod parse {
         if v.is_some() {
             let mut bool_arg = None;
             if parse_opt_bool(&mut bool_arg, v) {
-                *slot = if bool_arg.expect("invariant: parse_opt_bool returned true so bool_arg is Some") // tRust: unwrap -> expect { CFProtection::Full } else { CFProtection::None };
+                *slot = if bool_arg.unwrap() { CFProtection::Full } else { CFProtection::None };
                 return true;
             }
         }
@@ -1484,7 +1484,7 @@ pub mod parse {
                     Offload::Test
                 }
                 _ => {
-                    // tRust: known issue (ZuseZ4) — print an error saying which value is not recognized
+                    // FIXME(ZuseZ4): print an error saying which value is not recognized
                     return false;
                 }
             };
@@ -1530,7 +1530,7 @@ pub mod parse {
                 "Inline" => AutoDiff::Inline,
                 "NoTT" => AutoDiff::NoTT,
                 _ => {
-                    // tRust: known issue (ZuseZ4) — print an error saying which value is not recognized
+                    // FIXME(ZuseZ4): print an error saying which value is not recognized
                     return false;
                 }
             };
@@ -1589,7 +1589,7 @@ pub mod parse {
         if v.is_some() {
             let mut bool_arg = None;
             if parse_opt_bool(&mut bool_arg, v) {
-                *slot = if bool_arg.expect("invariant: parse_opt_bool returned true so bool_arg is Some") // tRust: unwrap -> expect { Some(InstrumentXRay::default()) } else { None };
+                *slot = if bool_arg.unwrap() { Some(InstrumentXRay::default()) } else { None };
                 return true;
             }
         }
@@ -1685,7 +1685,7 @@ pub mod parse {
         if v.is_some() {
             let mut bool_arg = None;
             if parse_opt_bool(&mut bool_arg, v) {
-                *slot = if bool_arg.expect("invariant: parse_opt_bool returned true so bool_arg is Some") // tRust: unwrap -> expect { LtoCli::Yes } else { LtoCli::No };
+                *slot = if bool_arg.unwrap() { LtoCli::Yes } else { LtoCli::No };
                 return true;
             }
         }
@@ -1703,7 +1703,7 @@ pub mod parse {
         if v.is_some() {
             let mut bool_arg = None;
             if parse_opt_bool(&mut bool_arg, v) {
-                *slot = if bool_arg.expect("invariant: parse_opt_bool returned true so bool_arg is Some") // tRust: unwrap -> expect {
+                *slot = if bool_arg.unwrap() {
                     LinkerPluginLto::LinkerPluginAuto
                 } else {
                     LinkerPluginLto::Disabled
@@ -1948,7 +1948,7 @@ pub mod parse {
         if v.is_some() {
             let mut bool_arg = None;
             if parse_opt_bool(&mut bool_arg, v) {
-                *slot = if bool_arg.expect("invariant: parse_opt_bool returned true so bool_arg is Some") // tRust: unwrap -> expect {
+                *slot = if bool_arg.unwrap() {
                     CollapseMacroDebuginfo::Yes
                 } else {
                     CollapseMacroDebuginfo::No
@@ -2542,6 +2542,8 @@ options! {
         "don't steal the THIR when we're done with it; useful for rustc drivers (default: no)"),
     no_trait_vptr: bool = (false, parse_no_value, [TRACKED],
         "disable generation of trait vptr in vtable for upcasting"),
+    no_trust_verify: bool = (false, parse_no_value, [UNTRACKED],
+        "disable tRust's native MIR verification pass"),
     no_unique_section_names: bool = (false, parse_bool, [TRACKED],
         "do not use unique names for text and data sections when -Z function-sections is used"),
     normalize_docs: bool = (false, parse_bool, [TRACKED],
@@ -2727,6 +2729,8 @@ written to standard error output)"),
     #[rustc_lint_opt_deny_field_access("use `Session::tls_model` instead of this field")]
     tls_model: Option<TlsModel> = (None, parse_tls_model, [TRACKED],
         "choose the TLS model to use (`rustc --print tls-models` for details)"),
+    no_trust_verify: bool = (false, parse_bool, [TRACKED],
+        "disable the tRust MIR verification pass"),
     trace_macros: bool = (false, parse_bool, [UNTRACKED],
         "for every macro invocation, print its name and arguments (default: no)"),
     track_diagnostics: bool = (false, parse_bool, [UNTRACKED],
@@ -2738,19 +2742,20 @@ written to standard error output)"),
     treat_err_as_bug: Option<NonZero<usize>> = (None, parse_treat_err_as_bug, [TRACKED],
         "treat the `val`th error that occurs as bug (default if not specified: 0 - don't treat errors as bugs. \
         default if specified without a value: 1 - treat the first error as bug)"),
+    trust_verify: bool = (false, parse_bool, [UNTRACKED],
+        "enable tRust's native MIR verification pass"),
+    trust_verify_level: u8 = (0, parse_number, [UNTRACKED],
+        "set tRust verification level (0 = safety, 1 = functional, 2 = domain)"),
     trim_diagnostic_paths: bool = (true, parse_bool, [UNTRACKED],
         "in diagnostics, use heuristics to shorten paths referring to items"),
+    trust_verify: bool = (false, parse_bool, [TRACKED],
+        "enable the tRust MIR verification pass"),
+    trust_verify_level: usize = (1, parse_number, [TRACKED],
+        "set the tRust verification proof level (0 = safety, 1 = functional, 2 = domain)"),
+    trust_verify_output: String = ("human".to_string(), parse_string, [TRACKED],
+        "set tRust verification output mode (`human`, `json`, or `both`)"),
     tune_cpu: Option<String> = (None, parse_opt_string, [TRACKED],
         "select processor to schedule for (`rustc --print target-cpus` for details)"),
-    // tRust: verification is ON by default — use -Z no-trust-verify to disable
-    trust_verify: bool = (true, parse_bool, [TRACKED],
-        "enable the tRust verification pass to check safety properties (default: yes)"),
-    // tRust: opt-out flag for verification (overrides trust_verify)
-    no_trust_verify: bool = (false, parse_bool, [TRACKED],
-        "disable the tRust verification pass (default: no)"),
-    // tRust: maximum verification level (0=safety, 1=functional, 2=domain/all)
-    trust_verify_level: usize = (0, parse_number, [TRACKED],
-        "maximum tRust verification level (0=safety, 1=functional, 2=all)"),
     #[rustc_lint_opt_deny_field_access("use `TyCtxt::use_typing_mode_borrowck` instead of this field")]
     typing_mode_borrowck: bool = (false, parse_bool, [TRACKED],
         "enable `TypingMode::Borrowck`, changing the way opaque types are handled during MIR borrowck"),
@@ -2810,7 +2815,7 @@ written to standard error output)"),
         "whether to build a wasi command or reactor"),
     // This option only still exists to provide a more gradual transition path for people who need
     // the spec-complaint C ABI to be used.
-    // tRust: known issue — remove this after a couple releases
+    // FIXME remove this after a couple releases
     wasm_c_abi: () = ((), parse_wasm_c_abi, [TRACKED],
         "use spec-compliant C ABI for `wasm32-unknown-unknown` (deprecated, always enabled)"),
     write_long_types_to_disk: bool = (true, parse_bool, [UNTRACKED],

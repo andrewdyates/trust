@@ -117,10 +117,7 @@ fn test_interval_widen_stable() {
 
 #[test]
 fn test_interval_narrow() {
-    let a = IntervalDomain::Interval {
-        low: Bound::Unbounded,
-        high: Bound::Unbounded,
-    };
+    let a = IntervalDomain::Interval { low: Bound::Unbounded, high: Bound::Unbounded };
     let b = IntervalDomain::new(0, 100);
     let n = a.narrow(&b);
     assert_eq!(n.low(), Some(0));
@@ -129,10 +126,7 @@ fn test_interval_narrow() {
 
 #[test]
 fn test_interval_narrow_partial() {
-    let a = IntervalDomain::Interval {
-        low: Bound::Finite(0),
-        high: Bound::Unbounded,
-    };
+    let a = IntervalDomain::Interval { low: Bound::Finite(0), high: Bound::Unbounded };
     let b = IntervalDomain::new(5, 50);
     let n = a.narrow(&b);
     // Lower bound was finite, keep it; upper was unbounded, narrow to 50
@@ -503,14 +497,8 @@ fn test_congruence_subset() {
 
 #[test]
 fn test_reduced_product_join() {
-    let a = ReducedProduct::new(
-        IntervalDomain::new(0, 5),
-        IntervalDomain::new(10, 20),
-    );
-    let b = ReducedProduct::new(
-        IntervalDomain::new(3, 8),
-        IntervalDomain::new(15, 25),
-    );
+    let a = ReducedProduct::new(IntervalDomain::new(0, 5), IntervalDomain::new(10, 20));
+    let b = ReducedProduct::new(IntervalDomain::new(3, 8), IntervalDomain::new(15, 25));
     let j = a.join(&b);
     assert_eq!(j.first.low(), Some(0));
     assert_eq!(j.first.high(), Some(8));
@@ -520,14 +508,8 @@ fn test_reduced_product_join() {
 
 #[test]
 fn test_reduced_product_meet() {
-    let a = ReducedProduct::new(
-        IntervalDomain::new(0, 10),
-        IntervalDomain::new(5, 15),
-    );
-    let b = ReducedProduct::new(
-        IntervalDomain::new(3, 7),
-        IntervalDomain::new(8, 20),
-    );
+    let a = ReducedProduct::new(IntervalDomain::new(0, 10), IntervalDomain::new(5, 15));
+    let b = ReducedProduct::new(IntervalDomain::new(3, 7), IntervalDomain::new(8, 20));
     let m = a.meet(&b);
     assert_eq!(m.first.low(), Some(3));
     assert_eq!(m.first.high(), Some(7));
@@ -549,14 +531,8 @@ fn test_reduced_product_top() {
 
 #[test]
 fn test_reduced_product_subset() {
-    let a = ReducedProduct::new(
-        IntervalDomain::new(2, 5),
-        IntervalDomain::new(3, 7),
-    );
-    let b = ReducedProduct::new(
-        IntervalDomain::new(0, 10),
-        IntervalDomain::new(0, 10),
-    );
+    let a = ReducedProduct::new(IntervalDomain::new(2, 5), IntervalDomain::new(3, 7));
+    let b = ReducedProduct::new(IntervalDomain::new(0, 10), IntervalDomain::new(0, 10));
     assert!(a.is_subset_of(&b));
     assert!(!b.is_subset_of(&a));
 }
@@ -614,20 +590,15 @@ fn test_reduce_interval_congruence_empty() {
 #[test]
 fn test_triple_product() {
     // Test the triple product: Interval x Octagon x Congruence
-    type TripleProduct = ReducedProduct<ReducedProduct<IntervalDomain, OctagonDomain>, CongruenceDomain>;
+    type TripleProduct =
+        ReducedProduct<ReducedProduct<IntervalDomain, OctagonDomain>, CongruenceDomain>;
 
     let a = TripleProduct::new(
-        ReducedProduct::new(
-            IntervalDomain::new(0, 10),
-            OctagonDomain::new(vec!["x".into()]),
-        ),
+        ReducedProduct::new(IntervalDomain::new(0, 10), OctagonDomain::new(vec!["x".into()])),
         CongruenceDomain::new(),
     );
     let b = TripleProduct::new(
-        ReducedProduct::new(
-            IntervalDomain::new(5, 15),
-            OctagonDomain::new(vec!["x".into()]),
-        ),
+        ReducedProduct::new(IntervalDomain::new(5, 15), OctagonDomain::new(vec!["x".into()])),
         CongruenceDomain::new(),
     );
 
@@ -646,8 +617,10 @@ fn test_octagon_discharges_vc_interval_cannot() {
     let len_interval = IntervalDomain::new(0, 100);
     // Interval alone cannot prove i < len
     // (both ranges overlap -- we need relational info)
-    assert!(!i_interval.is_subset_of(&IntervalDomain::new(0, 99))
-        || !len_interval.is_subset_of(&IntervalDomain::at_least(1)));
+    assert!(
+        !i_interval.is_subset_of(&IntervalDomain::new(0, 99))
+            || !len_interval.is_subset_of(&IntervalDomain::at_least(1))
+    );
 
     // Octagon CAN prove it:
     let mut oct = OctagonDomain::new(vec!["i".into(), "len".into()]);

@@ -24,8 +24,6 @@ where
     R: Send,
 {
     // We assert that current registry has not terminated.
-    // SAFETY: `Registry::current` clones a live registry for the current worker, or the global
-    // registry outside any pool, so `broadcast_in` receives a non-terminated registry.
     unsafe { broadcast_in(op, &Registry::current()) }
 }
 
@@ -42,8 +40,6 @@ where
     OP: Fn(BroadcastContext<'_>) + Send + Sync + 'static,
 {
     // We assert that current registry has not terminated.
-    // SAFETY: `Registry::current` clones a live registry for the current worker, or the global
-    // registry outside any pool, so `spawn_broadcast_in` receives a non-terminated registry.
     unsafe { spawn_broadcast_in(op, &Registry::current()) }
 }
 
@@ -59,8 +55,6 @@ impl<'a> BroadcastContext<'a> {
     pub(super) fn with<R>(f: impl FnOnce(BroadcastContext<'_>) -> R) -> R {
         let worker_thread = WorkerThread::current();
         assert!(!worker_thread.is_null());
-        // SAFETY: broadcast callbacks only run on pool workers, and after the null check the TLS
-        // pointer is the current thread's live `WorkerThread` for the duration of this call.
         f(BroadcastContext { worker: unsafe { &*worker_thread }, _marker: PhantomData })
     }
 
@@ -119,23 +113,17 @@ where
     };
 
     let n_threads = registry.num_threads();
-    // SAFETY: `current_thread` came from `WorkerThread::current` on this thread, so if it is
-    // non-null it points to the live worker for this thread; `as_ref` handles the null case.
     let current_thread = unsafe { current_thread.as_ref() };
     let tlv = crate::tlv::get();
     let latch = CountLatch::with_count(n_threads, current_thread);
     let jobs: Vec<_> =
         (0..n_threads).map(|_| StackJob::new(tlv, &f, LatchRef::new(&latch))).collect();
-    // SAFETY: `jobs` owns every `StackJob` until after the latch wait below, so each advertised
-    // `JobRef` stays valid until the corresponding worker executes it exactly once.
     let job_refs = jobs.iter().map(|job| unsafe { job.as_job_ref() });
 
     registry.inject_broadcast(job_refs);
 
     let current_thread_job_id = current_thread
         .and_then(|worker| (registry.id() == worker.registry.id()).then(|| worker))
-        // SAFETY: a worker from this registry has an index in `0..n_threads`, and the `jobs`
-        // vector keeps that `StackJob` alive while we temporarily borrow it to read its `JobRef` id.
         .map(|worker| unsafe { jobs[worker.index()].as_job_ref() }.id());
 
     // Wait for all jobs to complete, then collect the results, maybe propagating a panic.
@@ -144,8 +132,6 @@ where
         || started.load(Ordering::Relaxed),
         |job| Some(job.id()) == current_thread_job_id,
     );
-    // SAFETY: `latch.wait` only returns after every stack job has completed, so each result slot
-    // has been initialized before we consume the jobs.
     jobs.into_iter().map(|job| unsafe { job.into_result() }).collect()
 }
 

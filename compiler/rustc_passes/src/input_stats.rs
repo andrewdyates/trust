@@ -222,27 +222,27 @@ impl<'v> hir_visit::Visitor<'v> for StatCollector<'v> {
     }
 
     fn visit_nested_item(&mut self, id: hir::ItemId) {
-        let nested_item = self.tcx.expect("invariant: tcx is always Some when visiting HIR").hir_item(id); // tRust: unwrap -> expect
+        let nested_item = self.tcx.unwrap().hir_item(id);
         self.visit_item(nested_item)
     }
 
     fn visit_nested_trait_item(&mut self, trait_item_id: hir::TraitItemId) {
-        let nested_trait_item = self.tcx.expect("invariant: tcx is always Some when visiting HIR").hir_trait_item(trait_item_id); // tRust: unwrap -> expect
+        let nested_trait_item = self.tcx.unwrap().hir_trait_item(trait_item_id);
         self.visit_trait_item(nested_trait_item)
     }
 
     fn visit_nested_impl_item(&mut self, impl_item_id: hir::ImplItemId) {
-        let nested_impl_item = self.tcx.expect("invariant: tcx is always Some when visiting HIR").hir_impl_item(impl_item_id); // tRust: unwrap -> expect
+        let nested_impl_item = self.tcx.unwrap().hir_impl_item(impl_item_id);
         self.visit_impl_item(nested_impl_item)
     }
 
     fn visit_nested_foreign_item(&mut self, id: hir::ForeignItemId) {
-        let nested_foreign_item = self.tcx.expect("invariant: tcx is always Some when visiting HIR").hir_foreign_item(id); // tRust: unwrap -> expect
+        let nested_foreign_item = self.tcx.unwrap().hir_foreign_item(id);
         self.visit_foreign_item(nested_foreign_item);
     }
 
     fn visit_nested_body(&mut self, body_id: hir::BodyId) {
-        let nested_body = self.tcx.expect("invariant: tcx is always Some when visiting HIR").hir_body(body_id); // tRust: unwrap -> expect
+        let nested_body = self.tcx.unwrap().hir_body(body_id);
         self.visit_body(nested_body)
     }
 

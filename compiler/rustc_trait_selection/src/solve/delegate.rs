@@ -68,7 +68,7 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
                 // We don't do this fast path when opaques are defined since we may
                 // eventually use opaques to incompletely guide inference via ty var
                 // self types.
-                // tRust: known issue — Properly consider opaques here.
+                // FIXME: Properly consider opaques here.
                 && self.inner.borrow_mut().opaque_types().is_empty()
             {
                 return Some(Certainty::AMBIGUOUS);
@@ -286,11 +286,11 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
             }
         };
 
-        // tRust: known issue — Check for defaultness here may cause diagnostics problems.
+        // FIXME: Check for defaultness here may cause diagnostics problems.
         if eligible { Ok(Some(node_item.item.def_id)) } else { Ok(None) }
     }
 
-    // tRust: known issue — This actually should destructure the `Result` we get from transmutability and
+    // FIXME: This actually should destructure the `Result` we get from transmutability and
     // register candidates. We probably need to register >1 since we may have an OR of ANDs.
     fn is_transmutable(
         &self,
@@ -306,7 +306,7 @@ impl<'tcx> rustc_next_trait_solver::delegate::SolverDelegate for SolverDelegate<
             return Err(NoSolution);
         };
 
-        // tRust: known issue (transmutability) — This really should be returning nested goals for `Answer::If*`
+        // FIXME(transmutability): This really should be returning nested goals for `Answer::If*`
         match rustc_transmute::TransmuteTypeEnv::new(self.0.tcx).is_transmutable(src, dst, assume) {
             rustc_transmute::Answer::Yes => Ok(Certainty::Yes),
             rustc_transmute::Answer::No(_) | rustc_transmute::Answer::If(_) => Err(NoSolution),

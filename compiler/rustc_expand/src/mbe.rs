@@ -23,7 +23,7 @@ use rustc_span::{Ident, Span};
 #[derive(PartialEq, Encodable, Decodable, Debug)]
 pub(crate) struct Delimited {
     delim: Delimiter,
-    /// tRust: known issue —: #67062 has details about why this is sub-optimal.
+    /// FIXME: #67062 has details about why this is sub-optimal.
     tts: Vec<TokenTree>,
 }
 

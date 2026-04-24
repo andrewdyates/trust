@@ -1,4 +1,3 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/self_verify_z4.rs: Self-verification of z4 solver components
 //
 // Tier 2 showcase: tRust verifies z4 solver algorithms by building VerifiableFunction
@@ -15,7 +14,7 @@
 
 use std::process::Command;
 
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_types::{
     AssertMessage, BasicBlock, BinOp, BlockId, ConstValue, LocalDecl, Operand, Place, Projection,
@@ -29,21 +28,17 @@ use trust_types::{
 
 /// Check whether the z4 binary is available on PATH.
 fn z4_available() -> bool {
-    Command::new("z4")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Command::new("z4").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// Create a SmtLibBackend, panicking if z4 is not on PATH.
-fn require_z4() -> SmtLibBackend {
+/// Create a IncrementalZ4Session, panicking if z4 is not on PATH.
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH -- install z4 to run these tests"),
     }
@@ -81,17 +76,13 @@ fn build_bcp_propagation_model() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::Unit, name: None },                         // _0: return
-                LocalDecl { index: 1, ty: Ty::u32(), name: Some("trail_len".into()) },     // _1: arg
-                LocalDecl { index: 2, ty: Ty::u32(), name: Some("watch_idx".into()) },     // _2: arg
-                LocalDecl { index: 3, ty: Ty::u32(), name: Some("num_watches".into()) },   // _3: arg (unused in arith but used for array size)
-                LocalDecl { index: 4, ty: Ty::u32(), name: Some("decision_level".into()) },// _4: arg
+                LocalDecl { index: 0, ty: Ty::Unit, name: None }, // _0: return
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("trail_len".into()) }, // _1: arg
+                LocalDecl { index: 2, ty: Ty::u32(), name: Some("watch_idx".into()) }, // _2: arg
+                LocalDecl { index: 3, ty: Ty::u32(), name: Some("num_watches".into()) }, // _3: arg (unused in arith but used for array size)
+                LocalDecl { index: 4, ty: Ty::u32(), name: Some("decision_level".into()) }, // _4: arg
                 // _5: (u32, bool) -- checked add result for trail_len + 1
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 6, ty: Ty::u32(), name: None }, // _6: new trail_len
                 // _7: watch list array (fixed-size model)
                 LocalDecl {
@@ -101,11 +92,7 @@ fn build_bcp_propagation_model() -> VerifiableFunction {
                 },
                 LocalDecl { index: 8, ty: Ty::u32(), name: None }, // _8: watch_list[watch_idx]
                 // _9: (u32, bool) -- checked add result for decision_level + 1
-                LocalDecl {
-                    index: 9,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 9, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 10, ty: Ty::u32(), name: None }, // _10: new decision_level
             ],
             blocks: vec![
@@ -224,24 +211,16 @@ fn build_clause_arena_model() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::u32(), name: None },                         // _0: return (the literal read)
-                LocalDecl { index: 1, ty: Ty::u32(), name: Some("head".into()) },           // _1: arg -- arena head pointer
-                LocalDecl { index: 2, ty: Ty::u32(), name: Some("clause_size".into()) },    // _2: arg -- size of clause to alloc
-                LocalDecl { index: 3, ty: Ty::u32(), name: Some("clause_offset".into()) },  // _3: arg -- offset of clause to read
-                LocalDecl { index: 4, ty: Ty::u32(), name: Some("lit_idx".into()) },        // _4: arg -- literal index within clause
+                LocalDecl { index: 0, ty: Ty::u32(), name: None }, // _0: return (the literal read)
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("head".into()) }, // _1: arg -- arena head pointer
+                LocalDecl { index: 2, ty: Ty::u32(), name: Some("clause_size".into()) }, // _2: arg -- size of clause to alloc
+                LocalDecl { index: 3, ty: Ty::u32(), name: Some("clause_offset".into()) }, // _3: arg -- offset of clause to read
+                LocalDecl { index: 4, ty: Ty::u32(), name: Some("lit_idx".into()) }, // _4: arg -- literal index within clause
                 // _5: (u32, bool) -- checked add for head + clause_size
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 6, ty: Ty::u32(), name: None }, // _6: new_head
                 // _7: (u32, bool) -- checked add for clause_offset + lit_idx
-                LocalDecl {
-                    index: 7,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 7, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 8, ty: Ty::u32(), name: None }, // _8: effective index
                 // _9: arena array (fixed-size model)
                 LocalDecl {
@@ -383,11 +362,11 @@ fn build_lrat_checker_model() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::Bool, name: None },                            // _0: return (step valid?)
-                LocalDecl { index: 1, ty: Ty::u32(), name: Some("clause_db_len".into()) },    // _1: arg
-                LocalDecl { index: 2, ty: Ty::u32(), name: Some("ref_clause_id".into()) },    // _2: arg
-                LocalDecl { index: 3, ty: Ty::u32(), name: Some("step_counter".into()) },     // _3: arg
-                LocalDecl { index: 4, ty: Ty::u32(), name: Some("pivot_idx".into()) },        // _4: arg
+                LocalDecl { index: 0, ty: Ty::Bool, name: None }, // _0: return (step valid?)
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("clause_db_len".into()) }, // _1: arg
+                LocalDecl { index: 2, ty: Ty::u32(), name: Some("ref_clause_id".into()) }, // _2: arg
+                LocalDecl { index: 3, ty: Ty::u32(), name: Some("step_counter".into()) }, // _3: arg
+                LocalDecl { index: 4, ty: Ty::u32(), name: Some("pivot_idx".into()) },    // _4: arg
                 LocalDecl { index: 5, ty: Ty::Bool, name: None }, // _5: ref_clause_id < clause_db_len
                 // _6: clause literals array (fixed-size model)
                 LocalDecl {
@@ -397,11 +376,7 @@ fn build_lrat_checker_model() -> VerifiableFunction {
                 },
                 LocalDecl { index: 7, ty: Ty::u32(), name: None }, // _7: clause_lits[pivot_idx]
                 // _8: (u32, bool) -- checked add for step_counter + 1
-                LocalDecl {
-                    index: 8,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 8, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 9, ty: Ty::u32(), name: None }, // _9: new step_counter
             ],
             blocks: vec![
@@ -427,7 +402,9 @@ fn build_lrat_checker_model() -> VerifiableFunction {
                     terminator: Terminator::Assert {
                         cond: Operand::Copy(Place::local(5)),
                         expected: true,
-                        msg: AssertMessage::Custom("LRAT: referenced clause ID out of bounds".to_string()),
+                        msg: AssertMessage::Custom(
+                            "LRAT: referenced clause ID out of bounds".to_string(),
+                        ),
                         target: BlockId(1),
                         span: SourceSpan::default(),
                     },
@@ -564,15 +541,9 @@ fn test_z4_sv1_bcp_propagation_vc_generation() {
     );
 
     // Should produce IndexOutOfBounds for watch_list[watch_idx]
-    let idx_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .collect();
-    assert_eq!(
-        idx_vcs.len(),
-        1,
-        "Z4-SV-1: BCP model should produce exactly 1 IndexOutOfBounds VC"
-    );
+    let idx_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).collect();
+    assert_eq!(idx_vcs.len(), 1, "Z4-SV-1: BCP model should produce exactly 1 IndexOutOfBounds VC");
 
     // All VCs should be L0Safety
     for vc in &vcs {
@@ -612,10 +583,8 @@ fn test_z4_sv2_clause_arena_vc_generation() {
     );
 
     // Should produce IndexOutOfBounds for arena[effective_index]
-    let idx_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .collect();
+    let idx_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).collect();
     assert_eq!(
         idx_vcs.len(),
         1,
@@ -648,10 +617,8 @@ fn test_z4_sv3_lrat_checker_vc_generation() {
     let vcs = trust_vcgen::generate_vcs(&func);
 
     // Should produce Assertion VC for "clause ID out of bounds"
-    let assert_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::Assertion { .. }))
-        .collect();
+    let assert_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Assertion { .. })).collect();
     assert!(
         !assert_vcs.is_empty(),
         "Z4-SV-3: LRAT model should produce at least 1 Assertion VC for clause ID bounds check"
@@ -668,10 +635,8 @@ fn test_z4_sv3_lrat_checker_vc_generation() {
     );
 
     // Should produce IndexOutOfBounds for clause_lits[pivot_idx]
-    let idx_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .collect();
+    let idx_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).collect();
     assert_eq!(
         idx_vcs.len(),
         1,
@@ -712,10 +677,7 @@ fn test_z4_self_verify_full_suite() {
         .iter()
         .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }))
         .count();
-    let sv1_idx = sv1_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .count();
+    let sv1_idx = sv1_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).count();
     assert_eq!(sv1_add, 2, "Z4-SV-1: expected 2 Add overflow VCs");
     assert_eq!(sv1_idx, 1, "Z4-SV-1: expected 1 IndexOutOfBounds VC");
 
@@ -750,10 +712,7 @@ fn test_z4_self_verify_full_suite() {
         .iter()
         .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }))
         .count();
-    let sv2_idx = sv2_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .count();
+    let sv2_idx = sv2_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).count();
     assert_eq!(sv2_add, 2, "Z4-SV-2: expected 2 Add overflow VCs");
     assert_eq!(sv2_idx, 1, "Z4-SV-2: expected 1 IndexOutOfBounds VC");
 
@@ -784,18 +743,13 @@ fn test_z4_self_verify_full_suite() {
     let sv3_vcs = trust_vcgen::generate_vcs(&sv3);
     let sv3_routed = router.verify_all(&sv3_vcs);
 
-    let sv3_assert = sv3_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::Assertion { .. }))
-        .count();
+    let sv3_assert =
+        sv3_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Assertion { .. })).count();
     let sv3_add = sv3_vcs
         .iter()
         .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }))
         .count();
-    let sv3_idx = sv3_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .count();
+    let sv3_idx = sv3_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).count();
     assert!(sv3_assert >= 1, "Z4-SV-3: expected at least 1 Assertion VC");
     assert!(sv3_add >= 1, "Z4-SV-3: expected at least 1 Add overflow VC");
     assert_eq!(sv3_idx, 1, "Z4-SV-3: expected 1 IndexOutOfBounds VC");
@@ -823,8 +777,7 @@ fn test_z4_self_verify_full_suite() {
     });
 
     // --- Summary ---
-    let total_vcs: usize =
-        sv1_routed.len() + sv2_routed.len() + sv3_routed.len();
+    let total_vcs: usize = sv1_routed.len() + sv2_routed.len() + sv3_routed.len();
     assert!(
         total_vcs >= 9,
         "z4 self-verification suite should generate at least 9 VCs total, got {}",
@@ -846,11 +799,8 @@ fn test_z4_self_verify_full_suite() {
 
 #[test]
 fn test_z4_self_verify_report_generation() {
-    let models: Vec<VerifiableFunction> = vec![
-        build_bcp_propagation_model(),
-        build_clause_arena_model(),
-        build_lrat_checker_model(),
-    ];
+    let models: Vec<VerifiableFunction> =
+        vec![build_bcp_propagation_model(), build_clause_arena_model(), build_lrat_checker_model()];
 
     let router = trust_router::Router::new();
     let mut all_results = Vec::new();
@@ -865,10 +815,7 @@ fn test_z4_self_verify_report_generation() {
     let report = trust_report::build_json_report("z4-self-verification", &all_results);
 
     assert_eq!(report.crate_name, "z4-self-verification");
-    assert_eq!(
-        report.summary.functions_analyzed, 3,
-        "report should cover 3 z4 component models"
-    );
+    assert_eq!(report.summary.functions_analyzed, 3, "report should cover 3 z4 component models");
     assert!(
         report.summary.total_obligations >= 9,
         "report should have at least 9 obligations, got {}",
@@ -883,18 +830,12 @@ fn test_z4_self_verify_report_generation() {
 
     // Verify text summary
     let text = trust_report::format_json_summary(&report);
-    assert!(
-        text.contains("bcp_unit_propagate"),
-        "text report should mention bcp_unit_propagate"
-    );
+    assert!(text.contains("bcp_unit_propagate"), "text report should mention bcp_unit_propagate");
     assert!(
         text.contains("clause_arena_alloc_and_read"),
         "text report should mention clause_arena_alloc_and_read"
     );
-    assert!(
-        text.contains("lrat_check_step"),
-        "text report should mention lrat_check_step"
-    );
+    assert!(text.contains("lrat_check_step"), "text report should mention lrat_check_step");
 
     println!();
     println!("=== tRust Self-Verification: z4 Solver Proof Report ===");
@@ -908,14 +849,14 @@ fn test_z4_self_verify_report_generation() {
 // ===========================================================================
 // Phase 1 self-hosting: Real z4 SmtLib backend tests (issue #630)
 //
-// These tests replace MockBackend with SmtLibBackend, sending VCs to the
+// These tests replace MockBackend with IncrementalZ4Session, sending VCs to the
 // real z4 solver and asserting on real SAT/UNSAT outcomes. They skip
 // gracefully if z4 is not on PATH.
 // ===========================================================================
 
 /// Helper: verify VCs through real z4 and return summary counts.
 fn verify_with_real_z4(
-    z4: &SmtLibBackend,
+    z4: &IncrementalZ4Session,
     vcs: &[trust_types::VerificationCondition],
     label: &str,
 ) -> (u32, u32, u32) {
@@ -963,9 +904,9 @@ fn test_z4_sv1_bcp_real_smtlib() {
 
     eprintln!("\n=== Z4-SV-1: BCP propagation via real z4 ({} VCs) ===", vcs.len());
 
-    // All VCs should be handleable by SmtLibBackend (L0Safety)
+    // All VCs should be handleable by IncrementalZ4Session (L0Safety)
     for vc in &vcs {
-        assert!(z4.can_handle(vc), "SmtLibBackend should handle L0Safety VC: {:?}", vc.kind);
+        assert!(z4.can_handle(vc), "IncrementalZ4Session should handle L0Safety VC: {:?}", vc.kind);
     }
 
     let (proved, failed, unknown) = verify_with_real_z4(&z4, &vcs, "BCP");
@@ -974,17 +915,14 @@ fn test_z4_sv1_bcp_real_smtlib() {
     // - ArithmeticOverflow(Add) on trail_len+1: SAT (trail_len = u32::MAX)
     // - IndexOutOfBounds on watch_list[watch_idx]: SAT (watch_idx >= 256)
     // - ArithmeticOverflow(Add) on decision_level+1: SAT (decision_level = u32::MAX)
-    assert!(
-        proved + failed + unknown == vcs.len() as u32,
-        "all VCs should get a result"
-    );
+    assert!(proved + failed + unknown == vcs.len() as u32, "all VCs should get a result");
     assert!(
         failed >= 1,
         "z4 should find at least one violation in unconstrained BCP model (got {failed}F)"
     );
 
     // Verify via Router with SmtLib backend
-    let router = trust_router::Router::with_backends(vec![Box::new(SmtLibBackend::new())]);
+    let router = trust_router::Router::with_backends(vec![Box::new(IncrementalZ4Session::new())]);
     let routed = router.verify_all(&vcs);
     assert_eq!(routed.len(), vcs.len());
     for (_vc, result) in &routed {
@@ -1012,7 +950,7 @@ fn test_z4_sv2_clause_arena_real_smtlib() {
     eprintln!("\n=== Z4-SV-2: Clause arena via real z4 ({} VCs) ===", vcs.len());
 
     for vc in &vcs {
-        assert!(z4.can_handle(vc), "SmtLibBackend should handle L0Safety VC: {:?}", vc.kind);
+        assert!(z4.can_handle(vc), "IncrementalZ4Session should handle L0Safety VC: {:?}", vc.kind);
     }
 
     let (proved, failed, unknown) = verify_with_real_z4(&z4, &vcs, "ClauseArena");
@@ -1021,17 +959,14 @@ fn test_z4_sv2_clause_arena_real_smtlib() {
     // - ArithmeticOverflow(Add) on head+clause_size: SAT
     // - ArithmeticOverflow(Add) on clause_offset+lit_idx: SAT
     // - IndexOutOfBounds on arena[effective_index]: SAT
-    assert!(
-        proved + failed + unknown == vcs.len() as u32,
-        "all VCs should get a result"
-    );
+    assert!(proved + failed + unknown == vcs.len() as u32, "all VCs should get a result");
     assert!(
         failed >= 1,
         "z4 should find at least one violation in unconstrained clause arena model (got {failed}F)"
     );
 
     // Verify via Router with SmtLib backend
-    let router = trust_router::Router::with_backends(vec![Box::new(SmtLibBackend::new())]);
+    let router = trust_router::Router::with_backends(vec![Box::new(IncrementalZ4Session::new())]);
     let routed = router.verify_all(&vcs);
     assert_eq!(routed.len(), vcs.len());
 }
@@ -1053,7 +988,7 @@ fn test_z4_sv3_lrat_checker_real_smtlib() {
     eprintln!("\n=== Z4-SV-3: LRAT checker via real z4 ({} VCs) ===", vcs.len());
 
     for vc in &vcs {
-        assert!(z4.can_handle(vc), "SmtLibBackend should handle L0Safety VC: {:?}", vc.kind);
+        assert!(z4.can_handle(vc), "IncrementalZ4Session should handle L0Safety VC: {:?}", vc.kind);
     }
 
     let (proved, failed, unknown) = verify_with_real_z4(&z4, &vcs, "LRAT");
@@ -1062,17 +997,14 @@ fn test_z4_sv3_lrat_checker_real_smtlib() {
     // - Assertion (ref_clause_id < clause_db_len): SAT (can fail)
     // - IndexOutOfBounds on clause_lits[pivot_idx]: SAT
     // - ArithmeticOverflow(Add) on step_counter+1: SAT
-    assert!(
-        proved + failed + unknown == vcs.len() as u32,
-        "all VCs should get a result"
-    );
+    assert!(proved + failed + unknown == vcs.len() as u32, "all VCs should get a result");
     assert!(
         failed >= 1,
         "z4 should find at least one violation in unconstrained LRAT model (got {failed}F)"
     );
 
     // Verify via Router with SmtLib backend
-    let router = trust_router::Router::with_backends(vec![Box::new(SmtLibBackend::new())]);
+    let router = trust_router::Router::with_backends(vec![Box::new(IncrementalZ4Session::new())]);
     let routed = router.verify_all(&vcs);
     assert_eq!(routed.len(), vcs.len());
 }
@@ -1100,7 +1032,7 @@ fn test_z4_self_verify_full_suite_real_smtlib() {
     let mut total_failed = 0u32;
     let mut total_unknown = 0u32;
 
-    let router = trust_router::Router::with_backends(vec![Box::new(SmtLibBackend::new())]);
+    let router = trust_router::Router::with_backends(vec![Box::new(IncrementalZ4Session::new())]);
 
     for (label, model) in &models {
         let vcs = trust_vcgen::generate_vcs(model);
@@ -1124,9 +1056,7 @@ fn test_z4_self_verify_full_suite_real_smtlib() {
     eprintln!("  Failed:    {total_failed} (z4 found counterexample)");
     eprintln!("  Unknown:   {total_unknown}");
     eprintln!();
-    eprintln!(
-        "  3/3 z4 components verified with real z4 solver (BCP, clause arena, LRAT checker)"
-    );
+    eprintln!("  3/3 z4 components verified with real z4 solver (BCP, clause arena, LRAT checker)");
 
     // Acceptance criteria: all 3 models produce VCs that z4 resolves
     assert!(total >= 9, "should have at least 9 VCs total, got {total}");
@@ -1134,10 +1064,7 @@ fn test_z4_self_verify_full_suite_real_smtlib() {
         total_failed >= 3,
         "z4 should find violations in all 3 unconstrained models (got {total_failed}F)"
     );
-    assert_eq!(
-        total_unknown, 0,
-        "no VCs should be Unknown when z4 is available"
-    );
+    assert_eq!(total_unknown, 0, "no VCs should be Unknown when z4 is available");
 
     // Build a proof report from real z4 results
     let report = trust_report::build_json_report("z4-self-verification-real", &all_results);

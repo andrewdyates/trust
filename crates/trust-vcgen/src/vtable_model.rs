@@ -73,31 +73,19 @@ impl VtableModel {
             })
             .collect();
 
-        Self {
-            trait_name: trait_name.to_string(),
-            method_contracts,
-            vtable,
-        }
+        Self { trait_name: trait_name.to_string(), method_contracts, vtable }
     }
 
     /// Create a vtable model directly from a vtable and contracts.
     #[must_use]
     pub fn new(trait_name: String, vtable: VTable, contracts: Vec<MethodContract>) -> Self {
-        let method_contracts = contracts
-            .into_iter()
-            .map(|c| (c.method_name.clone(), c))
-            .collect();
-        Self {
-            trait_name,
-            method_contracts,
-            vtable,
-        }
+        let method_contracts = contracts.into_iter().map(|c| (c.method_name.clone(), c)).collect();
+        Self { trait_name, method_contracts, vtable }
     }
 
     /// Set the contract for a specific method.
     pub fn set_contract(&mut self, contract: MethodContract) {
-        self.method_contracts
-            .insert(contract.method_name.clone(), contract);
+        self.method_contracts.insert(contract.method_name.clone(), contract);
     }
 
     /// Get the trait name.
@@ -179,12 +167,7 @@ impl<'a> DynDispatchVc<'a> {
         contract: &'a MethodContract,
         targets: &'a [trust_types::ConcreteTarget],
     ) -> Self {
-        Self {
-            trait_name,
-            method_name,
-            contract,
-            targets,
-        }
+        Self { trait_name, method_name, contract, targets }
     }
 
     /// Generate VCs for this dispatch site.
@@ -207,7 +190,7 @@ impl<'a> DynDispatchVc<'a> {
                         self.trait_name, self.method_name
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location,
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -225,14 +208,10 @@ impl<'a> DynDispatchVc<'a> {
             // Precondition VC: trait precondition must be accepted by each impl
             // Formula: NOT(pre_trait => pre_impl) -- if SAT, impl rejects valid input
             if !self.contract.preconditions.is_empty() {
-                let impl_pre_var = Formula::Var(
-                    format!("pre_{}_{}", impl_ty_name, self.method_name),
-                    Sort::Bool,
-                );
-                let implication = Formula::Implies(
-                    Box::new(pre_conj.clone()),
-                    Box::new(impl_pre_var),
-                );
+                let impl_pre_var =
+                    Formula::Var(format!("pre_{}_{}", impl_ty_name, self.method_name), Sort::Bool);
+                let implication =
+                    Formula::Implies(Box::new(pre_conj.clone()), Box::new(impl_pre_var));
                 vcs.push(VerificationCondition {
                     kind: VcKind::Precondition {
                         callee: format!(
@@ -240,7 +219,7 @@ impl<'a> DynDispatchVc<'a> {
                             impl_ty_name, self.trait_name, self.method_name
                         ),
                     },
-                    function: function_name.to_string(),
+                    function: function_name.into(),
                     location: location.clone(),
                     formula: Formula::Not(Box::new(implication)),
                     contract_metadata: None,
@@ -250,20 +229,17 @@ impl<'a> DynDispatchVc<'a> {
             // Postcondition VC: each impl must guarantee at least what the trait promises
             // Formula: NOT(post_impl => post_trait) -- if SAT, impl fails to deliver
             if !self.contract.postconditions.is_empty() {
-                let impl_post_var = Formula::Var(
-                    format!("post_{}_{}", impl_ty_name, self.method_name),
-                    Sort::Bool,
-                );
-                let implication = Formula::Implies(
-                    Box::new(impl_post_var),
-                    Box::new(post_conj.clone()),
-                );
+                let impl_post_var =
+                    Formula::Var(format!("post_{}_{}", impl_ty_name, self.method_name), Sort::Bool);
+                let implication =
+                    Formula::Implies(Box::new(impl_post_var), Box::new(post_conj.clone()));
                 vcs.push(VerificationCondition {
                     kind: VcKind::Postcondition,
                     function: format!(
                         "<{} as {}>::{}",
                         impl_ty_name, self.trait_name, self.method_name
-                    ),
+                    )
+                    .into(),
                     location: location.clone(),
                     formula: Formula::Not(Box::new(implication)),
                     contract_metadata: None,
@@ -273,11 +249,8 @@ impl<'a> DynDispatchVc<'a> {
 
         // Dispatch completeness: assert the dispatch is bounded
         if self.targets.len() > 1 {
-            let target_names: Vec<String> = self
-                .targets
-                .iter()
-                .map(|t| format!("{:?}", t.impl_type))
-                .collect();
+            let target_names: Vec<String> =
+                self.targets.iter().map(|t| format!("{:?}", t.impl_type)).collect();
             vcs.push(VerificationCondition {
                 kind: VcKind::Assertion {
                     message: format!(
@@ -288,7 +261,7 @@ impl<'a> DynDispatchVc<'a> {
                         target_names.join(", ")
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location,
                 formula: Formula::Bool(true),
                 contract_metadata: None,
@@ -331,15 +304,16 @@ impl TraitBoundPropagation {
     /// Create a new bound propagation checker.
     #[must_use]
     pub fn new(type_name: impl Into<String>, bounds: Vec<TraitBound>) -> Self {
-        Self {
-            type_name: type_name.into(),
-            bounds,
-        }
+        Self { type_name: type_name.into(), bounds }
     }
 
     /// Check which bounds are satisfied by known impls.
     #[must_use]
-    pub fn check_bounds(&self, resolver: &TraitResolver, concrete_ty: &trust_types::Ty) -> Vec<BoundCheckResult> {
+    pub fn check_bounds(
+        &self,
+        resolver: &TraitResolver,
+        concrete_ty: &trust_types::Ty,
+    ) -> Vec<BoundCheckResult> {
         self.bounds
             .iter()
             .map(|bound| {
@@ -348,15 +322,9 @@ impl TraitBoundPropagation {
                     bound: bound.clone(),
                     satisfied,
                     reason: if satisfied {
-                        format!(
-                            "{:?} implements {}",
-                            concrete_ty, bound.trait_name
-                        )
+                        format!("{:?} implements {}", concrete_ty, bound.trait_name)
                     } else {
-                        format!(
-                            "{:?} does not implement {}",
-                            concrete_ty, bound.trait_name
-                        )
+                        format!("{:?} does not implement {}", concrete_ty, bound.trait_name)
                     },
                 }
             })
@@ -385,7 +353,7 @@ impl TraitBoundPropagation {
                         self.type_name, r.bound.trait_name, r.reason
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -493,11 +461,7 @@ impl ObjectSafetyChecker {
         methods: Vec<ObjectSafetyMethod>,
         has_sized_supertrait: bool,
     ) -> Self {
-        Self {
-            trait_name: trait_name.into(),
-            methods,
-            has_sized_supertrait,
-        }
+        Self { trait_name: trait_name.into(), methods, has_sized_supertrait }
     }
 
     /// Check whether the trait is object-safe.
@@ -519,21 +483,16 @@ impl ObjectSafetyChecker {
             }
 
             if !method.has_receiver {
-                violations.push(ObjectSafetyViolation::NoReceiver {
-                    method: method.name.clone(),
-                });
+                violations.push(ObjectSafetyViolation::NoReceiver { method: method.name.clone() });
             }
 
             if method.returns_self {
-                violations.push(ObjectSafetyViolation::ReturnsSelf {
-                    method: method.name.clone(),
-                });
+                violations.push(ObjectSafetyViolation::ReturnsSelf { method: method.name.clone() });
             }
 
             if method.has_type_params {
-                violations.push(ObjectSafetyViolation::GenericMethod {
-                    method: method.name.clone(),
-                });
+                violations
+                    .push(ObjectSafetyViolation::GenericMethod { method: method.name.clone() });
             }
         }
 
@@ -561,7 +520,7 @@ impl ObjectSafetyChecker {
                         violation.description()
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -618,21 +577,12 @@ impl WitnessType {
         // Find a type that satisfies ALL bounds.
         let witness = candidate_types.iter().find_map(|type_key| {
             let ty = &type_map[type_key];
-            let all_satisfied = bounds
-                .iter()
-                .all(|bound| resolver.resolve_impl(ty, &bound.trait_name).is_some());
-            if all_satisfied {
-                Some(ty.clone())
-            } else {
-                None
-            }
+            let all_satisfied =
+                bounds.iter().all(|bound| resolver.resolve_impl(ty, &bound.trait_name).is_some());
+            if all_satisfied { Some(ty.clone()) } else { None }
         });
 
-        Self {
-            type_param,
-            bounds: bounds.to_vec(),
-            witness,
-        }
+        Self { type_param, bounds: bounds.to_vec(), witness }
     }
 
     /// Whether a witness was found.
@@ -658,7 +608,7 @@ impl WitnessType {
                         self.type_param, bound_desc, witness_ty
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: SourceSpan::default(),
                 // Witness found -- the formula is unsatisfiable (no violation).
                 formula: Formula::Bool(true),
@@ -671,7 +621,7 @@ impl WitnessType {
                         self.type_param, bound_desc
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -707,25 +657,15 @@ mod tests {
     }
 
     fn make_trait_bound(name: &str) -> TraitBound {
-        TraitBound {
-            trait_name: name.to_string(),
-            type_params: vec![],
-            associated_types: vec![],
-        }
+        TraitBound { trait_name: name.to_string(), type_params: vec![], associated_types: vec![] }
     }
 
     fn x_gt_0() -> Formula {
-        Formula::Gt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     fn result_ge_0() -> Formula {
-        Formula::Ge(
-            Box::new(Formula::Var("result".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Ge(Box::new(Formula::Var("result".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     fn make_compute_impl(ty: Ty) -> TraitImpl {
@@ -811,14 +751,9 @@ mod tests {
         // 2 impls * (1 pre + 1 post) + 1 completeness = 5 VCs
         assert_eq!(vcs.len(), 5);
 
-        let pre_count = vcs
-            .iter()
-            .filter(|vc| matches!(&vc.kind, VcKind::Precondition { .. }))
-            .count();
-        let post_count = vcs
-            .iter()
-            .filter(|vc| matches!(vc.kind, VcKind::Postcondition))
-            .count();
+        let pre_count =
+            vcs.iter().filter(|vc| matches!(&vc.kind, VcKind::Precondition { .. })).count();
+        let post_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Postcondition)).count();
         assert_eq!(pre_count, 2);
         assert_eq!(post_count, 2);
     }
@@ -878,7 +813,9 @@ mod tests {
         let vcs = dispatch.generate_vcs("test_fn");
 
         assert_eq!(vcs.len(), 1);
-        assert!(matches!(&vcs[0].kind, VcKind::Assertion { message } if message.contains("no known implementations")));
+        assert!(
+            matches!(&vcs[0].kind, VcKind::Assertion { message } if message.contains("no known implementations"))
+        );
         assert_eq!(vcs[0].formula, Formula::Bool(false));
     }
 
@@ -911,18 +848,9 @@ mod tests {
         };
 
         let targets = vec![
-            ConcreteTarget {
-                impl_type: Ty::i32(),
-                body_def_path: "<i32>::compute".to_string(),
-            },
-            ConcreteTarget {
-                impl_type: Ty::u32(),
-                body_def_path: "<u32>::compute".to_string(),
-            },
-            ConcreteTarget {
-                impl_type: Ty::u64(),
-                body_def_path: "<u64>::compute".to_string(),
-            },
+            ConcreteTarget { impl_type: Ty::i32(), body_def_path: "<i32>::compute".to_string() },
+            ConcreteTarget { impl_type: Ty::u32(), body_def_path: "<u32>::compute".to_string() },
+            ConcreteTarget { impl_type: Ty::u64(), body_def_path: "<u64>::compute".to_string() },
         ];
 
         let dispatch = DynDispatchVc::new("Compute", "compute", &contract, &targets);
@@ -1145,9 +1073,7 @@ mod tests {
 
         assert!(!checker.is_object_safe());
         let violations = checker.check();
-        assert!(violations
-            .iter()
-            .any(|v| matches!(v, ObjectSafetyViolation::ReturnsSelf { .. })));
+        assert!(violations.iter().any(|v| matches!(v, ObjectSafetyViolation::ReturnsSelf { .. })));
     }
 
     #[test]
@@ -1166,9 +1092,9 @@ mod tests {
 
         assert!(!checker.is_object_safe());
         let violations = checker.check();
-        assert!(violations
-            .iter()
-            .any(|v| matches!(v, ObjectSafetyViolation::GenericMethod { .. })));
+        assert!(
+            violations.iter().any(|v| matches!(v, ObjectSafetyViolation::GenericMethod { .. }))
+        );
     }
 
     #[test]
@@ -1186,8 +1112,8 @@ mod tests {
                 },
                 ObjectSafetyMethod {
                     name: "sized_method".to_string(),
-                    has_receiver: false, // would normally violate, but excluded
-                    returns_self: true,  // would normally violate, but excluded
+                    has_receiver: false,   // would normally violate, but excluded
+                    returns_self: true,    // would normally violate, but excluded
                     has_type_params: true, // would normally violate, but excluded
                     where_self_sized: true,
                 },
@@ -1288,8 +1214,7 @@ mod tests {
         let mut resolver = TraitResolver::new();
         resolver.add_impl(make_clone_impl(Ty::i32()));
 
-        let witness =
-            WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
+        let witness = WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
 
         assert!(witness.is_satisfiable());
     }
@@ -1298,8 +1223,7 @@ mod tests {
     fn test_witness_no_impls() {
         let resolver = TraitResolver::new();
 
-        let witness =
-            WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
+        let witness = WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
 
         assert!(!witness.is_satisfiable());
     }
@@ -1320,8 +1244,7 @@ mod tests {
         let mut resolver = TraitResolver::new();
         resolver.add_impl(make_clone_impl(Ty::i32()));
 
-        let witness =
-            WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
+        let witness = WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
         let vc = witness.generate_vc("test_fn");
 
         // Witness found -> formula is Bool(true) (no violation)
@@ -1332,8 +1255,7 @@ mod tests {
     fn test_witness_vc_unsatisfiable() {
         let resolver = TraitResolver::new();
 
-        let witness =
-            WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
+        let witness = WitnessType::find_witness("T", &[make_trait_bound("Clone")], &resolver);
         let vc = witness.generate_vc("test_fn");
 
         // No witness -> formula is Bool(false) (violation)
@@ -1383,11 +1305,8 @@ mod tests {
 
         // 3. Check trait bound propagation (dyn Compute + Send)
         let bound_prop = TraitBoundPropagation::new("T", vec![make_trait_bound("Send")]);
-        let bound_vcs = bound_prop.generate_multi_type_vcs(
-            &resolver,
-            &[Ty::i32(), Ty::u32()],
-            "test_fn",
-        );
+        let bound_vcs =
+            bound_prop.generate_multi_type_vcs(&resolver, &[Ty::i32(), Ty::u32()], "test_fn");
         assert!(bound_vcs.is_empty(), "both types implement Send");
 
         // 4. Check object safety

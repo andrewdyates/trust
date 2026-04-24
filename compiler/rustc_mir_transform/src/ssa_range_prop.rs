@@ -98,7 +98,7 @@ impl<'tcx, 'body, 'a> RangeSet<'tcx, 'body, 'a> {
         let Some(ranges) = self.ranges.get(place) else {
             return None;
         };
-        // NOTE: Uses first dominating range; intersection of all valid ranges would be more precise.
+        // FIXME: This should use the intersection of all valid ranges.
         let (_, range) =
             ranges.iter().find(|(range_loc, _)| range_loc.dominates(location, &self.dominators))?;
         Some(*range)
@@ -185,7 +185,7 @@ impl<'tcx> MutVisitor<'tcx> for RangeSet<'tcx, '_, '_> {
                     }
                     for (val, target) in targets.iter() {
                         if distinct_targets[&target] != 1 {
-                            // NOTE: Multiple targets share this block; range could be union of values.
+                            // FIXME: For multiple targets, the range can be the union of their values.
                             continue;
                         }
                         let successor = Location { block: target, statement_index: 0 };
@@ -196,7 +196,7 @@ impl<'tcx> MutVisitor<'tcx> for RangeSet<'tcx, '_, '_> {
                         }
                     }
 
-                    // NOTE: Otherwise-target range only computed for bool; other types could benefit.
+                    // FIXME: The range for the otherwise target be extend to more types.
                     // For instance, `val` is within the range [4, 1) at the otherwise target of `matches!(val, 1 | 2 | 3)`.
                     let otherwise = Location { block: targets.otherwise(), statement_index: 0 };
                     if place.ty(self.local_decls, self.tcx).ty.is_bool()

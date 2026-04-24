@@ -71,7 +71,7 @@ impl<'cx, 'tcx> VerifyBoundCx<'cx, 'tcx> {
             VerifyBound::IsEmpty
         } else if param_bounds.len() == 1 {
             // Micro-opt: no need to store the vector if it's just len 1
-            param_bounds.pop().expect("invariant: param_bounds must have exactly one element when len == 1") // tRust:
+            param_bounds.pop().unwrap()
         } else {
             // If we can find any other bound `R` such that `T: R`, then
             // we don't need to check for `'empty`, because `R: 'empty`.

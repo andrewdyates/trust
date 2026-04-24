@@ -108,9 +108,10 @@ impl LifetimeAbstraction {
         let mut bindings = BTreeMap::new();
         for (var, lt_a) in &self.bindings {
             if let Some(lt_b) = other.bindings.get(var)
-                && lt_a == lt_b {
-                    bindings.insert(var.clone(), lt_a.clone());
-                }
+                && lt_a == lt_b
+            {
+                bindings.insert(var.clone(), lt_a.clone());
+            }
         }
         Self { outlives, bindings }
     }
@@ -127,10 +128,7 @@ impl LifetimeAbstraction {
     /// Generate predicates from lifetime constraints.
     #[must_use]
     pub fn to_predicates(&self) -> Vec<Predicate> {
-        self.outlives
-            .iter()
-            .map(|(l, s)| Predicate::Custom(format!("{l}:outlives:{s}")))
-            .collect()
+        self.outlives.iter().map(|(l, s)| Predicate::Custom(format!("{l}:outlives:{s}"))).collect()
     }
 
     /// Refine the lifetime abstraction from a spurious counterexample.
@@ -142,16 +140,20 @@ impl LifetimeAbstraction {
     ) -> Vec<Predicate> {
         let mut new_preds = Vec::new();
 
-        let ref_lt = self.bindings.get(reference_var).cloned()
+        let ref_lt = self
+            .bindings
+            .get(reference_var)
+            .cloned()
             .unwrap_or_else(|| format!("'lt_{reference_var}"));
-        let referent_lt = self.bindings.get(referent_var).cloned()
+        let referent_lt = self
+            .bindings
+            .get(referent_var)
+            .cloned()
             .unwrap_or_else(|| format!("'lt_{referent_var}"));
 
         if !self.outlives_transitive(&referent_lt, &ref_lt) {
             self.add_outlives(referent_lt.clone(), ref_lt.clone());
-            new_preds.push(Predicate::Custom(format!(
-                "{referent_lt}:outlives:{ref_lt}"
-            )));
+            new_preds.push(Predicate::Custom(format!("{referent_lt}:outlives:{ref_lt}")));
         }
 
         if !self.bindings.contains_key(reference_var) {

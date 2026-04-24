@@ -14,7 +14,6 @@ members = [
     "trust-debug",
     "trust-disasm",
     "trust-loop",
-    "trust-testgen",
     "trust-types",
     "trust-vcgen",
     "trust-router",
@@ -25,27 +24,24 @@ members = [
     "trust-temporal",
     "trust-proof-cert",
     "trust-strengthen",
+    "trust-spec",
     "trust-backprop",
-    "trust-runtime",
     "trust-symex",
     "trust-transval",
-    "trust-decompile",
     "trust-integration-tests",
     "trust-lift",
     "trust-machine-sem",
-    "trust-crown",
-    "trust-type-recover",
     "trust-lsp",
     "trust-zani-lib",
     "trust-sunder-lib",
     "trust-llvm2-bridge",
+    "trust-tmir-bridge",
+    "trust-codegen-llvm2",
+    "ait-buildd",
 ]
 # trust-mir-extract requires rustc_private (nightly).
-# trust-driver is the deprecated standalone wrapper (superseded by native
-# trust_verify MIR pass); kept for z4 backend reference until migration.
 exclude = [
     "trust-mir-extract",
-    "trust-driver",
 ]
 
 [workspace.package]
@@ -61,7 +57,6 @@ trust-cegar = { path = "trust-cegar" }
 trust-debug = { path = "trust-debug" }
 trust-disasm = { path = "trust-disasm" }
 trust-loop = { path = "trust-loop" }
-trust-testgen = { path = "trust-testgen" }
 trust-types = { path = "trust-types" }
 trust-vcgen = { path = "trust-vcgen" }
 trust-router = { path = "trust-router" }
@@ -72,16 +67,13 @@ trust-convergence = { path = "trust-convergence" }
 trust-temporal = { path = "trust-temporal" }
 trust-proof-cert = { path = "trust-proof-cert" }
 trust-strengthen = { path = "trust-strengthen" }
+trust-spec = { path = "trust-spec" }
 trust-backprop = { path = "trust-backprop" }
-trust-runtime = { path = "trust-runtime" }
 trust-symex = { path = "trust-symex" }
 trust-transval = { path = "trust-transval" }
-trust-decompile = { path = "trust-decompile" }
 trust-integration-tests = { path = "trust-integration-tests" }
 trust-lift = { path = "trust-lift" }
 trust-machine-sem = { path = "trust-machine-sem" }
-trust-crown = { path = "trust-crown" }
-trust-type-recover = { path = "trust-type-recover" }
 trust-lsp = { path = "trust-lsp" }
 trust-zani-lib = { path = "trust-zani-lib" }
 trust-sunder-lib = { path = "trust-sunder-lib" }
@@ -99,13 +91,15 @@ bincode = "1.3"
 num-bigint = "0.4"
 proptest = "1.11"
 reqwest = { version = "0.12", features = ["json", "blocking"], default-features = false }
-tla-mc-core = { git = "https://github.com/andrewdyates/tla2" }
+tla-mc-core = { git = "https://github.com/andrewdyates/tla2", rev = "f96cd001f0a2022000313ef9dd92e4a79f62ba98" }
 lean5-kernel = { git = "https://github.com/andrewdyates/lean5" }
 rayon = "1.10"
 # URL must NOT have .git suffix — zani uses bare URL, and Cargo treats z4.git vs z4 as different sources.
 z4 = { git = "https://github.com/andrewdyates/z4" }
 # tRust: z4-bindings typed builder API for direct z4 integration
 z4-bindings = { git = "https://github.com/andrewdyates/z4" }
+# tRust #879: z4-proof-common shared types for proof checker crates
+z4-proof-common = { git = "https://github.com/andrewdyates/z4" }
 # tRust: zani bounded model checker
 zani-verifier = { git = "https://github.com/andrewdyates/zani" }
 # tRust: zani_core VC IR for direct BMC/CHC integration
@@ -122,6 +116,15 @@ llvm2-lower = { git = "https://github.com/andrewdyates/LLVM2" }
 llvm2-verify = { git = "https://github.com/andrewdyates/LLVM2" }
 llvm2-codegen = { git = "https://github.com/andrewdyates/LLVM2" }
 trust-llvm2-bridge = { path = "trust-llvm2-bridge" }
+trust-tmir-bridge = { path = "trust-tmir-bridge" }
+trust-codegen-llvm2 = { path = "trust-codegen-llvm2" }
+ait-buildd = { path = "ait-buildd" }
+# tRust #869: tMIR universal proof-carrying IR
+tmir = { git = "https://github.com/andrewdyates/tMIR" }
+tempfile = "3"
+fs2 = "0.4"
+anyhow = "1"
+dirs = "5"
 syn = { version = "2", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"

@@ -168,10 +168,7 @@ pub enum ViolationKind {
 impl SendSyncChecker {
     /// Create a new checker.
     pub fn new() -> Self {
-        Self {
-            types: FxHashMap::default(),
-            violations: Vec::new(),
-        }
+        Self { types: FxHashMap::default(), violations: Vec::new() }
     }
 
     /// Register a type for checking.
@@ -235,27 +232,25 @@ impl SendSyncChecker {
                 type_name: name.to_string(),
                 kind: ViolationKind::UnprotectedInteriorMutability,
                 span: SourceSpan::default(),
-                message: format!(
-                    "type '{}' has interior mutability but is !Sync",
-                    name
-                ),
+                message: format!("type '{}' has interior mutability but is !Sync", name),
             });
         }
     }
 
     /// Generate VCs from violations.
     pub fn to_vcs(&self, function: &str) -> Vec<VerificationCondition> {
-        self.violations.iter().map(|v| {
-            VerificationCondition {
-                kind: VcKind::Assertion {
-                    message: v.message.clone(),
-                },
-                function: function.to_string(),
-                location: v.span.clone(),
-                formula: Formula::Bool(false), // violation => unsatisfiable
-                contract_metadata: None,
-            }
-        }).collect()
+        self.violations
+            .iter()
+            .map(|v| {
+                VerificationCondition {
+                    kind: VcKind::Assertion { message: v.message.clone() },
+                    function: function.into(),
+                    location: v.span.clone(),
+                    formula: Formula::Bool(false), // violation => unsatisfiable
+                    contract_metadata: None,
+                }
+            })
+            .collect()
     }
 }
 
@@ -293,11 +288,7 @@ pub struct DataRace {
 impl DataRaceDetector {
     /// Create a new detector.
     pub fn new() -> Self {
-        Self {
-            accesses: Vec::new(),
-            mutex_events: Vec::new(),
-            races: Vec::new(),
-        }
+        Self { accesses: Vec::new(), mutex_events: Vec::new(), races: Vec::new() }
     }
 
     /// Record a shared memory access.
@@ -371,7 +362,8 @@ impl DataRaceDetector {
 
     /// Generate VCs asserting each unprotected race is infeasible.
     pub fn to_vcs(&self, function: &str) -> Vec<VerificationCondition> {
-        self.races.iter()
+        self.races
+            .iter()
             .filter(|r| !r.is_protected)
             .map(|race| {
                 let msg = format!(
@@ -380,7 +372,7 @@ impl DataRaceDetector {
                 );
                 VerificationCondition {
                     kind: VcKind::Assertion { message: msg },
-                    function: function.to_string(),
+                    function: function.into(),
                     location: race.access1.span.clone(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
@@ -440,7 +432,7 @@ fn check_atomic_ordering(function: &str, atomics: &[AtomicOp]) -> Vec<Verificati
                         op.variable, op.ordering
                     ),
                 },
-                function: function.to_string(),
+                function: function.into(),
                 location: op.span.clone(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -456,7 +448,7 @@ fn check_atomic_ordering(function: &str, atomics: &[AtomicOp]) -> Vec<Verificati
                         op.variable, op.ordering
                     ),
                 },
-                function: function.to_string(),
+                function: function.into(),
                 location: op.span.clone(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,

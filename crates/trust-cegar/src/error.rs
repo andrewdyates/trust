@@ -13,7 +13,6 @@ pub enum CegarError {
 
     /// A counterexample path references a block index that does not exist.
     #[error("invalid block index {index} (function has {num_blocks} blocks)")]
-    #[allow(dead_code)]
     InvalidBlockIndex { index: usize, num_blocks: usize },
 
     /// No new predicates could be extracted from a spurious counterexample.
@@ -22,7 +21,6 @@ pub enum CegarError {
 
     /// The abstraction is inconsistent (e.g., contradictory predicates).
     #[error("inconsistent abstraction: {reason}")]
-    #[allow(dead_code)]
     InconsistentAbstraction { reason: String },
 
     /// The solver returned an unexpected result.

@@ -171,7 +171,7 @@ pub fn join_path_syms(path: impl IntoIterator<Item = impl Borrow<Symbol>>) -> St
     let len_hint = iter.size_hint().1.unwrap_or(1);
     let mut s = String::with_capacity(len_hint * 8);
 
-    let first_sym = *iter.next().expect("invariant: path must have at least one segment").borrow(); // tRust: unwrap -> expect
+    let first_sym = *iter.next().unwrap().borrow();
     if first_sym != kw::PathRoot {
         s.push_str(first_sym.as_str());
     }
@@ -191,7 +191,7 @@ pub fn join_path_idents(path: impl IntoIterator<Item = impl Borrow<Ident>>) -> S
     let len_hint = iter.size_hint().1.unwrap_or(1);
     let mut s = String::with_capacity(len_hint * 8);
 
-    let first_ident = *iter.next().expect("invariant: path must have at least one segment").borrow(); // tRust: unwrap -> expect
+    let first_ident = *iter.next().unwrap().borrow();
     if first_ident.name != kw::PathRoot {
         s.push_str(&first_ident.to_string());
     }
@@ -613,8 +613,6 @@ pub struct Block {
     /// The statements in the block.
     pub stmts: ThinVec<Stmt>,
     pub id: NodeId,
-    // SAFETY: Documentation only; this field records whether a parsed block used
-    // `unsafe`, and no unsafe operation is performed here.
     /// Distinguishes between `unsafe { ... }` and `{ ... }`.
     pub rules: BlockCheckMode,
     pub span: Span,

@@ -17,7 +17,7 @@ fn constness(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Constness {
             Constness::NotConst
         }
         Node::Expr(e) if let ExprKind::Closure(c) = e.kind => c.constness,
-        // tRust: known issue — (fee1-dead) extract this one out and rename this query to `fn_constness` so we don't need `is_const_fn` anymore.
+        // FIXME(fee1-dead): extract this one out and rename this query to `fn_constness` so we don't need `is_const_fn` anymore.
         Node::Item(i) if let ItemKind::Impl(impl_) = i.kind => impl_.constness,
         Node::Item(Item { kind: ItemKind::Fn { sig, .. }, .. }) => sig.header.constness,
         Node::ImplItem(ImplItem {

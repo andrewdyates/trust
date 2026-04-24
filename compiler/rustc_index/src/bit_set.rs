@@ -311,12 +311,12 @@ impl<T: Idx> DenseBitSet<T> {
 
     /// Sets `self = self | !other`.
     ///
-    /// tRust: known issue — Incorporate this into [`BitRelations`] and fill out
+    /// FIXME: Incorporate this into [`BitRelations`] and fill out
     /// implementations for other bitset types, if needed.
     pub fn union_not(&mut self, other: &DenseBitSet<T>) {
         assert_eq!(self.domain_size, other.domain_size);
 
-        // tRust: known issue (Zalathar) — If we were to forcibly _set_ all excess bits before
+        // FIXME(Zalathar): If we were to forcibly _set_ all excess bits before
         // the bitwise update, and then clear them again afterwards, we could
         // quickly and accurately detect whether the update changed anything.
         // But that's only worth doing if there's an actual use-case.
@@ -646,7 +646,7 @@ impl<T: Idx> ChunkedBitSet<T> {
                         // SAFETY: `words` can safely be all zeroes.
                         unsafe { words.assume_init() }
                     };
-                    let words_ref = Rc::get_mut(&mut words).expect("invariant: freshly created Rc has no other references"); // tRust: unwrap -> expect
+                    let words_ref = Rc::get_mut(&mut words).unwrap();
 
                     let (word_index, mask) = chunk_word_index_and_mask(elem);
                     words_ref[word_index] |= mask;
@@ -697,7 +697,7 @@ impl<T: Idx> ChunkedBitSet<T> {
                         // SAFETY: `words` can safely be all zeroes.
                         unsafe { words.assume_init() }
                     };
-                    let words_ref = Rc::get_mut(&mut words).expect("invariant: freshly created Rc has no other references"); // tRust: unwrap -> expect
+                    let words_ref = Rc::get_mut(&mut words).unwrap();
 
                     // Set only the bits in use.
                     let num_words = num_words(chunk_domain_size as usize);

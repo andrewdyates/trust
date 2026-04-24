@@ -165,7 +165,6 @@ impl InitMask {
         }
 
         let InitMaskBlocks::Materialized(ref mut blocks) = self.blocks else {
-            // tRust: invariant: initmask blocks must be materialized here
             bug!("initmask blocks must be materialized here")
         };
         blocks
@@ -210,7 +209,7 @@ impl<D: Decoder> Decodable<D> for InitMaskMaterialized {
         let mut blocks = Vec::with_capacity(num_blocks);
         for _ in 0..num_blocks {
             let bytes = decoder.read_raw_bytes(8);
-            let block = u64::from_le_bytes(bytes.try_into().expect("invariant: value fits in target type"));
+            let block = u64::from_le_bytes(bytes.try_into().unwrap());
             blocks.push(block);
         }
         InitMaskMaterialized { blocks }
@@ -259,13 +258,13 @@ impl InitMaskMaterialized {
         let bits = bits.bytes();
         let a = bits / Self::BLOCK_SIZE;
         let b = bits % Self::BLOCK_SIZE;
-        (usize::try_from(a).expect("invariant: value fits in target type"), usize::try_from(b).expect("invariant: value fits in target type"))
+        (usize::try_from(a).unwrap(), usize::try_from(b).unwrap())
     }
 
     #[inline]
     fn size_from_bit_index(block: impl TryInto<u64>, bit: impl TryInto<u64>) -> Size {
-        let block = block.try_into().ok().expect("invariant: value fits in target type");
-        let bit = bit.try_into().ok().expect("invariant: value fits in target type");
+        let block = block.try_into().ok().unwrap();
+        let bit = bit.try_into().ok().unwrap();
         Size::from_bytes(block * Self::BLOCK_SIZE + bit)
     }
 
@@ -341,7 +340,7 @@ impl InitMaskMaterialized {
             return;
         }
         let unused_trailing_bits =
-            u64::try_from(self.blocks.len()).expect("invariant: value fits in target type") * Self::BLOCK_SIZE - len.bytes();
+            u64::try_from(self.blocks.len()).unwrap() * Self::BLOCK_SIZE - len.bytes();
 
         // If there's not enough capacity in the currently allocated blocks, allocate some more.
         if amount.bytes() > unused_trailing_bits {
@@ -351,7 +350,7 @@ impl InitMaskMaterialized {
             // have to manually set them with another write.
             let block = if new_state { u64::MAX } else { 0 };
             self.blocks
-                .extend(iter::repeat(block).take(usize::try_from(additional_blocks).expect("invariant: value fits in target type")));
+                .extend(iter::repeat(block).take(usize::try_from(additional_blocks).unwrap()));
         }
 
         // New blocks have already been set here, so we only need to set the unused trailing bits,

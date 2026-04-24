@@ -133,7 +133,7 @@ impl<K: Hash + Eq, V> interpret::AllocMap<K, V> for FxIndexMap<K, V> {
     where
         K: Borrow<Q>,
     {
-        // tRust: known issue (#120456) — - is `swap_remove` correct?
+        // FIXME(#120456) - is `swap_remove` correct?
         FxIndexMap::swap_remove(self, k)
     }
 
@@ -148,7 +148,6 @@ impl<K: Hash + Eq, V> interpret::AllocMap<K, V> for FxIndexMap<K, V> {
             Some(v) => Ok(v),
             None => {
                 vacant()?;
-                // tRust: invariant — CTFE machine only reads from existing allocations, never extends the alloc_map
                 bug!("The CTFE machine shouldn't ever need to extend the alloc_map when reading")
             }
         }
@@ -214,8 +213,8 @@ impl<'tcx> CompileTimeInterpCx<'tcx> {
             Symbol::intern(
                 &caller.file.name.display(RemapPathScopeComponents::DIAGNOSTICS).to_string_lossy(),
             ),
-            u32::try_from(caller.line).expect("invariant: source line number fits in u32"),
-            u32::try_from(caller.col_display).expect("invariant: source column number fits in u32").checked_add(1).expect("invariant: column + 1 cannot overflow u32 for valid source locations"),
+            u32::try_from(caller.line).unwrap(),
+            u32::try_from(caller.col_display).unwrap().checked_add(1).unwrap(),
         )
     }
 
@@ -360,7 +359,7 @@ impl<'tcx> CompileTimeInterpCx<'tcx> {
                     // For comparing statics to non-statics, as per https://doc.rust-lang.org/nightly/reference/items/static-items.html#r-items.static.storage-disjointness
                     // immutable statics can overlap with other kinds of allocations sometimes.
                     //
-                    // tRust: known issue — We could be more decisive for (non-zero-sized) mutable statics,
+                    // FIXME: We could be more decisive for (non-zero-sized) mutable statics,
                     // which cannot overlap with other kinds of allocations.
                     //
                     // Functions and vtables can be duplicated and deduplicated, so we
@@ -373,7 +372,7 @@ impl<'tcx> CompileTimeInterpCx<'tcx> {
                     // `TypeId`s, so comparing those should always return 2, whether they are the
                     // same allocation or not.
                     //
-                    // tRust: known issue — We could revisit comparing pointers into the same
+                    // FIXME: We could revisit comparing pointers into the same
                     // `GlobalAlloc::Memory` once https://github.com/rust-lang/rust/issues/128775
                     // is fixed (but they can be deduplicated, so comparing pointers into different
                     // ones should return 2).
@@ -549,7 +548,7 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
             | sym::assert_zero_valid
             | sym::assert_mem_uninitialized_valid => {
                 let ty = instance.args.type_at(0);
-                let requirement = ValidityRequirement::from_intrinsic(intrinsic_name).expect("invariant: intrinsic_name is a valid validity requirement intrinsic");
+                let requirement = ValidityRequirement::from_intrinsic(intrinsic_name).unwrap();
 
                 let should_panic = !ecx
                     .tcx
@@ -565,7 +564,6 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
                         _ if layout.is_uninhabited() => format!(
                             "aborted execution: attempted to instantiate uninhabited type `{ty}`"
                         ),
-                        // tRust: invariant — this ValidityRequirement variant is handled in a preceding branch
                         ValidityRequirement::Inhabited => bug!("handled earlier"),
                         ValidityRequirement::Zero => format!(
                             "aborted execution: attempted to zero-initialize type `{ty}`, which is invalid"
@@ -573,7 +571,6 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
                         ValidityRequirement::UninitMitigated0x01Fill => format!(
                             "aborted execution: attempted to leave type `{ty}` uninitialized, which is invalid"
                         ),
-                        // tRust: invariant — ValidityRequirement::Uninit has no corresponding assert function
                         ValidityRequirement::Uninit => bug!("assert_uninit_valid doesn't exist"),
                     };
 
@@ -614,7 +611,6 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
                 {
                     (base, variant_idx, field_idx)
                 } else {
-                    // tRust: invariant — the field at this position must be a type representation field
                     span_bug!(ecx.cur_span(), "expected field representing type, got {frt_ty}")
                 };
                 let layout = ecx.layout_of(ty)?;
@@ -628,7 +624,7 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
 
             _ => {
                 // We haven't handled the intrinsic, let's see if we can use a fallback body.
-                if ecx.tcx.intrinsic(instance.def_id()).expect("invariant: instance def_id is a known intrinsic").must_be_overridden {
+                if ecx.tcx.intrinsic(instance.def_id()).unwrap().must_be_overridden {
                     throw_unsup_format!(
                         "intrinsic `{intrinsic_name}` is not supported at compile-time"
                     );

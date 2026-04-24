@@ -271,7 +271,10 @@ impl OwnershipAbstraction {
 }
 
 /// Return the more restrictive of two ownership states.
-pub(in crate::rust_abstraction) fn more_restrictive(a: OwnershipState, b: OwnershipState) -> OwnershipState {
+pub(in crate::rust_abstraction) fn more_restrictive(
+    a: OwnershipState,
+    b: OwnershipState,
+) -> OwnershipState {
     fn rank(s: OwnershipState) -> u8 {
         match s {
             OwnershipState::Owned => 0,

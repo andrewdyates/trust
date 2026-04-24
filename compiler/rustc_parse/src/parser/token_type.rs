@@ -414,7 +414,7 @@ impl TokenType {
             TokenType::Type => "type",
             TokenType::Const => "a const expression",
 
-            _ => return format!("`{}`", self.is_keyword().expect("invariant: token is a keyword")), // tRust: unwrap -> expect
+            _ => return format!("`{}`", self.is_keyword().unwrap()),
         }
         .to_string()
     }

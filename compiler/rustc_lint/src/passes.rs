@@ -56,7 +56,7 @@ macro_rules! late_lint_methods {
 /// invoke methods recursively (unlike `Visitor`). By default they
 /// do nothing.
 ///
-// tRust: known issue — eliminate the duplication with `Visitor`. But this also
+// FIXME: eliminate the duplication with `Visitor`. But this also
 // contains a few lint-specific methods with no equivalent in `Visitor`.
 //
 macro_rules! declare_late_lint_pass {

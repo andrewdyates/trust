@@ -112,15 +112,15 @@ pub fn includes(a: &LatticeElement, b: &LatticeElement) -> bool {
         return false;
     }
     match (a, b) {
-        (LatticeElement::Interval { lo: l1, hi: h1 },
-         LatticeElement::Interval { lo: l2, hi: h2 }) => {
-            l1 <= l2 && h2 <= h1
-        }
-        (LatticeElement::Sign(s1), LatticeElement::Sign(s2)) => {
-            sign_includes(s1, s2)
-        }
-        (LatticeElement::Congruence { modulus: m1, remainder: r1 },
-         LatticeElement::Congruence { modulus: m2, remainder: r2 }) => {
+        (
+            LatticeElement::Interval { lo: l1, hi: h1 },
+            LatticeElement::Interval { lo: l2, hi: h2 },
+        ) => l1 <= l2 && h2 <= h1,
+        (LatticeElement::Sign(s1), LatticeElement::Sign(s2)) => sign_includes(s1, s2),
+        (
+            LatticeElement::Congruence { modulus: m1, remainder: r1 },
+            LatticeElement::Congruence { modulus: m2, remainder: r2 },
+        ) => {
             // m2 divides m1, and r2 === r1 (mod m1)
             if *m1 == 0 {
                 return *m2 == 0 && r1 == r2;
@@ -155,12 +155,20 @@ fn sign_includes(a: &SignValue, b: &SignValue) -> bool {
 /// Compute the join (least upper bound) of two lattice elements.
 #[must_use]
 pub fn join(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
-    if is_bottom(a) { return b.clone(); }
-    if is_bottom(b) { return a.clone(); }
-    if is_top(a) || is_top(b) { return LatticeElement::Top; }
+    if is_bottom(a) {
+        return b.clone();
+    }
+    if is_bottom(b) {
+        return a.clone();
+    }
+    if is_top(a) || is_top(b) {
+        return LatticeElement::Top;
+    }
     match (a, b) {
-        (LatticeElement::Interval { lo: l1, hi: h1 },
-         LatticeElement::Interval { lo: l2, hi: h2 }) => {
+        (
+            LatticeElement::Interval { lo: l1, hi: h1 },
+            LatticeElement::Interval { lo: l2, hi: h2 },
+        ) => {
             let (lo, hi) = interval_join((*l1, *h1), (*l2, *h2));
             LatticeElement::Interval { lo, hi }
         }
@@ -172,8 +180,10 @@ pub fn join(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
                 LatticeElement::Sign(result)
             }
         }
-        (LatticeElement::Congruence { modulus: m1, remainder: r1 },
-         LatticeElement::Congruence { modulus: m2, remainder: r2 }) => {
+        (
+            LatticeElement::Congruence { modulus: m1, remainder: r1 },
+            LatticeElement::Congruence { modulus: m2, remainder: r2 },
+        ) => {
             if m1 == m2 && r1 == r2 {
                 return a.clone();
             }
@@ -192,10 +202,7 @@ pub fn join(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
             }
         }
         (LatticeElement::Product(a1, a2), LatticeElement::Product(b1, b2)) => {
-            LatticeElement::Product(
-                Box::new(join(a1, b1)),
-                Box::new(join(a2, b2)),
-            )
+            LatticeElement::Product(Box::new(join(a1, b1)), Box::new(join(a2, b2)))
         }
         _ => LatticeElement::Top,
     }
@@ -208,19 +215,23 @@ pub fn join(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
 /// Compute the meet (greatest lower bound) of two lattice elements.
 #[must_use]
 pub fn meet(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
-    if is_top(a) { return b.clone(); }
-    if is_top(b) { return a.clone(); }
-    if is_bottom(a) || is_bottom(b) { return LatticeElement::Bottom; }
+    if is_top(a) {
+        return b.clone();
+    }
+    if is_top(b) {
+        return a.clone();
+    }
+    if is_bottom(a) || is_bottom(b) {
+        return LatticeElement::Bottom;
+    }
     match (a, b) {
-        (LatticeElement::Interval { lo: l1, hi: h1 },
-         LatticeElement::Interval { lo: l2, hi: h2 }) => {
+        (
+            LatticeElement::Interval { lo: l1, hi: h1 },
+            LatticeElement::Interval { lo: l2, hi: h2 },
+        ) => {
             let lo = (*l1).max(*l2);
             let hi = (*h1).min(*h2);
-            if lo > hi {
-                LatticeElement::Bottom
-            } else {
-                LatticeElement::Interval { lo, hi }
-            }
+            if lo > hi { LatticeElement::Bottom } else { LatticeElement::Interval { lo, hi } }
         }
         (LatticeElement::Sign(s1), LatticeElement::Sign(s2)) => {
             let result = sign_meet(s1, s2);
@@ -229,8 +240,10 @@ pub fn meet(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
                 Some(s) => LatticeElement::Sign(s),
             }
         }
-        (LatticeElement::Congruence { modulus: m1, remainder: r1 },
-         LatticeElement::Congruence { modulus: m2, remainder: r2 }) => {
+        (
+            LatticeElement::Congruence { modulus: m1, remainder: r1 },
+            LatticeElement::Congruence { modulus: m2, remainder: r2 },
+        ) => {
             // Meet of congruences: lcm of moduli if remainders compatible
             let l = lcm(*m1, *m2);
             if l == 0 {
@@ -272,12 +285,20 @@ pub fn meet(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
 /// when bounds grow.
 #[must_use]
 pub fn widen(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
-    if is_bottom(a) { return b.clone(); }
-    if is_bottom(b) { return a.clone(); }
-    if is_top(a) || is_top(b) { return LatticeElement::Top; }
+    if is_bottom(a) {
+        return b.clone();
+    }
+    if is_bottom(b) {
+        return a.clone();
+    }
+    if is_top(a) || is_top(b) {
+        return LatticeElement::Top;
+    }
     match (a, b) {
-        (LatticeElement::Interval { lo: l1, hi: h1 },
-         LatticeElement::Interval { lo: l2, hi: h2 }) => {
+        (
+            LatticeElement::Interval { lo: l1, hi: h1 },
+            LatticeElement::Interval { lo: l2, hi: h2 },
+        ) => {
             let (lo, hi) = interval_widen((*l1, *h1), (*l2, *h2));
             if lo == i64::MIN && hi == i64::MAX {
                 LatticeElement::Top
@@ -295,10 +316,7 @@ pub fn widen(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
             }
         }
         (LatticeElement::Product(a1, a2), LatticeElement::Product(b1, b2)) => {
-            LatticeElement::Product(
-                Box::new(widen(a1, b1)),
-                Box::new(widen(a2, b2)),
-            )
+            LatticeElement::Product(Box::new(widen(a1, b1)), Box::new(widen(a2, b2)))
         }
         _ => LatticeElement::Top,
     }
@@ -314,19 +332,23 @@ pub fn widen(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
 /// losing soundness.
 #[must_use]
 pub fn narrow(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
-    if is_bottom(a) || is_bottom(b) { return LatticeElement::Bottom; }
-    if is_top(a) { return b.clone(); }
-    if is_top(b) { return a.clone(); }
+    if is_bottom(a) || is_bottom(b) {
+        return LatticeElement::Bottom;
+    }
+    if is_top(a) {
+        return b.clone();
+    }
+    if is_top(b) {
+        return a.clone();
+    }
     match (a, b) {
-        (LatticeElement::Interval { lo: l1, hi: h1 },
-         LatticeElement::Interval { lo: l2, hi: h2 }) => {
+        (
+            LatticeElement::Interval { lo: l1, hi: h1 },
+            LatticeElement::Interval { lo: l2, hi: h2 },
+        ) => {
             let lo = if *l1 == i64::MIN { *l2 } else { *l1 };
             let hi = if *h1 == i64::MAX { *h2 } else { *h1 };
-            if lo > hi {
-                LatticeElement::Bottom
-            } else {
-                LatticeElement::Interval { lo, hi }
-            }
+            if lo > hi { LatticeElement::Bottom } else { LatticeElement::Interval { lo, hi } }
         }
         (LatticeElement::Sign(s1), LatticeElement::Sign(s2)) => {
             // Finite domain: narrowing = meet
@@ -356,7 +378,9 @@ pub fn narrow(a: &LatticeElement, b: &LatticeElement) -> LatticeElement {
 /// Join (least upper bound) in the sign domain.
 #[must_use]
 pub fn sign_join(a: &SignValue, b: &SignValue) -> SignValue {
-    if a == b { return *a; }
+    if a == b {
+        return *a;
+    }
     match (*a, *b) {
         (SignValue::AnySign, _) | (_, SignValue::AnySign) => SignValue::AnySign,
         (SignValue::Negative, SignValue::Zero) | (SignValue::Zero, SignValue::Negative) => {
@@ -393,14 +417,17 @@ pub fn sign_join(a: &SignValue, b: &SignValue) -> SignValue {
 /// Returns `None` when the meet is bottom (empty intersection).
 #[must_use]
 pub fn sign_meet(a: &SignValue, b: &SignValue) -> Option<SignValue> {
-    if a == b { return Some(*a); }
+    if a == b {
+        return Some(*a);
+    }
     match (*a, *b) {
         (SignValue::AnySign, x) | (x, SignValue::AnySign) => Some(x),
         // NonNegative meets
         (SignValue::NonNegative, SignValue::Positive)
         | (SignValue::Positive, SignValue::NonNegative) => Some(SignValue::Positive),
-        (SignValue::NonNegative, SignValue::Zero)
-        | (SignValue::Zero, SignValue::NonNegative) => Some(SignValue::Zero),
+        (SignValue::NonNegative, SignValue::Zero) | (SignValue::Zero, SignValue::NonNegative) => {
+            Some(SignValue::Zero)
+        }
         (SignValue::NonNegative, SignValue::NonPositive)
         | (SignValue::NonPositive, SignValue::NonNegative) => Some(SignValue::Zero),
         (SignValue::NonNegative, SignValue::NonZero)
@@ -408,16 +435,19 @@ pub fn sign_meet(a: &SignValue, b: &SignValue) -> Option<SignValue> {
         // NonPositive meets
         (SignValue::NonPositive, SignValue::Negative)
         | (SignValue::Negative, SignValue::NonPositive) => Some(SignValue::Negative),
-        (SignValue::NonPositive, SignValue::Zero)
-        | (SignValue::Zero, SignValue::NonPositive) => Some(SignValue::Zero),
+        (SignValue::NonPositive, SignValue::Zero) | (SignValue::Zero, SignValue::NonPositive) => {
+            Some(SignValue::Zero)
+        }
         (SignValue::NonPositive, SignValue::NonZero)
         | (SignValue::NonZero, SignValue::NonPositive) => Some(SignValue::Negative),
         // NonZero meets
         (SignValue::NonZero, SignValue::Zero) | (SignValue::Zero, SignValue::NonZero) => None,
-        (SignValue::NonZero, SignValue::Positive)
-        | (SignValue::Positive, SignValue::NonZero) => Some(SignValue::Positive),
-        (SignValue::NonZero, SignValue::Negative)
-        | (SignValue::Negative, SignValue::NonZero) => Some(SignValue::Negative),
+        (SignValue::NonZero, SignValue::Positive) | (SignValue::Positive, SignValue::NonZero) => {
+            Some(SignValue::Positive)
+        }
+        (SignValue::NonZero, SignValue::Negative) | (SignValue::Negative, SignValue::NonZero) => {
+            Some(SignValue::Negative)
+        }
         // Disjoint base signs
         (SignValue::Negative, SignValue::Zero)
         | (SignValue::Zero, SignValue::Negative)
@@ -506,7 +536,9 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
 }
 
 fn lcm(a: u64, b: u64) -> u64 {
-    if a == 0 || b == 0 { return 0; }
+    if a == 0 || b == 0 {
+        return 0;
+    }
     a / gcd(a, b) * b
 }
 
@@ -602,10 +634,7 @@ mod tests {
         let a = LatticeElement::Interval { lo: 0, hi: 5 };
         let b = LatticeElement::Interval { lo: 0, hi: 10 };
         // hi grew, so widened to MAX
-        assert_eq!(
-            widen(&a, &b),
-            LatticeElement::Interval { lo: 0, hi: i64::MAX }
-        );
+        assert_eq!(widen(&a, &b), LatticeElement::Interval { lo: 0, hi: i64::MAX });
     }
 
     #[test]
@@ -628,10 +657,7 @@ mod tests {
     fn test_narrow_intervals() {
         let a = LatticeElement::Interval { lo: 0, hi: i64::MAX };
         let b = LatticeElement::Interval { lo: 0, hi: 100 };
-        assert_eq!(
-            narrow(&a, &b),
-            LatticeElement::Interval { lo: 0, hi: 100 }
-        );
+        assert_eq!(narrow(&a, &b), LatticeElement::Interval { lo: 0, hi: 100 });
     }
 
     #[test]
@@ -677,7 +703,10 @@ mod tests {
 
     #[test]
     fn test_sign_meet_basic() {
-        assert_eq!(sign_meet(&SignValue::NonNegative, &SignValue::Positive), Some(SignValue::Positive));
+        assert_eq!(
+            sign_meet(&SignValue::NonNegative, &SignValue::Positive),
+            Some(SignValue::Positive)
+        );
         assert_eq!(sign_meet(&SignValue::Negative, &SignValue::Positive), None);
         assert_eq!(sign_meet(&SignValue::NonZero, &SignValue::Zero), None);
     }
@@ -747,10 +776,7 @@ mod tests {
         // 0 mod 4 join 0 mod 6 => 0 mod gcd(4,6)=2
         let a = LatticeElement::Congruence { modulus: 4, remainder: 0 };
         let b = LatticeElement::Congruence { modulus: 6, remainder: 0 };
-        assert_eq!(
-            join(&a, &b),
-            LatticeElement::Congruence { modulus: 2, remainder: 0 }
-        );
+        assert_eq!(join(&a, &b), LatticeElement::Congruence { modulus: 2, remainder: 0 });
     }
 
     #[test]
@@ -765,10 +791,7 @@ mod tests {
     fn test_display() {
         assert_eq!(LatticeElement::Bottom.to_string(), "bot");
         assert_eq!(LatticeElement::Top.to_string(), "top");
-        assert_eq!(
-            LatticeElement::Interval { lo: 1, hi: 10 }.to_string(),
-            "[1, 10]"
-        );
+        assert_eq!(LatticeElement::Interval { lo: 1, hi: 10 }.to_string(), "[1, 10]");
         assert_eq!(
             LatticeElement::Congruence { modulus: 4, remainder: 1 }.to_string(),
             "1 (mod 4)"

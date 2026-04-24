@@ -8,11 +8,13 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
+    use crate::abstract_interp::discharge::{
+        ComparisonOp, check_comparison_intervals, try_eval_boolean, type_bounds,
+    };
+    use crate::abstract_interp::transfer::{compute_successor_states, narrow_from_otherwise};
+    use crate::abstract_interp::*;
     use trust_types::fx::{FxHashMap, FxHashSet};
     use trust_types::*;
-    use crate::abstract_interp::*;
-    use crate::abstract_interp::discharge::{check_comparison_intervals, ComparisonOp, try_eval_boolean, type_bounds};
-    use crate::abstract_interp::transfer::{compute_successor_states, narrow_from_otherwise};
 
     // -- Interval arithmetic tests --
 
@@ -284,20 +286,14 @@ mod tests {
     fn test_abstract_eval_variable() {
         let mut env = IntervalDomain::top();
         env.set("x".into(), Interval::new(0, 10));
-        let result = abstract_eval_formula(
-            &Formula::Var("x".to_string(), Sort::Int),
-            &env,
-        );
+        let result = abstract_eval_formula(&Formula::Var("x".into(), Sort::Int), &env);
         assert_eq!(result, Interval::new(0, 10));
     }
 
     #[test]
     fn test_abstract_eval_unknown_variable_is_top() {
         let env = IntervalDomain::top();
-        let result = abstract_eval_formula(
-            &Formula::Var("unknown".to_string(), Sort::Int),
-            &env,
-        );
+        let result = abstract_eval_formula(&Formula::Var("unknown".into(), Sort::Int), &env);
         assert_eq!(result, Interval::TOP);
     }
 
@@ -307,8 +303,8 @@ mod tests {
         env.set("x".into(), Interval::new(1, 5));
         env.set("y".into(), Interval::new(10, 20));
         let formula = Formula::Add(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         assert_eq!(abstract_eval_formula(&formula, &env), Interval::new(11, 25));
     }
@@ -319,8 +315,8 @@ mod tests {
         env.set("x".into(), Interval::new(10, 20));
         env.set("y".into(), Interval::new(1, 5));
         let formula = Formula::Sub(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         assert_eq!(abstract_eval_formula(&formula, &env), Interval::new(5, 19));
     }
@@ -330,10 +326,8 @@ mod tests {
         let mut env = IntervalDomain::top();
         env.set("a".into(), Interval::new(0, 10));
         // a + 5
-        let formula = Formula::Add(
-            Box::new(Formula::Var("a".to_string(), Sort::Int)),
-            Box::new(Formula::Int(5)),
-        );
+        let formula =
+            Formula::Add(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(5)));
         assert_eq!(abstract_eval_formula(&formula, &env), Interval::new(5, 15));
     }
 
@@ -351,10 +345,8 @@ mod tests {
         let mut env = IntervalDomain::top();
         env.set("x".into(), Interval::new(0, 5));
         // x < 10 should be definitely true (x.hi=5 < 10)
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         assert_eq!(try_eval_boolean(&formula, &env), Some(true));
     }
 
@@ -363,10 +355,8 @@ mod tests {
         let mut env = IntervalDomain::top();
         env.set("x".into(), Interval::new(0, 15));
         // x < 10 is indeterminate (x could be 5 or 12)
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         assert_eq!(try_eval_boolean(&formula, &env), None);
     }
 
@@ -375,10 +365,8 @@ mod tests {
         let mut env = IntervalDomain::top();
         env.set("y".into(), Interval::new(5, 10));
         // y == 0 is definitely false (interval [5,10] doesn't include 0)
-        let formula = Formula::Eq(
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Eq(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(0)));
         assert_eq!(try_eval_boolean(&formula, &env), Some(false));
     }
 
@@ -388,7 +376,7 @@ mod tests {
         env.set("y".into(), Interval::new(5, 10));
         // NOT(y == 0) is definitely true
         let formula = Formula::Not(Box::new(Formula::Eq(
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
             Box::new(Formula::Int(0)),
         )));
         assert_eq!(try_eval_boolean(&formula, &env), Some(true));
@@ -400,14 +388,8 @@ mod tests {
         env.set("x".into(), Interval::new(0, 5));
         // x < 10 AND x >= 0 — both definitely true
         let formula = Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Ge(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
         assert_eq!(try_eval_boolean(&formula, &env), Some(true));
     }
@@ -418,14 +400,8 @@ mod tests {
         env.set("x".into(), Interval::new(0, 5));
         // x < 10 AND x > 100 — second is definitely false
         let formula = Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]);
         assert_eq!(try_eval_boolean(&formula, &env), Some(false));
     }
@@ -440,10 +416,10 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
@@ -461,10 +437,10 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
@@ -482,10 +458,10 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
@@ -503,15 +479,15 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::Eq(
-                    Box::new(Formula::Var("flag".to_string(), Sort::Bool)),
+                    Box::new(Formula::Var("flag".into(), Sort::Bool)),
                     Box::new(Formula::Int(1)),
                 ),
                 Formula::Eq(
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("y".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
             ]),
@@ -531,11 +507,11 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::IndexOutOfBounds,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Ge(
-                Box::new(Formula::Var("idx".to_string(), Sort::Int)),
-                Box::new(Formula::Var("len".to_string(), Sort::Int)),
+                Box::new(Formula::Var("idx".into(), Sort::Int)),
+                Box::new(Formula::Var("len".into(), Sort::Int)),
             ),
             contract_metadata: None,
         };
@@ -553,11 +529,11 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::IndexOutOfBounds,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Ge(
-                Box::new(Formula::Var("idx".to_string(), Sort::Int)),
-                Box::new(Formula::Var("len".to_string(), Sort::Int)),
+                Box::new(Formula::Var("idx".into(), Sort::Int)),
+                Box::new(Formula::Var("len".into(), Sort::Int)),
             ),
             contract_metadata: None,
         };
@@ -574,11 +550,11 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::Assertion { message: "test".to_string() },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             // Violation formula: x > 100 (definitely false when x in [0,5])
             formula: Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(100)),
             ),
             contract_metadata: None,
@@ -595,10 +571,10 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
@@ -615,10 +591,10 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::RemainderByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("d".to_string(), Sort::Int)),
+                Box::new(Formula::Var("d".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
@@ -633,17 +609,17 @@ mod tests {
     #[test]
     fn test_discharge_batch_mixed() {
         let mut env = IntervalDomain::top();
-        env.set("y".into(), Interval::constant(2));  // divisor = 2
-        env.set("z".into(), Interval::new(-5, 5));   // divisor includes zero
+        env.set("y".into(), Interval::constant(2)); // divisor = 2
+        env.set("z".into(), Interval::new(-5, 5)); // divisor includes zero
 
         let vcs = vec![
             // Dischargeable: y == 0 is false when y = 2
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Eq(
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("y".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 contract_metadata: None,
@@ -651,10 +627,10 @@ mod tests {
             // Not dischargeable: z could be 0
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Eq(
-                    Box::new(Formula::Var("z".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("z".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 contract_metadata: None,
@@ -677,20 +653,20 @@ mod tests {
         let vcs = vec![
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Eq(
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("y".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 contract_metadata: None,
             },
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Eq(
-                    Box::new(Formula::Var("z".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("z".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 contract_metadata: None,
@@ -706,18 +682,16 @@ mod tests {
     fn test_discharge_batch_none_discharged() {
         let env = IntervalDomain::top();
 
-        let vcs = vec![
-            VerificationCondition {
-                kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
-                location: SourceSpan::default(),
-                formula: Formula::Eq(
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                ),
-                contract_metadata: None,
-            },
-        ];
+        let vcs = vec![VerificationCondition {
+            kind: VcKind::DivisionByZero,
+            function: "f".into(),
+            location: SourceSpan::default(),
+            formula: Formula::Eq(
+                Box::new(Formula::Var("y".into(), Sort::Int)),
+                Box::new(Formula::Int(0)),
+            ),
+            contract_metadata: None,
+        }];
 
         let report = try_discharge_batch(&vcs, &env);
         assert_eq!(report.discharged_count(), 0, "no VCs discharged with top env");
@@ -754,10 +728,12 @@ mod tests {
     #[test]
     fn test_abstract_interp_result_discharged() {
         let result = AbstractInterpResult::Discharged(VerificationResult::Proved {
-            solver: "abstract-interp".to_string(),
+            solver: "abstract-interp".into(),
             time_ms: 0,
-            strength: ProofStrength::abstract_interpretation(), proof_certificate: None,
-                solver_warnings: None, });
+            strength: ProofStrength::abstract_interpretation(),
+            proof_certificate: None,
+            solver_warnings: None,
+        });
         assert!(result.is_discharged());
     }
 
@@ -784,10 +760,11 @@ mod tests {
     }
 
     #[test]
-    fn test_check_comparison_ne_non_overlapping() {
+    fn test_check_comparison_eq_non_overlapping() {
         let a = Interval::new(0, 5);
         let b = Interval::new(10, 20);
-        assert_eq!(check_comparison_intervals(&a, &b, ComparisonOp::Ne), Some(true));
+        // Non-overlapping intervals can never be equal
+        assert_eq!(check_comparison_intervals(&a, &b, ComparisonOp::Eq), Some(false));
     }
 
     #[test]
@@ -1237,10 +1214,8 @@ mod tests {
     fn test_abstract_eval_div_formula() {
         let mut env = IntervalDomain::top();
         env.set("x".into(), Interval::new(0, 100));
-        let formula = Formula::Div(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(2)),
-        );
+        let formula =
+            Formula::Div(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(2)));
         let result = abstract_eval_formula(&formula, &env);
         assert_eq!(result.lo, 0);
         assert_eq!(result.hi, 50);
@@ -1250,10 +1225,8 @@ mod tests {
     fn test_abstract_eval_rem_formula() {
         let mut env = IntervalDomain::top();
         env.set("x".into(), Interval::new(0, 100));
-        let formula = Formula::Rem(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(7)),
-        );
+        let formula =
+            Formula::Rem(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(7)));
         let result = abstract_eval_formula(&formula, &env);
         assert_eq!(result.lo, 0);
         assert_eq!(result.hi, 6);
@@ -1318,8 +1291,7 @@ mod tests {
         let result = interval_add(&partial, &mods_half);
 
         // a/2 + b/2 + (a%2+b%2)/2 must fit in u32
-        assert!(result.hi <= u32_max,
-            "textbook midpoint must fit in u32, got hi={}", result.hi);
+        assert!(result.hi <= u32_max, "textbook midpoint must fit in u32, got hi={}", result.hi);
     }
 
     // ── tRust #357: End-to-end discharge with type-aware init ────────────
@@ -1371,10 +1343,7 @@ mod tests {
         // The divisor (constant 2) should have interval [2, 2],
         // which excludes zero. The generic formula evaluator should
         // determine that Eq(2, 0) is false.
-        let div_zero_formula = Formula::Eq(
-            Box::new(Formula::Int(2)),
-            Box::new(Formula::Int(0)),
-        );
+        let div_zero_formula = Formula::Eq(Box::new(Formula::Int(2)), Box::new(Formula::Int(0)));
         let eval = try_eval_boolean(&div_zero_formula, &merged);
         assert_eq!(eval, Some(false), "Eq(2, 0) should be definitely false");
     }
@@ -1394,7 +1363,8 @@ mod tests {
                 assert!(
                     result.contains(concrete),
                     "{va}/{vb}={concrete} not in [{}, {}]",
-                    result.lo, result.hi
+                    result.lo,
+                    result.hi
                 );
             }
         }
@@ -1410,7 +1380,8 @@ mod tests {
             assert!(
                 result.contains(concrete),
                 "{va}%3={concrete} not in [{}, {}]",
-                result.lo, result.hi
+                result.lo,
+                result.hi
             );
         }
     }
@@ -1425,7 +1396,8 @@ mod tests {
             assert!(
                 result.contains(concrete),
                 "{va}>>2={concrete} not in [{}, {}]",
-                result.lo, result.hi
+                result.lo,
+                result.hi
             );
         }
     }
@@ -1497,8 +1469,8 @@ mod tests {
         // And([a_in_range, b_in_range, Not(lo <= a+b <= hi)])
         // The generic evaluator handles this: if the Not(...) is false,
         // the whole And can be false => dischargeable.
-        let a_var = Formula::Var("a".to_string(), Sort::Int);
-        let b_var = Formula::Var("b".to_string(), Sort::Int);
+        let a_var = Formula::Var("a".into(), Sort::Int);
+        let b_var = Formula::Var("b".into(), Sort::Int);
         let sum = Formula::Add(Box::new(a_var.clone()), Box::new(b_var.clone()));
 
         // Evaluate the sum interval.
@@ -1516,14 +1488,13 @@ mod tests {
         env.set("a".into(), Interval::new(0, 1000));
         env.set("b".into(), Interval::new(0, 1000));
 
-        let a_var = Formula::Var("a".to_string(), Sort::Int);
-        let b_var = Formula::Var("b".to_string(), Sort::Int);
+        let a_var = Formula::Var("a".into(), Sort::Int);
+        let b_var = Formula::Var("b".into(), Sort::Int);
         let product = Formula::Mul(Box::new(a_var), Box::new(b_var));
 
         let result = abstract_eval_formula(&product, &env);
         assert_eq!(result, Interval::new(0, 1_000_000));
-        assert!(result.hi < (1i128 << 32),
-            "product must fit in u32");
+        assert!(result.hi < (1i128 << 32), "product must fit in u32");
     }
 
     #[test]
@@ -1534,8 +1505,8 @@ mod tests {
         env.set("a".into(), Interval::new(0, u32_max));
         env.set("b".into(), Interval::new(0, u32_max));
 
-        let a_var = Formula::Var("a".to_string(), Sort::Int);
-        let b_var = Formula::Var("b".to_string(), Sort::Int);
+        let a_var = Formula::Var("a".into(), Sort::Int);
+        let b_var = Formula::Var("b".into(), Sort::Int);
         let sum = Formula::Add(Box::new(a_var), Box::new(b_var));
 
         let result = abstract_eval_formula(&sum, &env);
@@ -1551,25 +1522,18 @@ mod tests {
         // Sum: [0, u32::MAX - 1] which fits in u32.
         let u32_max = (1i128 << 32) - 1;
         let mut env = IntervalDomain::top();
-        let a_half = interval_div(
-            &Interval::new(0, u32_max),
-            &Interval::constant(2),
-        );
-        let b_half = interval_div(
-            &Interval::new(0, u32_max),
-            &Interval::constant(2),
-        );
+        let a_half = interval_div(&Interval::new(0, u32_max), &Interval::constant(2));
+        let b_half = interval_div(&Interval::new(0, u32_max), &Interval::constant(2));
         env.set("a_half".into(), a_half);
         env.set("b_half".into(), b_half);
 
         let sum = Formula::Add(
-            Box::new(Formula::Var("a_half".to_string(), Sort::Int)),
-            Box::new(Formula::Var("b_half".to_string(), Sort::Int)),
+            Box::new(Formula::Var("a_half".into(), Sort::Int)),
+            Box::new(Formula::Var("b_half".into(), Sort::Int)),
         );
 
         let result = abstract_eval_formula(&sum, &env);
-        assert!(result.hi <= u32_max,
-            "a/2 + b/2 must fit in u32, hi={}", result.hi);
+        assert!(result.hi <= u32_max, "a/2 + b/2 must fit in u32, hi={}", result.hi);
     }
 
     #[test]
@@ -1581,16 +1545,15 @@ mod tests {
         env.set("b".into(), Interval::new(0, 100));
 
         let diff = Formula::Sub(
-            Box::new(Formula::Var("a".to_string(), Sort::Int)),
-            Box::new(Formula::Var("b".to_string(), Sort::Int)),
+            Box::new(Formula::Var("a".into(), Sort::Int)),
+            Box::new(Formula::Var("b".into(), Sort::Int)),
         );
         let result = abstract_eval_formula(&diff, &env);
         assert_eq!(result, Interval::new(-100, 100));
 
         let i32_min = -(1i128 << 31);
         let i32_max = (1i128 << 31) - 1;
-        assert!(result.lo >= i32_min && result.hi <= i32_max,
-            "a-b must fit in i32");
+        assert!(result.lo >= i32_min && result.hi <= i32_max, "a-b must fit in i32");
     }
 
     #[test]
@@ -1603,8 +1566,8 @@ mod tests {
         env.set("b_mod".into(), b_mod);
 
         let sum = Formula::Add(
-            Box::new(Formula::Var("a_mod".to_string(), Sort::Int)),
-            Box::new(Formula::Var("b_mod".to_string(), Sort::Int)),
+            Box::new(Formula::Var("a_mod".into(), Sort::Int)),
+            Box::new(Formula::Var("b_mod".into(), Sort::Int)),
         );
         let result = abstract_eval_formula(&sum, &env);
         assert_eq!(result, Interval::new(0, 18));
@@ -1622,8 +1585,8 @@ mod tests {
         env.set("b_shr".into(), b_shr);
 
         let sum = Formula::Add(
-            Box::new(Formula::Var("a_shr".to_string(), Sort::Int)),
-            Box::new(Formula::Var("b_shr".to_string(), Sort::Int)),
+            Box::new(Formula::Var("a_shr".into(), Sort::Int)),
+            Box::new(Formula::Var("b_shr".into(), Sort::Int)),
         );
         let result = abstract_eval_formula(&sum, &env);
         assert_eq!(result, Interval::new(0, 30));
@@ -1642,8 +1605,8 @@ mod tests {
         env.set("b_mask".into(), b_mask);
 
         let sum = Formula::Add(
-            Box::new(Formula::Var("a_mask".to_string(), Sort::Int)),
-            Box::new(Formula::Var("b_mask".to_string(), Sort::Int)),
+            Box::new(Formula::Var("a_mask".into(), Sort::Int)),
+            Box::new(Formula::Var("b_mask".into(), Sort::Int)),
         );
         let result = abstract_eval_formula(&sum, &env);
         assert_eq!(result, Interval::new(0, 510));
@@ -1871,27 +1834,15 @@ mod tests {
 
         // x > 100 OR y > 100 — both are definitely false
         let formula_all_false = Formula::Or(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
+            Formula::Gt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]);
         assert_eq!(try_eval_boolean(&formula_all_false, &env), Some(false));
 
         // x < 10 OR y > 100 — first is definitely true
         let formula_one_true = Formula::Or(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Gt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]);
         assert_eq!(try_eval_boolean(&formula_one_true, &env), Some(true));
     }
@@ -1904,7 +1855,7 @@ mod tests {
         // false => anything is true
         let formula_false_premise = Formula::Implies(
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(100)),
             )),
             Box::new(Formula::Bool(false)),
@@ -1914,11 +1865,11 @@ mod tests {
         // true => true is true
         let formula_true_both = Formula::Implies(
             Box::new(Formula::Lt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(100)),
             )),
             Box::new(Formula::Lt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(1000)),
             )),
         );
@@ -1937,12 +1888,12 @@ mod tests {
             // x + y = [0, 200] — x+y > 1000 is definitely false => dischargeable
             VerificationCondition {
                 kind: VcKind::Assertion { message: "overflow check".to_string() },
-                function: "test".to_string(),
+                function: "test".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Gt(
                     Box::new(Formula::Add(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                        Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
+                        Box::new(Formula::Var("y".into(), Sort::Int)),
                     )),
                     Box::new(Formula::Int(1000)),
                 ),
@@ -1951,12 +1902,12 @@ mod tests {
             // z + y = [TOP] — cannot determine => not dischargeable
             VerificationCondition {
                 kind: VcKind::Assertion { message: "overflow check 2".to_string() },
-                function: "test".to_string(),
+                function: "test".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Gt(
                     Box::new(Formula::Add(
-                        Box::new(Formula::Var("z".to_string(), Sort::Int)),
-                        Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("z".into(), Sort::Int)),
+                        Box::new(Formula::Var("y".into(), Sort::Int)),
                     )),
                     Box::new(Formula::Int(1000)),
                 ),
@@ -1983,8 +1934,7 @@ mod tests {
 
         let i16_min = -(1i128 << 15);
         let i16_max = (1i128 << 15) - 1;
-        assert!(result.lo >= i16_min && result.hi <= i16_max,
-            "product must fit in i16");
+        assert!(result.lo >= i16_min && result.hi <= i16_max, "product must fit in i16");
     }
 
     #[test]
@@ -1996,13 +1946,15 @@ mod tests {
 
         let mut b = IntervalDomain::top();
         b.set("x".into(), Interval::new(0, 20)); // x.hi increased
-        b.set("y".into(), Interval::new(5, 5));   // y unchanged
+        b.set("y".into(), Interval::new(5, 5)); // y unchanged
 
         let widened = a.widen(&b);
-        assert_eq!(widened.get("x"), Interval::new(0, i128::MAX),
-            "x.hi increased, should widen to MAX");
-        assert_eq!(widened.get("y"), Interval::constant(5),
-            "y unchanged, should stay [5,5]");
+        assert_eq!(
+            widened.get("x"),
+            Interval::new(0, i128::MAX),
+            "x.hi increased, should widen to MAX"
+        );
+        assert_eq!(widened.get("y"), Interval::constant(5), "y unchanged, should stay [5,5]");
     }
 
     #[test]
@@ -2018,24 +1970,23 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::IndexOutOfBounds,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Or(vec![
                 Formula::Lt(
-                    Box::new(Formula::Var("idx".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("idx".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 Formula::Ge(
-                    Box::new(Formula::Var("idx".to_string(), Sort::Int)),
-                    Box::new(Formula::Var("len".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("idx".into(), Sort::Int)),
+                    Box::new(Formula::Var("len".into(), Sort::Int)),
                 ),
             ]),
             contract_metadata: None,
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "idx in [2,5] with len=10 should discharge bounds check");
+        assert!(result.is_discharged(), "idx in [2,5] with len=10 should discharge bounds check");
     }
 
     // ── tRust #206: Negation overflow discharge tests ────────────────────
@@ -2050,21 +2001,21 @@ mod tests {
         let i32_max = (1i128 << 31) - 1;
         let vc = VerificationCondition {
             kind: VcKind::NegationOverflow { ty: Ty::Int { width: 32, signed: true } },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(i32_min)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(i32_max)),
                     ),
                 ]),
                 Formula::Eq(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                     Box::new(Formula::Int(i32_min)),
                 ),
             ]),
@@ -2072,8 +2023,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "x in [0,100] excludes i32::MIN, negation is safe");
+        assert!(result.is_discharged(), "x in [0,100] excludes i32::MIN, negation is safe");
     }
 
     #[test]
@@ -2086,21 +2036,21 @@ mod tests {
         let i32_max = (1i128 << 31) - 1;
         let vc = VerificationCondition {
             kind: VcKind::NegationOverflow { ty: Ty::Int { width: 32, signed: true } },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(i32_min)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(i32_max)),
                     ),
                 ]),
                 Formula::Eq(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                     Box::new(Formula::Int(i32_min)),
                 ),
             ]),
@@ -2108,8 +2058,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(!result.is_discharged(),
-            "x includes i32::MIN, cannot discharge negation overflow");
+        assert!(!result.is_discharged(), "x includes i32::MIN, cannot discharge negation overflow");
     }
 
     #[test]
@@ -2122,21 +2071,21 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::NegationOverflow { ty: Ty::Int { width: 32, signed: true } },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(i32_min)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(i32_max)),
                     ),
                 ]),
                 Formula::Eq(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                     Box::new(Formula::Int(i32_min)),
                 ),
             ]),
@@ -2144,8 +2093,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "x in [1, i32::MAX] excludes INT_MIN, safe to negate");
+        assert!(result.is_discharged(), "x in [1, i32::MAX] excludes INT_MIN, safe to negate");
     }
 
     // ── tRust #206: Shift overflow discharge tests ───────────────────────
@@ -2162,21 +2110,21 @@ mod tests {
                 operand_ty: Ty::Int { width: 32, signed: false },
                 shift_ty: Ty::Int { width: 32, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
                 Formula::Ge(
-                    Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("amt".into(), Sort::Int)),
                     Box::new(Formula::Int(32)),
                 ),
             ]),
@@ -2184,8 +2132,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "shift amount=3 on u32 should discharge");
+        assert!(result.is_discharged(), "shift amount=3 on u32 should discharge");
     }
 
     #[test]
@@ -2200,21 +2147,21 @@ mod tests {
                 operand_ty: Ty::Int { width: 32, signed: false },
                 shift_ty: Ty::Int { width: 32, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
                 Formula::Ge(
-                    Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("amt".into(), Sort::Int)),
                     Box::new(Formula::Int(32)),
                 ),
             ]),
@@ -2222,8 +2169,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(!result.is_discharged(),
-            "shift amount in [0,40] could be >= 32, cannot discharge");
+        assert!(!result.is_discharged(), "shift amount in [0,40] could be >= 32, cannot discharge");
     }
 
     #[test]
@@ -2238,21 +2184,21 @@ mod tests {
                 operand_ty: Ty::Int { width: 32, signed: false },
                 shift_ty: Ty::Int { width: 32, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
                 Formula::Ge(
-                    Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("amt".into(), Sort::Int)),
                     Box::new(Formula::Int(32)),
                 ),
             ]),
@@ -2260,8 +2206,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "shift amount in [1,15] is safely within [0,32)");
+        assert!(result.is_discharged(), "shift amount in [1,15] is safely within [0,32)");
     }
 
     #[test]
@@ -2277,26 +2222,26 @@ mod tests {
                 operand_ty: Ty::Int { width: 32, signed: true },
                 shift_ty: Ty::Int { width: 32, signed: true },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(-(1i128 << 31))),
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int((1i128 << 31) - 1)),
                     ),
                 ]),
                 Formula::Or(vec![
                     Formula::Lt(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(0)),
                     ),
                     Formula::Ge(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(32)),
                     ),
                 ]),
@@ -2305,8 +2250,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "signed shift amt in [2,10] is safe for 32-bit type");
+        assert!(result.is_discharged(), "signed shift amt in [2,10] is safe for 32-bit type");
     }
 
     // ── tRust #206: Float division by zero discharge tests ───────────────
@@ -2319,18 +2263,17 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::FloatDivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("fd".to_string(), Sort::Int)),
+                Box::new(Formula::Var("fd".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "float divisor=3 should discharge FloatDivisionByZero");
+        assert!(result.is_discharged(), "float divisor=3 should discharge FloatDivisionByZero");
     }
 
     #[test]
@@ -2340,18 +2283,17 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::FloatDivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("fd".to_string(), Sort::Int)),
+                Box::new(Formula::Var("fd".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(!result.is_discharged(),
-            "unknown float divisor cannot discharge");
+        assert!(!result.is_discharged(), "unknown float divisor cannot discharge");
     }
 
     #[test]
@@ -2362,18 +2304,17 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::FloatDivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
-                Box::new(Formula::Var("fd".to_string(), Sort::Int)),
+                Box::new(Formula::Var("fd".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ),
             contract_metadata: None,
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "float divisor in [1,100] excludes zero");
+        assert!(result.is_discharged(), "float divisor in [1,100] excludes zero");
     }
 
     // ── tRust #206: Cast overflow discharge tests ────────────────────────
@@ -2389,26 +2330,26 @@ mod tests {
                 from_ty: Ty::Int { width: 32, signed: false },
                 to_ty: Ty::Int { width: 8, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
                 Formula::Or(vec![
                     Formula::Lt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(0)),
                     ),
                     Formula::Gt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(255)),
                     ),
                 ]),
@@ -2417,8 +2358,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "x in [0,200] fits in u8 [0,255], cast is safe");
+        assert!(result.is_discharged(), "x in [0,200] fits in u8 [0,255], cast is safe");
     }
 
     #[test]
@@ -2432,26 +2372,26 @@ mod tests {
                 from_ty: Ty::Int { width: 32, signed: false },
                 to_ty: Ty::Int { width: 8, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
                 Formula::Or(vec![
                     Formula::Lt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(0)),
                     ),
                     Formula::Gt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(255)),
                     ),
                 ]),
@@ -2460,8 +2400,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(!result.is_discharged(),
-            "x in [0,300] exceeds u8 max=255, cannot discharge");
+        assert!(!result.is_discharged(), "x in [0,300] exceeds u8 max=255, cannot discharge");
     }
 
     #[test]
@@ -2475,26 +2414,26 @@ mod tests {
                 from_ty: Ty::Int { width: 32, signed: true },
                 to_ty: Ty::Int { width: 32, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(-(1i128 << 31))),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int((1i128 << 31) - 1)),
                     ),
                 ]),
                 Formula::Or(vec![
                     Formula::Lt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(0)),
                     ),
                     Formula::Gt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
@@ -2503,8 +2442,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "i32 x in [10,50] fits in u32 range, cast is safe");
+        assert!(result.is_discharged(), "i32 x in [10,50] fits in u32 range, cast is safe");
     }
 
     #[test]
@@ -2518,26 +2456,26 @@ mod tests {
                 from_ty: Ty::Int { width: 32, signed: true },
                 to_ty: Ty::Int { width: 32, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(-(1i128 << 31))),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int((1i128 << 31) - 1)),
                     ),
                 ]),
                 Formula::Or(vec![
                     Formula::Lt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(0)),
                     ),
                     Formula::Gt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(u32::MAX as i128)),
                     ),
                 ]),
@@ -2546,8 +2484,10 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(!result.is_discharged(),
-            "i32 x in [-10,50] has negative values, cannot discharge u32 cast");
+        assert!(
+            !result.is_discharged(),
+            "i32 x in [-10,50] has negative values, cannot discharge u32 cast"
+        );
     }
 
     // ── tRust #206: Batch discharge with new VC kinds ────────────────────
@@ -2556,9 +2496,9 @@ mod tests {
     fn test_discharge_batch_mixed_new_kinds() {
         // Batch with negation, shift, and float div VCs — some dischargeable.
         let mut env = IntervalDomain::top();
-        env.set("x".into(), Interval::new(0, 100));       // safe for negation
-        env.set("amt".into(), Interval::new(0, 40));       // NOT safe for shift (>= 32)
-        env.set("fd".into(), Interval::new(1, 10));        // safe for float div
+        env.set("x".into(), Interval::new(0, 100)); // safe for negation
+        env.set("amt".into(), Interval::new(0, 40)); // NOT safe for shift (>= 32)
+        env.set("fd".into(), Interval::new(1, 10)); // safe for float div
 
         let i32_min = -(1i128 << 31);
         let i32_max = (1i128 << 31) - 1;
@@ -2567,21 +2507,21 @@ mod tests {
             // Negation: x in [0, 100] — safe
             VerificationCondition {
                 kind: VcKind::NegationOverflow { ty: Ty::Int { width: 32, signed: true } },
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::And(vec![
                     Formula::And(vec![
                         Formula::Le(
                             Box::new(Formula::Int(i32_min)),
-                            Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("x".into(), Sort::Int)),
                         ),
                         Formula::Le(
-                            Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("x".into(), Sort::Int)),
                             Box::new(Formula::Int(i32_max)),
                         ),
                     ]),
                     Formula::Eq(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(i32_min)),
                     ),
                 ]),
@@ -2594,21 +2534,21 @@ mod tests {
                     operand_ty: Ty::Int { width: 32, signed: false },
                     shift_ty: Ty::Int { width: 32, signed: false },
                 },
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::And(vec![
                     Formula::And(vec![
                         Formula::Le(
                             Box::new(Formula::Int(0)),
-                            Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("amt".into(), Sort::Int)),
                         ),
                         Formula::Le(
-                            Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                            Box::new(Formula::Var("amt".into(), Sort::Int)),
                             Box::new(Formula::Int(u32::MAX as i128)),
                         ),
                     ]),
                     Formula::Ge(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(32)),
                     ),
                 ]),
@@ -2617,10 +2557,10 @@ mod tests {
             // Float div: fd in [1, 10] — safe
             VerificationCondition {
                 kind: VcKind::FloatDivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Eq(
-                    Box::new(Formula::Var("fd".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("fd".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 ),
                 contract_metadata: None,
@@ -2628,12 +2568,9 @@ mod tests {
         ];
 
         let report = try_discharge_batch(&vcs, &env);
-        assert_eq!(report.discharged_count(), 2,
-            "negation and float div should be discharged");
-        assert_eq!(report.remaining_count(), 1,
-            "shift should remain for solver");
-        assert_eq!(report.remaining[0], 1,
-            "shift VC at index 1 should remain");
+        assert_eq!(report.discharged_count(), 2, "negation and float div should be discharged");
+        assert_eq!(report.remaining_count(), 1, "shift should remain for solver");
+        assert_eq!(report.remaining[0], 1, "shift VC at index 1 should remain");
     }
 
     #[test]
@@ -2646,21 +2583,21 @@ mod tests {
         let i8_max: i128 = 127;
         let vc = VerificationCondition {
             kind: VcKind::NegationOverflow { ty: Ty::Int { width: 8, signed: true } },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(i8_min)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(i8_max)),
                     ),
                 ]),
                 Formula::Eq(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                     Box::new(Formula::Int(i8_min)),
                 ),
             ]),
@@ -2668,8 +2605,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "i8 x in [-100,100] excludes -128, safe to negate");
+        assert!(result.is_discharged(), "i8 x in [-100,100] excludes -128, safe to negate");
     }
 
     #[test]
@@ -2684,21 +2620,21 @@ mod tests {
                 operand_ty: Ty::Int { width: 64, signed: false },
                 shift_ty: Ty::Int { width: 64, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("amt".into(), Sort::Int)),
                         Box::new(Formula::Int(u64::MAX as i128)),
                     ),
                 ]),
                 Formula::Ge(
-                    Box::new(Formula::Var("amt".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("amt".into(), Sort::Int)),
                     Box::new(Formula::Int(64)),
                 ),
             ]),
@@ -2706,8 +2642,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "shift amount in [0,63] is safe for u64 (width=64)");
+        assert!(result.is_discharged(), "shift amount in [0,63] is safe for u64 (width=64)");
     }
 
     #[test]
@@ -2721,26 +2656,26 @@ mod tests {
                 from_ty: Ty::Int { width: 16, signed: false },
                 to_ty: Ty::Int { width: 8, signed: false },
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::And(vec![
                 Formula::And(vec![
                     Formula::Le(
                         Box::new(Formula::Int(0)),
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                     ),
                     Formula::Le(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(u16::MAX as i128)),
                     ),
                 ]),
                 Formula::Or(vec![
                     Formula::Lt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(0)),
                     ),
                     Formula::Gt(
-                        Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                        Box::new(Formula::Var("x".into(), Sort::Int)),
                         Box::new(Formula::Int(255)),
                     ),
                 ]),
@@ -2749,8 +2684,7 @@ mod tests {
         };
 
         let result = try_discharge_vc(&vc, &env);
-        assert!(result.is_discharged(),
-            "u16 x in [0,100] fits in u8 [0,255]");
+        assert!(result.is_discharged(), "u16 x in [0,100] fits in u8 [0,255]");
     }
 
     // -- ThresholdSet tests --
@@ -2858,8 +2792,16 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Int { width: 32, signed: true }, name: Some("_0".to_string()) },
-                    LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("i".to_string()) },
+                    LocalDecl {
+                        index: 0,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("_0".to_string()),
+                    },
+                    LocalDecl {
+                        index: 1,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("i".to_string()),
+                    },
                 ],
                 blocks: vec![
                     BasicBlock {
@@ -2872,16 +2814,8 @@ mod tests {
                             span: SourceSpan::default(),
                         },
                     },
-                    BasicBlock {
-                        id: BlockId(1),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
-                    BasicBlock {
-                        id: BlockId(2),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+                    BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 1,
                 return_ty: Ty::Int { width: 32, signed: true },
@@ -2909,25 +2843,25 @@ mod tests {
             body: VerifiableBody {
                 locals: vec![
                     LocalDecl { index: 0, ty: Ty::Bool, name: Some("_0".to_string()) },
-                    LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".to_string()) },
-                ],
-                blocks: vec![
-                    BasicBlock {
-                        id: BlockId(0),
-                        stmts: vec![
-                            Statement::Assign {
-                                place: Place::local(0),
-                                rvalue: Rvalue::BinaryOp(
-                                    BinOp::Lt,
-                                    Operand::Copy(Place::local(1)),
-                                    Operand::Constant(ConstValue::Int(100)),
-                                ),
-                                span: SourceSpan::default(),
-                            },
-                        ],
-                        terminator: Terminator::Return,
+                    LocalDecl {
+                        index: 1,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("x".to_string()),
                     },
                 ],
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![Statement::Assign {
+                        place: Place::local(0),
+                        rvalue: Rvalue::BinaryOp(
+                            BinOp::Lt,
+                            Operand::Copy(Place::local(1)),
+                            Operand::Constant(ConstValue::Int(100)),
+                        ),
+                        span: SourceSpan::default(),
+                    }],
+                    terminator: Terminator::Return,
+                }],
                 arg_count: 1,
                 return_ty: Ty::Bool,
             },
@@ -2951,16 +2885,22 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Int { width: 8, signed: false }, name: Some("_0".to_string()) },
-                    LocalDecl { index: 1, ty: Ty::Int { width: 8, signed: false }, name: Some("x".to_string()) },
-                ],
-                blocks: vec![
-                    BasicBlock {
-                        id: BlockId(0),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
+                    LocalDecl {
+                        index: 0,
+                        ty: Ty::Int { width: 8, signed: false },
+                        name: Some("_0".to_string()),
+                    },
+                    LocalDecl {
+                        index: 1,
+                        ty: Ty::Int { width: 8, signed: false },
+                        name: Some("x".to_string()),
                     },
                 ],
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Return,
+                }],
                 arg_count: 1,
                 return_ty: Ty::Int { width: 8, signed: false },
             },
@@ -2992,8 +2932,16 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Int { width: 32, signed: true }, name: Some("_0".to_string()) },
-                    LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("d".to_string()) },
+                    LocalDecl {
+                        index: 0,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("_0".to_string()),
+                    },
+                    LocalDecl {
+                        index: 1,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("d".to_string()),
+                    },
                 ],
                 blocks: vec![
                     BasicBlock {
@@ -3021,9 +2969,7 @@ mod tests {
         let mut state = IntervalDomain::top();
         state.set("d".to_string(), Interval::new(0, 10));
 
-        let successors = compute_successor_states(
-            &func.body.blocks[0].terminator, &func, &state,
-        );
+        let successors = compute_successor_states(&func.body.blocks[0].terminator, &func, &state);
         // Arm 0 -> d == 0
         assert_eq!(successors[0].0, BlockId(1));
         assert_eq!(successors[0].1.get("d"), Interval::constant(0));
@@ -3043,16 +2989,22 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Int { width: 32, signed: true }, name: Some("_0".to_string()) },
-                    LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".to_string()) },
-                ],
-                blocks: vec![
-                    BasicBlock {
-                        id: BlockId(0),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
+                    LocalDecl {
+                        index: 0,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("_0".to_string()),
+                    },
+                    LocalDecl {
+                        index: 1,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("x".to_string()),
                     },
                 ],
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Return,
+                }],
                 arg_count: 1,
                 return_ty: Ty::Int { width: 32, signed: true },
             },
@@ -3066,7 +3018,8 @@ mod tests {
 
         // Exclude values 0, 1, 2 from the lo edge => x in [3, 5]
         let narrowed = narrow_from_otherwise(
-            &state, &func,
+            &state,
+            &func,
             &Operand::Copy(Place::local(1)),
             &[(0, BlockId(1)), (1, BlockId(2)), (2, BlockId(3))],
         );
@@ -3081,16 +3034,22 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Int { width: 32, signed: true }, name: Some("_0".to_string()) },
-                    LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".to_string()) },
-                ],
-                blocks: vec![
-                    BasicBlock {
-                        id: BlockId(0),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
+                    LocalDecl {
+                        index: 0,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("_0".to_string()),
+                    },
+                    LocalDecl {
+                        index: 1,
+                        ty: Ty::Int { width: 32, signed: true },
+                        name: Some("x".to_string()),
                     },
                 ],
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Return,
+                }],
                 arg_count: 1,
                 return_ty: Ty::Int { width: 32, signed: true },
             },
@@ -3104,7 +3063,8 @@ mod tests {
 
         // Exclude values 4, 5 from the hi edge => x in [0, 3]
         let narrowed = narrow_from_otherwise(
-            &state, &func,
+            &state,
+            &func,
             &Operand::Copy(Place::local(1)),
             &[(4, BlockId(1)), (5, BlockId(2))],
         );
@@ -3180,9 +3140,9 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::i32(), Ty::i32()),
             },
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
-            formula: Formula::Var("original".to_string(), Sort::Bool),
+            formula: Formula::Var("original".into(), Sort::Bool),
             contract_metadata: None,
         };
 
@@ -3192,7 +3152,7 @@ mod tests {
         let env_formula = interval_domain_to_formula(&env);
         assert_eq!(
             augmented.formula,
-            Formula::And(vec![env_formula, Formula::Var("original".to_string(), Sort::Bool)])
+            Formula::And(vec![env_formula, Formula::Var("original".into(), Sort::Bool)])
         );
         // Function name unchanged.
         assert_eq!(augmented.function, vc.function);
@@ -3204,9 +3164,9 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
-            formula: Formula::Var("phi".to_string(), Sort::Bool),
+            formula: Formula::Var("phi".into(), Sort::Bool),
             contract_metadata: None,
         };
 
@@ -3223,14 +3183,14 @@ mod tests {
         let vcs = vec![
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationCondition {
                 kind: VcKind::IndexOutOfBounds,
-                function: "g".to_string(),
+                function: "g".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(true),
                 contract_metadata: None,
@@ -3243,10 +3203,7 @@ mod tests {
         let env_formula = interval_domain_to_formula(&env);
         // Both VCs should have the env formula conjoined.
         for (orig, aug) in vcs.iter().zip(augmented.iter()) {
-            assert_eq!(
-                aug.formula,
-                Formula::And(vec![env_formula.clone(), orig.formula.clone()])
-            );
+            assert_eq!(aug.formula, Formula::And(vec![env_formula.clone(), orig.formula.clone()]));
         }
     }
 
@@ -3265,13 +3222,13 @@ mod tests {
                     Ty::Int { width: 8, signed: true },
                 ),
             },
-            function: "overflow_fn".to_string(),
+            function: "overflow_fn".into(),
             location: SourceSpan::default(),
             // Violation formula: result > 127 (overflow for i8)
             formula: Formula::Gt(
                 Box::new(Formula::Add(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                 )),
                 Box::new(Formula::Int(127)),
             ),

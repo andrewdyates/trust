@@ -604,7 +604,7 @@ impl<'a> DiagCtxtHandle<'a> {
             | Expect => None,
         };
 
-        // tRust: known issue — (Centril, #69537) Consider reintroducing panic on overwriting a stashed diagnostic
+        // FIXME(Centril, #69537): Consider reintroducing panic on overwriting a stashed diagnostic
         // if/when we have a more robust macro-friendly replacement for `(span, key)` as a key.
         // See the PR for a discussion.
         self.inner
@@ -621,7 +621,7 @@ impl<'a> DiagCtxtHandle<'a> {
     /// and [`StashKey`] as the key. Panics if the found diagnostic is an
     /// error.
     pub fn steal_non_err(self, span: Span, key: StashKey) -> Option<Diag<'a, ()>> {
-        // tRust: known issue — (#120456) - is `swap_remove` correct?
+        // FIXME(#120456) - is `swap_remove` correct?
         let (diag, guar) = self.inner.borrow_mut().stashed_diagnostics.get_mut(&key).and_then(
             |stashed_diagnostics| stashed_diagnostics.swap_remove(&span.with_parent(None)),
         )?;
@@ -643,7 +643,7 @@ impl<'a> DiagCtxtHandle<'a> {
     where
         F: FnMut(&mut Diag<'_>),
     {
-        // tRust: known issue — (#120456) - is `swap_remove` correct?
+        // FIXME(#120456) - is `swap_remove` correct?
         let err = self.inner.borrow_mut().stashed_diagnostics.get_mut(&key).and_then(
             |stashed_diagnostics| stashed_diagnostics.swap_remove(&span.with_parent(None)),
         );
@@ -667,7 +667,7 @@ impl<'a> DiagCtxtHandle<'a> {
         key: StashKey,
         new_err: Diag<'_>,
     ) -> ErrorGuaranteed {
-        // tRust: known issue — (#120456) - is `swap_remove` correct?
+        // FIXME(#120456) - is `swap_remove` correct?
         let old_err = self.inner.borrow_mut().stashed_diagnostics.get_mut(&key).and_then(
             |stashed_diagnostics| stashed_diagnostics.swap_remove(&span.with_parent(None)),
         );
@@ -998,7 +998,7 @@ impl<'a> DiagCtxtHandle<'a> {
         self.create_almost_fatal(fatal).emit()
     }
 
-    // tRust: known issue — This method should be removed (every error should have an associated error code).
+    // FIXME: This method should be removed (every error should have an associated error code).
     #[track_caller]
     pub fn struct_err(self, msg: impl Into<DiagMessage>) -> Diag<'a> {
         Diag::new(self, Error, msg)
@@ -1273,7 +1273,7 @@ impl DiagCtxtInner {
                 return None;
             }
             Expect | ForceWarning => {
-                self.fulfilled_expectations.insert(diagnostic.lint_id.expect("invariant: lint diagnostic must have lint_id")); // tRust: unwrap -> expect
+                self.fulfilled_expectations.insert(diagnostic.lint_id.unwrap());
                 if let Expect = diagnostic.level {
                     // Nothing emitted here for expected lints.
                     TRACK_DIAGNOSTIC(diagnostic, &mut |_| None);
@@ -1466,7 +1466,7 @@ impl DiagCtxtInner {
                 let msg = msg!(
                     "`flushed_delayed` got diagnostic with level {$level}, instead of the expected `DelayedBug`"
                 ).arg("level", bug.level).format();
-                bug.sub(Note, msg, bug.span.primary_span().expect("invariant: bug diagnostic must have primary span").into()); // tRust: unwrap -> expect
+                bug.sub(Note, msg, bug.span.primary_span().unwrap().into());
             }
             bug.level = Bug;
 
@@ -1479,7 +1479,7 @@ impl DiagCtxtInner {
 
     fn panic_if_treat_err_as_bug(&self) {
         if self.treat_err_as_bug() {
-            let n = self.flags.treat_err_as_bug.map(|c| c.get()).expect("invariant: treat_err_as_bug must be set when called"); // tRust: unwrap -> expect
+            let n = self.flags.treat_err_as_bug.map(|c| c.get()).unwrap();
             assert_eq!(n, self.err_guars.len() + self.lint_err_guars.len());
             if n == 1 {
                 panic!("aborting due to `-Z treat-err-as-bug=1`");
@@ -1659,7 +1659,7 @@ pub enum Style {
     Removal,
 }
 
-// tRust: known issue — (eddyb) this doesn't belong here AFAICT, should be moved to callsite.
+// FIXME(eddyb) this doesn't belong here AFAICT, should be moved to callsite.
 pub fn elided_lifetime_in_path_suggestion(
     source_map: &SourceMap,
     n: usize,

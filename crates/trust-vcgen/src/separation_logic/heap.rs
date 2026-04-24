@@ -161,7 +161,7 @@ impl SymbolicHeap {
                             "[unsafe:sep:heap] use-after-free: read through freed pointer `{ptr_name}`"
                         ),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Bool(true), // definite violation
                     contract_metadata: None,
@@ -178,7 +178,7 @@ impl SymbolicHeap {
                             ptr.permission.label()
                         ),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -195,7 +195,7 @@ impl SymbolicHeap {
                             ptr.provenance
                         ),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Not(Box::new(bounds)),
                     contract_metadata: None,
@@ -230,7 +230,7 @@ impl SymbolicHeap {
                             "[unsafe:sep:heap] use-after-free: write through freed pointer `{ptr_name}`"
                         ),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -247,7 +247,7 @@ impl SymbolicHeap {
                             ptr.permission.label()
                         ),
                     },
-                    function: func_name.to_string(),
+                    function: func_name.into(),
                     location: span.clone(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,

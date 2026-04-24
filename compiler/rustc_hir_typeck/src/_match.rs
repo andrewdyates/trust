@@ -85,7 +85,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             if let Some(e) = &arm.guard {
                 self.check_expr_has_type_or_error(e, tcx.types.bool, |_| {});
 
-                // NOTE: if this is the first arm and the pattern is irrefutable,
+                // FIXME: If this is the first arm and the pattern is irrefutable,
                 // e.g. `_` or `x`, and the guard diverges, then the whole match
                 // may also be considered to diverge. We should warn on all subsequent
                 // arms, too, just like we do for diverging scrutinees above.
@@ -502,7 +502,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // }
         // ```
         //
-        // NOTE(tschottdorf): don't call contains_explicit_ref_binding, which
+        // FIXME(tschottdorf): don't call contains_explicit_ref_binding, which
         // is problematic as the HIR is being scraped, but ref bindings may be
         // implicit after #42640. We need to make sure that pat_adjustments
         // (once introduced) is populated by the time we get here.
@@ -532,9 +532,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) -> Option<LocalDefId> {
         let expected_ty = expectation.to_option(self)?;
         let (def_id, args) = match *expected_ty.kind() {
-            // NOTE: could also check that the RPIT is not defined
+            // FIXME: Could also check that the RPIT is not defined
             ty::Alias(ty::Opaque, alias_ty) => (alias_ty.def_id.as_local()?, alias_ty.args),
-            // NOTE(-Znext-solver=no): Remove this branch once `replace_opaque_types_with_infer` is gone.
+            // FIXME(-Znext-solver=no): Remove this branch once `replace_opaque_types_with_infer` is gone.
             ty::Infer(ty::TyVar(_)) => self
                 .inner
                 .borrow_mut()

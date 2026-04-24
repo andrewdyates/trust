@@ -149,7 +149,7 @@ impl<'sess> AttributeParser<'sess, Early> {
 
         let path = AttrPath::from_ast(&normal_attr.item.path, identity);
         let args = ArgParser::from_attr_args(
-            &normal_attr.item.args.unparsed_ref().expect("invariant: normal attr must have unparsed args"), // tRust: unwrap -> expect
+            &normal_attr.item.args.unparsed_ref().unwrap(),
             &parts,
             &sess.psess,
             emit_errors,
@@ -401,7 +401,7 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
                         let attr = AttrItem {
                             path: attr_path.clone(),
                             args: self
-                                .lower_attr_args(n.item.args.unparsed_ref().expect("invariant: normal attr must have unparsed args"), lower_span), // tRust: unwrap -> expect
+                                .lower_attr_args(n.item.args.unparsed_ref().unwrap(), lower_span),
                             id: HashIgnoredAttrId { attr_id: attr.id },
                             style: attr.style,
                             span: attr_span,
@@ -416,7 +416,7 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
                         let attr = Attribute::Unparsed(Box::new(attr));
 
                         if self.tools.contains(&parts[0])
-                            // tRust: known issue — this can be removed once #152369 has been merged.
+                            // FIXME: this can be removed once #152369 has been merged.
                             // https://github.com/rust-lang/rust/pull/152369
                             || [sym::allow, sym::deny, sym::expect, sym::forbid, sym::warn]
                                 .contains(&parts[0])

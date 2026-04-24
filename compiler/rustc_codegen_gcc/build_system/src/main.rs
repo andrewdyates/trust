@@ -65,8 +65,6 @@ pub enum Command {
 
 fn main() {
     if env::var("RUST_BACKTRACE").is_err() {
-        // SAFETY: This runs at process startup before the build system creates threads, so
-        // mutating the environment cannot race with other readers.
         unsafe {
             env::set_var("RUST_BACKTRACE", "1");
         }

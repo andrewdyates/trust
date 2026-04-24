@@ -21,8 +21,6 @@ impl Lock {
             operation |= libc::LOCK_NB
         }
 
-        // SAFETY: The libc function is called with valid arguments
-        // that satisfy its documented preconditions.
         let ret = unsafe { libc::flock(file.as_raw_fd(), operation) };
         if ret == -1 { Err(io::Error::last_os_error()) } else { Ok(Lock { _file: file }) }
     }

@@ -234,9 +234,7 @@ impl<'tcx> TyCtxt<'tcx> {
         } else {
             let delegate = FnMutDelegate {
                 regions: &mut replace_regions,
-                // tRust: invariant: unexpected bound ty in binder: <...>
                 types: &mut |b| bug!("unexpected bound ty in binder: {b:?}"),
-                // tRust: invariant: unexpected bound ct in binder: <...>
                 consts: &mut |b| bug!("unexpected bound ct in binder: {b:?}"),
             };
             let mut replacer = BoundVarReplacer::new(self, delegate);

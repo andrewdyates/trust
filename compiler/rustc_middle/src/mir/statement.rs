@@ -31,7 +31,6 @@ impl<'tcx> Statement<'tcx> {
         let replaced_stmt = std::mem::replace(&mut self.kind, StatementKind::Nop);
         if !drop_debuginfo {
             let Some(debuginfo) = replaced_stmt.as_debuginfo() else {
-                // tRust: invariant: debuginfo is not yet supported.
                 bug!("debuginfo is not yet supported.")
             };
             self.debuginfos.push(debuginfo);
@@ -131,16 +130,13 @@ impl<'tcx> PlaceTy<'tcx> {
                 ty::Coroutine(def_id, args) => {
                     let mut variants = args.as_coroutine().state_tys(def_id, tcx);
                     let Some(mut variant) = variants.nth(variant_index.into()) else {
-                        // tRust: invariant: variant <...> of coroutine out of range: <...>
                         bug!("variant {variant_index:?} of coroutine out of range: {self_ty:?}");
                     };
 
                     variant.nth(f.index()).unwrap_or_else(|| {
-                        // tRust: invariant: expected value must exist: field {f:?} out of range of variant: {self_ty:?} {
                         bug!("field {f:?} out of range of variant: {self_ty:?} {variant_idx:?}")
                     })
                 }
-                // tRust: invariant: can't downcast non-adt non-coroutine type: <...>
                 _ => bug!("can't downcast non-adt non-coroutine type: {self_ty:?}"),
             }
         } else {
@@ -153,29 +149,24 @@ impl<'tcx> PlaceTy<'tcx> {
                     .upvar_tys()
                     .get(f.index())
                     .copied()
-                    // tRust: invariant: expected value must exist: field {f:?} out of range: {self_ty:?}
                     .unwrap_or_else(|| bug!("field {f:?} out of range: {self_ty:?}")),
                 ty::CoroutineClosure(_, args) => args
                     .as_coroutine_closure()
                     .upvar_tys()
                     .get(f.index())
                     .copied()
-                    // tRust: invariant: expected value must exist: field {f:?} out of range: {self_ty:?}
                     .unwrap_or_else(|| bug!("field {f:?} out of range: {self_ty:?}")),
                 // Only prefix fields (upvars and current state) are
                 // accessible without a variant index.
                 ty::Coroutine(_, args) => {
                     args.as_coroutine().prefix_tys().get(f.index()).copied().unwrap_or_else(|| {
-                        // tRust: invariant: expected value must exist: field {f:?} out of range of prefixes for {self_ty}
                         bug!("field {f:?} out of range of prefixes for {self_ty}")
                     })
                 }
                 ty::Tuple(tys) => tys
                     .get(f.index())
                     .copied()
-                    // tRust: invariant: expected value must exist: field {f:?} out of range: {self_ty:?}
                     .unwrap_or_else(|| bug!("field {f:?} out of range: {self_ty:?}")),
-                // tRust: invariant: expected value must exist: can't project out of {self_ty:?}
                 _ => bug!("can't project out of {self_ty:?}"),
             }
         }
@@ -218,19 +209,17 @@ impl<'tcx> PlaceTy<'tcx> {
         T: ::std::fmt::Debug + Copy,
     {
         if self.variant_index.is_some() && !matches!(elem, ProjectionElem::Field(..)) {
-            // tRust: invariant: cannot use non field projection on downcasted place
             bug!("cannot use non field projection on downcasted place")
         }
         let answer = match *elem {
             ProjectionElem::Deref => {
                 let ty = structurally_normalize(self.ty).builtin_deref(true).unwrap_or_else(|| {
-                    // tRust: invariant: expected value must exist: deref projection of non-dereferenceable ty {:?}
                     bug!("deref projection of non-dereferenceable ty {:?}", self)
                 });
                 PlaceTy::from_ty(ty)
             }
             ProjectionElem::Index(_) | ProjectionElem::ConstantIndex { .. } => {
-                PlaceTy::from_ty(structurally_normalize(self.ty).builtin_index().expect("invariant: builtin_index returned a valid value"))
+                PlaceTy::from_ty(structurally_normalize(self.ty).builtin_index().unwrap())
             }
             ProjectionElem::Subslice { from, to, from_end } => {
                 PlaceTy::from_ty(match structurally_normalize(self.ty).kind() {
@@ -243,7 +232,6 @@ impl<'tcx> PlaceTy<'tcx> {
                         let len = size - from - to;
                         Ty::new_array(tcx, *inner, len)
                     }
-                    // tRust: invariant: cannot subslice non-array type: <...>
                     _ => bug!("cannot subslice non-array type: `{:?}`", self),
                 })
             }
@@ -258,7 +246,7 @@ impl<'tcx> PlaceTy<'tcx> {
             )),
             ProjectionElem::OpaqueCast(ty) => PlaceTy::from_ty(handle_opaque_cast_and_subtype(ty)),
 
-            // tRust: known issue (unsafe_binders) — Rename `handle_opaque_cast_and_subtype` to be more general.
+            // FIXME(unsafe_binders): Rename `handle_opaque_cast_and_subtype` to be more general.
             ProjectionElem::UnwrapUnsafeBinder(ty) => {
                 PlaceTy::from_ty(handle_opaque_cast_and_subtype(ty))
             }
@@ -321,14 +309,14 @@ impl<V, T> ProjectionElem<V, T> {
             | Self::OpaqueCast(_)
             | Self::Subslice { .. } => false,
 
-            // tRust: known issue (unsafe_binders) — Figure this out.
+            // FIXME(unsafe_binders): Figure this out.
             Self::UnwrapUnsafeBinder(..) => false,
         }
     }
 
     /// Returns the `ProjectionKind` associated to this projection.
     pub fn kind(self) -> ProjectionKind {
-        self.try_map(|_| Some(()), |_| ()).expect("invariant: infallible map always succeeds")
+        self.try_map(|_| Some(()), |_| ()).unwrap()
     }
 
     /// Apply functions to types and values in this projection and return the result.
@@ -373,7 +361,7 @@ pub struct PlaceRef<'tcx> {
 impl<'tcx> !PartialOrd for PlaceRef<'tcx> {}
 
 impl<'tcx> Place<'tcx> {
-    // tRust: known issue — change this to a const fn by also making List::empty a const fn.
+    // FIXME change this to a const fn by also making List::empty a const fn.
     pub fn return_place() -> Place<'tcx> {
         Place { local: RETURN_PLACE, projection: List::empty() }
     }
@@ -889,7 +877,7 @@ impl<'tcx> UnOp {
 
 impl<'tcx> BinOp {
     pub fn ty(&self, tcx: TyCtxt<'tcx>, lhs_ty: Ty<'tcx>, rhs_ty: Ty<'tcx>) -> Ty<'tcx> {
-        // tRust: known issue — handle SIMD correctly
+        // FIXME: handle SIMD correctly
         match self {
             &BinOp::Add
             | &BinOp::AddUnchecked

@@ -30,7 +30,6 @@ pub(crate) fn create_pgo_func_name_var<'ll>(
     llfn: &'ll llvm::Value,
     mangled_fn_name: &str,
 ) -> &'ll llvm::Value {
-    // SAFETY: The function value is valid, and the name buffer and length are valid.
     unsafe {
         llvm::LLVMRustCoverageCreatePGOFuncNameVar(
             llfn,
@@ -47,7 +46,6 @@ pub(crate) fn write_filenames_to_buffer(filenames: &[impl AsRef<str>]) -> Vec<u8
         .map(|s: &str| (s.as_ptr(), s.len()))
         .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    // SAFETY: The filename data pointers, lengths, and output buffer are all valid.
     llvm::build_byte_buffer(|buffer| unsafe {
         llvm::LLVMRustCoverageWriteFilenamesToBuffer(
             pointers.as_ptr(),
@@ -93,7 +91,6 @@ pub(crate) fn write_function_mappings_to_buffer(
     // - All types are FFI-compatible and have matching representations in Rust/C++.
     // - For pointer/length pairs, the pointer and length come from the same vector or slice.
     // - C++ code does not retain any pointers after the call returns.
-    // SAFETY: All virtual file mapping indices, expressions, and mapping regions are valid, and the output buffer is a valid mutable reference.
     llvm::build_byte_buffer(|buffer| unsafe {
         llvm::LLVMRustCoverageWriteFunctionMappingsToBuffer(
             virtual_file_mapping.as_ptr(),
@@ -114,7 +111,6 @@ pub(crate) fn write_function_mappings_to_buffer(
 /// Hashes some bytes into a 64-bit hash, via LLVM's `IndexedInstrProf::ComputeHash`,
 /// as required for parts of the LLVM coverage mapping format.
 pub(crate) fn hash_bytes(bytes: &[u8]) -> u64 {
-    // SAFETY: The byte buffer and length are valid.
     unsafe { llvm::LLVMRustCoverageHashBytes(bytes.as_ptr(), bytes.len()) }
 }
 

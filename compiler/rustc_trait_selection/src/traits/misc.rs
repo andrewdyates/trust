@@ -109,7 +109,7 @@ pub fn type_allowed_to_implement_const_param_ty<'tcx>(
         ty::Uint(_) | ty::Int(_) | ty::Bool | ty::Char => return Ok(()),
 
         // Handle types gated under `feature(unsized_const_params)`
-        // tRust: known issue (unsized_const_params) — Make `const N: [u8]` work then forbid references
+        // FIXME(unsized_const_params): Make `const N: [u8]` work then forbid references
         ty::Slice(inner_ty) | ty::Ref(_, inner_ty, Mutability::Not) => {
             need_unstable_feature_bound = true;
             vec![inner_ty]
@@ -221,7 +221,7 @@ pub fn all_fields_implement_trait<'tcx>(
                 _ => field_span,
             };
 
-            // tRust: known issue (compiler-errors) — This gives us better spans for bad
+            // FIXME(compiler-errors): This gives us better spans for bad
             // projection types like in issue-50480.
             // If the ADT has args, point to the cause we are given.
             // If it does not, then this field probably doesn't normalize

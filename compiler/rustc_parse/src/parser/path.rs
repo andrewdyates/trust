@@ -362,7 +362,7 @@ impl<'a> Parser<'a> {
                     let span = lo.to(self.prev_token.span);
                     AngleBracketedArgs { args, span }.into()
                 } else if self.token == token::OpenParen
-                    // tRust: known issue —(return_type_notation): Could also recover `...` here.
+                    // FIXME(return_type_notation): Could also recover `...` here.
                     && self.look_ahead(1, |t| *t == token::DotDot)
                 {
                     self.bump(); // (
@@ -639,7 +639,7 @@ impl<'a> Parser<'a> {
 
                 // Swap `self` with our backup of the parser state before attempting to parse
                 // generic arguments.
-                let snapshot = mem::replace(self, snapshot.expect("invariant: parser snapshot exists")); // tRust: unwrap -> expect
+                let snapshot = mem::replace(self, snapshot.unwrap());
 
                 // Eat the unmatched angle brackets.
                 let all_angle_brackets = (0..snapshot.unmatched_angle_bracket_count)
@@ -744,7 +744,7 @@ impl<'a> Parser<'a> {
                         Err(()) => return Ok(Some(AngleBracketedArg::Arg(arg))),
                     };
                     if binder {
-                        // tRust: known issue —(compiler-errors): this could be improved by suggesting lifting
+                        // FIXME(compiler-errors): this could be improved by suggesting lifting
                         // this up to the trait, at least before this becomes real syntax.
                         // e.g. `Trait<for<'a> Assoc = Ty>` -> `for<'a> Trait<Assoc = Ty>`
                         return Err(self.dcx().struct_span_err(
@@ -928,7 +928,7 @@ impl<'a> Parser<'a> {
         if self.token == token::Pound && self.look_ahead(1, |t| *t == token::OpenBracket) {
             let attrs_wrapper = self.parse_outer_attributes()?;
             let raw_attrs = attrs_wrapper.take_for_recovery(self.psess);
-            attr_span = Some(raw_attrs[0].span.to(raw_attrs.last().expect("invariant: collection is non-empty").span)); // tRust: unwrap -> expect
+            attr_span = Some(raw_attrs[0].span.to(raw_attrs.last().unwrap().span));
         }
         let start = self.token.span;
         let arg = if self.check_lifetime() && self.look_ahead(1, |t| !t.is_like_plus()) {

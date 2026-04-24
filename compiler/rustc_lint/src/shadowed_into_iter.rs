@@ -101,7 +101,7 @@ impl<'tcx> LateLintPass<'tcx> for ShadowedIntoIter {
         }
 
         let (lint, target, edition, can_suggest_ufcs) =
-            if is_ref_to_array(*adjusted_receiver_tys.last().expect("invariant: adjusted_receiver_tys is non-empty")) // tRust: unwrap -> expect
+            if is_ref_to_array(*adjusted_receiver_tys.last().unwrap())
                 && let Some(idx) = adjusted_receiver_tys
                     .iter()
                     .copied()
@@ -109,7 +109,7 @@ impl<'tcx> LateLintPass<'tcx> for ShadowedIntoIter {
                     .position(|ty| ty.is_array())
             {
                 (ARRAY_INTO_ITER, "[T; N]", "2021", idx == 0)
-            } else if is_ref_to_boxed_slice(*adjusted_receiver_tys.last().expect("invariant: adjusted_receiver_tys is non-empty")) // tRust: unwrap -> expect
+            } else if is_ref_to_boxed_slice(*adjusted_receiver_tys.last().unwrap())
                 && let Some(idx) = adjusted_receiver_tys
                     .iter()
                     .copied()

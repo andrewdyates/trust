@@ -32,14 +32,8 @@ impl DependencyTracker {
 
     /// Register that `function` depends on `dependency` (i.e., calls it).
     pub fn add_dependency(&mut self, function: &str, dependency: &str) {
-        self.dependencies
-            .entry(function.to_string())
-            .or_default()
-            .insert(dependency.to_string());
-        self.reverse_deps
-            .entry(dependency.to_string())
-            .or_default()
-            .insert(function.to_string());
+        self.dependencies.entry(function.to_string()).or_default().insert(dependency.to_string());
+        self.reverse_deps.entry(dependency.to_string()).or_default().insert(function.to_string());
     }
 
     /// Register multiple dependencies at once.
@@ -120,6 +114,7 @@ impl DependencyTracker {
 }
 
 /// Why a function's cached result was invalidated.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvalidationReason {
     /// The function whose cached result is being invalidated.
@@ -138,9 +133,13 @@ pub struct InvalidationPlan {
     /// Functions to re-verify, ordered callee-first (leaves before callers).
     pub functions: Vec<String>,
     /// Invalidation reasons for diagnostics.
+    #[cfg(test)]
     pub reasons: Vec<InvalidationReason>,
 }
 
+// tRust: test-only convenience methods on InvalidationPlan.
+// Production code accesses `.functions` directly.
+#[cfg(test)]
 impl InvalidationPlan {
     /// Number of functions that need re-verification.
     #[must_use]
@@ -173,11 +172,13 @@ impl InvalidationPlan {
 #[must_use]
 pub(crate) fn plan_invalidation(changed: &[String], deps: &DependencyTracker) -> InvalidationPlan {
     let mut all_affected: FxHashSet<String> = FxHashSet::default();
+    #[cfg(test)]
     let mut reasons: Vec<InvalidationReason> = Vec::new();
 
     for changed_fn in changed {
         // The changed function itself needs re-verification
         all_affected.insert(changed_fn.clone());
+        #[cfg(test)]
         reasons.push(InvalidationReason {
             function: changed_fn.clone(),
             changed_root: changed_fn.clone(),
@@ -188,12 +189,15 @@ pub(crate) fn plan_invalidation(changed: &[String], deps: &DependencyTracker) ->
         let dependents = deps.transitive_dependents(changed_fn);
         for dep in &dependents {
             all_affected.insert(dep.clone());
-            let chain = find_shortest_chain(deps, changed_fn, dep);
-            reasons.push(InvalidationReason {
-                function: dep.clone(),
-                changed_root: changed_fn.clone(),
-                chain,
-            });
+            #[cfg(test)]
+            {
+                let chain = find_shortest_chain(deps, changed_fn, dep);
+                reasons.push(InvalidationReason {
+                    function: dep.clone(),
+                    changed_root: changed_fn.clone(),
+                    chain,
+                });
+            }
         }
     }
 
@@ -201,10 +205,15 @@ pub(crate) fn plan_invalidation(changed: &[String], deps: &DependencyTracker) ->
     // Functions with fewer transitive dependents come first (leaves).
     let ordered = topological_sort_affected(&all_affected, deps);
 
-    InvalidationPlan { functions: ordered, reasons }
+    InvalidationPlan {
+        functions: ordered,
+        #[cfg(test)]
+        reasons,
+    }
 }
 
 /// Find the shortest dependency chain from `root` to `target` through reverse deps.
+#[cfg(test)]
 fn find_shortest_chain(deps: &DependencyTracker, root: &str, target: &str) -> Vec<String> {
     // BFS from root through reverse_deps to find target
     let mut visited: FxHashMap<String, String> = FxHashMap::default(); // node -> predecessor
@@ -248,7 +257,10 @@ fn find_shortest_chain(deps: &DependencyTracker, root: &str, target: &str) -> Ve
 ///
 /// Within the affected set, a function that is depended upon by others
 /// in the set should come first (re-verify it before its callers).
-fn topological_sort_affected(affected: &FxHashSet<String>, deps: &DependencyTracker) -> Vec<String> {
+fn topological_sort_affected(
+    affected: &FxHashSet<String>,
+    deps: &DependencyTracker,
+) -> Vec<String> {
     // Collect affected dependency info into owned structures to avoid lifetime issues.
     // For each affected function, compute its direct dependencies that are also affected.
     let mut out_degree: FxHashMap<String, usize> = FxHashMap::default();
@@ -256,11 +268,8 @@ fn topological_sort_affected(affected: &FxHashSet<String>, deps: &DependencyTrac
 
     for func in affected {
         reverse.entry(func.clone()).or_default();
-        let affected_deps: Vec<String> = deps
-            .direct_dependencies(func)
-            .into_iter()
-            .filter(|d| affected.contains(d))
-            .collect();
+        let affected_deps: Vec<String> =
+            deps.direct_dependencies(func).into_iter().filter(|d| affected.contains(d)).collect();
         out_degree.insert(func.clone(), affected_deps.len());
 
         for dep in affected_deps {
@@ -270,11 +279,8 @@ fn topological_sort_affected(affected: &FxHashSet<String>, deps: &DependencyTrac
 
     // Kahn's algorithm: start with functions that have no affected dependencies
     let mut queue: VecDeque<String> = VecDeque::new();
-    let mut initial: Vec<String> = out_degree
-        .iter()
-        .filter(|(_, deg)| **deg == 0)
-        .map(|(name, _)| name.clone())
-        .collect();
+    let mut initial: Vec<String> =
+        out_degree.iter().filter(|(_, deg)| **deg == 0).map(|(name, _)| name.clone()).collect();
     initial.sort(); // deterministic
     queue.extend(initial);
 
@@ -298,11 +304,8 @@ fn topological_sort_affected(affected: &FxHashSet<String>, deps: &DependencyTrac
 
     // Append cycle members in sorted order
     let in_result: FxHashSet<&str> = result.iter().map(String::as_str).collect();
-    let mut remaining: Vec<String> = affected
-        .iter()
-        .filter(|f| !in_result.contains(f.as_str()))
-        .cloned()
-        .collect();
+    let mut remaining: Vec<String> =
+        affected.iter().filter(|f| !in_result.contains(f.as_str())).cloned().collect();
     remaining.sort();
     result.extend(remaining);
 
@@ -497,10 +500,7 @@ mod tests {
     fn test_plan_multiple_changes_deduped() {
         let tracker = tracker_with_chain();
         // Both B and C change -> A, B, C all affected but no duplicates
-        let plan = plan_invalidation(
-            &["B".to_string(), "C".to_string()],
-            &tracker,
-        );
+        let plan = plan_invalidation(&["B".to_string(), "C".to_string()], &tracker);
         assert_eq!(plan.len(), 3);
     }
 

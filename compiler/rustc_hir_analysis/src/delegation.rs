@@ -116,7 +116,7 @@ enum InheritanceKind {
     /// predicate are copied. It's always equal to `false` except when
     /// delegating from a free function to a trait method.
     ///
-    /// tRust: known issue — (fn_delegation): This often leads to type inference
+    /// FIXME(fn_delegation): This often leads to type inference
     /// errors. Support providing generic arguments or restrict use sites.
     WithParent(bool),
     /// The trait implementation should be compatible with the original trait.

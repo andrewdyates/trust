@@ -113,8 +113,8 @@ impl<'a, 'b, 'c, 'tcx, 'pcx, 'fnctx> Diagnostic<'a, ()>
         if precise {
             let args = args.iter().fold(String::new(), |mut string, arg| {
                 let span = arg.span.find_ancestor_inside(sp).unwrap_or_default();
-                write!(string, ", {}", this.sess().source_map().span_to_snippet(span).expect("invariant: value is present"))
-                    .expect("invariant: value is present");
+                write!(string, ", {}", this.sess().source_map().span_to_snippet(span).unwrap())
+                    .unwrap();
                 string
             });
 
@@ -180,7 +180,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     && let ty::Adt(adt_def, args) = self_ty.kind()
                     && self.tcx.is_lang_item(adt_def.did(), hir::LangItem::Pin)
                     && let ty::Ref(_, _, ty::Mutability::Mut) =
-                        args[0].as_type().expect("invariant: is a type variable").kind() =>
+                        args[0].as_type().unwrap().kind() =>
             {
                 (RUST_2024_PRELUDE_COLLISIONS, "2024")
             }
@@ -462,7 +462,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 Some(join_path_idents(path.segments.iter().map(|seg| seg.ident)))
             }
             _ => {
-                // tRust: invariant — `import_items` here are collected from trait-import uses, so the selected item must still be an `ItemKind::Use`
                 span_bug!(span, "unexpected item kind, expected a use: {:?}", import_items[0].kind);
             }
         }

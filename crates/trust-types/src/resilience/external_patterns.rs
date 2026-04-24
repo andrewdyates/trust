@@ -3,8 +3,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::utils::strip_generics;
 use crate::VerifiableFunction;
+use crate::utils::strip_generics;
 
 use super::types::{ExternalDependency, FailureMode, FailureModel};
 
@@ -49,11 +49,7 @@ pub const EXTERNAL_CALL_PATTERNS: &[(&str, &str, &[FailureMode])] = &[
         "database",
         &[FailureMode::Timeout, FailureMode::Error, FailureMode::Unavailable],
     ),
-    (
-        "rusqlite::Connection::execute",
-        "database",
-        &[FailureMode::Error, FailureMode::Unavailable],
-    ),
+    ("rusqlite::Connection::execute", "database", &[FailureMode::Error, FailureMode::Unavailable]),
     // Redis
     (
         "redis::Commands::get",
@@ -71,36 +67,12 @@ pub const EXTERNAL_CALL_PATTERNS: &[(&str, &str, &[FailureMode])] = &[
         &[FailureMode::Timeout, FailureMode::Error, FailureMode::Unavailable],
     ),
     // File I/O
-    (
-        "std::fs::read",
-        "filesystem",
-        &[FailureMode::Error],
-    ),
-    (
-        "std::fs::write",
-        "filesystem",
-        &[FailureMode::Error],
-    ),
-    (
-        "std::fs::File::open",
-        "filesystem",
-        &[FailureMode::Error],
-    ),
-    (
-        "std::fs::File::create",
-        "filesystem",
-        &[FailureMode::Error],
-    ),
-    (
-        "std::io::Read::read",
-        "filesystem",
-        &[FailureMode::Error, FailureMode::Partial],
-    ),
-    (
-        "std::io::Write::write",
-        "filesystem",
-        &[FailureMode::Error, FailureMode::Partial],
-    ),
+    ("std::fs::read", "filesystem", &[FailureMode::Error]),
+    ("std::fs::write", "filesystem", &[FailureMode::Error]),
+    ("std::fs::File::open", "filesystem", &[FailureMode::Error]),
+    ("std::fs::File::create", "filesystem", &[FailureMode::Error]),
+    ("std::io::Read::read", "filesystem", &[FailureMode::Error, FailureMode::Partial]),
+    ("std::io::Write::write", "filesystem", &[FailureMode::Error, FailureMode::Partial]),
     // S3 / AWS
     (
         "aws_sdk_s3::Client::get_object",
@@ -113,11 +85,7 @@ pub const EXTERNAL_CALL_PATTERNS: &[(&str, &str, &[FailureMode])] = &[
         &[FailureMode::Timeout, FailureMode::Error, FailureMode::Unavailable],
     ),
     // DNS / Network primitives
-    (
-        "std::net::TcpStream::connect",
-        "network",
-        &[FailureMode::Timeout, FailureMode::Unavailable],
-    ),
+    ("std::net::TcpStream::connect", "network", &[FailureMode::Timeout, FailureMode::Unavailable]),
     (
         "tokio::net::TcpStream::connect",
         "network",
@@ -154,15 +122,16 @@ pub fn extract_failure_model(func: &VerifiableFunction) -> FailureModel {
 
     for block in &func.body.blocks {
         if let crate::Terminator::Call { func: func_name, span, .. } = &block.terminator
-            && let Some((service, failure_modes)) = match_external_call(func_name) {
-                model.dependencies.push(ExternalDependency {
-                    name: service.to_string(),
-                    failure_modes,
-                    block: block.id,
-                    span: span.clone(),
-                    call_path: func_name.clone(),
-                });
-            }
+            && let Some((service, failure_modes)) = match_external_call(func_name)
+        {
+            model.dependencies.push(ExternalDependency {
+                name: service.to_string(),
+                failure_modes,
+                block: block.id,
+                span: span.clone(),
+                call_path: func_name.clone(),
+            });
+        }
     }
 
     model

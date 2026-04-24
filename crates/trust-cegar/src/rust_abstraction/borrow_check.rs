@@ -72,9 +72,7 @@ impl BorrowCheckPredicate {
             Self::NoMutWhileShared { place } => {
                 Predicate::Custom(format!("{place}:no_mut_while_shared"))
             }
-            Self::ExclusiveMut { place } => {
-                Predicate::Custom(format!("{place}:exclusive_mut"))
-            }
+            Self::ExclusiveMut { place } => Predicate::Custom(format!("{place}:exclusive_mut")),
             Self::BorrowActive { borrow_var, referent } => {
                 Predicate::Custom(format!("{borrow_var}:borrows:{referent}"))
             }
@@ -104,24 +102,21 @@ impl BorrowCheckPredicate {
                 if !ownership.is_mutably_borrowed(place) {
                     return false;
                 }
-                let borrow_count = ownership.states.values()
+                let borrow_count = ownership
+                    .states
+                    .values()
                     .filter(|s| {
-                        **s == OwnershipState::SharedBorrow
-                            || **s == OwnershipState::MutableBorrow
+                        **s == OwnershipState::SharedBorrow || **s == OwnershipState::MutableBorrow
                     })
                     .count();
                 borrow_count > 1
             }
-            Self::BorrowActive { borrow_var, .. } => {
-                ownership.is_moved(borrow_var)
-            }
+            Self::BorrowActive { borrow_var, .. } => ownership.is_moved(borrow_var),
             Self::NoAlias { var_a, var_b } => {
                 let _ = (var_a, var_b);
                 false
             }
-            Self::SharedBorrowCount { .. } => {
-                false
-            }
+            Self::SharedBorrowCount { .. } => false,
         }
     }
 }

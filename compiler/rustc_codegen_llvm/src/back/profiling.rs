@@ -48,7 +48,6 @@ pub(crate) unsafe extern "C" fn selfprofile_before_pass_callback(
     pass_name: *const c_char,
     ir_name: *const c_char,
 ) {
-    // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
     unsafe {
         let llvm_self_profiler = &mut *(llvm_self_profiler as *mut LlvmSelfProfiler<'_>);
         let pass_name = CStr::from_ptr(pass_name).to_str().expect("valid UTF-8");
@@ -58,7 +57,6 @@ pub(crate) unsafe extern "C" fn selfprofile_before_pass_callback(
 }
 
 pub(crate) unsafe extern "C" fn selfprofile_after_pass_callback(llvm_self_profiler: *mut c_void) {
-    // SAFETY: The pointer cast is valid because the source and target types have compatible layouts, and the resulting pointer is only used within this scope.
     let llvm_self_profiler = unsafe { &mut *(llvm_self_profiler as *mut LlvmSelfProfiler<'_>) };
     llvm_self_profiler.after_pass_callback();
 }

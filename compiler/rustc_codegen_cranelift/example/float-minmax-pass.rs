@@ -13,7 +13,6 @@ struct f32x4(pub [f32; 4]);
 
 impl f32x4 {
     fn into_array(self) -> [f32; 4] {
-        // SAFETY: transmute between types of identical size and compatible layout.
         unsafe { std::mem::transmute(self) }
     }
 }
@@ -33,8 +32,6 @@ fn main() {
 
     let n = f32x4([nan, nan, nan, nan]);
 
-    // SAFETY: calling SIMD intrinsics (simd_fmin/simd_fmax) with valid f32x4 operands
-    // of matching type and lane count.
     unsafe {
         let min0 = simd_fmin(x, y);
         let min1 = simd_fmin(y, x);

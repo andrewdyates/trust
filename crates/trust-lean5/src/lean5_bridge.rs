@@ -319,10 +319,12 @@ pub(crate) fn translate_vc_kind(kind: &VcKind) -> LeanExpr {
         VcKind::FloatOverflowToInfinity { .. } => const_expr("tRust.VcKind.floatOverflowInf"),
         // tRust #438: Rvalue safety VCs.
         VcKind::InvalidDiscriminant { .. } => const_expr("tRust.VcKind.invalidDiscriminant"),
-        VcKind::AggregateArrayLengthMismatch { .. } => const_expr("tRust.VcKind.aggregateArrayLengthMismatch"),
-// tRust #463: Unsafe operation.
+        VcKind::AggregateArrayLengthMismatch { .. } => {
+            const_expr("tRust.VcKind.aggregateArrayLengthMismatch")
+        }
+        // tRust #463: Unsafe operation.
         VcKind::UnsafeOperation { .. } => const_expr("tRust.VcKind.unsafeOperation"),
-_ => const_expr("tRust.VcKind.unknown"),
+        _ => const_expr("tRust.VcKind.unknown"),
     }
 }
 
@@ -425,9 +427,7 @@ pub fn serialize_proof_cert(cert: &ProofCert) -> Result<Vec<u8>, CertificateErro
 /// Returns the serialized bytes. If the term cannot be converted, returns
 /// a debug-format fallback (preserving backward compatibility with the
 /// unchecked path).
-pub fn serialize_proof_cert_from_lean_term(
-    term: &crate::reconstruction::LeanProofTerm,
-) -> Vec<u8> {
+pub fn serialize_proof_cert_from_lean_term(term: &crate::reconstruction::LeanProofTerm) -> Vec<u8> {
     match lean_term_to_proof_cert(term) {
         Ok(cert) => bincode::serialize(&cert).unwrap_or_else(|_| format!("{term:?}").into_bytes()),
         Err(_) => format!("{term:?}").into_bytes(),
@@ -442,10 +442,9 @@ fn lean_term_to_proof_cert(
     use lean5_kernel::BinderInfo;
 
     match term {
-        LeanProofTerm::Var(idx) => Ok(ProofCert::BVar {
-            idx: *idx as u32,
-            expected_type: Box::new(LeanExpr::prop()),
-        }),
+        LeanProofTerm::Var(idx) => {
+            Ok(ProofCert::BVar { idx: *idx as u32, expected_type: Box::new(LeanExpr::prop()) })
+        }
         LeanProofTerm::App(f, a) => {
             let fn_cert = lean_term_to_proof_cert(f)?;
             let arg_cert = lean_term_to_proof_cert(a)?;

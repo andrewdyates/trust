@@ -154,11 +154,10 @@ pub(crate) mod Enzyme_AD {
         lib: &libloading::Library,
         bytes: &[u8],
     ) -> Result<*mut c_void, libloading::Error> {
-        // SAFETY: The pointer cast is valid because the source and target types have compatible layouts, and the resulting pointer is only used within this scope.
         unsafe {
             let s: libloading::Symbol<'_, *mut c_void> = lib.get(bytes)?;
             // libloading = 0.9.0: try_as_raw_ptr always succeeds and returns Some
-            let s = s.try_as_raw_ptr().expect("invariant: value can be converted to raw pointer");
+            let s = s.try_as_raw_ptr().unwrap();
             Ok(s)
         }
     }
@@ -180,14 +179,12 @@ pub(crate) mod Enzyme_AD {
     // e.g.
     // load_ptrs_by_symbols_fn(ABC: ABCFn, XYZ: XYZFn);
     // =>
-    // SAFETY: The library path is valid, and the loaded symbol name matches the expected function signature.
     // let ABC: libloading::Symbol<'_, ABCFn> = unsafe { lib.get(b"ABC")? };
     // let XYZ: libloading::Symbol<'_, XYZFn> = unsafe { lib.get(b"XYZ")? };
     macro_rules! load_ptrs_by_symbols_fn {
         ($lib:expr, $($name:ident : $ty:ty),* $(,)?) => {
             $(
                 #[allow(non_snake_case)]
-                // SAFETY: The library path is valid, and the loaded symbol name matches the expected function signature.
                 let $name: $ty = *unsafe { $lib.get::<$ty>(stringify!($name).as_bytes())? };
             )*
         };
@@ -218,7 +215,7 @@ pub(crate) mod Enzyme_AD {
                 Ok::<_, EnzymeLibraryError>(Mutex::new(w))
             })?;
 
-            Ok(mtx.lock().expect("invariant: mutex is not poisoned"))
+            Ok(mtx.lock().unwrap())
         }
 
         /// Get the EnzymeWrapper instance. Panics if not initialized.
@@ -227,11 +224,10 @@ pub(crate) mod Enzyme_AD {
                 .get()
                 .expect("EnzymeWrapper not initialized. Call get_or_init with sysroot first.")
                 .lock()
-                .expect("invariant: enzyme wrapper mutex is not poisoned")
+                .unwrap()
         }
 
         pub(crate) fn new_type_tree(&self) -> CTypeTreeRef {
-            // SAFETY: The Enzyme library is loaded and the function pointer is valid. No preconditions for creating a new empty type tree.
             unsafe { (self.EnzymeNewTypeTree)() }
         }
 
@@ -240,32 +236,26 @@ pub(crate) mod Enzyme_AD {
             t: CConcreteType,
             ctx: &Context,
         ) -> *mut EnzymeTypeTree {
-            // SAFETY: The Enzyme library is loaded, the concrete type enum value is valid, and the LLVM context reference is valid.
             unsafe { (self.EnzymeNewTypeTreeCT)(t, ctx) }
         }
 
         pub(crate) fn new_type_tree_tr(&self, tree: CTypeTreeRef) -> CTypeTreeRef {
-            // SAFETY: The Enzyme library is loaded, and the source type tree reference is valid.
             unsafe { (self.EnzymeNewTypeTreeTR)(tree) }
         }
 
         pub(crate) fn free_type_tree(&self, tree: CTypeTreeRef) {
-            // SAFETY: The Enzyme library is loaded, and the type tree was allocated by a prior Enzyme type tree constructor. It will not be used after this call.
             unsafe { (self.EnzymeFreeTypeTree)(tree) }
         }
 
         pub(crate) fn merge_type_tree(&self, tree1: CTypeTreeRef, tree2: CTypeTreeRef) -> bool {
-            // SAFETY: The Enzyme library is loaded, and both type tree references are valid.
             unsafe { (self.EnzymeMergeTypeTree)(tree1, tree2) }
         }
 
         pub(crate) fn tree_only_eq(&self, tree: CTypeTreeRef, num: i64) {
-            // SAFETY: The Enzyme library is loaded, and the type tree reference is valid.
             unsafe { (self.EnzymeTypeTreeOnlyEq)(tree, num) }
         }
 
         pub(crate) fn tree_data0_eq(&self, tree: CTypeTreeRef) {
-            // SAFETY: The Enzyme library is loaded, and the type tree reference is valid.
             unsafe { (self.EnzymeTypeTreeData0Eq)(tree) }
         }
 
@@ -277,7 +267,6 @@ pub(crate) mod Enzyme_AD {
             max_size: i64,
             add_offset: u64,
         ) {
-            // SAFETY: The Enzyme library is loaded, the type tree reference is valid, and the data layout string is a valid C string.
             unsafe {
                 (self.EnzymeTypeTreeShiftIndiciesEq)(
                     tree,
@@ -297,52 +286,42 @@ pub(crate) mod Enzyme_AD {
             ct: CConcreteType,
             ctx: &Context,
         ) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe { (self.EnzymeTypeTreeInsertEq)(tree, indices, len, ct, ctx) }
         }
 
         pub(crate) fn tree_to_string(&self, tree: *mut EnzymeTypeTree) -> *const c_char {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe { (self.EnzymeTypeTreeToString)(tree) }
         }
 
         pub(crate) fn tree_to_string_free(&self, ch: *const c_char) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe { (self.EnzymeTypeTreeToStringFree)(ch) }
         }
 
         pub(crate) fn get_max_type_depth(&self) -> usize {
-            // SAFETY: The pointer cast is valid because the source and target types have compatible layouts, and the resulting pointer is only used within this scope.
             unsafe { std::ptr::read::<u32>(self.EnzymeMaxTypeDepth as *const u32) as usize }
         }
 
         pub(crate) fn set_print_perf(&mut self, print: bool) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe {
                 (self.EnzymeSetCLBool)(self.EnzymePrintPerf, print as u8);
             }
         }
 
         pub(crate) fn set_print_activity(&mut self, print: bool) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe {
                 (self.EnzymeSetCLBool)(self.EnzymePrintActivity, print as u8);
             }
         }
 
         pub(crate) fn set_print_type(&mut self, print: bool) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe {
                 (self.EnzymeSetCLBool)(self.EnzymePrintType, print as u8);
             }
         }
 
         pub(crate) fn set_print_type_fun(&mut self, fun_name: &str) {
-            let c_fun_name = std::ffi::CString::new(fun_name).unwrap_or_else(|err| {
-                // tRust: invariant — Enzyme function names passed through this FFI setting contain no interior NUL bytes
-                bug!("failed to set_print_type_fun: {err}")
-            });
-            // SAFETY: The pointer cast is valid because the source and target types have compatible layouts, and the resulting pointer is only used within this scope.
+            let c_fun_name = std::ffi::CString::new(fun_name)
+                .unwrap_or_else(|err| bug!("failed to set_print_type_fun: {err}"));
             unsafe {
                 (self.EnzymeSetCLString)(
                     self.EnzymeFunctionToAnalyze,
@@ -352,35 +331,30 @@ pub(crate) mod Enzyme_AD {
         }
 
         pub(crate) fn set_print(&mut self, print: bool) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe {
                 (self.EnzymeSetCLBool)(self.EnzymePrint, print as u8);
             }
         }
 
         pub(crate) fn set_strict_aliasing(&mut self, strict: bool) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe {
                 (self.EnzymeSetCLBool)(self.EnzymeStrictAliasing, strict as u8);
             }
         }
 
         pub(crate) fn set_loose_types(&mut self, loose: bool) {
-            // SAFETY: The Enzyme configuration function and its name string argument are valid.
             unsafe {
                 (self.EnzymeSetCLBool)(self.looseTypeAnalysis, loose as u8);
             }
         }
 
         pub(crate) fn set_inline(&mut self, val: bool) {
-            // SAFETY: The library path is valid, and the loaded symbol name matches the expected function signature.
             unsafe {
                 (self.EnzymeSetCLBool)(self.EnzymeInline, val as u8);
             }
         }
 
         pub(crate) fn set_rust_rules(&mut self, val: bool) {
-            // SAFETY: The library path is valid, and the loaded symbol name matches the expected function signature.
             unsafe {
                 (self.EnzymeSetCLBool)(self.RustTypeRules, val as u8);
             }
@@ -391,7 +365,6 @@ pub(crate) mod Enzyme_AD {
             sysroot: &rustc_session::config::Sysroot,
         ) -> Result<Self, EnzymeLibraryError> {
             let enzyme_path = Self::get_enzyme_path(sysroot)?;
-            // SAFETY: The library path is valid, and the loaded symbol name matches the expected function signature.
             let lib = unsafe { libloading::Library::new(enzyme_path)? };
 
             load_ptrs_by_symbols_fn!(
@@ -456,7 +429,6 @@ pub(crate) mod Enzyme_AD {
         }
 
         fn get_enzyme_path(sysroot: &Sysroot) -> Result<String, EnzymeLibraryError> {
-            // SAFETY: Calling stateless LLVM functions that return version number constants.
             let llvm_version_major = unsafe { LLVMRustVersionMajor() };
 
             let path_buf = sysroot
@@ -520,7 +492,7 @@ impl TypeTree {
         max_size: isize,
         add_offset: usize,
     ) -> Self {
-        let layout = std::ffi::CString::new(layout).expect("invariant: CString::new failed - input contains null byte");
+        let layout = std::ffi::CString::new(layout).unwrap();
         let wrapper = EnzymeWrapper::get_instance();
         wrapper.shift_indicies_eq(
             self.inner,
@@ -551,7 +523,6 @@ impl std::fmt::Display for TypeTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let wrapper = EnzymeWrapper::get_instance();
         let ptr = wrapper.tree_to_string(self.inner);
-        // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
         let cstr = unsafe { std::ffi::CStr::from_ptr(ptr) };
         match cstr.to_str() {
             Ok(x) => write!(f, "{}", x)?,

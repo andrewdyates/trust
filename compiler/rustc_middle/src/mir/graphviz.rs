@@ -67,8 +67,8 @@ where
 
     // Graph label
     let mut label = String::from("");
-    // tRust: known issue — remove this unwrap
-    write_graph_label(tcx, body, &mut label).expect("invariant: write to string buffer succeeds");
+    // FIXME: remove this unwrap
+    write_graph_label(tcx, body, &mut label).unwrap();
     let g = mir_fn_to_generic_graph(tcx, body);
     let settings = GraphvizSettings {
         graph_attrs: Some(graph_attrs.join(" ")),

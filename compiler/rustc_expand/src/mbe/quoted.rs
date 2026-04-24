@@ -124,7 +124,7 @@ fn parse(
 
             let span = token.span.with_lo(start_sp.lo());
             let edition = || {
-                // tRust: known issue —(#85708) - once we properly decode a foreign
+                // FIXME(#85708) - once we properly decode a foreign
                 // crate's `SyntaxContext::root`, then we can replace
                 // this with just `span.edition()`. A
                 // `SyntaxContext::root()` from the current crate will
@@ -165,7 +165,7 @@ pub(super) fn parse_one_tt(
 ) -> TokenTree {
     parse(&tokenstream::TokenStream::new(vec![input]), part, sess, node_id, features, edition)
         .pop()
-        .expect("invariant: single input token always produces at least one parsed tree") // tRust: unwrap -> expect
+        .unwrap()
 }
 
 /// Asks for the `macro_metavar_expr` feature if it is not enabled
@@ -210,7 +210,7 @@ fn parse_tree<'a>(
     match tree {
         // `tree` is a `$` token. Look at the next token in `trees`
         &tokenstream::TokenTree::Token(Token { kind: token::Dollar, span: dollar_span }, _) => {
-            // tRust: known issue —: Handle `Invisible`-delimited groups in a more systematic way
+            // FIXME: Handle `Invisible`-delimited groups in a more systematic way
             // during parsing.
             let mut next = outer_iter.next();
             let mut iter_storage;
@@ -297,7 +297,7 @@ fn parse_tree<'a>(
                 // `tree` is followed by an `ident`. This could be `$meta_var` or the `$crate`
                 // special metavariable that names the crate of the invocation.
                 Some(tokenstream::TokenTree::Token(token, _)) if token.is_ident() => {
-                    let (ident, is_raw) = token.ident().expect("invariant: token.is_ident() guard ensures ident() succeeds"); // tRust: unwrap -> expect
+                    let (ident, is_raw) = token.ident().unwrap();
                     let span = ident.span.with_lo(dollar_span.lo());
                     if ident.name == kw::Crate && matches!(is_raw, IdentIsRaw::No) {
                         TokenTree::token(token::Ident(kw::DollarCrate, is_raw), span)

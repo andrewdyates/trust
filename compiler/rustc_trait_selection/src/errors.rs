@@ -473,7 +473,7 @@ impl Subdiagnostic for RegionOriginNote<'_> {
                 diag.note_expected_found("", expected, "", found);
             }
             RegionOriginNote::WithRequirement { span, requirement, expected_found: None } => {
-                // tRust: known issue — this really should be handled at some earlier stage. Our
+                // FIXME: this really should be handled at some earlier stage. Our
                 // handling of region checking when type errors are present is
                 // *terrible*.
                 let msg = msg!(
@@ -787,7 +787,7 @@ impl Subdiagnostic for IntroducesStaticBecauseUnmetLifetimeReq {
     }
 }
 
-// tRust: known issue (#100717) — replace with a `Option<Span>` when subdiagnostic supports that
+// FIXME(#100717): replace with a `Option<Span>` when subdiagnostic supports that
 #[derive(Subdiagnostic)]
 pub enum DoesNotOutliveStaticFromImpl {
     #[note(
@@ -1653,8 +1653,6 @@ pub enum SuggestAccessingField<'a> {
     },
     #[suggestion(
         "you might have meant to use field `{$name}` whose type is `{$ty}`",
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         code = "unsafe {{ {snippet}.{name} }}",
         applicability = "maybe-incorrect",
         style = "verbose"
@@ -1984,7 +1982,7 @@ pub fn impl_trait_overcapture_suggestion<'tcx>(
             .map(sym::character)
             .chain((0..).map(|i| Symbol::intern(&format!("T{i}"))))
             .find(|s| captured_non_lifetimes.insert(*s))
-            .expect("invariant: infinite iterator of type param names must always yield a fresh name") // tRust: unwrap -> expect
+            .unwrap()
     };
 
     let mut suggs = vec![];
@@ -2037,7 +2035,7 @@ pub fn impl_trait_overcapture_suggestion<'tcx>(
         .join(", ");
 
     let opaque_hir_id = tcx.local_def_id_to_hir_id(opaque_def_id);
-    // tRust: known issue — This is a bit too conservative, since it ignores parens already written in AST.
+    // FIXME: This is a bit too conservative, since it ignores parens already written in AST.
     let (lparen, rparen) = match tcx
         .hir_parent_iter(opaque_hir_id)
         .nth(1)
@@ -2051,7 +2049,7 @@ pub fn impl_trait_overcapture_suggestion<'tcx>(
         }
         Node::Ty(ty) => match ty.kind {
             rustc_hir::TyKind::Ptr(_) | rustc_hir::TyKind::Ref(..) => ("(", ")"),
-            // tRust: known issue — RPITs are not allowed to be nested in `impl Fn() -> ...`,
+            // FIXME: RPITs are not allowed to be nested in `impl Fn() -> ...`,
             // but we eventually could support that, and that would necessitate
             // making this more sophisticated.
             _ => ("", ""),

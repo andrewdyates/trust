@@ -156,12 +156,7 @@ fn reverse_postorder(cfg: &Cfg) -> Vec<usize> {
     let mut visited = vec![false; n];
     let mut postorder = Vec::with_capacity(n);
 
-    fn dfs(
-        cfg: &Cfg,
-        block: usize,
-        visited: &mut Vec<bool>,
-        postorder: &mut Vec<usize>,
-    ) {
+    fn dfs(cfg: &Cfg, block: usize, visited: &mut Vec<bool>, postorder: &mut Vec<usize>) {
         if block >= visited.len() || visited[block] {
             return;
         }
@@ -276,37 +271,29 @@ fn rename_block(
     if block < cfg.blocks.len() {
         for &succ_addr in &cfg.blocks[block].successors {
             if let Some(succ_idx) = cfg.block_index(succ_addr)
-                && let Some(succ_phis) = phi_nodes.get_mut(&succ_idx) {
-                    // Find which predecessor index we are in the successor's pred list.
-                    let pred_position = preds[succ_idx].iter().position(|&p| p == block);
-                    if let Some(pos) = pred_position {
-                        for phi in succ_phis.iter_mut() {
-                            if pos < phi.operands.len() {
-                                let current_version = stacks
-                                    .get(&phi.operands[pos].1.name)
-                                    .and_then(|s| s.last().copied())
-                                    .unwrap_or(0);
-                                phi.operands[pos].1.version = current_version;
-                            }
+                && let Some(succ_phis) = phi_nodes.get_mut(&succ_idx)
+            {
+                // Find which predecessor index we are in the successor's pred list.
+                let pred_position = preds[succ_idx].iter().position(|&p| p == block);
+                if let Some(pos) = pred_position {
+                    for phi in succ_phis.iter_mut() {
+                        if pos < phi.operands.len() {
+                            let current_version = stacks
+                                .get(&phi.operands[pos].1.name)
+                                .and_then(|s| s.last().copied())
+                                .unwrap_or(0);
+                            phi.operands[pos].1.version = current_version;
                         }
                     }
                 }
+            }
         }
     }
 
     // Recurse into dominated children.
     let dom_children = children[block].clone();
     for child in dom_children {
-        rename_block(
-            child,
-            cfg,
-            children,
-            preds,
-            defined_vars,
-            phi_nodes,
-            max_versions,
-            stacks,
-        );
+        rename_block(child, cfg, children, preds, defined_vars, phi_nodes, max_versions, stacks);
     }
 
     // Pop stacks to restore state.
@@ -328,7 +315,10 @@ fn rename_block(
 ///
 /// Actual variable definitions are extracted from the lifted instructions
 /// (placeholder: we use register names from the disassembled instructions).
-pub(crate) fn construct_ssa(cfg: &Cfg, defined_vars: &FxHashMap<usize, Vec<String>>) -> Result<SsaForm, LiftError> {
+pub(crate) fn construct_ssa(
+    cfg: &Cfg,
+    defined_vars: &FxHashMap<usize, Vec<String>>,
+) -> Result<SsaForm, LiftError> {
     let idom = compute_idom(cfg);
     let dom_frontiers = compute_dom_frontiers(cfg, &idom);
 
@@ -362,24 +352,21 @@ pub(crate) fn construct_ssa(cfg: &Cfg, defined_vars: &FxHashMap<usize, Vec<Strin
                     let version = max_versions.entry(var_name.clone()).or_insert(0);
                     *version += 1;
                     let phi = PhiNode {
-                        dest: SsaVar {
-                            name: var_name.clone(),
-                            version: *version,
-                        },
+                        dest: SsaVar { name: var_name.clone(), version: *version },
                         operands: preds[frontier_block]
                             .iter()
                             .map(|&p| {
-                                (p, SsaVar {
-                                    name: var_name.clone(),
-                                    version: 0, // Placeholder — renaming fills this in.
-                                })
+                                (
+                                    p,
+                                    SsaVar {
+                                        name: var_name.clone(),
+                                        version: 0, // Placeholder — renaming fills this in.
+                                    },
+                                )
                             })
                             .collect(),
                     };
-                    phi_nodes
-                        .entry(frontier_block)
-                        .or_default()
-                        .push(phi);
+                    phi_nodes.entry(frontier_block).or_default().push(phi);
 
                     // The phi itself is a definition, so add to worklist.
                     if def_blocks.insert(frontier_block) {
@@ -393,10 +380,7 @@ pub(crate) fn construct_ssa(cfg: &Cfg, defined_vars: &FxHashMap<usize, Vec<Strin
     // Phase 2: Rename variables to fill in correct version numbers.
     rename_variables(cfg, &idom, defined_vars, &mut phi_nodes, &mut max_versions);
 
-    Ok(SsaForm {
-        phi_nodes,
-        max_versions,
-    })
+    Ok(SsaForm { phi_nodes, max_versions })
 }
 
 #[cfg(test)]
@@ -486,10 +470,7 @@ mod tests {
         // Verify phi operands have correct versions (not the placeholder 0).
         // Blocks 1 and 2 each define x0 once, so operands should be version 1.
         for op in &phis[0].operands {
-            assert_ne!(
-                op.1.version, 0,
-                "phi operand should have non-zero version after rename"
-            );
+            assert_ne!(op.1.version, 0, "phi operand should have non-zero version after rename");
         }
     }
 
@@ -528,8 +509,7 @@ mod tests {
         defined_vars.insert(1, vec!["x0".to_string()]); // then-branch redefines x0
         // Block 2 does NOT define x0 — it inherits version from block 0.
 
-        let ssa = construct_ssa(&cfg, &defined_vars)
-            .expect("SSA construction should succeed");
+        let ssa = construct_ssa(&cfg, &defined_vars).expect("SSA construction should succeed");
 
         let phis = ssa.phi_nodes.get(&3).expect("block 3 should have phi nodes");
         assert_eq!(phis.len(), 1);
@@ -538,11 +518,7 @@ mod tests {
 
         // Both operands must have non-zero versions (the rename pass fills them in).
         for (pred, var) in &phis[0].operands {
-            assert_ne!(
-                var.version, 0,
-                "phi operand from pred {} should not be version 0",
-                pred,
-            );
+            assert_ne!(var.version, 0, "phi operand from pred {} should not be version 0", pred,);
         }
 
         // The two operand versions must differ: one comes from the entry
@@ -610,8 +586,7 @@ mod tests {
         defined_vars.insert(0, vec!["x0".to_string()]); // entry defines x0
         defined_vars.insert(2, vec!["x0".to_string()]); // loop body redefines x0
 
-        let ssa = construct_ssa(&cfg, &defined_vars)
-            .expect("SSA construction should succeed");
+        let ssa = construct_ssa(&cfg, &defined_vars).expect("SSA construction should succeed");
 
         // Block 1 (header) should have a phi node for x0.
         let phis = ssa.phi_nodes.get(&1).expect("loop header (block 1) should have phi nodes");
@@ -621,11 +596,7 @@ mod tests {
 
         // Both operands must have non-zero versions.
         for (pred, var) in &phis[0].operands {
-            assert_ne!(
-                var.version, 0,
-                "phi operand from pred {} should not be version 0",
-                pred,
-            );
+            assert_ne!(var.version, 0, "phi operand from pred {} should not be version 0", pred,);
         }
 
         // The two operand versions must differ: one from entry (block 0),

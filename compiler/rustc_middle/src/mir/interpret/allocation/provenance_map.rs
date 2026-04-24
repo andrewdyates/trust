@@ -234,7 +234,7 @@ impl<Prov: Provenance> ProvenanceMap<Prov> {
             }
             // The final provenance is the expected one we found along the way, or wildcard if
             // we didn't find any.
-            Some(expected.map(|(prov, _addr)| prov).or_else(|| Prov::WILDCARD).expect("invariant: fallback produces a value"))
+            Some(expected.map(|(prov, _addr)| prov).or_else(|| Prov::WILDCARD).unwrap())
         };
         if prov.is_none() && !Prov::OFFSET_IS_ADDR {
             // There are some bytes with provenance here but overall the provenance does not add up.
@@ -316,7 +316,7 @@ impl<Prov: Provenance> ProvenanceMap<Prov> {
         let ptrs = self.ptrs.range(ptrs_range.clone());
 
         // We need to handle clearing the provenance from parts of a pointer.
-        if let &(first, prov) = ptrs.first().expect("invariant: collection is non-empty")
+        if let &(first, prov) = ptrs.first().unwrap()
             && first < start
         {
             // Insert the remaining part in the bytewise provenance.
@@ -325,7 +325,7 @@ impl<Prov: Provenance> ProvenanceMap<Prov> {
                 bytes.insert(pos, frag);
             }
         }
-        if let &(last, prov) = ptrs.last().expect("invariant: collection is non-empty")
+        if let &(last, prov) = ptrs.last().unwrap()
             && last + pointer_size > end
         {
             // Insert the remaining part in the bytewise provenance.
@@ -352,7 +352,7 @@ impl<Prov: Provenance> ProvenanceMap<Prov> {
         data_bytes: &[u8],
         range: AllocRange,
     ) {
-        let wildcard = Prov::WILDCARD.expect("invariant: wildcard provenance is available");
+        let wildcard = Prov::WILDCARD.unwrap();
 
         // Clear existing provenance in this range.
         self.clear(range, data_bytes, cx);

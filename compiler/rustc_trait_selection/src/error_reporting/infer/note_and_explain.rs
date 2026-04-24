@@ -89,7 +89,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
                     ) => {
                         diag.note("an associated type was expected, but a different one was found");
                     }
-                    // tRust: known issue (inherent_associated_types) — Extend this to support `ty::Inherent`, too.
+                    // FIXME(inherent_associated_types): Extend this to support `ty::Inherent`, too.
                     (ty::Param(p), ty::Alias(ty::Projection, proj))
                     | (ty::Alias(ty::Projection, proj), ty::Param(p))
                         if !tcx.is_impl_trait_in_trait(proj.def_id) =>
@@ -113,7 +113,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
                         let mut note = true;
                         if let Some((local_id, generics)) = parent {
                             // Synthesize the associated type restriction `Add<Output = Expected>`.
-                            // tRust: known issue — extract this logic for use in other diagnostics.
+                            // FIXME: extract this logic for use in other diagnostics.
                             let (trait_ref, assoc_args) = proj.trait_ref_and_own_args(tcx);
                             let item_name = tcx.item_name(proj.def_id);
                             let item_args = self.format_generic_args(assoc_args);
@@ -385,7 +385,7 @@ impl<T> Trait<T> for X {
                                 alias_def_id = tcx.parent(alias_def_id);
                             }
                             let opaque_path = tcx.def_path_str(alias_def_id);
-                            // tRust: known issue (type_alias_impl_trait) — make this a structured suggestion
+                            // FIXME(type_alias_impl_trait): make this a structured suggestion
                             match tcx.opaque_ty_origin(opaque_ty.def_id) {
                                 rustc_hir::OpaqueTyOrigin::FnReturn { .. } => {}
                                 rustc_hir::OpaqueTyOrigin::AsyncFn { .. } => {}
@@ -781,7 +781,7 @@ fn foo(&self) -> Self::T { String::new() }
         let items = tcx.associated_items(assoc_container_id);
         // Find all the methods in the trait that could be called to construct the
         // expected associated type.
-        // tRust: known issue — consider suggesting the use of associated `const`s.
+        // FIXME: consider suggesting the use of associated `const`s.
         let methods: Vec<(Span, String)> = items
             .in_definition_order()
             .filter(|item| {
@@ -850,10 +850,10 @@ fn foo(&self) -> Self::T { String::new() }
 
         if let DefKind::Trait | DefKind::Impl { .. } = tcx.def_kind(parent_id) {
             let assoc_items = tcx.associated_items(parent_id);
-            // tRust: known issue — account for `#![feature(specialization)]`
+            // FIXME: account for `#![feature(specialization)]`
             for assoc_item in assoc_items.in_definition_order() {
                 if assoc_item.is_type()
-                    // tRust: known issue — account for returning some type in a trait fn impl that has
+                    // FIXME: account for returning some type in a trait fn impl that has
                     // an assoc type as a return type (#72076).
                     && let hir::Defaultness::Default { has_value: true } = assoc_item.defaultness(tcx)
                     && let assoc_ty = tcx.type_of(assoc_item.def_id).instantiate_identity()
@@ -895,7 +895,7 @@ fn foo(&self) -> Self::T { String::new() }
         msg: impl Fn() -> String,
         is_bound_surely_present: bool,
     ) -> bool {
-        // tRust: known issue — we would want to call `resolve_vars_if_possible` on `ty` before suggesting.
+        // FIXME: we would want to call `resolve_vars_if_possible` on `ty` before suggesting.
 
         let trait_bounds = bounds.iter().filter_map(|bound| match bound {
             hir::GenericBound::Trait(ptr) if ptr.modifiers == hir::TraitBoundModifiers::NONE => {

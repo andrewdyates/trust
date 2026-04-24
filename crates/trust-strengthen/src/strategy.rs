@@ -70,12 +70,7 @@ pub struct StrategyRecord {
 
 impl Default for StrategyRecord {
     fn default() -> Self {
-        Self {
-            times_selected: 0,
-            successes: 0,
-            total_reward: 0.0,
-            last_reward: 0.0,
-        }
+        Self { times_selected: 0, successes: 0, total_reward: 0.0, last_reward: 0.0 }
     }
 }
 
@@ -133,11 +128,7 @@ impl StrategySelector {
     /// Create a strategy selector with a custom exploration constant.
     #[must_use]
     pub fn with_exploration(exploration_constant: f64) -> Self {
-        Self {
-            records: FxHashMap::default(),
-            total_selections: 0,
-            exploration_constant,
-        }
+        Self { records: FxHashMap::default(), total_selections: 0, exploration_constant }
     }
 
     /// Select the best strategy using UCB1.
@@ -171,13 +162,9 @@ impl StrategySelector {
     /// Select the top-k strategies by UCB1 score.
     #[must_use]
     pub fn select_top_k(&self, k: usize) -> Vec<Strategy> {
-        let mut scored: Vec<(Strategy, f64)> = Strategy::ALL_BASE
-            .iter()
-            .map(|s| (*s, self.ucb1_score(*s)))
-            .collect();
-        scored.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let mut scored: Vec<(Strategy, f64)> =
+            Strategy::ALL_BASE.iter().map(|s| (*s, self.ucb1_score(*s))).collect();
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scored.into_iter().take(k).map(|(s, _)| s).collect()
     }
 
@@ -248,9 +235,7 @@ impl StrategySelector {
             })
             .collect();
         summaries.sort_by(|a, b| {
-            b.success_rate
-                .partial_cmp(&a.success_rate)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.success_rate.partial_cmp(&a.success_rate).unwrap_or(std::cmp::Ordering::Equal)
         });
         summaries
     }
@@ -296,6 +281,8 @@ pub struct StrategySummary {
 
 #[cfg(test)]
 mod tests {
+    use trust_types::fx::FxHashSet;
+
     use super::*;
 
     // --- Strategy ---
@@ -307,18 +294,12 @@ mod tests {
 
     #[test]
     fn test_strategy_to_proposal_source() {
-        assert_eq!(
-            Strategy::Heuristic.to_proposal_source(),
-            Some(ProposalSource::Heuristic)
-        );
+        assert_eq!(Strategy::Heuristic.to_proposal_source(), Some(ProposalSource::Heuristic));
         assert_eq!(
             Strategy::WeakestPrecondition.to_proposal_source(),
             Some(ProposalSource::WeakestPrecondition)
         );
-        assert_eq!(
-            Strategy::Llm.to_proposal_source(),
-            Some(ProposalSource::Llm)
-        );
+        assert_eq!(Strategy::Llm.to_proposal_source(), Some(ProposalSource::Llm));
         assert_eq!(
             Strategy::CounterexampleGuided.to_proposal_source(),
             Some(ProposalSource::CounterexampleGuided)
@@ -342,12 +323,8 @@ mod tests {
 
     #[test]
     fn test_strategy_record_average_reward() {
-        let record = StrategyRecord {
-            times_selected: 4,
-            successes: 3,
-            total_reward: 3.2,
-            last_reward: 0.8,
-        };
+        let record =
+            StrategyRecord { times_selected: 4, successes: 3, total_reward: 3.2, last_reward: 0.8 };
         assert!((record.average_reward() - 0.8).abs() < 1e-10);
     }
 
@@ -622,10 +599,7 @@ mod tests {
 
         // Most selections should have been Heuristic (exploitation)
         let heuristic_record = selector.record_for(Strategy::Heuristic);
-        assert!(
-            heuristic_record.is_some(),
-            "Heuristic should have been selected at least once"
-        );
+        assert!(heuristic_record.is_some(), "Heuristic should have been selected at least once");
         // Verify the selected strategy is reasonable
         assert!(
             selected == Strategy::Heuristic || selected == Strategy::WeakestPrecondition,

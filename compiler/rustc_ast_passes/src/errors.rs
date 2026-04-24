@@ -751,8 +751,8 @@ pub(crate) struct ConstBoundTraitObject {
     pub span: Span,
 }
 
-// tRust: known issue (const_trait_impl) — Consider making the note/reason the message of the diagnostic.
-// tRust: known issue (const_trait_impl) — Provide structured suggestions (e.g., add `const` here).
+// FIXME(const_trait_impl): Consider making the note/reason the message of the diagnostic.
+// FIXME(const_trait_impl): Provide structured suggestions (e.g., add `const` here).
 #[derive(Diagnostic)]
 #[diag("`[const]` is not allowed here")]
 pub(crate) struct TildeConstDisallowed {
@@ -863,7 +863,7 @@ pub(crate) struct CVariadicNotSupported<'a> {
 
 #[derive(Diagnostic)]
 #[diag("patterns aren't allowed in foreign function declarations", code = E0130)]
-// tRust: known issue — deduplicate with rustc_lint (`BuiltinLintDiag::PatternsInFnsWithoutBody`)
+// FIXME: deduplicate with rustc_lint (`BuiltinLintDiag::PatternsInFnsWithoutBody`)
 pub(crate) struct PatternInForeign {
     #[primary_span]
     #[label("pattern not allowed in foreign function")]
@@ -872,7 +872,7 @@ pub(crate) struct PatternInForeign {
 
 #[derive(Diagnostic)]
 #[diag("patterns aren't allowed in functions without bodies", code = E0642)]
-// tRust: known issue — deduplicate with rustc_lint (`BuiltinLintDiag::PatternsInFnsWithoutBody`)
+// FIXME: deduplicate with rustc_lint (`BuiltinLintDiag::PatternsInFnsWithoutBody`)
 pub(crate) struct PatternInBodiless {
     #[primary_span]
     #[label("pattern not allowed in function without body")]

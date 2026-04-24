@@ -41,11 +41,7 @@ impl Cfg {
     /// Create a new empty CFG.
     // tRust #513: Made pub so trust-vcgen tests can construct fixtures.
     pub fn new() -> Self {
-        Self {
-            blocks: Vec::new(),
-            addr_to_block: FxHashMap::default(),
-            entry: 0,
-        }
+        Self { blocks: Vec::new(), addr_to_block: FxHashMap::default(), entry: 0 }
     }
 
     /// Add a block and register its address mapping.
@@ -120,5 +116,4 @@ mod tests {
         assert_eq!(cfg.block_index(0x2000), None);
         assert_eq!(cfg.block_count(), 1);
     }
-
 }

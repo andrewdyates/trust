@@ -17,7 +17,7 @@ use trust_types::{Formula, Sort};
 ///
 /// Returns `Some(vec![lo..hi])` if the range is statically known and within `max`.
 pub(super) fn detect_finite_domain(
-    bindings: &[(String, Sort)],
+    bindings: &[(trust_types::Symbol, Sort)],
     body: &Formula,
     max: usize,
 ) -> Option<Vec<i128>> {
@@ -28,15 +28,17 @@ pub(super) fn detect_finite_domain(
 
     // Pattern 1: Forall desugaring -- Implies(range_guard, inner_body)
     if let Formula::Implies(guard, _) = body
-        && let Some(range) = extract_range_from_guard(guard, var_name) {
-            return range_to_domain(range.0, range.1, max);
-        }
+        && let Some(range) = extract_range_from_guard(guard, var_name.as_str())
+    {
+        return range_to_domain(range.0, range.1, max);
+    }
 
     // Pattern 2: Exists desugaring -- And([range_guard_parts..., body])
     if let Formula::And(clauses) = body
-        && let Some(range) = extract_range_from_and_clauses(clauses, var_name) {
-            return range_to_domain(range.0, range.1, max);
-        }
+        && let Some(range) = extract_range_from_and_clauses(clauses, var_name.as_str())
+    {
+        return range_to_domain(range.0, range.1, max);
+    }
 
     None
 }
@@ -102,48 +104,56 @@ fn extract_bound_from_atom(
         // Le(lo_val, var) -- lo_val <= var
         Formula::Le(a, b) => {
             if is_var(b, var_name)
-                && let Some(val) = as_const(a) {
-                    *lo = Some(val);
-                }
+                && let Some(val) = as_const(a)
+            {
+                *lo = Some(val);
+            }
             // Le(var, hi_val) -- var <= hi_val (inclusive upper bound)
             if is_var(a, var_name)
-                && let Some(val) = as_const(b) {
-                    *hi = Some(val + 1); // convert inclusive to exclusive
-                }
+                && let Some(val) = as_const(b)
+            {
+                *hi = Some(val + 1); // convert inclusive to exclusive
+            }
         }
         // Lt(var, hi_val) -- var < hi_val
         Formula::Lt(a, b) => {
             if is_var(a, var_name)
-                && let Some(val) = as_const(b) {
-                    *hi = Some(val);
-                }
+                && let Some(val) = as_const(b)
+            {
+                *hi = Some(val);
+            }
             // Lt(lo_val, var) -- lo_val < var
             if is_var(b, var_name)
-                && let Some(val) = as_const(a) {
-                    *lo = Some(val + 1);
-                }
+                && let Some(val) = as_const(a)
+            {
+                *lo = Some(val + 1);
+            }
         }
         // Ge(var, lo_val) -- var >= lo_val
         Formula::Ge(a, b) => {
             if is_var(a, var_name)
-                && let Some(val) = as_const(b) {
-                    *lo = Some(val);
-                }
+                && let Some(val) = as_const(b)
+            {
+                *lo = Some(val);
+            }
             if is_var(b, var_name)
-                && let Some(val) = as_const(a) {
-                    *hi = Some(val + 1);
-                }
+                && let Some(val) = as_const(a)
+            {
+                *hi = Some(val + 1);
+            }
         }
         // Gt(var, lo_val) -- var > lo_val
         Formula::Gt(a, b) => {
             if is_var(a, var_name)
-                && let Some(val) = as_const(b) {
-                    *lo = Some(val + 1);
-                }
+                && let Some(val) = as_const(b)
+            {
+                *lo = Some(val + 1);
+            }
             if is_var(b, var_name)
-                && let Some(val) = as_const(a) {
-                    *hi = Some(val);
-                }
+                && let Some(val) = as_const(a)
+            {
+                *hi = Some(val);
+            }
         }
         _ => {}
     }
@@ -179,9 +189,7 @@ pub fn substitute(formula: &Formula, var_name: &str, replacement: &Formula) -> F
         Formula::Var(..) | Formula::Bool(_) | Formula::Int(_) | Formula::BitVec { .. } => {
             formula.clone()
         }
-        Formula::Not(inner) => {
-            Formula::Not(Box::new(substitute(inner, var_name, replacement)))
-        }
+        Formula::Not(inner) => Formula::Not(Box::new(substitute(inner, var_name, replacement))),
         Formula::And(cs) => {
             Formula::And(cs.iter().map(|c| substitute(c, var_name, replacement)).collect())
         }
@@ -232,9 +240,7 @@ pub fn substitute(formula: &Formula, var_name: &str, replacement: &Formula) -> F
             Box::new(substitute(a, var_name, replacement)),
             Box::new(substitute(b, var_name, replacement)),
         ),
-        Formula::Neg(inner) => {
-            Formula::Neg(Box::new(substitute(inner, var_name, replacement)))
-        }
+        Formula::Neg(inner) => Formula::Neg(Box::new(substitute(inner, var_name, replacement))),
         Formula::Ite(c, t, e) => Formula::Ite(
             Box::new(substitute(c, var_name, replacement)),
             Box::new(substitute(t, var_name, replacement)),
@@ -254,20 +260,14 @@ pub fn substitute(formula: &Formula, var_name: &str, replacement: &Formula) -> F
             if bindings.iter().any(|(n, _)| n == var_name) {
                 formula.clone()
             } else {
-                Formula::Forall(
-                    bindings.clone(),
-                    Box::new(substitute(body, var_name, replacement)),
-                )
+                Formula::Forall(bindings.clone(), Box::new(substitute(body, var_name, replacement)))
             }
         }
         Formula::Exists(bindings, body) => {
             if bindings.iter().any(|(n, _)| n == var_name) {
                 formula.clone()
             } else {
-                Formula::Exists(
-                    bindings.clone(),
-                    Box::new(substitute(body, var_name, replacement)),
-                )
+                Formula::Exists(bindings.clone(), Box::new(substitute(body, var_name, replacement)))
             }
         }
         // Bitvector operations -- pass through (no variables inside width params)
@@ -276,7 +276,11 @@ pub fn substitute(formula: &Formula, var_name: &str, replacement: &Formula) -> F
 }
 
 /// Unroll `forall([binding], body)` over a finite domain.
-pub(super) fn unroll_forall(bindings: &[(String, Sort)], body: &Formula, domain: &[i128]) -> Formula {
+pub(super) fn unroll_forall(
+    bindings: &[(trust_types::Symbol, Sort)],
+    body: &Formula,
+    domain: &[i128],
+) -> Formula {
     if bindings.is_empty() || domain.is_empty() {
         return Formula::Bool(true);
     }
@@ -287,7 +291,7 @@ pub(super) fn unroll_forall(bindings: &[(String, Sort)], body: &Formula, domain:
     let conjuncts: Vec<Formula> = domain
         .iter()
         .map(|&val| {
-            let replaced = substitute(body, var_name, &Formula::Int(val));
+            let replaced = substitute(body, var_name.as_str(), &Formula::Int(val));
             if remaining_bindings.is_empty() {
                 replaced
             } else {
@@ -304,7 +308,11 @@ pub(super) fn unroll_forall(bindings: &[(String, Sort)], body: &Formula, domain:
 }
 
 /// Unroll `exists([binding], body)` over a finite domain.
-pub(super) fn unroll_exists(bindings: &[(String, Sort)], body: &Formula, domain: &[i128]) -> Formula {
+pub(super) fn unroll_exists(
+    bindings: &[(trust_types::Symbol, Sort)],
+    body: &Formula,
+    domain: &[i128],
+) -> Formula {
     if bindings.is_empty() || domain.is_empty() {
         return Formula::Bool(false);
     }
@@ -315,7 +323,7 @@ pub(super) fn unroll_exists(bindings: &[(String, Sort)], body: &Formula, domain:
     let disjuncts: Vec<Formula> = domain
         .iter()
         .map(|&val| {
-            let replaced = substitute(body, var_name, &Formula::Int(val));
+            let replaced = substitute(body, var_name.as_str(), &Formula::Int(val));
             if remaining_bindings.is_empty() {
                 replaced
             } else {

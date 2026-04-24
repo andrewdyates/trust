@@ -45,7 +45,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
             return None;
         }
 
-        // tRust: known issue — we should point at the lifetime
+        // FIXME: we should point at the lifetime
         let multi_span: MultiSpan = vec![binding_span].into();
         let multispan_subdiag = IntroducesStaticBecauseUnmetLifetimeReq {
             unmet_requirements: multi_span,
@@ -72,7 +72,6 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                 ..
             }) = impl_node
             else {
-                // tRust: invariant — the enclosing HIR node must be an impl block at this point in static lifetime error reporting
                 bug!("Node not an impl.");
             };
 

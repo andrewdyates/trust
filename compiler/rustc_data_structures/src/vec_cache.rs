@@ -100,8 +100,6 @@ impl SlotIndex {
         // * slot is a valid pointer (buckets are always valid for the index we get).
         // * value is initialized since we saw a >= 2 index above.
         // * `V: Copy`, so safe to read.
-        // SAFETY: Seeing an index >= 2 means initialization completed, so reading
-        // `value` is valid, and `V: Copy` permits copying it out.
         let value = unsafe { (*slot).value };
         Some((value, index))
     }
@@ -128,7 +126,7 @@ impl SlotIndex {
         // initialize this bucket.
         if ptr.is_null() {
             let bucket_layout =
-                std::alloc::Layout::array::<Slot<V>>(bucket_idx.capacity()).expect("invariant: allocation layout must be valid"); // tRust: unwrap -> expect
+                std::alloc::Layout::array::<Slot<V>>(bucket_idx.capacity()).unwrap();
             // This is more of a sanity check -- this code is very cold, so it's safe to pay a
             // little extra cost here.
             assert!(bucket_layout.size() > 0);
@@ -165,13 +163,11 @@ impl SlotIndex {
                 // We have acquired the initialization lock. It is our job to write `value` and
                 // then set the lock to the real index.
 
-                // SAFETY: The atomic operation uses appropriate ordering, and
-                // the pointer stored atomically is always valid.
                 unsafe {
                     (&raw mut (*slot).value).write(value);
                 }
 
-                index_and_lock.store(extra.checked_add(2).expect("invariant: index addition must not overflow"), Ordering::Release); // tRust: unwrap -> expect
+                index_and_lock.store(extra.checked_add(2).unwrap(), Ordering::Release);
 
                 true
             }
@@ -208,7 +204,7 @@ impl SlotIndex {
         // AtomicU32 access.
         let index_and_lock = unsafe { &(*slot).index_and_lock };
 
-        index_and_lock.store(extra.checked_add(2).expect("invariant: index addition must not overflow"), Ordering::Release); // tRust: unwrap -> expect
+        index_and_lock.store(extra.checked_add(2).unwrap(), Ordering::Release);
     }
 }
 
@@ -272,9 +268,7 @@ unsafe impl<K: Idx, #[may_dangle] V, I> Drop for VecCache<K, V, I> {
         for (idx, bucket) in BucketIndex::enumerate_buckets(&self.buckets) {
             let bucket = bucket.load(Ordering::Acquire);
             if !bucket.is_null() {
-                let layout = std::alloc::Layout::array::<Slot<V>>(ENTRIES_BY_BUCKET[idx]).expect("invariant: allocation layout must be valid"); // tRust: unwrap -> expect
-                // SAFETY: The layout matches the original allocation, and the
-                // pointer was allocated by the same allocator.
+                let layout = std::alloc::Layout::array::<Slot<V>>(ENTRIES_BY_BUCKET[idx]).unwrap();
                 unsafe {
                     std::alloc::dealloc(bucket.cast(), layout);
                 }
@@ -284,9 +278,7 @@ unsafe impl<K: Idx, #[may_dangle] V, I> Drop for VecCache<K, V, I> {
         for (idx, bucket) in BucketIndex::enumerate_buckets(&self.present) {
             let bucket = bucket.load(Ordering::Acquire);
             if !bucket.is_null() {
-                let layout = std::alloc::Layout::array::<Slot<()>>(ENTRIES_BY_BUCKET[idx]).expect("invariant: allocation layout must be valid"); // tRust: unwrap -> expect
-                // SAFETY: The layout matches the original allocation, and the
-                // pointer was allocated by the same allocator.
+                let layout = std::alloc::Layout::array::<Slot<()>>(ENTRIES_BY_BUCKET[idx]).unwrap();
                 unsafe {
                     std::alloc::dealloc(bucket.cast(), layout);
                 }
@@ -303,11 +295,8 @@ where
 {
     #[inline(always)]
     pub fn lookup(&self, key: &K) -> Option<(V, I)> {
-        let key = u32::try_from(key.index()).expect("invariant: key index must fit in u32"); // tRust: unwrap -> expect
+        let key = u32::try_from(key.index()).unwrap();
         let slot_idx = SlotIndex::from_index(key);
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `slot_idx` came from `SlotIndex::from_index`, and
-        // `self.buckets` is only accessed through these `SlotIndex` helpers.
         match unsafe { slot_idx.get(&self.buckets) } {
             Some((value, idx)) => Some((value, I::new(idx as usize))),
             None => None,
@@ -316,11 +305,11 @@ where
 
     #[inline]
     pub fn complete(&self, key: K, value: V, index: I) {
-        let key = u32::try_from(key.index()).expect("invariant: key index must fit in u32"); // tRust: unwrap -> expect
+        let key = u32::try_from(key.index()).unwrap();
         let slot_idx = SlotIndex::from_index(key);
         if slot_idx.put(&self.buckets, value, index.index() as u32) {
             let present_idx = self.len.fetch_add(1, Ordering::Relaxed);
-            let slot = SlotIndex::from_index(u32::try_from(present_idx).expect("invariant: present index must fit in u32")); // tRust: unwrap -> expect
+            let slot = SlotIndex::from_index(u32::try_from(present_idx).unwrap());
             // SAFETY: We should always be uniquely putting due to `len` fetch_add returning unique values.
             // We can't get here if `len` overflows because `put` will not succeed u32::MAX + 1 times
             // as it will run out of slots.
@@ -331,9 +320,6 @@ where
     pub fn for_each(&self, f: &mut dyn FnMut(&K, &V, I)) {
         for idx in 0..self.len.load(Ordering::Acquire) {
             let key = SlotIndex::from_index(idx as u32);
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because `key` came from `SlotIndex::from_index`, and
-            // `self.present` is private slot storage managed by `SlotIndex`.
             match unsafe { key.get(&self.present) } {
                 // This shouldn't happen in our current usage (iter is really only
                 // used long after queries are done running), but if we hit this in practice it's
@@ -343,7 +329,7 @@ where
                     let key = K::new(key as usize);
                     // unwrap() is OK: present entries are always written only after we put the real
                     // entry.
-                    let value = self.lookup(&key).expect("invariant: inserted key must be present in cache"); // tRust: unwrap -> expect
+                    let value = self.lookup(&key).unwrap();
                     f(&key, &value.0, value.1);
                 }
             }

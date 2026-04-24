@@ -1,6 +1,3 @@
-//! tRust: MIR pass that inserts enum discriminant validity checks when UB
-//! tRust: checks are enabled.
-
 use rustc_abi::{Scalar, Size, TagEncoding, Variants, WrappingRange};
 use rustc_hir::LangItem;
 use rustc_index::IndexVec;
@@ -276,7 +273,6 @@ fn insert_discr_cast_to_u128<'tcx>(
             4 => tcx.types.u32,
             8 => tcx.types.u64,
             16 => tcx.types.u128,
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             invalid => bug!("Found discriminant with invalid size, has {} bytes", invalid),
         }
     };

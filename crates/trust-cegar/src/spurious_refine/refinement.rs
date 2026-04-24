@@ -19,10 +19,7 @@ use crate::rust_abstraction::RustAbstractionDomain;
 ///
 /// Generates boundary predicates (x >= 0, x == val) and pairwise
 /// comparisons between integer variables in the counterexample.
-pub(crate) fn predicate_refine(
-    cex: &Counterexample,
-    existing: &[Predicate],
-) -> Vec<Predicate> {
+pub(crate) fn predicate_refine(cex: &Counterexample, existing: &[Predicate]) -> Vec<Predicate> {
     let existing_set: BTreeSet<&Predicate> = existing.iter().collect();
     let mut new_preds = Vec::new();
 
@@ -109,10 +106,7 @@ pub(crate) fn predicate_refine(
 ///
 /// More targeted than predicate refinement: focuses on the exact program
 /// points that contribute to the spurious path.
-pub(crate) fn trace_refine(
-    cex: &Counterexample,
-    existing: &[Predicate],
-) -> Vec<Predicate> {
+pub(crate) fn trace_refine(cex: &Counterexample, existing: &[Predicate]) -> Vec<Predicate> {
     let existing_set: BTreeSet<&Predicate> = existing.iter().collect();
     let mut new_preds = Vec::new();
 
@@ -144,19 +138,20 @@ pub(crate) fn trace_refine(
 
                 // Ordering with next variable in trace (if exists).
                 if let Some((next_name, next_val)) = cex.assignments.get(i + 1)
-                    && let CounterexampleValue::Int(next_n) = next_val {
-                        let op = if n < next_n {
-                            CmpOp::Lt
-                        } else if n == next_n {
-                            CmpOp::Eq
-                        } else {
-                            CmpOp::Gt
-                        };
-                        let pred = Predicate::comparison(name, op, next_name);
-                        if !existing_set.contains(&pred) {
-                            new_preds.push(pred);
-                        }
+                    && let CounterexampleValue::Int(next_n) = next_val
+                {
+                    let op = if n < next_n {
+                        CmpOp::Lt
+                    } else if n == next_n {
+                        CmpOp::Eq
+                    } else {
+                        CmpOp::Gt
+                    };
+                    let pred = Predicate::comparison(name, op, next_name);
+                    if !existing_set.contains(&pred) {
+                        new_preds.push(pred);
                     }
+                }
             }
             CounterexampleValue::Uint(n) => {
                 let eq = Predicate::comparison(name, CmpOp::Eq, n.to_string());
@@ -233,9 +228,7 @@ pub(crate) fn rust_semantic_refine(
             .iter()
             .filter_map(|(name, val)| match val {
                 CounterexampleValue::Int(n) => Some((name.as_str(), *n)),
-                CounterexampleValue::Uint(n) => {
-                    i128::try_from(*n).ok().map(|v| (name.as_str(), v))
-                }
+                CounterexampleValue::Uint(n) => i128::try_from(*n).ok().map(|v| (name.as_str(), v)),
                 CounterexampleValue::Bool(b) => Some((name.as_str(), i128::from(*b))),
                 _ => None,
             })
@@ -263,23 +256,24 @@ pub(crate) fn rust_semantic_refine(
                 if let Some(discs) = domain.type_info.discriminants(var)
                     && let (Some(&min), Some(&max)) =
                         (discs.iter().next(), discs.iter().next_back())
-                    {
-                        let pred = Predicate::range(var, min, max);
-                        if !existing_set.contains(&pred) {
-                            new_preds.push(pred);
-                        }
+                {
+                    let pred = Predicate::range(var, min, max);
+                    if !existing_set.contains(&pred) {
+                        new_preds.push(pred);
                     }
+                }
                 continue;
             }
 
             // Interval check: add interval boundary predicates.
             if !domain.intervals.contains_value(var, value)
-                && let Some((lo, hi)) = domain.intervals.get_interval(var) {
-                    let pred = Predicate::range(var, lo, hi);
-                    if !existing_set.contains(&pred) {
-                        new_preds.push(pred);
-                    }
+                && let Some((lo, hi)) = domain.intervals.get_interval(var)
+            {
+                let pred = Predicate::range(var, lo, hi);
+                if !existing_set.contains(&pred) {
+                    new_preds.push(pred);
                 }
+            }
 
             // Non-null reference check.
             if domain.type_info.is_non_null_ref(var) && value == 0 {

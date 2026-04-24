@@ -315,7 +315,6 @@ impl TyCtxt<'_> {
         match self.opt_parent(id) {
             Some(id) => id,
             // not `unwrap_or_else` to avoid breaking caller tracking
-            // tRust: invariant: expected value must exist: {id:?} doesn't have a parent
             None => bug!("{id:?} doesn't have a parent"),
         }
     }
@@ -404,6 +403,7 @@ impl Visibility<DefId> {
 }
 
 /// The crate variances map is computed during typeck and contains the
+
 /// directly, because to do so will make your pass dependent on the
 /// HIR of every item in the local crate. Instead, use
 /// `tcx.variances_of()` to get the variance for a *particular*
@@ -449,6 +449,7 @@ impl<'tcx> rustc_type_ir::Flags for Ty<'tcx> {
 }
 
 /// The crate outlives map is computed during typeck and contains the
+
 /// directly, because to do so will make your pass dependent on the
 /// HIR of every item in the local crate. Instead, use
 /// `tcx.inferred_outlives_of()` to get the outlives for a *particular*
@@ -560,13 +561,6 @@ impl<'tcx> Term<'tcx> {
     #[inline]
     pub fn kind(self) -> TermKind<'tcx> {
         let ptr =
-            // SAFETY: The pointer was created by `TermKind::pack()` which ORs in tag bits
-            // from a validly-aligned interned pointer. Masking off TAG_MASK restores the
-            // original non-null pointer address; the result is non-zero because the original
-            // interned pointer was non-null and aligned (alignment > TAG_MASK, asserted in
-            // `pack()`).
-            // SAFETY: `pack()` stored a non-null, properly aligned interned pointer here,
-            // so clearing the tag bits recovers that original address.
             unsafe { self.ptr.map_addr(|addr| NonZero::new_unchecked(addr.get() & !TAG_MASK)) };
         // SAFETY: use of `Interned::new_unchecked` here is ok because these
         // pointers were originally created from `Interned` types in `pack()`,
@@ -1045,7 +1039,7 @@ impl<'tcx> TypingEnv<'tcx> {
     where
         T: TypeVisitable<TyCtxt<'tcx>>,
     {
-        // tRust: known issue (#132279) — We should assert that the value does not contain any placeholders
+        // FIXME(#132279): We should assert that the value does not contain any placeholders
         // as these placeholders are also local to the current inference context. However, we
         // currently use pseudo-canonical queries in the trait solver, which replaces params
         // with placeholders during canonicalization. We should also simply not use pseudo-
@@ -1083,7 +1077,7 @@ pub struct Destructor {
     pub did: DefId,
 }
 
-// tRust: known issue — consider combining this definition with regular `Destructor`
+// FIXME: consider combining this definition with regular `Destructor`
 #[derive(Copy, Clone, Debug, HashStable, Encodable, Decodable)]
 pub struct AsyncDestructor {
     /// The `DefId` of the `impl AsyncDrop`
@@ -1185,7 +1179,7 @@ impl VariantDef {
 
     /// Computes the `Ident` of this variant by looking up the `Span`
     pub fn ident(&self, tcx: TyCtxt<'_>) -> Ident {
-        Ident::new(self.name, tcx.def_ident_span(self.def_id).expect("invariant: def_ident_span returned a valid value"))
+        Ident::new(self.name, tcx.def_ident_span(self.def_id).unwrap())
     }
 
     /// Was this variant obtained as part of recovering from a syntactic error?
@@ -1374,7 +1368,7 @@ impl<'tcx> FieldDef {
 
     /// Computes the `Ident` of this variant by looking up the `Span`
     pub fn ident(&self, tcx: TyCtxt<'_>) -> Ident {
-        Ident::new(self.name, tcx.def_ident_span(self.did).expect("invariant: def_ident_span returned a valid value"))
+        Ident::new(self.name, tcx.def_ident_span(self.did).unwrap())
     }
 }
 
@@ -1516,7 +1510,7 @@ impl<'tcx> TyCtxt<'tcx> {
             match def_key.disambiguated_data.data {
                 // The name of a constructor is that of its parent.
                 rustc_hir::definitions::DefPathData::Ctor => self
-                    .opt_item_name(DefId { krate: def_id.krate, index: def_key.parent.expect("invariant: def key has parent") }),
+                    .opt_item_name(DefId { krate: def_id.krate, index: def_key.parent.unwrap() }),
                 _ => def_key.get_opt_name(),
             }
         }
@@ -1531,7 +1525,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn item_name(self, id: impl IntoQueryKey<DefId>) -> Symbol {
         let id = id.into_query_key();
         self.opt_item_name(id).unwrap_or_else(|| {
-            // tRust: invariant: HIR node must have a name
             bug!("item_name: no name for {:?}", self.def_path(id));
         })
     }
@@ -1544,7 +1537,6 @@ impl<'tcx> TyCtxt<'tcx> {
         let def = self.opt_item_name(def_id)?;
         let span = self
             .def_ident_span(def_id)
-            // tRust: invariant: expected value must exist: missing ident span for {def_id:?}
             .unwrap_or_else(|| bug!("missing ident span for {def_id:?}"));
         Some(Ident::new(def, span))
     }
@@ -1555,7 +1547,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn item_ident(self, def_id: impl IntoQueryKey<DefId>) -> Ident {
         let def_id = def_id.into_query_key();
         self.opt_item_ident(def_id).unwrap_or_else(|| {
-            // tRust: invariant: HIR node must have a name
             bug!("item_ident: no name for {:?}", self.def_path(def_id));
         })
     }
@@ -1652,7 +1643,6 @@ impl<'tcx> TyCtxt<'tcx> {
                 let struct_did = self.parent(ctor_did);
                 self.adt_def(struct_did).non_enum_variant()
             }
-            // tRust: invariant: expect_variant_res used with unexpected res <...>
             _ => bug!("expect_variant_res used with unexpected res {:?}", res),
         }
     }
@@ -1736,7 +1726,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn get_attr(self, did: impl Into<DefId>, attr: Symbol) -> Option<&'tcx hir::Attribute> {
         if cfg!(debug_assertions) && !rustc_feature::is_valid_for_get_attr(attr) {
             let did: DefId = did.into();
-            // tRust: invariant: get_attr: unexpected called with DefId <...>, attr <...>
             bug!("get_attr: unexpected called with DefId `{:?}`, attr `{:?}`", did, attr);
         } else {
             #[allow(deprecated)]
@@ -1849,7 +1838,7 @@ impl<'tcx> TyCtxt<'tcx> {
             // layout of `async_drop_in_place<T>::{closure}` in case,
             // when T is a coroutine, contains this internal coroutine's ptr in upvars
             // and doesn't require any locals. Here is an `empty coroutine's layout`
-            let arg_cor_ty = args.first().expect("invariant: collection is non-empty").expect_ty();
+            let arg_cor_ty = args.first().unwrap().expect_ty();
             if arg_cor_ty.is_coroutine() {
                 let span = self.def_span(def_id);
                 let source_info = SourceInfo::outermost(span);
@@ -1983,7 +1972,7 @@ impl<'tcx> TyCtxt<'tcx> {
             && let Some(def_id) = def_id.as_local()
             && let outer = self.def_span(def_id).ctxt().outer_expn_data()
             && matches!(outer.kind, ExpnKind::Macro(MacroKind::Derive, _))
-            && find_attr!(self, outer.macro_def_id.expect("invariant: outer expansion has macro def id"), RustcBuiltinMacro { .. })
+            && find_attr!(self, outer.macro_def_id.unwrap(), RustcBuiltinMacro { .. })
         {
             true
         } else {
@@ -2025,7 +2014,7 @@ impl<'tcx> TyCtxt<'tcx> {
         ident
     }
 
-    // tRust: known issue (vincenzopalazzo) — move the HirId to a LocalDefId
+    // FIXME(vincenzopalazzo): move the HirId to a LocalDefId
     pub fn adjust_ident_and_get_scope(
         self,
         mut ident: Ident,
@@ -2077,7 +2066,6 @@ impl<'tcx> TyCtxt<'tcx> {
                     DefKind::Impl { of_trait: true } | DefKind::Trait => {
                         self.is_conditionally_const(parent_def_id)
                     }
-                    // tRust: invariant: unexpected parent item of associated type: <...>
                     _ => bug!("unexpected parent item of associated type: {parent_def_id:?}"),
                 }
             }
@@ -2098,14 +2086,13 @@ impl<'tcx> TyCtxt<'tcx> {
                         self.constness(def_id) == hir::Constness::Const
                             && self.is_conditionally_const(parent_def_id)
                     }
-                    // tRust: invariant: unexpected parent item of associated fn: <...>
                     _ => bug!("unexpected parent item of associated fn: {parent_def_id:?}"),
                 }
             }
             DefKind::OpaqueTy => match self.opaque_ty_origin(def_id) {
                 hir::OpaqueTyOrigin::FnReturn { parent, .. } => self.is_conditionally_const(parent),
                 hir::OpaqueTyOrigin::AsyncFn { .. } => false,
-                // tRust: known issue (const_trait_impl) — ATPITs could be conditionally const?
+                // FIXME(const_trait_impl): ATPITs could be conditionally const?
                 hir::OpaqueTyOrigin::TyAlias { .. } => false,
             },
             DefKind::Closure => self.constness(def_id) == hir::Constness::Const,

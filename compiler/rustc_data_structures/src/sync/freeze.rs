@@ -77,8 +77,6 @@ impl<T> FreezeLock<T> {
             } else {
                 Some(self.lock.read())
             },
-            // SAFETY: The pointer is non-null and properly aligned, derived
-            // from a valid reference or allocation that outlives this use.
             data: unsafe { NonNull::new_unchecked(self.data.get()) },
         }
     }
@@ -103,8 +101,6 @@ impl<T> FreezeLock<T> {
         } else {
             Some(FreezeWriteGuard {
                 _lock_guard,
-                // SAFETY: The pointer is non-null and properly aligned, derived
-                // from a valid reference or allocation that outlives this use.
                 data: unsafe { NonNull::new_unchecked(self.data.get()) },
                 frozen: &self.frozen,
                 marker: PhantomData,

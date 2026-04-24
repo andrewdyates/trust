@@ -117,6 +117,5 @@ declare_hooks! {
 
 #[cold]
 fn default_hook(name: &str) -> ! {
-    // tRust: invariant: tcx.<...> cannot be called as <...> was never assigned to a provider function
     bug!("`tcx.{name}` cannot be called as `{name}` was never assigned to a provider function")
 }

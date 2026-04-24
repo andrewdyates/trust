@@ -9,8 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
 use std::path::Path;
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 use crate::error::CertificateError;
 use crate::kernel_check::{KernelContext, ProofTerm};
@@ -73,13 +73,11 @@ pub fn lower_proof_term(
             Box::new(lower_proof_term(a, ctx, depth)?),
         )),
 
-        LeanProofTerm::Lambda { binder_name, binder_type, body } => {
-            Ok(ProofTerm::Lambda {
-                binder_name: binder_name.clone(),
-                binder_type: Box::new(lower_proof_term(binder_type, ctx, depth)?),
-                body: Box::new(lower_proof_term(body, ctx, depth + 1)?),
-            })
-        }
+        LeanProofTerm::Lambda { binder_name, binder_type, body } => Ok(ProofTerm::Lambda {
+            binder_name: binder_name.clone(),
+            binder_type: Box::new(lower_proof_term(binder_type, ctx, depth)?),
+            body: Box::new(lower_proof_term(body, ctx, depth + 1)?),
+        }),
 
         LeanProofTerm::Let { name, ty, value, body } => {
             // Encode let as: (fun (name : ty) => body) value
@@ -98,10 +96,7 @@ pub fn lower_proof_term(
 
         LeanProofTerm::ByAssumption { hypothesis_index } => {
             if *hypothesis_index >= depth {
-                return Err(LoweringError::UnknownAssumption {
-                    index: *hypothesis_index,
-                    depth,
-                });
+                return Err(LoweringError::UnknownAssumption { index: *hypothesis_index, depth });
             }
             // In CIC, a hypothesis at index i is just Var(i)
             Ok(ProofTerm::Var(*hypothesis_index))
@@ -110,10 +105,8 @@ pub fn lower_proof_term(
         LeanProofTerm::ByDecidability { proposition } => {
             // Map to a kernel constant for the decision procedure.
             // Compute a stable name from the proposition's debug representation.
-            let dec_name = format!(
-                "tRust.Decidability.decide_{:x}",
-                compute_formula_hash(proposition),
-            );
+            let dec_name =
+                format!("tRust.Decidability.decide_{:x}", compute_formula_hash(proposition),);
             if ctx.lookup(&dec_name).is_some() {
                 Ok(ProofTerm::Const(dec_name))
             } else {
@@ -129,9 +122,7 @@ pub fn lower_proof_term(
         // Non-exhaustive: future LeanProofTerm variants.
         // All current variants are handled above; this arm covers future additions.
         #[allow(unreachable_patterns)]
-        _ => Err(LoweringError::Failed {
-            reason: "unsupported LeanProofTerm variant".to_string(),
-        }),
+        _ => Err(LoweringError::Failed { reason: "unsupported LeanProofTerm variant".to_string() }),
     }
 }
 
@@ -215,11 +206,9 @@ impl TheoremLibrary {
     ///
     /// Returns `CertificateError` if the file cannot be read or parsed.
     pub fn load(path: &Path) -> Result<Self, CertificateError> {
-        let data = std::fs::read_to_string(path).map_err(|e| {
-            CertificateError::BundleIoFailed {
-                path: path.display().to_string(),
-                reason: e.to_string(),
-            }
+        let data = std::fs::read_to_string(path).map_err(|e| CertificateError::BundleIoFailed {
+            path: path.display().to_string(),
+            reason: e.to_string(),
         })?;
         Self::from_json(&data)
     }
@@ -238,10 +227,7 @@ impl TheoremLibrary {
 
     /// Register a theorem in the library.
     pub fn add_theorem(&mut self, theorem: V1Theorem) {
-        self.by_category
-            .entry(theorem.category.clone())
-            .or_default()
-            .push(theorem.name.clone());
+        self.by_category.entry(theorem.category.clone()).or_default().push(theorem.name.clone());
         self.theorems.insert(theorem.name.clone(), theorem);
     }
 
@@ -280,19 +266,12 @@ impl TheoremLibrary {
     /// # Errors
     ///
     /// Returns error if any theorem name conflicts with an existing entry.
-    pub fn populate_context(
-        &self,
-        ctx: &mut KernelContext,
-    ) -> Result<usize, CertificateError> {
+    pub fn populate_context(&self, ctx: &mut KernelContext) -> Result<usize, CertificateError> {
         let mut loaded = 0;
         let order = self.dependency_order();
         for name in &order {
             if let Some(thm) = self.theorems.get(name) {
-                ctx.add_definition(
-                    &thm.name,
-                    thm.proposition.clone(),
-                    thm.proof.clone(),
-                )?;
+                ctx.add_definition(&thm.name, thm.proposition.clone(), thm.proof.clone())?;
                 loaded += 1;
             }
         }
@@ -313,14 +292,11 @@ impl TheoremLibrary {
         let order = self.dependency_order();
         for name in &order {
             if let Some(thm) = self.theorems.get(name)
-                && categories.contains(&thm.category) {
-                    ctx.add_definition(
-                        &thm.name,
-                        thm.proposition.clone(),
-                        thm.proof.clone(),
-                    )?;
-                    loaded += 1;
-                }
+                && categories.contains(&thm.category)
+            {
+                ctx.add_definition(&thm.name, thm.proposition.clone(), thm.proof.clone())?;
+                loaded += 1;
+            }
         }
         Ok(loaded)
     }
@@ -339,10 +315,7 @@ impl TheoremLibrary {
             _ => return None,
         };
         // Find first theorem whose name starts with the expected prefix
-        self.theorems
-            .keys()
-            .find(|name| name.starts_with(prefix))
-            .map(|s| s.as_str())
+        self.theorems.keys().find(|name| name.starts_with(prefix)).map(|s| s.as_str())
     }
 
     /// Compute a topological ordering of theorems by dependency.
@@ -357,12 +330,7 @@ impl TheoremLibrary {
         order
     }
 
-    fn visit_deps(
-        &self,
-        name: &str,
-        visited: &mut FxHashSet<String>,
-        order: &mut Vec<String>,
-    ) {
+    fn visit_deps(&self, name: &str, visited: &mut FxHashSet<String>, order: &mut Vec<String>) {
         if visited.contains(name) {
             return;
         }
@@ -512,22 +480,15 @@ mod tests {
         let err = lower_proof_term(&term, &ctx, 2);
         assert!(err.is_err());
         let e = err.unwrap_err();
-        assert!(
-            e.to_string().contains("unknown assumption at index 5"),
-            "got: {e}",
-        );
+        assert!(e.to_string().contains("unknown assumption at index 5"), "got: {e}",);
     }
 
     #[test]
     fn test_lower_by_decidability_with_context() {
         let mut ctx = KernelContext::new();
         let formula = Formula::Bool(true);
-        let dec_name = format!(
-            "tRust.Decidability.decide_{:x}",
-            compute_formula_hash(&formula),
-        );
-        ctx.add_axiom(&dec_name, prop())
-            .expect("should add decidability axiom");
+        let dec_name = format!("tRust.Decidability.decide_{:x}", compute_formula_hash(&formula),);
+        ctx.add_axiom(&dec_name, prop()).expect("should add decidability axiom");
         let term = LeanProofTerm::ByDecidability { proposition: formula };
         let result = lower_proof_term(&term, &ctx, 0).expect("should lower ByDecidability");
         assert_eq!(result, ProofTerm::Const(dec_name));
@@ -536,14 +497,9 @@ mod tests {
     #[test]
     fn test_lower_by_decidability_fallback() {
         let ctx = KernelContext::new();
-        let term = LeanProofTerm::ByDecidability {
-            proposition: Formula::Bool(false),
-        };
+        let term = LeanProofTerm::ByDecidability { proposition: Formula::Bool(false) };
         let result = lower_proof_term(&term, &ctx, 0).expect("should fallback to oracle");
-        assert_eq!(
-            result,
-            ProofTerm::Const("tRust.Decidability.oracle".to_string()),
-        );
+        assert_eq!(result, ProofTerm::Const("tRust.Decidability.oracle".to_string()),);
     }
 
     #[test]
@@ -588,18 +544,9 @@ mod tests {
     #[test]
     fn test_library_categorization() {
         let mut lib = TheoremLibrary::new();
-        lib.add_theorem(make_identity_theorem(
-            "thm1",
-            TheoremCategory::WpSoundness,
-        ));
-        lib.add_theorem(make_identity_theorem(
-            "thm2",
-            TheoremCategory::WpSoundness,
-        ));
-        lib.add_theorem(make_identity_theorem(
-            "thm3",
-            TheoremCategory::MirSemantics,
-        ));
+        lib.add_theorem(make_identity_theorem("thm1", TheoremCategory::WpSoundness));
+        lib.add_theorem(make_identity_theorem("thm2", TheoremCategory::WpSoundness));
+        lib.add_theorem(make_identity_theorem("thm3", TheoremCategory::MirSemantics));
         let wp = lib.theorems_in_category(&TheoremCategory::WpSoundness);
         assert_eq!(wp.len(), 2);
         let mir = lib.theorems_in_category(&TheoremCategory::MirSemantics);
@@ -611,10 +558,7 @@ mod tests {
     #[test]
     fn test_library_populate_context() {
         let mut lib = TheoremLibrary::new();
-        lib.add_theorem(make_identity_theorem(
-            "tRust.v1.id",
-            TheoremCategory::Infrastructure,
-        ));
+        lib.add_theorem(make_identity_theorem("tRust.v1.id", TheoremCategory::Infrastructure));
         let mut ctx = KernelContext::new();
         // The theorem references Const("A"), so add "A" as an axiom
         ctx.add_axiom("A", prop()).expect("add A");
@@ -628,18 +572,9 @@ mod tests {
     #[test]
     fn test_library_selective_loading() {
         let mut lib = TheoremLibrary::new();
-        lib.add_theorem(make_identity_theorem(
-            "wp1",
-            TheoremCategory::WpSoundness,
-        ));
-        lib.add_theorem(make_identity_theorem(
-            "mir1",
-            TheoremCategory::MirSemantics,
-        ));
-        lib.add_theorem(make_identity_theorem(
-            "safe1",
-            TheoremCategory::SafetyProperty,
-        ));
+        lib.add_theorem(make_identity_theorem("wp1", TheoremCategory::WpSoundness));
+        lib.add_theorem(make_identity_theorem("mir1", TheoremCategory::MirSemantics));
+        lib.add_theorem(make_identity_theorem("safe1", TheoremCategory::SafetyProperty));
         let mut ctx = KernelContext::new();
         ctx.add_axiom("A", prop()).expect("add A");
         let loaded = lib
@@ -681,10 +616,7 @@ mod tests {
     #[test]
     fn test_library_duplicate_in_context_rejected() {
         let mut lib = TheoremLibrary::new();
-        lib.add_theorem(make_identity_theorem(
-            "dup",
-            TheoremCategory::Infrastructure,
-        ));
+        lib.add_theorem(make_identity_theorem("dup", TheoremCategory::Infrastructure));
         let mut ctx = KernelContext::new();
         ctx.add_axiom("A", prop()).expect("add A");
         // First populate succeeds
@@ -697,10 +629,8 @@ mod tests {
     #[test]
     fn test_match_theorem_division_by_zero() {
         let mut lib = TheoremLibrary::new();
-        let mut thm = make_identity_theorem(
-            "tRust.v1.wp_divcheck_sound",
-            TheoremCategory::SafetyProperty,
-        );
+        let mut thm =
+            make_identity_theorem("tRust.v1.wp_divcheck_sound", TheoremCategory::SafetyProperty);
         thm.dependencies = vec![];
         lib.add_theorem(thm);
 
@@ -738,10 +668,7 @@ mod tests {
 
         // Verify the theorem's proof checks against its proposition
         let thm = lib.get("tRust.v1.identity").unwrap();
-        let query = KernelQuery {
-            term: thm.proof.clone(),
-            expected_type: thm.proposition.clone(),
-        };
+        let query = KernelQuery { term: thm.proof.clone(), expected_type: thm.proposition.clone() };
         let result = check_proof(&query, &ctx).expect("kernel should not error");
         assert!(result.is_valid(), "v1 theorem should be valid: {result:?}");
     }
@@ -763,16 +690,12 @@ mod tests {
         };
 
         // Lower to kernel ProofTerm
-        let kernel_term = lower_proof_term(&lean_term, &ctx, 0)
-            .expect("lowering should succeed");
+        let kernel_term = lower_proof_term(&lean_term, &ctx, 0).expect("lowering should succeed");
 
         // Check: the lowered term should have type A -> A
         let a_const = ProofTerm::Const("A".to_string());
         let expected_type = arrow(a_const.clone(), a_const);
-        let query = KernelQuery {
-            term: kernel_term,
-            expected_type,
-        };
+        let query = KernelQuery { term: kernel_term, expected_type };
         let result = check_proof(&query, &ctx).expect("kernel should not error");
         assert!(result.is_valid(), "lowered term should be valid: {result:?}");
     }

@@ -85,7 +85,7 @@ fn fn_sig_for_fn_abi<'tcx>(
 
             // When this `CoroutineClosure` comes from a `ConstructCoroutineInClosureShim`,
             // make sure we respect the `target_kind` in that shim.
-            // tRust: known issue (async_closures) — This shouldn't be needed, and we should be populating
+            // FIXME(async_closures): This shouldn't be needed, and we should be populating
             // a separate def-id for these bodies.
             let mut coroutine_kind = args.as_coroutine_closure().kind();
 
@@ -125,7 +125,7 @@ fn fn_sig_for_fn_abi<'tcx>(
             )
         }
         ty::Coroutine(did, args) => {
-            let coroutine_kind = tcx.coroutine_kind(did).expect("invariant: Coroutine type must have a coroutine_kind"); // tRust: unwrap -> expect
+            let coroutine_kind = tcx.coroutine_kind(did).unwrap();
             let sig = args.as_coroutine().sig();
 
             let env_ty = Ty::new_mut_ref(tcx, tcx.lifetimes.re_erased, ty);
@@ -381,11 +381,11 @@ fn arg_attrs_for_rust_scalar<'tcx>(
     let tcx = cx.tcx();
 
     let drop_target_pointee_info = drop_target_pointee.and_then(|pointee| {
-        assert_eq!(pointee, layout.ty.builtin_deref(true).expect("invariant: drop_in_place arg must be a dereferenceable pointer type")); // tRust: unwrap -> expect
+        assert_eq!(pointee, layout.ty.builtin_deref(true).unwrap());
         assert_eq!(offset, Size::ZERO);
         // The argument to `drop_in_place` is semantically equivalent to a mutable reference.
         let mutref = Ty::new_mut_ref(tcx, tcx.lifetimes.re_erased, pointee);
-        let layout = cx.layout_of(mutref).expect("invariant: &mut T layout computation must succeed"); // tRust: unwrap -> expect
+        let layout = cx.layout_of(mutref).unwrap();
         layout.pointee_info_at(&cx, offset)
     });
 
@@ -567,7 +567,7 @@ fn fn_abi_new_uncached<'tcx>(
     let tcx = cx.tcx();
 
     let abi_map = AbiMap::from_target(&tcx.sess.target);
-    let conv = abi_map.canonize_abi(sig.abi, sig.c_variadic).expect("invariant: ABI must be canonizable for the target"); // tRust: unwrap -> expect
+    let conv = abi_map.canonize_abi(sig.abi, sig.c_variadic).unwrap();
 
     let mut inputs = sig.inputs();
     let extra_args = if sig.abi == ExternAbi::RustCall {
@@ -641,7 +641,7 @@ fn fn_abi_new_uncached<'tcx>(
         c_variadic: sig.c_variadic,
         fixed_count: inputs.len() as u32,
         conv,
-        // tRust: known issue — return false for tls shim
+        // FIXME return false for tls shim
         can_unwind: fn_can_unwind(
             tcx,
             // Since `#[rustc_nounwind]` can change unwinding, we cannot infer unwinding by `fn_def_id` for a virtual call.
@@ -748,7 +748,7 @@ fn make_thin_self_ptr<'tcx>(
     let tcx = cx.tcx();
     let wide_pointer_ty = if layout.is_unsized() {
         // unsized `self` is passed as a pointer to `self`
-        // tRust: known issue (mikeyhew) — change this to use &own if it is ever added to the language
+        // FIXME (mikeyhew) change this to use &own if it is ever added to the language
         Ty::new_mut_ptr(tcx, layout.ty)
     } else {
         match layout.backend_repr {
@@ -782,6 +782,6 @@ fn make_thin_self_ptr<'tcx>(
 
         // NOTE(eddyb) using an empty `ParamEnv`, and `unwrap`-ing the `Result`
         // should always work because the type is always `*mut ()`.
-        ..tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(unit_ptr_ty)).expect("invariant: *mut () layout must always succeed") // tRust: unwrap -> expect
+        ..tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(unit_ptr_ty)).unwrap()
     }
 }

@@ -34,7 +34,6 @@ pub(super) fn build_enum_type_di_node<'ll, 'tcx>(
 ) -> DINodeCreationResult<'ll> {
     let enum_type = unique_type_id.expect_ty();
     let &ty::Adt(enum_adt_def, _) = enum_type.kind() else {
-        // tRust: invariant — enum debuginfo dispatch only calls this helper with ADT enum types
         bug!("build_enum_type_di_node() called with non-enum type: `{:?}`", enum_type)
     };
 
@@ -107,13 +106,11 @@ fn build_enumeration_type_di_node<'ll, 'tcx>(
     let is_unsigned = match base_type.kind() {
         ty::Int(_) => false,
         ty::Uint(_) => true,
-        // tRust: invariant — DWARF enumeration base types must be signed or unsigned integer types
         _ => bug!("build_enumeration_type_di_node() called with non-integer tag type."),
     };
     let (size, align) = cx.size_and_align_of(base_type);
 
     let enumerator_di_nodes: SmallVec<Option<&'ll DIType>> = enumerators
-        // SAFETY: The `DIBuilder` is valid, and the name buffer and length are valid.
         .map(|(name, value)| unsafe {
             let value = [value as u64, (value >> 64) as u64];
             Some(llvm::LLVMRustDIBuilderCreateEnumerator(
@@ -134,7 +131,6 @@ fn build_enumeration_type_di_node<'ll, 'tcx>(
         (unknown_file_metadata(cx), UNKNOWN_LINE_NUMBER)
     };
 
-    // SAFETY: The `DIBuilder` is valid, all references are valid, and string buffers have correct lengths.
     unsafe {
         llvm::LLVMRustDIBuilderCreateEnumerationType(
             DIB(cx),
@@ -399,7 +395,7 @@ fn compute_discriminant_value<'ll, 'tcx>(
     match enum_type_and_layout.layout.variants() {
         &Variants::Single { .. } | &Variants::Empty => DiscrResult::NoDiscriminant,
         &Variants::Multiple { tag_encoding: TagEncoding::Direct, .. } => DiscrResult::Value(
-            enum_type_and_layout.ty.discriminant_for_variant(cx.tcx, variant_index).expect("invariant: variant has a discriminant").val,
+            enum_type_and_layout.ty.discriminant_for_variant(cx.tcx, variant_index).unwrap().val,
         ),
         &Variants::Multiple {
             tag_encoding: TagEncoding::Niche { ref niche_variants, niche_start, untagged_variant },
@@ -411,7 +407,7 @@ fn compute_discriminant_value<'ll, 'tcx>(
                     .for_variant(cx, variant_index)
                     .largest_niche
                     .as_ref()
-                    .expect("invariant: enum niche variant has discriminant value")
+                    .unwrap()
                     .valid_range;
 
                 let min = valid_range.start.min(valid_range.end);

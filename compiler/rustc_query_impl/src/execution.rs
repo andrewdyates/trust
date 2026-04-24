@@ -298,7 +298,7 @@ fn try_execute_query<'tcx, C: QueryCache, const INCR: bool>(
 
             // Delegate to another function to actually execute the query job.
             let (value, dep_node_index) = if INCR {
-                execute_job_incr(query, tcx, key, dep_node.expect("invariant: dep_node is Some in incremental mode (INCR=true)"), id) // tRust: unwrap -> expect
+                execute_job_incr(query, tcx, key, dep_node.unwrap(), id)
             } else {
                 execute_job_non_incr(query, tcx, key, id)
             };

@@ -8,12 +8,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
-
+use trust_types::fx::{FxHashMap, FxHashSet};
 use trust_types::{Counterexample, CounterexampleValue};
 
 use crate::proposer::{Proposal, ProposalKind};
-use trust_types::fx::FxHashSet;
 
 /// A common verification pattern that can be automatically applied.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,26 +20,15 @@ pub enum SpecPattern {
     /// Variable is non-null: `x != null` (or `x.is_some()` for Option).
     NonNull { variable: String },
     /// Variable is within bounds: `lo <= x && x < hi`.
-    BoundsCheck {
-        variable: String,
-        lo: String,
-        hi: String,
-    },
+    BoundsCheck { variable: String, lo: String, hi: String },
     /// Collection is non-empty: `!col.is_empty()`.
     NonEmpty { collection: String },
     /// Variable is monotonically changing.
-    Monotonic {
-        variable: String,
-        direction: MonotonicDirection,
-    },
+    Monotonic { variable: String, direction: MonotonicDirection },
     /// Loop invariant over a specific loop.
     Invariant { loop_id: String, formula: String },
     /// Return value is bounded: `lo <= result && result <= hi`.
-    ReturnBounds {
-        function: String,
-        lo: String,
-        hi: String,
-    },
+    ReturnBounds { function: String, lo: String, hi: String },
     /// Divisor is non-zero: `divisor != 0`.
     NonZeroDivisor { variable: String },
     /// Index is within array bounds: `idx < arr.len()`.
@@ -70,10 +57,7 @@ impl SpecPattern {
                 format!("{lo} <= {variable} && {variable} < {hi}")
             }
             Self::NonEmpty { collection } => format!("!{collection}.is_empty()"),
-            Self::Monotonic {
-                variable,
-                direction,
-            } => {
+            Self::Monotonic { variable, direction } => {
                 let dir = match direction {
                     MonotonicDirection::Increasing => "monotonically increasing",
                     MonotonicDirection::Decreasing => "monotonically decreasing",
@@ -144,9 +128,7 @@ impl PatternMatcher {
             // Option parameters suggest NonNull
             if ty.starts_with("Option<") {
                 suggestions.push(PatternSuggestion {
-                    pattern: SpecPattern::NonNull {
-                        variable: name.into(),
-                    },
+                    pattern: SpecPattern::NonNull { variable: name.into() },
                     confidence: 0.6,
                     rationale: format!("Option parameter `{name}` may be unwrapped"),
                 });
@@ -155,9 +137,7 @@ impl PatternMatcher {
             // Slice/Vec parameters suggest NonEmpty
             if ty.starts_with("&[") || ty.starts_with("&mut [") || ty.starts_with("Vec<") {
                 suggestions.push(PatternSuggestion {
-                    pattern: SpecPattern::NonEmpty {
-                        collection: name.into(),
-                    },
+                    pattern: SpecPattern::NonEmpty { collection: name.into() },
                     confidence: 0.5,
                     rationale: format!("Collection parameter `{name}` may need non-empty check"),
                 });
@@ -167,10 +147,7 @@ impl PatternMatcher {
             if ty == "usize" && is_index_name(name) {
                 let collection = guess_collection_name(params, name);
                 suggestions.push(PatternSuggestion {
-                    pattern: SpecPattern::IndexInBounds {
-                        index: name.into(),
-                        collection,
-                    },
+                    pattern: SpecPattern::IndexInBounds { index: name.into(), collection },
                     confidence: 0.65,
                     rationale: format!("Parameter `{name}: usize` likely used as index"),
                 });
@@ -179,19 +156,14 @@ impl PatternMatcher {
             // Numeric parameters with divisor-like names suggest NonZeroDivisor
             if is_numeric_type(ty) && is_divisor_name(name) {
                 suggestions.push(PatternSuggestion {
-                    pattern: SpecPattern::NonZeroDivisor {
-                        variable: name.into(),
-                    },
+                    pattern: SpecPattern::NonZeroDivisor { variable: name.into() },
                     confidence: 0.8,
                     rationale: format!("Parameter `{name}` likely used as divisor"),
                 });
             }
         }
 
-        suggestions
-            .into_iter()
-            .filter(|s| s.confidence >= self.min_confidence)
-            .collect()
+        suggestions.into_iter().filter(|s| s.confidence >= self.min_confidence).collect()
     }
 
     /// Detect applicable patterns using both function name and parameter types.
@@ -220,17 +192,13 @@ impl PatternMatcher {
             let collection_name = params
                 .iter()
                 .find(|(_, ty)| {
-                    ty.starts_with("&[")
-                        || ty.starts_with("&mut [")
-                        || ty.starts_with("Vec<")
+                    ty.starts_with("&[") || ty.starts_with("&mut [") || ty.starts_with("Vec<")
                 })
                 .map(|(name, _)| (*name).to_string())
                 .unwrap_or_else(|| "slice".to_string());
 
             suggestions.push(PatternSuggestion {
-                pattern: SpecPattern::Sorted {
-                    collection: collection_name.clone(),
-                },
+                pattern: SpecPattern::Sorted { collection: collection_name.clone() },
                 confidence: 0.92,
                 rationale: format!(
                     "Binary search requires `{collection_name}` to be sorted in ascending order"
@@ -238,10 +206,7 @@ impl PatternMatcher {
             });
         }
 
-        suggestions
-            .into_iter()
-            .filter(|s| s.confidence >= self.min_confidence)
-            .collect()
+        suggestions.into_iter().filter(|s| s.confidence >= self.min_confidence).collect()
     }
 
     /// Detect applicable patterns from counterexample values.
@@ -258,9 +223,7 @@ impl PatternMatcher {
                     // Zero values suggest NonZeroDivisor
                     CounterexampleValue::Uint(0) | CounterexampleValue::Int(0) => {
                         suggestions.push(PatternSuggestion {
-                            pattern: SpecPattern::NonZeroDivisor {
-                                variable: name.clone(),
-                            },
+                            pattern: SpecPattern::NonZeroDivisor { variable: name.clone() },
                             confidence: 0.75,
                             rationale: format!(
                                 "Counterexample has {name} = 0, suggesting non-zero requirement"
@@ -300,10 +263,7 @@ impl PatternMatcher {
             }
         }
 
-        suggestions
-            .into_iter()
-            .filter(|s| s.confidence >= self.min_confidence)
-            .collect()
+        suggestions.into_iter().filter(|s| s.confidence >= self.min_confidence).collect()
     }
 }
 
@@ -323,9 +283,7 @@ impl PatternDatabase {
     /// Create a new empty pattern database.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            success_records: FxHashMap::default(),
-        }
+        Self { success_records: FxHashMap::default() }
     }
 
     /// Record whether applying a pattern succeeded.
@@ -342,15 +300,9 @@ impl PatternDatabase {
     #[must_use]
     pub fn success_rate(&self, pattern: &SpecPattern) -> Option<f64> {
         let key = pattern.kind_name();
-        self.success_records
-            .get(key)
-            .and_then(|&(successes, total)| {
-                if total > 0 {
-                    Some(successes as f64 / total as f64)
-                } else {
-                    None
-                }
-            })
+        self.success_records.get(key).and_then(|&(successes, total)| {
+            if total > 0 { Some(successes as f64 / total as f64) } else { None }
+        })
     }
 
     /// Boost a suggestion's confidence based on historical success rate.
@@ -435,24 +387,15 @@ fn suggestion_to_proposal(
     suggestion: &PatternSuggestion,
 ) -> Proposal {
     let (kind, confidence_modifier) = match &suggestion.pattern {
-        SpecPattern::Invariant { .. } => (
-            ProposalKind::AddInvariant {
-                spec_body: suggestion.pattern.to_spec_body(),
-            },
-            0.0,
-        ),
-        SpecPattern::ReturnBounds { .. } => (
-            ProposalKind::AddPostcondition {
-                spec_body: suggestion.pattern.to_spec_body(),
-            },
-            0.0,
-        ),
+        SpecPattern::Invariant { .. } => {
+            (ProposalKind::AddInvariant { spec_body: suggestion.pattern.to_spec_body() }, 0.0)
+        }
+        SpecPattern::ReturnBounds { .. } => {
+            (ProposalKind::AddPostcondition { spec_body: suggestion.pattern.to_spec_body() }, 0.0)
+        }
         SpecPattern::IndexInBounds { .. } => (
             ProposalKind::AddBoundsCheck {
-                check_expr: format!(
-                    "assert!({})",
-                    suggestion.pattern.to_spec_body()
-                ),
+                check_expr: format!("assert!({})", suggestion.pattern.to_spec_body()),
             },
             0.0,
         ),
@@ -462,12 +405,7 @@ fn suggestion_to_proposal(
             },
             0.0,
         ),
-        _ => (
-            ProposalKind::AddPrecondition {
-                spec_body: suggestion.pattern.to_spec_body(),
-            },
-            0.0,
-        ),
+        _ => (ProposalKind::AddPrecondition { spec_body: suggestion.pattern.to_spec_body() }, 0.0),
     };
 
     Proposal {
@@ -629,9 +567,7 @@ impl PatternCatalog {
     /// Create an empty catalog.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
+        Self { entries: Vec::new() }
     }
 
     /// Add a pattern to the catalog.
@@ -678,7 +614,15 @@ pub fn builtin_patterns() -> PatternCatalog {
         template: "{param} < {collection}.len()".into(),
         category: PatternCategory::BoundsCheck,
         applicable_param_types: vec!["usize".into()],
-        applicable_param_names: vec!["i".into(), "j".into(), "k".into(), "idx".into(), "index".into(), "pos".into(), "offset".into()],
+        applicable_param_names: vec![
+            "i".into(),
+            "j".into(),
+            "k".into(),
+            "idx".into(),
+            "index".into(),
+            "pos".into(),
+            "offset".into(),
+        ],
         base_confidence: 0.75,
     });
 
@@ -686,7 +630,13 @@ pub fn builtin_patterns() -> PatternCatalog {
         name: "range-bounds".into(),
         template: "{lo} <= {param} && {param} < {hi}".into(),
         category: PatternCategory::BoundsCheck,
-        applicable_param_types: vec!["usize".into(), "u32".into(), "u64".into(), "i32".into(), "i64".into()],
+        applicable_param_types: vec![
+            "usize".into(),
+            "u32".into(),
+            "u64".into(),
+            "i32".into(),
+            "i64".into(),
+        ],
         applicable_param_names: vec!["start".into(), "end".into(), "range".into(), "bound".into()],
         base_confidence: 0.6,
     });
@@ -734,8 +684,26 @@ pub fn builtin_patterns() -> PatternCatalog {
         name: "non-zero-divisor".into(),
         template: "{param} != 0".into(),
         category: PatternCategory::Overflow,
-        applicable_param_types: vec!["u8".into(), "u16".into(), "u32".into(), "u64".into(), "u128".into(), "usize".into(), "i8".into(), "i16".into(), "i32".into(), "i64".into(), "i128".into(), "isize".into()],
-        applicable_param_names: vec!["divisor".into(), "denominator".into(), "denom".into(), "modulus".into()],
+        applicable_param_types: vec![
+            "u8".into(),
+            "u16".into(),
+            "u32".into(),
+            "u64".into(),
+            "u128".into(),
+            "usize".into(),
+            "i8".into(),
+            "i16".into(),
+            "i32".into(),
+            "i64".into(),
+            "i128".into(),
+            "isize".into(),
+        ],
+        applicable_param_names: vec![
+            "divisor".into(),
+            "denominator".into(),
+            "denom".into(),
+            "modulus".into(),
+        ],
         base_confidence: 0.85,
     });
 
@@ -743,7 +711,14 @@ pub fn builtin_patterns() -> PatternCatalog {
         name: "addition-no-overflow".into(),
         template: "{param} <= {type}::MAX - {other}".into(),
         category: PatternCategory::Overflow,
-        applicable_param_types: vec!["u8".into(), "u16".into(), "u32".into(), "u64".into(), "u128".into(), "usize".into()],
+        applicable_param_types: vec![
+            "u8".into(),
+            "u16".into(),
+            "u32".into(),
+            "u64".into(),
+            "u128".into(),
+            "usize".into(),
+        ],
         applicable_param_names: vec![],
         base_confidence: 0.7,
     });
@@ -773,7 +748,13 @@ pub fn builtin_patterns() -> PatternCatalog {
         template: "{param} is monotonically decreasing".into(),
         category: PatternCategory::Termination,
         applicable_param_types: vec!["usize".into(), "u32".into(), "u64".into()],
-        applicable_param_names: vec!["fuel".into(), "remaining".into(), "budget".into(), "gas".into(), "count".into()],
+        applicable_param_names: vec![
+            "fuel".into(),
+            "remaining".into(),
+            "budget".into(),
+            "gas".into(),
+            "count".into(),
+        ],
         base_confidence: 0.7,
     });
 
@@ -806,14 +787,12 @@ pub fn match_pattern(
     catalog
         .iter()
         .filter(|entry| {
-            let type_match = entry
-                .applicable_param_types
-                .iter()
-                .any(|t| param_type.contains(t.as_str()));
-            let name_match = entry
-                .applicable_param_names
-                .iter()
-                .any(|n| lower_name == n.to_lowercase() || lower_name.ends_with(&format!("_{}", n.to_lowercase())));
+            let type_match =
+                entry.applicable_param_types.iter().any(|t| param_type.contains(t.as_str()));
+            let name_match = entry.applicable_param_names.iter().any(|n| {
+                lower_name == n.to_lowercase()
+                    || lower_name.ends_with(&format!("_{}", n.to_lowercase()))
+            });
             type_match || name_match
         })
         .map(|entry| {
@@ -867,34 +846,28 @@ pub fn instantiate_pattern(template: &str, param_name: &str, param_type: &str) -
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{Counterexample, CounterexampleValue};
+
+    use super::*;
 
     // --- SpecPattern ---
 
     #[test]
     fn test_spec_pattern_non_null_to_spec_body() {
-        let pattern = SpecPattern::NonNull {
-            variable: "config".into(),
-        };
+        let pattern = SpecPattern::NonNull { variable: "config".into() };
         assert_eq!(pattern.to_spec_body(), "config.is_some()");
     }
 
     #[test]
     fn test_spec_pattern_bounds_check_to_spec_body() {
-        let pattern = SpecPattern::BoundsCheck {
-            variable: "x".into(),
-            lo: "0".into(),
-            hi: "100".into(),
-        };
+        let pattern =
+            SpecPattern::BoundsCheck { variable: "x".into(), lo: "0".into(), hi: "100".into() };
         assert_eq!(pattern.to_spec_body(), "0 <= x && x < 100");
     }
 
     #[test]
     fn test_spec_pattern_non_empty_to_spec_body() {
-        let pattern = SpecPattern::NonEmpty {
-            collection: "items".into(),
-        };
+        let pattern = SpecPattern::NonEmpty { collection: "items".into() };
         assert_eq!(pattern.to_spec_body(), "!items.is_empty()");
     }
 
@@ -904,10 +877,7 @@ mod tests {
             variable: "counter".into(),
             direction: MonotonicDirection::Increasing,
         };
-        assert_eq!(
-            pattern.to_spec_body(),
-            "counter is monotonically increasing"
-        );
+        assert_eq!(pattern.to_spec_body(), "counter is monotonically increasing");
     }
 
     #[test]
@@ -921,10 +891,8 @@ mod tests {
 
     #[test]
     fn test_spec_pattern_invariant() {
-        let pattern = SpecPattern::Invariant {
-            loop_id: "loop_0".into(),
-            formula: "0 <= i && i <= n".into(),
-        };
+        let pattern =
+            SpecPattern::Invariant { loop_id: "loop_0".into(), formula: "0 <= i && i <= n".into() };
         assert_eq!(pattern.to_spec_body(), "0 <= i && i <= n");
     }
 
@@ -935,52 +903,30 @@ mod tests {
             lo: "min_val".into(),
             hi: "max_val".into(),
         };
-        assert_eq!(
-            pattern.to_spec_body(),
-            "min_val <= result && result <= max_val"
-        );
+        assert_eq!(pattern.to_spec_body(), "min_val <= result && result <= max_val");
     }
 
     #[test]
     fn test_spec_pattern_non_zero_divisor() {
-        let pattern = SpecPattern::NonZeroDivisor {
-            variable: "denom".into(),
-        };
+        let pattern = SpecPattern::NonZeroDivisor { variable: "denom".into() };
         assert_eq!(pattern.to_spec_body(), "denom != 0");
     }
 
     #[test]
     fn test_spec_pattern_index_in_bounds() {
-        let pattern = SpecPattern::IndexInBounds {
-            index: "i".into(),
-            collection: "arr".into(),
-        };
+        let pattern = SpecPattern::IndexInBounds { index: "i".into(), collection: "arr".into() };
         assert_eq!(pattern.to_spec_body(), "i < arr.len()");
     }
 
     #[test]
     fn test_spec_pattern_kind_names() {
         let patterns: Vec<(SpecPattern, &str)> = vec![
+            (SpecPattern::NonNull { variable: "x".into() }, "non_null"),
             (
-                SpecPattern::NonNull {
-                    variable: "x".into(),
-                },
-                "non_null",
-            ),
-            (
-                SpecPattern::BoundsCheck {
-                    variable: "x".into(),
-                    lo: "0".into(),
-                    hi: "10".into(),
-                },
+                SpecPattern::BoundsCheck { variable: "x".into(), lo: "0".into(), hi: "10".into() },
                 "bounds_check",
             ),
-            (
-                SpecPattern::NonEmpty {
-                    collection: "v".into(),
-                },
-                "non_empty",
-            ),
+            (SpecPattern::NonEmpty { collection: "v".into() }, "non_empty"),
             (
                 SpecPattern::Monotonic {
                     variable: "c".into(),
@@ -988,41 +934,19 @@ mod tests {
                 },
                 "monotonic",
             ),
+            (SpecPattern::Invariant { loop_id: "l".into(), formula: "f".into() }, "invariant"),
             (
-                SpecPattern::Invariant {
-                    loop_id: "l".into(),
-                    formula: "f".into(),
-                },
-                "invariant",
-            ),
-            (
-                SpecPattern::ReturnBounds {
-                    function: "f".into(),
-                    lo: "0".into(),
-                    hi: "1".into(),
-                },
+                SpecPattern::ReturnBounds { function: "f".into(), lo: "0".into(), hi: "1".into() },
                 "return_bounds",
             ),
+            (SpecPattern::NonZeroDivisor { variable: "d".into() }, "non_zero_divisor"),
             (
-                SpecPattern::NonZeroDivisor {
-                    variable: "d".into(),
-                },
-                "non_zero_divisor",
-            ),
-            (
-                SpecPattern::IndexInBounds {
-                    index: "i".into(),
-                    collection: "a".into(),
-                },
+                SpecPattern::IndexInBounds { index: "i".into(), collection: "a".into() },
                 "index_in_bounds",
             ),
         ];
         for (pattern, expected_name) in &patterns {
-            assert_eq!(
-                pattern.kind_name(),
-                *expected_name,
-                "wrong kind_name for {pattern:?}"
-            );
+            assert_eq!(pattern.kind_name(), *expected_name, "wrong kind_name for {pattern:?}");
         }
     }
 
@@ -1064,11 +988,9 @@ mod tests {
     #[test]
     fn test_matcher_index_param_suggests_index_in_bounds() {
         let matcher = PatternMatcher::default();
-        let suggestions =
-            matcher.match_from_signature(&[("arr", "&[i32]"), ("idx", "usize")]);
-        let index_suggestion = suggestions
-            .iter()
-            .find(|s| matches!(s.pattern, SpecPattern::IndexInBounds { .. }));
+        let suggestions = matcher.match_from_signature(&[("arr", "&[i32]"), ("idx", "usize")]);
+        let index_suggestion =
+            suggestions.iter().find(|s| matches!(s.pattern, SpecPattern::IndexInBounds { .. }));
         assert!(index_suggestion.is_some());
         if let SpecPattern::IndexInBounds { ref index, ref collection } =
             index_suggestion.unwrap().pattern
@@ -1081,11 +1003,9 @@ mod tests {
     #[test]
     fn test_matcher_divisor_param_suggests_non_zero() {
         let matcher = PatternMatcher::default();
-        let suggestions =
-            matcher.match_from_signature(&[("x", "u64"), ("divisor", "u64")]);
-        let divisor_suggestion = suggestions
-            .iter()
-            .find(|s| matches!(s.pattern, SpecPattern::NonZeroDivisor { .. }));
+        let suggestions = matcher.match_from_signature(&[("x", "u64"), ("divisor", "u64")]);
+        let divisor_suggestion =
+            suggestions.iter().find(|s| matches!(s.pattern, SpecPattern::NonZeroDivisor { .. }));
         assert!(divisor_suggestion.is_some());
     }
 
@@ -1109,39 +1029,31 @@ mod tests {
     #[test]
     fn test_matcher_cex_zero_value_suggests_non_zero() {
         let matcher = PatternMatcher::default();
-        let cex = Counterexample::new(vec![
-            ("y".into(), CounterexampleValue::Uint(0)),
-        ]);
+        let cex = Counterexample::new(vec![("y".into(), CounterexampleValue::Uint(0))]);
         let suggestions = matcher.match_from_counterexamples(&[cex]);
-        let has_non_zero = suggestions
-            .iter()
-            .any(|s| matches!(s.pattern, SpecPattern::NonZeroDivisor { .. }));
+        let has_non_zero =
+            suggestions.iter().any(|s| matches!(s.pattern, SpecPattern::NonZeroDivisor { .. }));
         assert!(has_non_zero);
     }
 
     #[test]
     fn test_matcher_cex_large_value_suggests_bounds() {
         let matcher = PatternMatcher::default();
-        let cex = Counterexample::new(vec![
-            ("a".into(), CounterexampleValue::Uint(u64::MAX as u128)),
-        ]);
+        let cex =
+            Counterexample::new(vec![("a".into(), CounterexampleValue::Uint(u64::MAX as u128))]);
         let suggestions = matcher.match_from_counterexamples(&[cex]);
-        let has_bounds = suggestions
-            .iter()
-            .any(|s| matches!(s.pattern, SpecPattern::BoundsCheck { .. }));
+        let has_bounds =
+            suggestions.iter().any(|s| matches!(s.pattern, SpecPattern::BoundsCheck { .. }));
         assert!(has_bounds);
     }
 
     #[test]
     fn test_matcher_cex_negative_value_suggests_bounds() {
         let matcher = PatternMatcher::default();
-        let cex = Counterexample::new(vec![
-            ("x".into(), CounterexampleValue::Int(-5)),
-        ]);
+        let cex = Counterexample::new(vec![("x".into(), CounterexampleValue::Int(-5))]);
         let suggestions = matcher.match_from_counterexamples(&[cex]);
-        let has_bounds = suggestions
-            .iter()
-            .any(|s| matches!(s.pattern, SpecPattern::BoundsCheck { .. }));
+        let has_bounds =
+            suggestions.iter().any(|s| matches!(s.pattern, SpecPattern::BoundsCheck { .. }));
         assert!(has_bounds);
     }
 
@@ -1159,12 +1071,9 @@ mod tests {
     #[test]
     fn test_matcher_multiple_counterexamples() {
         let matcher = PatternMatcher::default();
-        let cex1 = Counterexample::new(vec![
-            ("y".into(), CounterexampleValue::Uint(0)),
-        ]);
-        let cex2 = Counterexample::new(vec![
-            ("x".into(), CounterexampleValue::Uint(u64::MAX as u128)),
-        ]);
+        let cex1 = Counterexample::new(vec![("y".into(), CounterexampleValue::Uint(0))]);
+        let cex2 =
+            Counterexample::new(vec![("x".into(), CounterexampleValue::Uint(u64::MAX as u128))]);
         let suggestions = matcher.match_from_counterexamples(&[cex1, cex2]);
         assert!(suggestions.len() >= 2);
     }
@@ -1174,18 +1083,14 @@ mod tests {
     #[test]
     fn test_database_empty_returns_none() {
         let db = PatternDatabase::new();
-        let pattern = SpecPattern::NonZeroDivisor {
-            variable: "x".into(),
-        };
+        let pattern = SpecPattern::NonZeroDivisor { variable: "x".into() };
         assert_eq!(db.success_rate(&pattern), None);
     }
 
     #[test]
     fn test_database_tracks_success_rate() {
         let mut db = PatternDatabase::new();
-        let pattern = SpecPattern::NonZeroDivisor {
-            variable: "x".into(),
-        };
+        let pattern = SpecPattern::NonZeroDivisor { variable: "x".into() };
 
         db.record_outcome(&pattern, true);
         db.record_outcome(&pattern, true);
@@ -1198,12 +1103,8 @@ mod tests {
     #[test]
     fn test_database_groups_by_kind() {
         let mut db = PatternDatabase::new();
-        let p1 = SpecPattern::NonZeroDivisor {
-            variable: "x".into(),
-        };
-        let p2 = SpecPattern::NonZeroDivisor {
-            variable: "y".into(),
-        };
+        let p1 = SpecPattern::NonZeroDivisor { variable: "x".into() };
+        let p2 = SpecPattern::NonZeroDivisor { variable: "y".into() };
 
         db.record_outcome(&p1, true);
         db.record_outcome(&p2, false);
@@ -1216,9 +1117,7 @@ mod tests {
     #[test]
     fn test_database_adjust_confidence() {
         let mut db = PatternDatabase::new();
-        let pattern = SpecPattern::NonZeroDivisor {
-            variable: "d".into(),
-        };
+        let pattern = SpecPattern::NonZeroDivisor { variable: "d".into() };
 
         // Record 100% success
         for _ in 0..10 {
@@ -1240,9 +1139,7 @@ mod tests {
     fn test_database_adjust_no_data_returns_original() {
         let db = PatternDatabase::new();
         let suggestion = PatternSuggestion {
-            pattern: SpecPattern::NonEmpty {
-                collection: "v".into(),
-            },
+            pattern: SpecPattern::NonEmpty { collection: "v".into() },
             confidence: 0.7,
             rationale: "test".into(),
         };
@@ -1253,18 +1150,8 @@ mod tests {
     #[test]
     fn test_database_total_records() {
         let mut db = PatternDatabase::new();
-        db.record_outcome(
-            &SpecPattern::NonZeroDivisor {
-                variable: "x".into(),
-            },
-            true,
-        );
-        db.record_outcome(
-            &SpecPattern::NonEmpty {
-                collection: "v".into(),
-            },
-            false,
-        );
+        db.record_outcome(&SpecPattern::NonZeroDivisor { variable: "x".into() }, true);
+        db.record_outcome(&SpecPattern::NonEmpty { collection: "v".into() }, false);
         assert_eq!(db.total_records(), 2);
     }
 
@@ -1278,32 +1165,23 @@ mod tests {
             &[("x", "u64"), ("divisor", "u64")],
             &[],
         );
-        let has_nonzero = proposals.iter().any(|p| {
-            matches!(p.kind, ProposalKind::AddNonZeroCheck { .. })
-        });
+        let has_nonzero =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddNonZeroCheck { .. }));
         assert!(has_nonzero, "should propose non-zero check for divisor param");
     }
 
     #[test]
     fn test_apply_patterns_from_counterexample() {
-        let cex = Counterexample::new(vec![
-            ("y".into(), CounterexampleValue::Uint(0)),
-        ]);
+        let cex = Counterexample::new(vec![("y".into(), CounterexampleValue::Uint(0))]);
         let proposals = apply_patterns("test::f", "f", &[], &[cex]);
         assert!(!proposals.is_empty());
     }
 
     #[test]
     fn test_apply_patterns_combined() {
-        let cex = Counterexample::new(vec![
-            ("divisor".into(), CounterexampleValue::Uint(0)),
-        ]);
-        let proposals = apply_patterns(
-            "test::divide",
-            "divide",
-            &[("x", "u64"), ("divisor", "u64")],
-            &[cex],
-        );
+        let cex = Counterexample::new(vec![("divisor".into(), CounterexampleValue::Uint(0))]);
+        let proposals =
+            apply_patterns("test::divide", "divide", &[("x", "u64"), ("divisor", "u64")], &[cex]);
         // Should get deduplicated suggestions
         assert!(!proposals.is_empty());
         // All proposals should reference the right function
@@ -1323,21 +1201,11 @@ mod tests {
     fn test_apply_patterns_with_db_adjusts_confidence() {
         let mut db = PatternDatabase::new();
         for _ in 0..10 {
-            db.record_outcome(
-                &SpecPattern::NonZeroDivisor {
-                    variable: "d".into(),
-                },
-                true,
-            );
+            db.record_outcome(&SpecPattern::NonZeroDivisor { variable: "d".into() }, true);
         }
 
-        let proposals = apply_patterns_with_db(
-            "test::f",
-            "f",
-            &[("d", "u64"), ("divisor", "u64")],
-            &[],
-            &db,
-        );
+        let proposals =
+            apply_patterns_with_db("test::f", "f", &[("d", "u64"), ("divisor", "u64")], &[], &db);
 
         // With 100% historical success, confidence should be boosted
         for p in &proposals {
@@ -1352,25 +1220,15 @@ mod tests {
     #[test]
     fn test_apply_patterns_deduplicates() {
         // Both signature and counterexample suggest non-zero for divisor
-        let cex = Counterexample::new(vec![
-            ("divisor".into(), CounterexampleValue::Uint(0)),
-        ]);
-        let proposals = apply_patterns(
-            "test::f",
-            "f",
-            &[("divisor", "u64")],
-            &[cex],
-        );
+        let cex = Counterexample::new(vec![("divisor".into(), CounterexampleValue::Uint(0))]);
+        let proposals = apply_patterns("test::f", "f", &[("divisor", "u64")], &[cex]);
         // Count how many NonZeroDivisor-related proposals we get
         let nonzero_count = proposals
             .iter()
             .filter(|p| matches!(p.kind, ProposalKind::AddNonZeroCheck { .. }))
             .count();
         // After dedup, should have at most 1
-        assert!(
-            nonzero_count <= 1,
-            "should deduplicate non-zero suggestions, got {nonzero_count}"
-        );
+        assert!(nonzero_count <= 1, "should deduplicate non-zero suggestions, got {nonzero_count}");
     }
 
     // --- Utility functions ---
@@ -1471,10 +1329,7 @@ mod tests {
     fn test_match_pattern_usize_index_param() {
         let catalog = builtin_patterns();
         let matches = match_pattern(&catalog, "idx", "usize");
-        assert!(
-            !matches.is_empty(),
-            "idx: usize should match at least one pattern"
-        );
+        assert!(!matches.is_empty(), "idx: usize should match at least one pattern");
         let has_index = matches.iter().any(|m| m.entry.name == "index-in-bounds");
         assert!(has_index, "idx: usize should match index-in-bounds pattern");
     }
@@ -1518,9 +1373,8 @@ mod tests {
     fn test_match_pattern_fuel_param_termination() {
         let catalog = builtin_patterns();
         let matches = match_pattern(&catalog, "fuel", "usize");
-        let has_termination = matches
-            .iter()
-            .any(|m| m.entry.category == PatternCategory::Termination);
+        let has_termination =
+            matches.iter().any(|m| m.entry.category == PatternCategory::Termination);
         assert!(has_termination, "fuel: usize should match a termination pattern");
     }
 

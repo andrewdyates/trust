@@ -18,8 +18,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::Sort;
 use std::fmt::Write;
+use trust_types::Sort;
 
 use crate::chc::{ChcSystem, ClauseKind, HornClause, PredicateApp};
 use crate::error::CegarError;
@@ -191,11 +191,7 @@ fn app_to_smtlib(app: &PredicateApp) -> String {
 }
 
 /// Collect free variables from a predicate application.
-fn collect_app_vars(
-    app: &PredicateApp,
-    system: &ChcSystem,
-    out: &mut Vec<(String, Sort)>,
-) {
+fn collect_app_vars(app: &PredicateApp, system: &ChcSystem, out: &mut Vec<(String, Sort)>) {
     let decl = system.predicates.iter().find(|p| p.name == app.predicate);
     for (idx, arg) in app.args.iter().enumerate() {
         if let trust_types::Formula::Var(name, sort) = arg {
@@ -271,9 +267,7 @@ pub fn parse_spacer_response(output: &str) -> Result<SpacerResult, CegarError> {
     let trimmed = output.trim();
 
     if trimmed.is_empty() {
-        return Err(CegarError::SolverError {
-            detail: "empty Spacer response".to_string(),
-        });
+        return Err(CegarError::SolverError { detail: "empty Spacer response".to_string() });
     }
 
     // Find the sat/unsat/unknown line.
@@ -282,21 +276,16 @@ pub fn parse_spacer_response(output: &str) -> Result<SpacerResult, CegarError> {
     match first_line {
         "unsat" => Ok(SpacerResult::Unsat),
         "unknown" => {
-            let reason = trimmed
-                .lines()
-                .nth(1)
-                .unwrap_or("no reason given")
-                .trim()
-                .to_string();
+            let reason = trimmed.lines().nth(1).unwrap_or("no reason given").trim().to_string();
             Ok(SpacerResult::Unknown { reason })
         }
         "sat" => {
             let interpretations = parse_model(trimmed)?;
             Ok(SpacerResult::Sat { interpretations })
         }
-        other => Err(CegarError::SolverError {
-            detail: format!("unexpected Spacer result: {other}"),
-        }),
+        other => {
+            Err(CegarError::SolverError { detail: format!("unexpected Spacer result: {other}") })
+        }
     }
 }
 
@@ -347,19 +336,14 @@ fn parse_model(output: &str) -> Result<Vec<PredicateInterpretation>, CegarError>
             body_str
         } else {
             // Simple atom (e.g., "true", "false").
-            let body_end = remaining
-                .find(|c: char| c == ')' || c.is_whitespace())
-                .unwrap_or(remaining.len());
+            let body_end =
+                remaining.find(|c: char| c == ')' || c.is_whitespace()).unwrap_or(remaining.len());
             let body_str = remaining[..body_end].to_string();
             remaining = &remaining[body_end..];
             body_str
         };
 
-        interpretations.push(PredicateInterpretation {
-            name,
-            params,
-            body,
-        });
+        interpretations.push(PredicateInterpretation { name, params, body });
     }
 
     Ok(interpretations)
@@ -419,10 +403,7 @@ pub struct SpacerConfig {
 
 impl Default for SpacerConfig {
     fn default() -> Self {
-        Self {
-            timeout_ms: 30_000,
-            max_unfold: None,
-        }
+        Self { timeout_ms: 30_000, max_unfold: None }
     }
 }
 
@@ -431,15 +412,9 @@ impl SpacerConfig {
     #[must_use]
     pub fn to_smtlib2_options(&self) -> String {
         let mut opts = String::new();
-        let _ = writeln!(opts, 
-            "(set-option :timeout {})",
-            self.timeout_ms
-        );
+        let _ = writeln!(opts, "(set-option :timeout {})", self.timeout_ms);
         if let Some(max) = self.max_unfold {
-            let _ = writeln!(opts, 
-                "(set-option :fp.spacer.max_level {})",
-                max
-            );
+            let _ = writeln!(opts, "(set-option :fp.spacer.max_level {})", max);
         }
         opts
     }
@@ -458,10 +433,7 @@ mod tests {
 
         // Init: x = 0 => Inv(x)
         system.add_clause(HornClause::init(
-            Formula::Eq(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
             PredicateApp::new("Inv", vec![Formula::Var("x".into(), Sort::Int)]),
         ));
 
@@ -487,14 +459,8 @@ mod tests {
         // Property: Inv(x) /\ x >= 10 => x <= 10
         system.add_clause(HornClause::property(
             PredicateApp::new("Inv", vec![Formula::Var("x".into(), Sort::Int)]),
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Le(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ));
 
         system
@@ -635,10 +601,7 @@ mod tests {
 
     #[test]
     fn test_spacer_config_to_smtlib2() {
-        let config = SpacerConfig {
-            timeout_ms: 5000,
-            max_unfold: Some(20),
-        };
+        let config = SpacerConfig { timeout_ms: 5000, max_unfold: Some(20) };
         let opts = config.to_smtlib2_options();
         assert!(opts.contains("(set-option :timeout 5000)"));
         assert!(opts.contains("(set-option :fp.spacer.max_level 20)"));
@@ -652,13 +615,8 @@ mod tests {
 
     #[test]
     fn test_app_to_smtlib_with_args() {
-        let app = PredicateApp::new(
-            "Inv",
-            vec![
-                Formula::Var("x".into(), Sort::Int),
-                Formula::Int(5),
-            ],
-        );
+        let app =
+            PredicateApp::new("Inv", vec![Formula::Var("x".into(), Sort::Int), Formula::Int(5)]);
         assert_eq!(app_to_smtlib(&app), "(Inv x 5)");
     }
 }

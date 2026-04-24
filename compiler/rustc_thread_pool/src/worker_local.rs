@@ -40,9 +40,6 @@ impl<T> WorkerLocal<T> {
     }
 
     fn current(&self) -> &T {
-        // SAFETY: the TLS worker pointer is either null or the live `WorkerThread` for this
-        // thread; we check for null, verify it belongs to `self.registry`, and then use its index,
-        // which is in bounds because `locals` was sized from that registry's thread count.
         unsafe {
             let worker_thread = WorkerThread::current();
             if worker_thread.is_null()

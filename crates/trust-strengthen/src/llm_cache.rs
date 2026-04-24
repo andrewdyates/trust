@@ -7,9 +7,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+
+use sha2::{Digest, Sha256};
 
 use crate::LlmResponse;
 
@@ -38,9 +39,7 @@ impl CacheKey {
         hasher.update(b"\x00");
         hasher.update(if tool_use { b"1" } else { b"0" });
         let result = hasher.finalize();
-        Self {
-            digest: format!("{result:x}"),
-        }
+        Self { digest: format!("{result:x}") }
     }
 
     /// Returns the hex digest string.
@@ -82,11 +81,7 @@ impl CacheStats {
     #[must_use]
     pub fn hit_rate(&self) -> f64 {
         let total = self.hits + self.misses;
-        if total == 0 {
-            0.0
-        } else {
-            self.hits as f64 / total as f64
-        }
+        if total == 0 { 0.0 } else { self.hits as f64 / total as f64 }
     }
 }
 
@@ -101,10 +96,7 @@ pub struct CacheConfig {
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self {
-            ttl: Duration::from_secs(600),
-            max_entries: 256,
-        }
+        Self { ttl: Duration::from_secs(600), max_entries: 256 }
     }
 }
 
@@ -135,11 +127,7 @@ impl ResponseCache {
     /// Create a new response cache with custom configuration.
     #[must_use]
     pub fn with_config(config: CacheConfig) -> Self {
-        Self {
-            entries: BTreeMap::new(),
-            config,
-            stats: CacheStats::default(),
-        }
+        Self { entries: BTreeMap::new(), config, stats: CacheStats::default() }
     }
 
     /// Look up a cached response by key, verifying source_hash and TTL.
@@ -182,14 +170,7 @@ impl ResponseCache {
             self.evict_oldest();
         }
 
-        self.entries.insert(
-            key,
-            CacheEntry {
-                response,
-                source_hash,
-                created: Instant::now(),
-            },
-        );
+        self.entries.insert(key, CacheEntry { response, source_hash, created: Instant::now() });
     }
 
     /// Evict the oldest entry (by creation time).
@@ -199,11 +180,8 @@ impl ResponseCache {
         }
 
         // Find the oldest entry by creation time
-        let oldest_key = self
-            .entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.created)
-            .map(|(key, _)| key.clone());
+        let oldest_key =
+            self.entries.iter().min_by_key(|(_, entry)| entry.created).map(|(key, _)| key.clone());
 
         if let Some(key) = oldest_key {
             self.entries.remove(&key);
@@ -320,21 +298,13 @@ mod tests {
 
     #[test]
     fn test_cache_stats_hit_rate_all_hits() {
-        let stats = CacheStats {
-            hits: 10,
-            misses: 0,
-            ..Default::default()
-        };
+        let stats = CacheStats { hits: 10, misses: 0, ..Default::default() };
         assert!((stats.hit_rate() - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_cache_stats_hit_rate_mixed() {
-        let stats = CacheStats {
-            hits: 3,
-            misses: 7,
-            ..Default::default()
-        };
+        let stats = CacheStats { hits: 3, misses: 7, ..Default::default() };
         assert!((stats.hit_rate() - 0.3).abs() < f64::EPSILON);
     }
 
@@ -388,10 +358,7 @@ mod tests {
 
     #[test]
     fn test_cache_expiration() {
-        let config = CacheConfig {
-            ttl: Duration::from_millis(1),
-            max_entries: 256,
-        };
+        let config = CacheConfig { ttl: Duration::from_millis(1), max_entries: 256 };
         let mut cache = ResponseCache::with_config(config);
         let key = CacheKey::new("prompt", "model", false);
         cache.insert(key.clone(), make_response("ephemeral"), 42);
@@ -407,10 +374,7 @@ mod tests {
 
     #[test]
     fn test_cache_eviction_at_capacity() {
-        let config = CacheConfig {
-            ttl: Duration::from_secs(600),
-            max_entries: 3,
-        };
+        let config = CacheConfig { ttl: Duration::from_secs(600), max_entries: 3 };
         let mut cache = ResponseCache::with_config(config);
 
         // Fill to capacity
@@ -467,18 +431,9 @@ mod tests {
         cache.insert(k3.clone(), make_response("a-tool"), 3);
 
         assert_eq!(cache.len(), 3);
-        assert_eq!(
-            cache.get(&k1, 1).expect("k1 should hit").content,
-            "a-no-tool"
-        );
-        assert_eq!(
-            cache.get(&k2, 2).expect("k2 should hit").content,
-            "b-no-tool"
-        );
-        assert_eq!(
-            cache.get(&k3, 3).expect("k3 should hit").content,
-            "a-tool"
-        );
+        assert_eq!(cache.get(&k1, 1).expect("k1 should hit").content, "a-no-tool");
+        assert_eq!(cache.get(&k2, 2).expect("k2 should hit").content, "b-no-tool");
+        assert_eq!(cache.get(&k3, 3).expect("k3 should hit").content, "a-tool");
         assert_eq!(cache.stats().hits, 3);
     }
 

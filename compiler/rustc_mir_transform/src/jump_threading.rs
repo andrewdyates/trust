@@ -441,7 +441,7 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
                 TrackElem::DerefLen => {
                     let op: OpTy<'_> = self.ecx.deref_pointer(op).discard_err()?.into();
                     let len_usize = op.len(&self.ecx).discard_err()?;
-                    let layout = self.ecx.layout_of(self.tcx.types.usize).expect("invariant: usize layout must be available"); // tRust: unwrap elimination
+                    let layout = self.ecx.layout_of(self.tcx.types.usize).unwrap();
                     Some(ImmTy::from_uint(len_usize, layout).into())
                 }
             },
@@ -545,7 +545,7 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
             }
             // Transfer the conditions on the copy rhs, after inverting the value of the condition.
             Rvalue::UnaryOp(UnOp::Not, Operand::Move(operand) | Operand::Copy(operand)) => {
-                let layout = self.ecx.layout_of(operand.ty(self.body, self.tcx).ty).expect("invariant: operand type layout must be available"); // tRust: unwrap elimination
+                let layout = self.ecx.layout_of(operand.ty(self.body, self.tcx).ty).unwrap();
                 let Some(lhs) = self.value(lhs) else { return };
                 let Some(operand) = self.place_value(*operand, None) else { return };
                 state.retain_mut(|mut c| {
@@ -647,7 +647,6 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
             // Disallowed during optimizations.
             TerminatorKind::FalseEdge { .. }
             | TerminatorKind::FalseUnwind { .. }
-            // tRust: invariant: MIR phase guarantee — coroutine drops/yields are lowered before this MIR phase
             | TerminatorKind::Yield { .. } => bug!("{term:?} invalid"),
             // Cannot reason about inline asm.
             TerminatorKind::InlineAsm { .. } => {

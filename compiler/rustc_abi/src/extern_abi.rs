@@ -76,7 +76,7 @@ pub enum ExternAbi {
     /// An entry-point function called by the GPU's host
     GpuKernel,
     /// An entry-point function called by the GPU's host
-    // tRust: known issue — why do we have two of these?
+    // FIXME: why do we have two of these?
     PtxKernel,
 
     /* interrupt */

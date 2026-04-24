@@ -227,6 +227,7 @@ pub const trait Drop {
     /// what state they are in.
     ///
     /// Note that even if this panics, the value is considered to be dropped;
+    
     /// handled by the compiler, but when using unsafe code, can sometimes occur
     /// unintentionally, particularly when using [`ptr::drop_in_place`].
     ///

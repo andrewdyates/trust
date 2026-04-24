@@ -43,7 +43,7 @@ macro_rules! pluralize {
 ///
 /// Take a list of items and a function to turn those items into a `String`, and output a display
 /// friendly comma separated list of those items.
-// tRust: known issue (estebank) — this needs to be changed to go through the translation machinery.
+// FIXME(estebank): this needs to be changed to go through the translation machinery.
 pub fn listify<T>(list: &[T], fmt: impl Fn(&T) -> String) -> Option<String> {
     Some(match list {
         [only] => fmt(&only),

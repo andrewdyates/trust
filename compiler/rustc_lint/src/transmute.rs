@@ -19,7 +19,6 @@ declare_lint! {
     ///
     /// ```rust
     /// const fn foo(ptr: *const u8) -> usize {
-    ///    // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///    unsafe {
     ///        std::mem::transmute::<*const u8, usize>(ptr)
     ///    }
@@ -53,7 +52,6 @@ declare_lint! {
     ///
     /// ```rust
     /// fn bytes_at_home(x: [u8; 4]) -> u32 {
-    ///   // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///   unsafe { std::mem::transmute(x) }
     /// }
     /// ```
@@ -79,7 +77,6 @@ declare_lint! {
     ///
     /// ```rust
     /// fn foo(a: usize) -> *const u8 {
-    ///    // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///    unsafe {
     ///        std::mem::transmute::<usize, *const u8>(a)
     ///    }
@@ -344,8 +341,8 @@ fn check_unnecessary_transmute<'tcx>(
             (Some(vec![(callee_span, format!("{dst}::from_bits"))]), None)
         }
         // bool → x8 in const context since `From::from` is not const yet
-        // tRust: known issue — Consider arg expr's precedence to avoid parentheses.
-        // tRust: known issue — (const_traits) Remove this when `From::from` is constified.
+        // FIXME: Consider arg expr's precedence to avoid parentheses.
+        // FIXME(const_traits): Remove this when `From::from` is constified.
         (ty::Bool, ty::Int(..) | ty::Uint(..)) if const_context.is_some() => (
             Some(vec![
                 (callee_span, "".to_string()),

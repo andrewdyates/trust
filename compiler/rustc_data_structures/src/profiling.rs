@@ -210,7 +210,7 @@ impl SelfProfilerRef {
         where
             F: for<'a> FnOnce(&'a SelfProfiler) -> TimingGuard<'a>,
         {
-            let profiler = profiler_ref.profiler.as_ref().expect("invariant: profiler must be initialized"); // tRust: unwrap -> expect
+            let profiler = profiler_ref.profiler.as_ref().unwrap();
             f(profiler)
         }
 
@@ -423,7 +423,7 @@ impl SelfProfilerRef {
                 profiler_ref
                     .profiler
                     .as_ref()
-                    .expect("invariant: profiler must be initialized") // tRust: unwrap -> expect
+                    .unwrap()
                     .increment_query_cache_hit_counters(QueryInvocationId(query_invocation_id.0));
             }
             if profiler_ref.event_filter_mask.contains(EventFilter::QUERY_CACHE_HITS) {
@@ -488,7 +488,7 @@ impl SelfProfilerRef {
     ) {
         let event_id = StringId::new_virtual(query_invocation_id.0);
         let thread_id = get_thread_id();
-        let profiler = self.profiler.as_ref().expect("invariant: profiler must be initialized"); // tRust: unwrap -> expect
+        let profiler = self.profiler.as_ref().unwrap();
         profiler.profiler.record_instant_event(
             event_kind(profiler),
             EventId::from_virtual(event_id),
@@ -518,7 +518,7 @@ impl SelfProfilerRef {
     /// IDs.
     pub fn store_query_cache_hits(&self) {
         if self.event_filter_mask.contains(EventFilter::QUERY_CACHE_HIT_COUNTS) {
-            let profiler = self.profiler.as_ref().expect("invariant: profiler must be initialized"); // tRust: unwrap -> expect
+            let profiler = self.profiler.as_ref().unwrap();
             let query_hits = profiler.query_hits.read();
             let builder = EventIdBuilder::new(&profiler.profiler);
             let thread_id = get_thread_id();
@@ -626,7 +626,7 @@ impl SelfProfiler {
         fs::create_dir_all(output_directory)?;
 
         let crate_name = crate_name.unwrap_or("unknown-crate");
-        // tRust: known issue — (eddyb) we need to pad the PID, strange as it may seem, as its
+        // HACK(eddyb) we need to pad the PID, strange as it may seem, as its
         // length can behave as a source of entropy for heap addresses, when
         // ASLR is disabled and the heap is otherwise deterministic.
         let pid: u32 = process::id();
@@ -866,7 +866,7 @@ struct JsonTimePassesEntry<'a> {
 impl Display for JsonTimePassesEntry<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self { pass: what, time, start_rss, end_rss } = self;
-        write!(f, r#"{{"pass":"{what}","time":{time},"rss_start":"#).expect("invariant: write to formatter must succeed"); // tRust: unwrap -> expect
+        write!(f, r#"{{"pass":"{what}","time":{time},"rss_start":"#).unwrap();
         match start_rss {
             Some(rss) => write!(f, "{rss}")?,
             None => write!(f, "null")?,
@@ -962,9 +962,6 @@ cfg_select! {
 
             let mut pmc = PROCESS_MEMORY_COUNTERS::default();
             let pmc_size = size_of_val(&pmc);
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because `GetCurrentProcess()` yields a valid pseudo-
-            // handle, `pmc` is writable, and `pmc_size` is its exact size.
             unsafe {
                 K32GetProcessMemoryInfo(
                     GetCurrentProcess(),
@@ -984,8 +981,6 @@ cfg_select! {
             use std::mem;
             const PROC_TASKINFO_SIZE: c_int = size_of::<proc_taskinfo>() as c_int;
 
-            // SAFETY: The pointer is non-null and properly aligned, derived
-            // from a valid reference or allocation that outlives this use.
             unsafe {
                 let mut info: proc_taskinfo = mem::zeroed();
                 let info_ptr = &mut info as *mut proc_taskinfo as *mut c_void;

@@ -7,7 +7,6 @@ use std::arch::asm;
 
 fn exit_syscall(status: i32) -> ! {
     #[cfg(target_arch = "x86_64")]
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!(
             "syscall",

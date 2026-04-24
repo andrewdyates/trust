@@ -441,7 +441,7 @@ pub(crate) struct UnionIter<X: Iterator, Y: Iterator> {
     ys: Peekable<Y>,
 }
 
-// tRust: known issue (jswrenn) — we'd likely benefit from specializing try_fold here.
+// FIXME(jswrenn) we'd likely benefit from specializing try_fold here.
 impl<S: Copy, X: Iterator<Item = (Byte, S)>, Y: Iterator<Item = (Byte, S)>> Iterator
     for UnionIter<X, Y>
 {

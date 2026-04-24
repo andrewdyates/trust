@@ -140,7 +140,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     item_msg = access_place_desc;
                     let local_info = self.body.local_decls[local].local_info();
                     let LocalInfo::StaticRef { def_id, .. } = *local_info else {
-                        // tRust: invariant — diagnostic precondition — borrowck state must be complete before diagnostic generation
                         bug!("is_ref_to_static return true, but not ref to static?");
                     };
                     let static_name = &self.infcx.tcx.item_name(def_id);
@@ -193,7 +192,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                         | ProjectionElem::Downcast(..)
                         | ProjectionElem::UnwrapUnsafeBinder(_),
                     ],
-            // tRust: invariant — type system guarantee
             } => bug!("Unexpected immutable place."),
         }
 
@@ -558,7 +556,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             // We want to point out when a `&` can be readily replaced
             // with an `&mut`.
             //
-            // // NOTE: this case could potentially be generalized to work for an to work for an
+            // FIXME: can this case be generalized to work for an
             // arbitrary base for the projection?
             PlaceRef { local, projection: [ProjectionElem::Deref] }
                 if self.body.local_decls[local].is_user_variable() =>
@@ -898,7 +896,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                 // We have an origin for this closure kind starting at this root variable so it's
                 // safe to unwrap here.
                 let captured_places =
-                    tables.closure_min_captures[&closure_local_def_id].get(&root_hir_id).expect("invariant: closure captures must contain the root variable");
+                    tables.closure_min_captures[&closure_local_def_id].get(&root_hir_id).unwrap();
 
                 let origin_projection = closure_kind_origin
                     .projections
@@ -926,19 +924,16 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                             ty::UpvarCapture::ByValue | ty::UpvarCapture::ByUse => {
                                 capture_reason = format!("possible mutation of `{upvar}`");
                             }
-                            // tRust: invariant — type system guarantee
                             _ => bug!("upvar `{upvar}` borrowed, but not mutably"),
                         }
                         break;
                     }
                 }
                 if capture_reason.is_empty() {
-                    // tRust: invariant — type system guarantee
                     bug!("upvar `{upvar}` borrowed, but cannot find reason");
                 }
                 capture_reason
             } else {
-                // tRust: invariant — type system guarantee
                 bug!("not an upvar")
             };
             // Sometimes we deliberately don't store the name of a place when coming from a macro in
@@ -1421,7 +1416,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         } else {
             // Otherwise, suggest that the user annotates the binding; We provide the
             // type of the local.
-            let ty = local_decl.ty.builtin_deref(true).expect("invariant: type must be a reference or pointer");
+            let ty = local_decl.ty.builtin_deref(true).unwrap();
 
             (span, format!("{}mut {}", if local_decl.ty.is_ref() { "&" } else { "*" }, ty), false)
         };
@@ -1433,7 +1428,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             suggest(
                 sugg,
                 Applicability::MachineApplicable,
-                // // NOTE(fee1-dead): this somehow doesn't fire
+                // FIXME(fee1-dead) this somehow doesn't fire
                 if has_change { " and changing the binding's type" } else { "" },
             );
             return;
@@ -1460,7 +1455,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             return;
         };
 
-        let tables = self.infcx.tcx.typeck(def_id.as_local().expect("invariant: def_id must be local"));
+        let tables = self.infcx.tcx.typeck(def_id.as_local().unwrap());
         if let Some(clone_trait) = self.infcx.tcx.lang_items().clone_trait()
             && let Some(expr) = local.init
             && let ty = tables.node_type_opt(expr.hir_id)
@@ -1473,7 +1468,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                 .as_deref()
             {
                 Some([]) => {
-                    // // NOTE: this error message isn't useful, since we're just, since we're just
+                    // FIXME: This error message isn't useful, since we're just
                     // vaguely suggesting to clone a value that already
                     // implements `Clone`.
                     //

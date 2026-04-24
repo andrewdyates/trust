@@ -29,14 +29,14 @@ pub fn compile_windows_resource_file(
     file_description: &str,
     filetype: VersionInfoFileType,
 ) -> path::PathBuf {
-    let mut resources_dir = path::PathBuf::from(env::var_os("OUT_DIR").expect("invariant: OUT_DIR set by cargo")); // tRust: unwrap -> expect
+    let mut resources_dir = path::PathBuf::from(env::var_os("OUT_DIR").unwrap());
     resources_dir.push("resources");
-    fs::create_dir_all(&resources_dir).expect("invariant: can create resources subdirectory in OUT_DIR"); // tRust: unwrap -> expect
+    fs::create_dir_all(&resources_dir).unwrap();
 
     let resource_compiler = if let Ok(path) = env::var("RUSTC_WINDOWS_RC") {
         path.into()
     } else {
-        find_msvc_tools::find_tool(&env::var("CARGO_CFG_TARGET_ARCH").expect("invariant: CARGO_CFG_TARGET_ARCH set by cargo"), "rc.exe") // tRust: unwrap -> expect
+        find_msvc_tools::find_tool(&env::var("CARGO_CFG_TARGET_ARCH").unwrap(), "rc.exe")
             .expect("found rc.exe")
             .path()
             .to_owned()
@@ -76,11 +76,11 @@ fn write_resource_script_file(
     let descriptive_version = env::var("CFG_VERSION").unwrap_or("unknown".to_string());
 
     // Set the product name to "Rust Compiler" or "Rust Compiler (nightly)" etc
-    let product_name = product_name(env::var("CFG_RELEASE_CHANNEL").expect("invariant: CFG_RELEASE_CHANNEL set by bootstrap")); // tRust: unwrap -> expect
+    let product_name = product_name(env::var("CFG_RELEASE_CHANNEL").unwrap());
 
     // For the numeric version we need `major,minor,patch,build`.
     // Extract them from `CFG_RELEASE` which is "major.minor.patch" and a "-dev", "-nightly" or similar suffix
-    let cfg_release = env::var("CFG_RELEASE").expect("invariant: CFG_RELEASE set by bootstrap"); // tRust: unwrap -> expect
+    let cfg_release = env::var("CFG_RELEASE").unwrap();
     // remove the suffix, if present and parse into [`ResourceVersion`]
     let version = parse_version(cfg_release.split("-").next().unwrap_or("0.0.0"))
         .expect("valid CFG_RELEASE version");

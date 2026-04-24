@@ -39,7 +39,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }],
             );
         } else {
-            // tRust: invariant — overloaded deref only succeeds for `Deref::deref`, whose receiver type is `&self`
             span_bug!(expr.span, "input to deref is not a ref?");
         }
         let ty = self.make_overloaded_place_return_type(method);
@@ -56,7 +55,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         index_expr: &'tcx hir::Expr<'tcx>,
         idx_ty: Ty<'tcx>,
     ) -> Option<(/*index type*/ Ty<'tcx>, /*element type*/ Ty<'tcx>)> {
-        // NOTE(#18741): this is almost but not quite the same as the
+        // FIXME(#18741) -- this is almost but not quite the same as the
         // autoderef that normal method probing does. They could likely be
         // consolidated.
 
@@ -172,7 +171,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         target: Ty::new_imm_ref(self.tcx, *region, adjusted_ty),
                     });
                 } else {
-                    // tRust: invariant — overloaded indexing only succeeds for `Index::index`, whose receiver type is `&self`
                     span_bug!(expr.span, "input to index is not a ref?");
                 }
                 if unsize {
@@ -213,7 +211,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return None;
         };
 
-        // NOTE(trait-system-refactor-initiative#231): we may want to treat
+        // FIXME(trait-system-refactor-initiative#231): we may want to treat
         // opaque types as rigid here to support `impl Deref<Target = impl Index<usize>>`.
         let treat_opaques = TreatNotYetDefinedOpaques::AsInfer;
         self.lookup_method_for_operator(
@@ -271,7 +269,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         while let hir::ExprKind::Field(expr, _)
         | hir::ExprKind::Index(expr, _, _)
-        | hir::ExprKind::Unary(hir::UnOp::Deref, expr) = exprs.last().expect("invariant: non-empty collection").kind
+        | hir::ExprKind::Unary(hir::UnOp::Deref, expr) = exprs.last().unwrap().kind
         {
             exprs.push(expr);
         }
@@ -312,7 +310,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     {
                         let method = self.register_infer_ok_obligations(ok);
                         let ty::Ref(_, _, mutbl) = *method.sig.output().kind() else {
-                            // tRust: invariant — `DerefMut::deref_mut` must return `&mut Target`, so the overloaded deref result has to be a mutable reference
                             span_bug!(
                                 self.tcx.def_span(method.def_id),
                                 "expected DerefMut to return a &mut"
@@ -398,7 +395,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.write_method_call_and_enforce_effects(expr.hir_id, expr.span, method);
 
         let ty::Ref(region, _, hir::Mutability::Mut) = method.sig.inputs()[0].kind() else {
-            // tRust: invariant — mutable overloaded place ops only succeed for `&mut self` receivers such as `IndexMut::index_mut` or `DerefMut::deref_mut`
             span_bug!(expr.span, "input to mutable place op is not a mut ref?");
         };
 

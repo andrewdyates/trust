@@ -89,7 +89,7 @@ pub(crate) struct CrateMetadata {
     /// Data about the top-level items in a crate, as well as various crate-level metadata.
     root: CrateRoot,
     /// Trait impl data.
-    /// tRust: known issue — Used only from queries and can use query cache,
+    /// FIXME: Used only from queries and can use query cache,
     /// so pre-decoding can probably be avoided.
     trait_impls: FxIndexMap<(u32, DefIndex), LazyArray<(DefIndex, Option<SimplifiedType>)>>,
     /// Inherent impls which do not follow the normal coherence rules.
@@ -196,7 +196,7 @@ pub(super) trait LazyDecoder: BlobDecoder {
             }
             LazyState::Previous(last_pos) => last_pos.get() + distance,
         };
-        let position = NonZero::new(position).expect("invariant: decoded lazy position is non-zero"); // tRust: unwrap→expect
+        let position = NonZero::new(position).unwrap();
         self.set_lazy_state(LazyState::Previous(position));
         f(position)
     }
@@ -264,14 +264,14 @@ impl<'a> Metadata<'a> for &'a MetadataBlob {
 
     fn decoder(self, pos: usize) -> Self::Context {
         BlobDecodeContext {
-            // tRust: known issue — This unwrap should never panic because we check that it won't when creating
+            // FIXME: This unwrap should never panic because we check that it won't when creating
             // `MetadataBlob`. Ideally we'd just have a `MetadataDecoder` and hand out subslices of
             // it as we do elsewhere in the compiler using `MetadataDecoder::split_at`. But we own
             // the data for the decoder so holding onto the `MemDecoder` too would make us a
             // self-referential struct which is downright goofy because `MetadataBlob` is already
             // self-referential. Probably `MemDecoder` should contain an `OwnedSlice`, but that
             // demands a significant refactoring due to our crate graph.
-            opaque: MemDecoder::new(self, pos).expect("invariant: valid metadata position for decoder"), // tRust: unwrap→expect
+            opaque: MemDecoder::new(self, pos).unwrap(),
             lazy_state: LazyState::NoNode,
             blob: self.blob(),
         }
@@ -488,13 +488,13 @@ impl<'a, 'tcx> SpanDecoder for MetadataDecodeContext<'a, 'tcx> {
                 .root
                 .expn_data
                 .get((crate_data, tcx), index)
-                .expect("invariant: expn_data must exist for expansion index") // tRust: unwrap -> expect
+                .unwrap()
                 .decode((crate_data, tcx));
             let expn_hash = crate_data
                 .root
                 .expn_hashes
                 .get((crate_data, tcx), index)
-                .expect("invariant: expn_hash must exist for expansion index") // tRust: unwrap -> expect
+                .unwrap()
                 .decode((crate_data, tcx));
             (expn_data, expn_hash)
         });
@@ -508,7 +508,7 @@ impl<'a, 'tcx> SpanDecoder for MetadataDecodeContext<'a, 'tcx> {
             // Skip past the tag we just peek'd.
             self.read_u8();
             // indirect tag lengths are safe to access, since they're (0, 8)
-            let bytes_needed = tag.length().expect("invariant: indirect span tag must have valid length").0 as usize; // tRust: unwrap -> expect
+            let bytes_needed = tag.length().unwrap().0 as usize;
             let mut total = [0u8; usize::BITS as usize / 8];
             total[..bytes_needed].copy_from_slice(self.read_raw_bytes(bytes_needed));
             let offset_or_position = usize::from_le_bytes(total);
@@ -708,7 +708,7 @@ impl MetadataBlob {
         }
 
         let found_version =
-            LazyValue::<String>::from_position(NonZero::new(METADATA_HEADER.len() + 8).expect("invariant: metadata header + 8 is always non-zero")) // tRust: unwrap -> expect
+            LazyValue::<String>::from_position(NonZero::new(METADATA_HEADER.len() + 8).unwrap())
                 .decode(self);
         if rustc_version(cfg_version) != found_version {
             return Err(Some(found_version));
@@ -719,9 +719,9 @@ impl MetadataBlob {
 
     fn root_pos(&self) -> NonZero<usize> {
         let offset = METADATA_HEADER.len();
-        let pos_bytes = self[offset..][..8].try_into().expect("invariant: 8-byte slice must convert to [u8; 8]"); // tRust: unwrap -> expect
+        let pos_bytes = self[offset..][..8].try_into().unwrap();
         let pos = u64::from_le_bytes(pos_bytes);
-        NonZero::new(pos as usize).expect("invariant: root position in metadata must be non-zero") // tRust: unwrap -> expect
+        NonZero::new(pos as usize).unwrap()
     }
 
     pub(crate) fn get_header(&self) -> CrateHeader {
@@ -821,7 +821,7 @@ impl MetadataBlob {
                                 .tables
                                 .def_keys
                                 .get(self, parent)
-                                .expect("invariant: def_key must exist for parent index") // tRust: unwrap -> expect
+                                .unwrap()
                                 .decode(self))
                             .to_string_no_crate_verbose()
                         )?;
@@ -860,8 +860,8 @@ impl MetadataBlob {
                     ) -> io::Result<()> {
                         let root = blob.get_root();
 
-                        let def_kind = root.tables.def_kind.get(blob, item).expect("invariant: def_kind must exist for item"); // tRust: unwrap -> expect
-                        let def_key = root.tables.def_keys.get(blob, item).expect("invariant: def_key must exist for item").decode(blob); // tRust: unwrap -> expect
+                        let def_kind = root.tables.def_kind.get(blob, item).unwrap();
+                        let def_key = root.tables.def_keys.get(blob, item).unwrap().decode(blob);
                         #[allow(rustc::symbol_intern_string_literal)]
                         let def_name = if item == CRATE_DEF_INDEX {
                             kw::Crate
@@ -873,7 +873,7 @@ impl MetadataBlob {
                                 .unwrap_or_else(|| Symbol::intern("???"))
                         };
                         let visibility =
-                            root.tables.visibility.get(blob, item).expect("invariant: visibility must exist for item").decode(blob).map_id( // tRust: unwrap -> expect
+                            root.tables.visibility.get(blob, item).unwrap().decode(blob).map_id(
                                 |index| {
                                     format!(
                                         "crate{}",
@@ -881,7 +881,7 @@ impl MetadataBlob {
                                             .tables
                                             .def_keys
                                             .get(blob, parent)
-                                            .expect("invariant: def_key must exist for parent index") // tRust: unwrap -> expect
+                                            .unwrap()
                                             .decode(blob))
                                         .to_string_no_crate_verbose()
                                     )
@@ -973,12 +973,12 @@ impl<'a> CrateMetadataRef<'a> {
             .root
             .proc_macro_data
             .as_ref()
-            .expect("invariant: proc_macro_data must exist for proc macro crate") // tRust: unwrap -> expect
+            .unwrap()
             .macros
             .decode((self, tcx))
             .position(|i| i == id)
-            .expect("invariant: proc macro DefIndex must be present in proc_macro_data"); // tRust: unwrap -> expect
-        &self.raw_proc_macros.expect("invariant: raw_proc_macros must be loaded for proc macro crate")[pos] // tRust: unwrap -> expect
+            .unwrap();
+        &self.raw_proc_macros.unwrap()[pos]
     }
 
     fn opt_item_name(self, item_index: DefIndex) -> Option<Symbol> {
@@ -1083,7 +1083,7 @@ impl<'a> CrateMetadataRef<'a> {
         };
 
         let data =
-            self.root.tables.variant_data.get((self, tcx), index).expect("invariant: variant_data must exist for ADT variant").decode((self, tcx)); // tRust: unwrap -> expect
+            self.root.tables.variant_data.get((self, tcx), index).unwrap().decode((self, tcx));
 
         let variant_did =
             if adt_kind == ty::AdtKind::Enum { Some(self.local_def_id(index)) } else { None };
@@ -1123,7 +1123,7 @@ impl<'a> CrateMetadataRef<'a> {
             _ => bug!("get_adt_def called on a non-ADT {:?}", did),
         };
         let repr =
-            self.root.tables.repr_options.get((self, tcx), item_id).expect("invariant: repr_options must exist for ADT def").decode((self, tcx)); // tRust: unwrap -> expect
+            self.root.tables.repr_options.get((self, tcx), item_id).unwrap().decode((self, tcx));
 
         let mut variants: Vec<_> = if let ty::AdtKind::Enum = adt_kind {
             self.root
@@ -1269,7 +1269,7 @@ impl<'a> CrateMetadataRef<'a> {
                 // Iterate over all children.
                 let non_reexports =
                     self.root.tables.module_children_non_reexports.get((self, tcx), id);
-                for child_index in non_reexports.expect("invariant: non_reexports must exist for module").decode((self, tcx)) { // tRust: unwrap -> expect
+                for child_index in non_reexports.unwrap().decode((self, tcx)) {
                     yield self.get_mod_child(tcx, child_index);
                 }
 
@@ -1349,7 +1349,7 @@ impl<'a> CrateMetadataRef<'a> {
             _ => bug!("cannot get associated-item of `{:?}`", self.def_key(id)),
         };
         let container =
-            self.root.tables.assoc_container.get((self, tcx), id).expect("invariant: assoc_container must exist for associated item").decode((self, tcx)); // tRust: unwrap -> expect
+            self.root.tables.assoc_container.get((self, tcx), id).unwrap().decode((self, tcx));
 
         ty::AssocItem { kind, def_id: self.local_def_id(id), container }
     }
@@ -1362,7 +1362,7 @@ impl<'a> CrateMetadataRef<'a> {
                     .tables
                     .variant_data
                     .get((self, tcx), node_id)
-                    .expect("invariant: variant_data must exist for struct/variant") // tRust: unwrap -> expect
+                    .unwrap()
                     .decode((self, tcx));
                 vdata.ctor.map(|(kind, index)| (kind, self.local_def_id(index)))
             }
@@ -1532,7 +1532,7 @@ impl<'a> CrateMetadataRef<'a> {
                     .tables
                     .macro_definition
                     .get((self, tcx), id)
-                    .expect("invariant: macro_definition must exist for Macro def kind") // tRust: unwrap -> expect
+                    .unwrap()
                     .decode((self, tcx));
                 ast::MacroDef { macro_rules, body: Box::new(body), eii_declaration: None }
             }
@@ -1543,7 +1543,7 @@ impl<'a> CrateMetadataRef<'a> {
     #[inline]
     fn def_key(self, index: DefIndex) -> DefKey {
         *self.def_key_cache.lock().entry(index).or_insert_with(|| {
-            self.root.tables.def_keys.get(&self.blob, index).expect("invariant: def_key must exist for DefIndex").decode(&self.blob) // tRust: unwrap -> expect
+            self.root.tables.def_keys.get(&self.blob, index).unwrap().decode(&self.blob)
         })
     }
 
@@ -1602,7 +1602,7 @@ impl<'a> CrateMetadataRef<'a> {
             map[&hash]
         };
 
-        let data = self.root.expn_data.get((self, tcx), index).expect("invariant: expn_data must exist for expansion index").decode((self, tcx)); // tRust: unwrap -> expect
+        let data = self.root.expn_data.get((self, tcx), index).unwrap().decode((self, tcx));
         rustc_span::hygiene::register_expn_id(self.cnum, index, data, hash)
     }
 

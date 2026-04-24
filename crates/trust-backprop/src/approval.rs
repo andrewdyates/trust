@@ -89,11 +89,7 @@ impl ApprovalQueue {
 
     /// Add a rewrite to the pending queue.
     pub fn enqueue(&mut self, rewrite: SourceRewrite, policy: ApprovalPolicy) {
-        self.pending.push(PendingRewrite {
-            rewrite,
-            policy,
-            reviewer_notes: None,
-        });
+        self.pending.push(PendingRewrite { rewrite, policy, reviewer_notes: None });
     }
 
     /// Number of pending rewrites.
@@ -112,30 +108,19 @@ impl ApprovalQueue {
     ///
     /// Returns `None` if the index is out of bounds.
     pub fn approve(&mut self, index: usize) -> Option<SourceRewrite> {
-        if index < self.pending.len() {
-            Some(self.pending.remove(index).rewrite)
-        } else {
-            None
-        }
+        if index < self.pending.len() { Some(self.pending.remove(index).rewrite) } else { None }
     }
 
     /// Reject a pending rewrite by index, removing it from the queue.
     ///
     /// Returns `None` if the index is out of bounds.
     pub fn reject(&mut self, index: usize) -> Option<PendingRewrite> {
-        if index < self.pending.len() {
-            Some(self.pending.remove(index))
-        } else {
-            None
-        }
+        if index < self.pending.len() { Some(self.pending.remove(index)) } else { None }
     }
 
     /// Approve all pending rewrites, draining the queue.
     pub fn approve_all(&mut self) -> Vec<SourceRewrite> {
-        self.pending
-            .drain(..)
-            .map(|pr| pr.rewrite)
-            .collect()
+        self.pending.drain(..).map(|pr| pr.rewrite).collect()
     }
 
     /// Drain all pending rewrites, returning them for external processing.
@@ -152,17 +137,26 @@ impl ApprovalQueue {
 #[must_use]
 pub fn classify_rewrite(rewrite: &SourceRewrite, rules: &[PolicyRule]) -> ApprovalPolicy {
     for rule in rules {
-        let path_matches = rewrite.function_name.contains(&rule.path_pattern)
-            || rewrite.file_path.contains(&rule.path_pattern);
+        let path_matches = if rule.path_pattern.is_empty() {
+            true
+        } else if rule.path_pattern.contains('/')
+            || rule.path_pattern.contains('\\')
+            || rule.path_pattern.ends_with(".rs")
+        {
+            rewrite.file_path.contains(&rule.path_pattern)
+        } else {
+            rewrite.function_name.contains(&rule.path_pattern)
+                || rewrite.file_path.split(['/', '\\']).any(|segment| {
+                    let stem = segment.strip_suffix(".rs").unwrap_or(segment);
+                    stem == rule.path_pattern
+                })
+        };
 
         if !path_matches {
             continue;
         }
 
-        let kind_matches = rule
-            .kind_filter
-            .as_ref()
-            .is_none_or(|f| f.matches(&rewrite.kind));
+        let kind_matches = rule.kind_filter.as_ref().is_none_or(|f| f.matches(&rewrite.kind));
 
         if kind_matches {
             return rule.policy;
@@ -181,9 +175,7 @@ pub fn classify_rewrite(rewrite: &SourceRewrite, rules: &[PolicyRule]) -> Approv
 /// - Everything else -> Auto
 fn default_classify(rewrite: &SourceRewrite) -> ApprovalPolicy {
     // Unsafe functions always need review
-    if rewrite.function_name.contains("unsafe")
-        || rewrite.file_path.contains("unsafe")
-    {
+    if rewrite.function_name.contains("unsafe") || rewrite.file_path.contains("unsafe") {
         return ApprovalPolicy::Review;
     }
 
@@ -242,9 +234,7 @@ mod tests {
     }
 
     fn attr_kind() -> RewriteKind {
-        RewriteKind::InsertAttribute {
-            attribute: "#[requires(\"x > 0\")]".into(),
-        }
+        RewriteKind::InsertAttribute { attribute: "#[requires(\"x > 0\")]".into() }
     }
 
     fn replace_kind() -> RewriteKind {
@@ -255,9 +245,7 @@ mod tests {
     }
 
     fn assert_kind() -> RewriteKind {
-        RewriteKind::InsertAssertion {
-            assertion: "assert!(i < v.len());".into(),
-        }
+        RewriteKind::InsertAssertion { assertion: "assert!(i < v.len());".into() }
     }
 
     // --- ApprovalPolicy tests ---

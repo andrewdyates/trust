@@ -32,7 +32,6 @@ pub(crate) fn item_namespace<'ll>(cx: &CodegenCx<'ll, '_>, def_id: DefId) -> &'l
         output
     };
 
-    // SAFETY: The `DIBuilder` is valid, the scope reference is valid, and the name buffer and length are valid.
     let scope = unsafe {
         llvm::LLVMDIBuilderCreateNameSpace(
             DIB(cx),

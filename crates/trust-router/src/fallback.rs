@@ -237,7 +237,7 @@ fn execute_sequential(
                 VerificationCondition {
                     formula: simplified,
                     kind: vc.kind.clone(),
-                    function: vc.function.clone(),
+                    function: vc.function,
                     location: vc.location.clone(),
                     contract_metadata: vc.contract_metadata,
                 }
@@ -259,7 +259,7 @@ fn execute_sequential(
                     // Spurious counterexample from over-approximated formula.
                     // Treat as Unknown — do not report as definitive failure.
                     let downgraded = VerificationResult::Unknown {
-                        solver: backend.name().to_string(),
+                        solver: backend.name().into(),
                         time_ms: result.time_ms(),
                         reason: "Failed on simplified formula (over-approximation may produce spurious CEX)".to_string(),
                     };
@@ -604,7 +604,7 @@ mod tests {
     fn make_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -622,7 +622,7 @@ mod tests {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "always-proves".to_string(),
+                solver: "always-proves".into(),
                 time_ms: 1,
                 strength: ProofStrength::smt_unsat(),
                 proof_certificate: None,
@@ -641,7 +641,7 @@ mod tests {
             true
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
-            VerificationResult::Timeout { solver: "always-timeout".to_string(), timeout_ms: 5000 }
+            VerificationResult::Timeout { solver: "always-timeout".into(), timeout_ms: 5000 }
         }
     }
 
@@ -658,7 +658,7 @@ mod tests {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Unknown {
-                solver: "always-unknown".to_string(),
+                solver: "always-unknown".into(),
                 time_ms: 100,
                 reason: self.reason.clone(),
             }
@@ -995,7 +995,7 @@ mod tests {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Failed {
-                solver: "always-fails".to_string(),
+                solver: "always-fails".into(),
                 time_ms: 2,
                 counterexample: None,
             }
@@ -1045,13 +1045,13 @@ mod tests {
                 if n == 0 {
                     // First attempt: timeout → triggers retry
                     VerificationResult::Timeout {
-                        solver: "timeout-then-fails".to_string(),
+                        solver: "timeout-then-fails".into(),
                         timeout_ms: 5000,
                     }
                 } else {
                     // Retries: fail (but on simplified formula)
                     VerificationResult::Failed {
-                        solver: "timeout-then-fails".to_string(),
+                        solver: "timeout-then-fails".into(),
                         time_ms: 2,
                         counterexample: None,
                     }

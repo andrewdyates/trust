@@ -7,7 +7,7 @@
 //! The format of the JSON output should be considered *unstable*. For now the
 //! structs at the end of this file (Diagnostic*) specify the error format.
 
-// tRust: known issue — spec the JSON output properly.
+// FIXME: spec the JSON output properly.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -323,10 +323,10 @@ impl Diagnostic {
 
         impl Write for BufWriter {
             fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-                self.0.lock().expect("invariant: mutex must not be poisoned").write(buf) // tRust: unwrap -> expect
+                self.0.lock().unwrap().write(buf)
             }
             fn flush(&mut self) -> io::Result<()> {
-                self.0.lock().expect("invariant: mutex must not be poisoned").flush() // tRust: unwrap -> expect
+                self.0.lock().unwrap().flush()
             }
         }
 
@@ -376,8 +376,8 @@ impl Diagnostic {
             .theme(if je.json_rendered.unicode { OutputTheme::Unicode } else { OutputTheme::Ascii })
             .emit_diagnostic(diag);
 
-        let buf = Arc::try_unwrap(buf.0).expect("invariant: Arc must have single owner").into_inner().expect("invariant: mutex must not be poisoned"); // tRust: unwrap -> expect
-        let buf = String::from_utf8(buf).expect("invariant: JSON output must be valid UTF-8"); // tRust: unwrap -> expect
+        let buf = Arc::try_unwrap(buf.0).unwrap().into_inner().unwrap();
+        let buf = String::from_utf8(buf).unwrap();
 
         Diagnostic {
             message: formatted_message.to_string(),

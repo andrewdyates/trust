@@ -1,6 +1,3 @@
-//! tRust: MIR pass manager that schedules passes, validates MIR, dumps output,
-//! tRust: and records profiling data.
-
 use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::sync::atomic::Ordering;
@@ -58,7 +55,7 @@ fn to_profiler_name(type_name: &'static str) -> &'static str {
 // name
 // ```
 const fn simplify_pass_type_name(name: &'static str) -> &'static str {
-    // NOTE(const-hack): Manual byte iteration because str methods aren't const-stable yet.
+    // FIXME(const-hack) Simplify the implementation once more `str` methods get const-stable.
 
     // Work backwards from the end. If a ':' is hit, strip it and everything before it.
     let bytes = name.as_bytes();

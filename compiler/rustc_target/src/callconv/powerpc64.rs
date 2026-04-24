@@ -1,4 +1,4 @@
-// tRust: known issue —
+// FIXME:
 // Alignment of 128 bit types is not currently handled, this will
 // need to be fixed when PowerPC vector support is added.
 
@@ -28,7 +28,7 @@ where
         // ELFv1 and AIX only passes one-member aggregates transparently.
         // ELFv2 passes up to eight uniquely addressable members.
         if ((abi == ELFv1 || abi == AIX) && arg.layout.size > unit.size)
-            || arg.layout.size > unit.size.checked_mul(8, cx).expect("invariant: unit size * 8 does not overflow") // tRust: unwrap -> expect
+            || arg.layout.size > unit.size.checked_mul(8, cx).unwrap()
         {
             return None;
         }
@@ -66,7 +66,7 @@ where
     // The incoming parameter is represented as a pointer in the IR,
     // the alignment is associated with the size of the register. (align 8 for 64bit)
     if !is_ret && abi == AIX {
-        arg.pass_by_stack_offset(Some(Align::from_bytes(8).expect("invariant: 8-byte alignment is a valid power of two"))); // tRust: unwrap -> expect
+        arg.pass_by_stack_offset(Some(Align::from_bytes(8).unwrap()));
         return;
     }
 
@@ -96,7 +96,7 @@ where
         let reg = if arg.layout.align.bytes() > 8 { Reg::i128() } else { Reg::i64() };
         arg.cast_to(Uniform::consecutive(
             reg,
-            size.align_to(Align::from_bytes(reg.size.bytes()).expect("invariant: register size in bytes is a valid alignment")), // tRust: unwrap -> expect
+            size.align_to(Align::from_bytes(reg.size.bytes()).unwrap()),
         ))
     };
 }

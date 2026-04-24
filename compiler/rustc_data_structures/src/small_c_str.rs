@@ -46,8 +46,6 @@ impl SmallCStr {
 
     #[inline]
     pub fn as_c_str(&self) -> &ffi::CStr {
-        // SAFETY: The byte slice is valid, non-null, and contains a
-        // nul terminator with no interior nul bytes.
         unsafe { ffi::CStr::from_bytes_with_nul_unchecked(&self.data) }
     }
 

@@ -16,38 +16,19 @@
 #[non_exhaustive]
 pub enum CrossCheckWarning {
     /// A formula variable does not correspond to any function parameter or local.
-    UnknownVariable {
-        var_name: String,
-        function: String,
-    },
+    UnknownVariable { var_name: String, function: String },
     /// An overflow VC's type bounds do not match the declared operand types.
-    OverflowBoundsMismatch {
-        expected_min: i128,
-        expected_max_approx: i128,
-        vc_description: String,
-    },
+    OverflowBoundsMismatch { expected_min: i128, expected_max_approx: i128, vc_description: String },
     /// A division-by-zero VC does not test the divisor for equality with zero.
-    DivZeroMissingDivisorCheck {
-        function: String,
-    },
+    DivZeroMissingDivisorCheck { function: String },
     /// A formula mixes Sort::Int and Sort::BitVec in comparisons or arithmetic
     /// without explicit conversion.
-    SortMismatch {
-        context: String,
-        lhs_sort: SortClass,
-        rhs_sort: SortClass,
-    },
+    SortMismatch { context: String, lhs_sort: SortClass, rhs_sort: SortClass },
     /// An And/Or formula has zero or one child (degenerate).
-    DegenerateConnective {
-        connective: String,
-        child_count: usize,
-    },
+    DegenerateConnective { connective: String, child_count: usize },
     /// An empty formula (Bool(true) or Bool(false)) used as the entire VC,
     /// which is likely a placeholder or auto-proved stub.
-    TrivialFormula {
-        function: String,
-        value: bool,
-    },
+    TrivialFormula { function: String, value: bool },
 }
 
 impl CrossCheckWarning {
@@ -76,9 +57,7 @@ impl CrossCheckWarning {
                 )
             }
             CrossCheckWarning::SortMismatch { context, lhs_sort, rhs_sort } => {
-                format!(
-                    "sort mismatch in {context}: LHS is {lhs_sort:?}, RHS is {rhs_sort:?}"
-                )
+                format!("sort mismatch in {context}: LHS is {lhs_sort:?}, RHS is {rhs_sort:?}")
             }
             CrossCheckWarning::DegenerateConnective { connective, child_count } => {
                 format!("{connective} has {child_count} children (expected >= 2)")

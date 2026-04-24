@@ -5,10 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{BinOp, Ty};
-use super::temporal::{LivenessProperty, FairnessConstraint};
 use super::ProofLevel;
-
+use super::temporal::{FairnessConstraint, LivenessProperty};
+use crate::model::{BinOp, Ty};
 
 /// What kind of property a VC checks.
 ///
@@ -34,27 +33,58 @@ use super::ProofLevel;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum VcKind {
-    ArithmeticOverflow { op: BinOp, operand_tys: (Ty, Ty) },
-    ShiftOverflow { op: BinOp, operand_ty: Ty, shift_ty: Ty },
+    ArithmeticOverflow {
+        op: BinOp,
+        operand_tys: (Ty, Ty),
+    },
+    ShiftOverflow {
+        op: BinOp,
+        operand_ty: Ty,
+        shift_ty: Ty,
+    },
     DivisionByZero,
     RemainderByZero,
     IndexOutOfBounds,
     SliceBoundsCheck,
-    Assertion { message: String },
-    Precondition { callee: String },
+    Assertion {
+        message: String,
+    },
+    Precondition {
+        callee: String,
+    },
     Postcondition,
-    CastOverflow { from_ty: Ty, to_ty: Ty },
-    NegationOverflow { ty: Ty },
+    CastOverflow {
+        from_ty: Ty,
+        to_ty: Ty,
+    },
+    NegationOverflow {
+        ty: Ty,
+    },
     Unreachable,
     // State machine properties (tla2)
-    DeadState { state: String },
+    DeadState {
+        state: String,
+    },
     Deadlock,
-    Temporal { property: String },
+    Temporal {
+        property: String,
+    },
     // tRust: Liveness and fairness properties (#49)
-    Liveness { property: LivenessProperty },
-    Fairness { constraint: FairnessConstraint },
-    TaintViolation { source_label: String, sink_kind: String, path_length: usize },
-    RefinementViolation { spec_file: String, action: String },
+    Liveness {
+        property: LivenessProperty,
+    },
+    Fairness {
+        constraint: FairnessConstraint,
+    },
+    TaintViolation {
+        source_label: String,
+        sink_kind: String,
+        path_length: usize,
+    },
+    RefinementViolation {
+        spec_file: String,
+        action: String,
+    },
     // tRust #53: External dependency resilience
     ResilienceViolation {
         service: String,
@@ -62,7 +92,10 @@ pub enum VcKind {
         reason: String,
     },
     // tRust: Cross-service protocol composition (#55)
-    ProtocolViolation { protocol: String, violation: String },
+    ProtocolViolation {
+        protocol: String,
+        violation: String,
+    },
     // tRust #66: Termination checking via decreases clauses
     NonTermination {
         /// "loop" or "recursion"
@@ -127,7 +160,10 @@ pub enum VcKind {
     /// Float division where divisor may be zero (produces +/-Inf per IEEE 754).
     FloatDivisionByZero,
     /// Float arithmetic that may overflow to infinity (+/-Inf).
-    FloatOverflowToInfinity { op: BinOp, operand_ty: Ty },
+    FloatOverflowToInfinity {
+        op: BinOp,
+        operand_ty: Ty,
+    },
     // tRust #438: Rvalue safety VCs for Discriminant, Aggregate, Ref, and Len.
     /// Discriminant read on a place that does not hold an enum/ADT type.
     InvalidDiscriminant {
@@ -143,7 +179,9 @@ pub enum VcKind {
     },
     // tRust #463: Unsafe code VC.
     /// Unsafe operation detected (raw pointer deref, transmute, FFI, etc.).
-    UnsafeOperation { desc: String },
+    UnsafeOperation {
+        desc: String,
+    },
     // tRust #460: FFI boundary verification with summary-based VCs.
     /// FFI call site where a summary-based contract was checked.
     FfiBoundaryViolation {
@@ -325,9 +363,15 @@ impl VcKind {
                     "aliasing violation: &mut aliases with &".to_string()
                 }
             }
-            VcKind::LifetimeViolation => "lifetime violation: reference outlives referent".to_string(),
-            VcKind::SendViolation => "Send violation: non-Send type sent across threads".to_string(),
-            VcKind::SyncViolation => "Sync violation: non-Sync type shared across threads".to_string(),
+            VcKind::LifetimeViolation => {
+                "lifetime violation: reference outlives referent".to_string()
+            }
+            VcKind::SendViolation => {
+                "Send violation: non-Send type sent across threads".to_string()
+            }
+            VcKind::SyncViolation => {
+                "Sync violation: non-Sync type shared across threads".to_string()
+            }
             // tRust #597: Functional correctness description.
             VcKind::FunctionalCorrectness { property, context } => {
                 format!("functional correctness ({property}): {context}")
@@ -346,7 +390,9 @@ impl VcKind {
                 format!("type refinement violation: {variable} does not satisfy {predicate}")
             }
             VcKind::FrameConditionViolation { variable, function } => {
-                format!("frame condition violation: `{variable}` modified outside modifies clause of `{function}`")
+                format!(
+                    "frame condition violation: `{variable}` modified outside modifies clause of `{function}`"
+                )
             }
         }
     }

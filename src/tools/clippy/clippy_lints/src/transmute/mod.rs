@@ -416,6 +416,7 @@ declare_clippy_lint! {
     /// };
     /// ```
     ///
+    
     ///
     /// ```no_run
     /// vec![2_u16].into_iter().map(u32::from).collect::<Vec<_>>();

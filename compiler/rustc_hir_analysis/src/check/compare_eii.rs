@@ -55,7 +55,7 @@ pub(crate) fn compare_eii_function_types<'tcx>(
         ObligationCauseCode::CompareEii { external_impl, declaration: foreign_item },
     );
 
-    // tRust: known issue — (eii): even if we don't support generic functions, we should support explicit outlive bounds here
+    // FIXME(eii): even if we don't support generic functions, we should support explicit outlive bounds here
     let param_env = tcx.param_env(foreign_item);
 
     let infcx = &tcx.infer_ctxt().build(TypingMode::non_body_analysis());
@@ -65,7 +65,7 @@ pub(crate) fn compare_eii_function_types<'tcx>(
     // compatible with that of the declaration. We do this by
     // checking that `impl_fty <: trait_fty`.
     //
-    // tRust: known issue — We manually instantiate the declaration here as we need
+    // FIXME: We manually instantiate the declaration here as we need
     // to manually compute its implied bounds. Otherwise this could just
     // be ocx.sub(impl_sig, trait_sig).
 
@@ -96,7 +96,7 @@ pub(crate) fn compare_eii_function_types<'tcx>(
     // as we don't normalize during implied bounds computation.
     wf_tys.extend(external_impl_sig.inputs_and_output.iter());
 
-    // tRust: known issue — Copied over from compare impl items, same issue:
+    // FIXME: Copied over from compare impl items, same issue:
     // We'd want to keep more accurate spans than "the method signature" when
     // processing the comparison between the trait and impl fn, but we sadly lose them
     // and point at the whole signature when a trait bound or specific input or output
@@ -435,7 +435,7 @@ fn extract_spans_for_error_reporting<'tcx>(
 
     match terr {
         TypeError::ArgumentMutability(i) | TypeError::ArgumentSorts(ExpectedFound { .. }, i) => (
-            external_impl_args.nth(i).expect("invariant: value is present"),
+            external_impl_args.nth(i).unwrap(),
             declaration_args.and_then(|mut args| args.nth(i)),
             external_impl_name,
         ),

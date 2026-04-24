@@ -38,7 +38,7 @@ pub enum CanonAbi {
     GpuKernel,
 
     /// ABIs relevant to bare-metal interrupt targets
-    // tRust: known issue (workingjubilee) — a particular reason for this nesting is we might not need these?
+    // FIXME(workingjubilee): a particular reason for this nesting is we might not need these?
     // interrupt ABIs should have the same properties:
     // - uncallable by Rust calls, as LLVM rejects it in most cases
     // - uses a preserve-all-registers *callee* convention
@@ -69,7 +69,7 @@ impl CanonAbi {
 impl fmt::Display for CanonAbi {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // convert to the ExternAbi that *shares a string* with this CanonAbi.
-        // tRust: known issue — ideally we'd avoid printing `CanonAbi`, and preserve `ExternAbi` everywhere
+        // FIXME: ideally we'd avoid printing `CanonAbi`, and preserve `ExternAbi` everywhere
         // that we need to generate error messages.
         let erased_abi = match self {
             CanonAbi::C => ExternAbi::C { unwind: false },

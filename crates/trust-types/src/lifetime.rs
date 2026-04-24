@@ -16,10 +16,9 @@ use crate::fx::FxHashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::formula::{Formula, VerificationCondition, VcKind};
+use crate::formula::{Formula, VcKind, VerificationCondition};
 use crate::model::{
-    BasicBlock, BlockId, Operand, Place, Rvalue, SourceSpan, Statement, Terminator,
-    VerifiableBody,
+    BasicBlock, BlockId, Operand, Place, Rvalue, SourceSpan, Statement, Terminator, VerifiableBody,
 };
 
 // ---------------------------------------------------------------------------
@@ -83,7 +82,9 @@ pub struct BorrowInfo {
 #[non_exhaustive]
 pub enum BorrowError {
     /// A place is already mutably borrowed.
-    #[error("cannot borrow `{place:?}` as {requested:?} because it is already borrowed as {existing:?}")]
+    #[error(
+        "cannot borrow `{place:?}` as {requested:?} because it is already borrowed as {existing:?}"
+    )]
     AlreadyBorrowed {
         place: Place,
         existing: Mutability,
@@ -93,11 +94,7 @@ pub enum BorrowError {
     },
     /// A value was used after being moved.
     #[error("use of moved value `{place:?}`, moved at {move_span:?}")]
-    MovedValue {
-        place: Place,
-        move_span: SourceSpan,
-        use_span: SourceSpan,
-    },
+    MovedValue { place: Place, move_span: SourceSpan, use_span: SourceSpan },
     /// A reference outlives the data it points to.
     #[error("dangling reference to `{place:?}`: data does not live long enough")]
     DanglingReference {
@@ -108,11 +105,7 @@ pub enum BorrowError {
     },
     /// A borrow was used after its lifetime expired.
     #[error("borrow of `{place:?}` has expired (lifetime {lifetime:?})")]
-    LifetimeExpired {
-        place: Place,
-        lifetime: Lifetime,
-        use_span: SourceSpan,
-    },
+    LifetimeExpired { place: Place, lifetime: Lifetime, use_span: SourceSpan },
 }
 
 // ---------------------------------------------------------------------------
@@ -149,9 +142,7 @@ impl LifetimeRelation {
 /// Returns `Ok(())` if all constraints are satisfiable, or a `BorrowError`
 /// if a constraint is violated (e.g., a short-lived reference assigned to
 /// a longer-lived slot).
-pub fn check_lifetime_constraints(
-    relations: &[LifetimeRelation],
-) -> Result<(), BorrowError> {
+pub fn check_lifetime_constraints(relations: &[LifetimeRelation]) -> Result<(), BorrowError> {
     // Build an outlives graph and check for violations.
     // A violation occurs when 'a: 'b is required but 'a has a strictly
     // smaller scope than 'b.
@@ -306,8 +297,7 @@ impl BorrowChecker {
             }
             Mutability::Shared => {
                 // Shared borrow: no mutable borrows allowed.
-                if let Some(existing) =
-                    active.iter().find(|b| b.mutability == Mutability::Mutable)
+                if let Some(existing) = active.iter().find(|b| b.mutability == Mutability::Mutable)
                 {
                     return Err(BorrowError::AlreadyBorrowed {
                         place: place.clone(),
@@ -338,10 +328,7 @@ impl BorrowChecker {
     ///
     /// Updates the ownership map based on moves, copies, and borrows
     /// observed in the statement. Returns any ownership transfers.
-    pub fn track_ownership(
-        &mut self,
-        stmt: &Statement,
-    ) -> Vec<OwnershipTransfer> {
+    pub fn track_ownership(&mut self, stmt: &Statement) -> Vec<OwnershipTransfer> {
         let mut new_transfers = Vec::new();
 
         if let Statement::Assign { place, rvalue, span } = stmt {
@@ -355,10 +342,7 @@ impl BorrowChecker {
                     };
                     self.ownership.insert(
                         src.local,
-                        OwnershipState::Moved {
-                            destination: place.clone(),
-                            span: span.clone(),
-                        },
+                        OwnershipState::Moved { destination: place.clone(), span: span.clone() },
                     );
                     self.ownership.insert(place.local, OwnershipState::Owned);
                     self.transfers.push(transfer.clone());
@@ -381,11 +365,7 @@ impl BorrowChecker {
                     let borrow = BorrowInfo {
                         borrowed_place: borrowed_place.clone(),
                         lifetime: Lifetime::new("'_auto", BlockId(0)),
-                        mutability: if *mutable {
-                            Mutability::Mutable
-                        } else {
-                            Mutability::Shared
-                        },
+                        mutability: if *mutable { Mutability::Mutable } else { Mutability::Shared },
                         span: span.clone(),
                     };
                     self.add_borrow(borrow);
@@ -451,7 +431,7 @@ fn generate_block_borrow_vcs(
                                 operand_place.local, move_span.file, move_span.line_start
                             ),
                         },
-                        function: String::new(),
+                        function: crate::Symbol::intern(""),
                         location: span.clone(),
                         formula: Formula::Bool(false), // always violated
                         contract_metadata: None,
@@ -461,17 +441,14 @@ fn generate_block_borrow_vcs(
 
             // Check borrow conflicts for references.
             if let Rvalue::Ref { mutable, place: borrowed } = rvalue {
-                let mutability =
-                    if *mutable { Mutability::Mutable } else { Mutability::Shared };
+                let mutability = if *mutable { Mutability::Mutable } else { Mutability::Shared };
                 if let Err(err) = checker.check_borrow(borrowed, mutability, span) {
                     vcs.push(VerificationCondition {
-                        kind: VcKind::Assertion {
-                            message: format!("borrow violation: {err}"),
-                        },
-                        function: String::new(),
+                        kind: VcKind::Assertion { message: format!("borrow violation: {err}") },
+                        function: crate::Symbol::intern(""),
                         location: span.clone(),
                         formula: Formula::Bool(false),
-                    contract_metadata: None,
+                        contract_metadata: None,
                     });
                 }
             }
@@ -528,7 +505,13 @@ mod tests {
     }
 
     fn span_at(file: &str, line: u32) -> SourceSpan {
-        SourceSpan { file: file.to_string(), line_start: line, col_start: 1, line_end: line, col_end: 40 }
+        SourceSpan {
+            file: file.to_string(),
+            line_start: line,
+            col_start: 1,
+            line_end: line,
+            col_end: 40,
+        }
     }
 
     // --- Lifetime tests ---
@@ -582,11 +565,8 @@ mod tests {
         });
 
         // Mutable borrow while shared borrow active should fail.
-        let result = checker.check_borrow(
-            &Place::local(0),
-            Mutability::Mutable,
-            &span_at("src/lib.rs", 15),
-        );
+        let result =
+            checker.check_borrow(&Place::local(0), Mutability::Mutable, &span_at("src/lib.rs", 15));
         assert!(result.is_err());
         match result.unwrap_err() {
             BorrowError::AlreadyBorrowed { existing, requested, .. } => {
@@ -681,10 +661,7 @@ mod tests {
         assert!(matches!(&transfers[0], OwnershipTransfer::Move { .. }));
 
         // Source should be moved.
-        assert!(matches!(
-            checker.ownership_state(0),
-            OwnershipState::Moved { .. }
-        ));
+        assert!(matches!(checker.ownership_state(0), OwnershipState::Moved { .. }));
         // Dest should be owned.
         assert_eq!(checker.ownership_state(1), &OwnershipState::Owned);
     }
@@ -918,11 +895,8 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("already borrowed"));
 
-        let moved = BorrowError::MovedValue {
-            place: Place::local(1),
-            move_span: span(),
-            use_span: span(),
-        };
+        let moved =
+            BorrowError::MovedValue { place: Place::local(1), move_span: span(), use_span: span() };
         assert!(format!("{moved}").contains("moved value"));
 
         let dangling = BorrowError::DanglingReference {

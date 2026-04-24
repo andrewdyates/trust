@@ -117,7 +117,6 @@ impl<'tcx> UniqueTypeId<'tcx> {
     pub(crate) fn expect_ty(self) -> Ty<'tcx> {
         match self {
             UniqueTypeId::Ty(ty, _) => ty,
-            // tRust: invariant — `expect_ty` is only called on `UniqueTypeId::Ty` values
             _ => bug!("Expected `UniqueTypeId::Ty` but found `{:?}`", self),
         }
     }
@@ -135,7 +134,6 @@ impl<'ll, 'tcx> TypeMap<'ll, 'tcx> {
     /// fail if the mapping already exists.
     pub(super) fn insert(&self, unique_type_id: UniqueTypeId<'tcx>, metadata: &'ll DIType) {
         if self.unique_id_to_di_node.borrow_mut().insert(unique_type_id, metadata).is_some() {
-            // tRust: invariant — each `UniqueTypeId` is inserted into the `TypeMap` at most once
             bug!("type metadata for unique ID '{:?}' is already in the `TypeMap`!", unique_type_id);
         }
     }
@@ -209,7 +207,6 @@ pub(super) fn stub<'ll, 'tcx>(
                 Stub::VTableTy { vtable_holder } => Some(vtable_holder),
                 _ => None,
             };
-            // SAFETY: The `DIBuilder` is valid, and all scope, type, and element references are valid.
             unsafe {
                 llvm::LLVMDIBuilderCreateStructType(
                     DIB(cx),
@@ -231,7 +228,6 @@ pub(super) fn stub<'ll, 'tcx>(
                 )
             }
         }
-        // SAFETY: The `DIBuilder` is valid, and all scope, type, and element references are valid.
         Stub::Union => unsafe {
             llvm::LLVMDIBuilderCreateUnionType(
                 DIB(cx),
@@ -330,7 +326,7 @@ pub(super) fn build_type_with_children<'ll, 'tcx>(
                 })
         };
         if is_expanding_recursive {
-            // tRust: known issue — indicate that this is an expanding recursive type in stub metadata?
+            // FIXME: indicate that this is an expanding recursive type in stub metadata?
             return DINodeCreationResult::new(stub_info.metadata, false);
         } else {
             debug_context(cx).adt_stack.borrow_mut().push((def_id, args));
@@ -345,7 +341,6 @@ pub(super) fn build_type_with_children<'ll, 'tcx>(
     let generics = generics(cx);
 
     if !(members.is_empty() && generics.is_empty()) {
-        // SAFETY: The `DIBuilder` is valid, the composite type is valid, and the replacement arrays are valid (or null).
         unsafe {
             let members_array = create_DIArray(DIB(cx), &members[..]);
             let generics_array = create_DIArray(DIB(cx), &generics[..]);

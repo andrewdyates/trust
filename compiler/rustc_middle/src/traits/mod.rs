@@ -786,7 +786,7 @@ pub enum DynCompatibilityViolation {
 
 impl DynCompatibilityViolation {
     pub fn error_msg(&self) -> Cow<'static, str> {
-        // tRust: known issue (mgca) — For method violations we just say "method ..." but for assoc const ones we
+        // FIXME(mgca): For method violations we just say "method ..." but for assoc const ones we
         //              say "it contains ... associated constant ...". Make it consistent.
 
         match self {

@@ -35,7 +35,7 @@ impl AbiMapping {
     /// get a [CanonAbi] even if Deprecated, panicking if Invalid
     #[track_caller]
     pub fn unwrap(self) -> CanonAbi {
-        self.into_option().expect("invariant: AbiMapping is not Invalid when unwrap is called") // tRust: unwrap -> expect
+        self.into_option().unwrap()
     }
 
     pub fn is_mapped(self) -> bool {

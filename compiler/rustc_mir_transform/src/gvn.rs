@@ -603,7 +603,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                     .write_discriminant(variant.unwrap_or(FIRST_VARIANT), &dest)
                     .discard_err()?;
                 self.ecx
-                    .alloc_mark_immutable(dest.ptr().provenance.expect("invariant: allocated pointer must have provenance").alloc_id()) // tRust: unwrap elimination
+                    .alloc_mark_immutable(dest.ptr().provenance.unwrap().alloc_id())
                     .discard_err()?;
                 dest.into()
             }
@@ -619,7 +619,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                     let field_dest = self.ecx.project_field(&dest, active_field).discard_err()?;
                     self.ecx.copy_op(field, &field_dest).discard_err()?;
                     self.ecx
-                        .alloc_mark_immutable(dest.ptr().provenance.expect("invariant: allocated pointer must have provenance").alloc_id()) // tRust: unwrap elimination
+                        .alloc_mark_immutable(dest.ptr().provenance.unwrap().alloc_id())
                         .discard_err()?;
                     dest.into()
                 } else {
@@ -702,9 +702,8 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                 }
                 CastKind::Transmute | CastKind::Subtype => {
                     let value = self.eval_to_const(value)?;
-                    // tRust: Upstream HACK -- limited transmute for same-layout types.
                     // `offset` for immediates generally only supports projections that match the
-                    // type of the immediate. However, as a workaround, we exploit that it can also do
+                    // type of the immediate. However, as a HACK, we exploit that it can also do
                     // limited transmutes: it only works between types with the same layout, and
                     // cannot transmute pointers to integers.
                     if value.as_mplace_or_imm().is_right() {
@@ -735,7 +734,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                     let dest = self.ecx.allocate(ty, MemoryKind::Stack).discard_err()?;
                     self.ecx.unsize_into(src, ty, &dest).discard_err()?;
                     self.ecx
-                        .alloc_mark_immutable(dest.ptr().provenance.expect("invariant: allocated pointer must have provenance").alloc_id()) // tRust: unwrap elimination
+                        .alloc_mark_immutable(dest.ptr().provenance.unwrap().alloc_id())
                         .discard_err()?;
                     dest.into()
                 }
@@ -762,7 +761,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
         }
         let op = self.eval_to_const_inner(index);
         self.evaluated[index] = Some(self.arena.alloc(op).as_ref());
-        self.evaluated[index].expect("invariant: value must be evaluated before use") // tRust: unwrap elimination
+        self.evaluated[index].unwrap()
     }
 
     /// Represent the *value* we obtain by dereferencing an `Address` value.
@@ -1078,7 +1077,6 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
             // Unsupported values.
             Rvalue::ThreadLocalRef(..) => return None,
             Rvalue::CopyForDeref(_) => {
-                // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
                 bug!("forbidden in runtime MIR: {rvalue:?}")
             }
         };
@@ -1161,7 +1159,6 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
         let tcx = self.tcx;
         let ty = rvalue.ty(self.local_decls, tcx);
 
-        // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
         let Rvalue::Aggregate(box ref kind, ref mut field_ops) = *rvalue else { bug!() };
 
         if field_ops.is_empty() {
@@ -1174,7 +1171,6 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                 AggregateKind::Adt(did, ..) => tcx.def_kind(did) != DefKind::Enum,
                 // Coroutines are never ZST, as they at least contain the implicit states.
                 AggregateKind::Coroutine(..) => false,
-                // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
                 AggregateKind::RawPtr(..) => bug!("MIR for RawPtr aggregate must have 2 fields"),
             };
 
@@ -1204,7 +1200,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
             }
             AggregateKind::RawPtr(..) => {
                 assert_eq!(field_ops.len(), 2);
-                let [mut pointer, metadata] = fields.try_into().expect("invariant: RawPtr aggregate must have exactly 2 fields"); // tRust: unwrap elimination
+                let [mut pointer, metadata] = fields.try_into().unwrap();
 
                 // Any thin pointer of matching mutability is fine as the data pointer.
                 let mut was_updated = false;
@@ -1231,7 +1227,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
             && fields.len() > 4
             && let Ok(&first) = fields.iter().all_equal_value()
         {
-            let len = ty::Const::from_target_usize(self.tcx, fields.len().try_into().expect("invariant: field count must fit in target usize")); // tRust: unwrap elimination
+            let len = ty::Const::from_target_usize(self.tcx, fields.len().try_into().unwrap());
             if let Some(op) = self.try_as_operand(first, location) {
                 *rvalue = Rvalue::Repeat(op, len);
             }
@@ -1326,8 +1322,8 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                     kind: CastKind::PointerCoercion(ty::adjustment::PointerCoercion::Unsize, _),
                     value: inner,
                 },
-            ) if let ty::Slice(..) = arg_ty.builtin_deref(true).expect("invariant: Len operand must be a dereferenceable type").kind() // tRust: unwrap elimination
-                && let ty::Array(_, len) = self.ty(inner).builtin_deref(true).expect("invariant: unsized coercion source must be dereferenceable").kind() // tRust: unwrap elimination =>
+            ) if let ty::Slice(..) = arg_ty.builtin_deref(true).unwrap().kind()
+                && let ty::Array(_, len) = self.ty(inner).builtin_deref(true).unwrap().kind() =>
             {
                 return Some(self.insert_constant(Const::Ty(self.tcx.types.usize, *len)));
             }
@@ -1816,7 +1812,7 @@ fn op_to_prop_const<'tcx>(
         if !scalar.try_to_scalar_int().is_ok() {
             // Check that we do not leak a pointer.
             // Those pointers may lose part of their identity in codegen.
-            // NOTE(#128775): Avoid leaking pointers that may lose identity in codegen.
+            // FIXME: remove this hack once https://github.com/rust-lang/rust/issues/128775 is fixed.
             return None;
         }
         return Some(ConstValue::Scalar(scalar));
@@ -1829,7 +1825,7 @@ fn op_to_prop_const<'tcx>(
 
         // Do not try interning a value that contains provenance.
         // Due to https://github.com/rust-lang/rust/issues/128775, doing so could lead to bugs.
-        // NOTE(#128775): Skip interning values with provenance to avoid codegen bugs.
+        // FIXME: remove this hack once that issue is fixed.
         let alloc_ref = ecx.get_ptr_alloc(mplace.ptr(), size).discard_err()??;
         if alloc_ref.has_provenance() {
             return None;
@@ -1842,7 +1838,7 @@ fn op_to_prop_const<'tcx>(
 
         // `alloc_id` may point to a static. Codegen will choke on an `Indirect` with anything
         // by `GlobalAlloc::Memory`, so do fall through to copying if needed.
-        // NOTE: Static allocs need special handling; codegen only supports GlobalAlloc::Memory.
+        // FIXME: find a way to treat this more uniformly (probably by fixing codegen)
         if let GlobalAlloc::Memory(alloc) = ecx.tcx.global_alloc(alloc_id)
             // Transmuting a constant is just an offset in the allocation. If the alignment of the
             // allocation is not enough, fallback to copying into a properly aligned value.
@@ -1908,7 +1904,7 @@ impl<'tcx> VnState<'_, '_, 'tcx> {
 
         // Check that we do not leak a pointer.
         // Those pointers may lose part of their identity in codegen.
-        // NOTE(#128775): Avoid leaking pointers that may lose identity in codegen.
+        // FIXME: remove this hack once https://github.com/rust-lang/rust/issues/128775 is fixed.
         if may_have_provenance(self.tcx, value, op.layout.size) {
             return None;
         }
@@ -2011,8 +2007,8 @@ impl<'tcx> MutVisitor<'tcx> for VnState<'_, '_, 'tcx> {
         if let Some(local) = lhs.as_local()
             && self.ssa.is_ssa(local)
             && let rvalue_ty = rvalue.ty(self.local_decls, self.tcx)
-            // NOTE(#112651): Subtyping guard - rvalue may have a subtype to local.
-            // Only mark local as reusable with exact type match.
+            // FIXME(#112651) `rvalue` may have a subtype to `local`. We can only mark
+            // `local` as reusable if we have an exact type match.
             && self.local_decls[local].ty == rvalue_ty
         {
             let value = value.unwrap_or_else(|| self.new_opaque(rvalue_ty));

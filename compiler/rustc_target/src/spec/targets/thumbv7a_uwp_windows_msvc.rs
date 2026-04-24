@@ -16,7 +16,7 @@ pub(crate) fn target() -> Target {
             llvm_floatabi: Some(FloatAbi::Hard),
             features: "+vfp3,+neon".into(),
             max_atomic_width: Some(64),
-            // tRust: known issue (jordanrh) — use PanicStrategy::Unwind when SEH is
+            // FIXME(jordanrh): use PanicStrategy::Unwind when SEH is
             // implemented for windows/arm in LLVM
             panic_strategy: PanicStrategy::Abort,
             ..base::windows_uwp_msvc::opts()

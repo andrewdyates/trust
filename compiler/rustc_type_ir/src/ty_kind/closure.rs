@@ -182,7 +182,7 @@ impl<I: Interner> ClosureArgs<I> {
 
     /// Returns the `fn` pointer type representing the closure signature for this
     /// closure.
-    // tRust: known issue (eddyb) -- this should be unnecessary, as the shallowly resolved
+    // FIXME(eddyb) this should be unnecessary, as the shallowly resolved
     // type is known at the time of the creation of `ClosureArgs`,
     // see `rustc_hir_analysis::check::closure`.
     pub fn sig_as_fn_ptr_ty(self) -> I::Ty {
@@ -195,7 +195,7 @@ impl<I: Interner> ClosureArgs<I> {
     ///
     /// If you have an inference context, use `infcx.closure_kind()`.
     pub fn kind(self) -> ty::ClosureKind {
-        self.kind_ty().to_opt_closure_kind().expect("invariant: closure kind_ty has valid closure kind") // tRust: unwrap -> expect
+        self.kind_ty().to_opt_closure_kind().unwrap()
     }
 
     /// Extracts the signature from the closure.
@@ -286,7 +286,7 @@ impl<I: Interner> CoroutineClosureArgs<I> {
     }
 
     pub fn kind(self) -> ty::ClosureKind {
-        self.kind_ty().to_opt_closure_kind().expect("invariant: coroutine kind_ty has valid closure kind") // tRust: unwrap -> expect
+        self.kind_ty().to_opt_closure_kind().unwrap()
     }
 
     pub fn signature_parts_ty(self) -> I::Ty {
@@ -335,7 +335,7 @@ impl<I: Interner> CoroutineClosureArgs<I> {
 struct HasRegionsBoundAt {
     binder: ty::DebruijnIndex,
 }
-// tRust: known issue -- Could be optimized to not walk into components with no escaping bound vars.
+// FIXME: Could be optimized to not walk into components with no escaping bound vars.
 impl<I: Interner> TypeVisitor<I> for HasRegionsBoundAt {
     type Result = ControlFlow<()>;
     fn visit_binder<T: TypeVisitable<I>>(&mut self, t: &ty::Binder<I, T>) -> Self::Result {
@@ -494,7 +494,7 @@ impl<I: Interner> CoroutineClosureSignature<I> {
 }
 
 /// Instantiates a `for<'env> ...` binder with a specific region.
-// tRust: known issue (async_closures) -- Get rid of this in favor of `BoundVarReplacerDelegate`
+// FIXME(async_closures): Get rid of this in favor of `BoundVarReplacerDelegate`
 // when that is uplifted.
 struct FoldEscapingRegions<I: Interner> {
     interner: I,

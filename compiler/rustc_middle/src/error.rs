@@ -42,7 +42,7 @@ pub struct UnsupportedUnion {
     pub ty_name: String,
 }
 
-// tRust: known issue (autodiff) — I should get used somewhere
+// FIXME(autodiff): I should get used somewhere
 #[derive(Diagnostic)]
 #[diag("reading from a `Duplicated` const {$ty} is unsafe")]
 pub struct AutodiffUnsafeInnerConstRef<'tcx> {

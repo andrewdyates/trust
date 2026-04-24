@@ -27,7 +27,7 @@ pub fn size_and_align_of_dst<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     match t.kind() {
         ty::Dynamic(..) => {
             // Load size/align from vtable.
-            let vtable = info.expect("invariant: info must succeed");
+            let vtable = info.unwrap();
             let size = meth::VirtualIndex::from_index(ty::COMMON_VTABLE_ENTRIES_SIZE)
                 .get_usize(bx, vtable, t);
             let align = meth::VirtualIndex::from_index(ty::COMMON_VTABLE_ENTRIES_ALIGN)
@@ -50,7 +50,7 @@ pub fn size_and_align_of_dst<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             (
                 // All slice sizes must fit into `isize`, so this multiplication cannot
                 // wrap -- neither signed nor unsigned.
-                bx.unchecked_sumul(info.expect("invariant: info must succeed"), bx.const_usize(unit.size.bytes())),
+                bx.unchecked_sumul(info.unwrap(), bx.const_usize(unit.size.bytes())),
                 bx.const_usize(unit.align.bytes()),
             )
         }
@@ -179,7 +179,6 @@ pub fn size_and_align_of_dst<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
             (full_size, full_align)
         }
-        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
         _ => bug!("size_and_align_of_dst: {t} not supported"),
     }
 }

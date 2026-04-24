@@ -1,6 +1,3 @@
-//! tRust: MIR pass that inserts explicit subtyping projections for assignment
-//! tRust: mismatches between place and rvalue types.
-
 use rustc_middle::mir::visit::MutVisitor;
 use rustc_middle::mir::*;
 use rustc_middle::ty::TyCtxt;

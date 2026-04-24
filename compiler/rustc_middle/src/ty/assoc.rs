@@ -42,7 +42,7 @@ impl AssocItem {
     }
 
     pub fn ident(&self, tcx: TyCtxt<'_>) -> Ident {
-        Ident::new(self.name(), tcx.def_ident_span(self.def_id).expect("invariant: def_ident_span returned a valid value"))
+        Ident::new(self.name(), tcx.def_ident_span(self.def_id).unwrap())
     }
 
     /// Gets the defaultness of the associated item.
@@ -59,7 +59,6 @@ impl AssocItem {
 
     pub fn expect_trait_impl(&self) -> Result<DefId, ErrorGuaranteed> {
         let AssocContainer::TraitImpl(trait_item_id) = self.container else {
-            // tRust: invariant: expected item to be in a trait impl: <...>
             bug!("expected item to be in a trait impl: {:?}", self.def_id);
         };
         trait_item_id

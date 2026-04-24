@@ -11,9 +11,9 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use trust_types::fx::FxHashMap;
 
 use trust_types::JsonProofReport;
 
@@ -26,10 +26,6 @@ pub(crate) enum VerificationError {
     ParseError(#[from] serde_json::Error),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("verification cancelled (superseded by generation {0})")]
-    Cancelled(u64),
-    #[error("no workspace root configured")]
-    NoWorkspaceRoot,
 }
 
 /// Tracks the state of ongoing verification runs.
@@ -63,9 +59,7 @@ impl VerificationState {
 
     /// Set the workspace root (called during initialize).
     pub(crate) fn set_workspace_root(&mut self, root: Option<&str>) {
-        self.workspace_root = root.and_then(|uri| {
-            uri.strip_prefix("file://").map(PathBuf::from)
-        });
+        self.workspace_root = root.and_then(|uri| uri.strip_prefix("file://").map(PathBuf::from));
     }
 
     /// Get the workspace root path.
@@ -80,8 +74,7 @@ impl VerificationState {
     /// result is still current when it completes.
     pub(crate) fn on_save(&mut self, uri: &str) -> u64 {
         self.generation += 1;
-        self.file_generations
-            .insert(uri.to_string(), self.generation);
+        self.file_generations.insert(uri.to_string(), self.generation);
         self.generation
     }
 
@@ -90,15 +83,7 @@ impl VerificationState {
     /// Returns `true` if no newer save has occurred for this file.
     #[must_use]
     pub(crate) fn is_current(&self, uri: &str, generation: u64) -> bool {
-        self.file_generations
-            .get(uri)
-            .is_some_and(|&g| g == generation)
-    }
-
-    /// Current global generation counter.
-    #[must_use]
-    pub(crate) fn generation(&self) -> u64 {
-        self.generation
+        self.file_generations.get(uri).is_some_and(|&g| g == generation)
     }
 
     /// Store a verification report for a file URI.
@@ -169,15 +154,15 @@ mod tests {
     #[test]
     fn test_verification_state_generation_increments() {
         let mut state = VerificationState::new();
-        assert_eq!(state.generation(), 0);
+        assert_eq!(state.generation, 0);
 
         let gen1 = state.on_save("file:///src/lib.rs");
         assert_eq!(gen1, 1);
-        assert_eq!(state.generation(), 1);
+        assert_eq!(state.generation, 1);
 
         let gen2 = state.on_save("file:///src/main.rs");
         assert_eq!(gen2, 2);
-        assert_eq!(state.generation(), 2);
+        assert_eq!(state.generation, 2);
     }
 
     #[test]
@@ -210,10 +195,7 @@ mod tests {
         assert!(state.workspace_root().is_none());
 
         state.set_workspace_root(Some("file://./project"));
-        assert_eq!(
-            state.workspace_root(),
-            Some(Path::new("./project"))
-        );
+        assert_eq!(state.workspace_root(), Some(Path::new("./project")));
     }
 
     #[test]
@@ -251,7 +233,7 @@ mod tests {
     #[test]
     fn test_verification_state_default() {
         let state = VerificationState::default();
-        assert_eq!(state.generation(), 0);
+        assert_eq!(state.generation, 0);
         assert!(state.workspace_root().is_none());
     }
 

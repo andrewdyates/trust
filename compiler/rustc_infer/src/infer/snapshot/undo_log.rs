@@ -71,10 +71,10 @@ impl<'tcx> Rollback<UndoLog<'tcx>> for InferCtxtInner<'tcx> {
             UndoLog::IntUnificationTable(undo) => self.int_unification_storage.reverse(undo),
             UndoLog::FloatUnificationTable(undo) => self.float_unification_storage.reverse(undo),
             UndoLog::RegionConstraintCollector(undo) => {
-                self.region_constraint_storage.as_mut().expect("invariant: region_constraint_storage must be initialized when reversing region collector undo").reverse(undo) // tRust:
+                self.region_constraint_storage.as_mut().unwrap().reverse(undo)
             }
             UndoLog::RegionUnificationTable(undo) => {
-                self.region_constraint_storage.as_mut().expect("invariant: region_constraint_storage must be initialized when reversing region unification undo").unification_table.reverse(undo) // tRust:
+                self.region_constraint_storage.as_mut().unwrap().unification_table.reverse(undo)
             }
             UndoLog::ProjectionCache(undo) => self.projection_cache.reverse(undo),
             UndoLog::PushTypeOutlivesConstraint => {
@@ -141,7 +141,7 @@ impl<'tcx> InferCtxtInner<'tcx> {
         self.undo_log.assert_open_snapshot(&snapshot);
 
         while self.undo_log.logs.len() > snapshot.undo_len {
-            let undo = self.undo_log.logs.pop().expect("invariant: undo log must have entries when len > snapshot.undo_len"); // tRust:
+            let undo = self.undo_log.logs.pop().unwrap();
             self.reverse(undo);
         }
 

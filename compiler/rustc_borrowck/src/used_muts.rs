@@ -59,7 +59,7 @@ impl GatherUsedMutsVisitor<'_, '_, '_, '_> {
         // be those that were never initialized - we will consider those as being used as
         // they will either have been removed by unreachable code optimizations; or linted
         // as unused variables.
-        // // NOTE: swap_remove is correct here - order doesn't matter for the used-muts set.
+        // FIXME(#120456) - is `swap_remove` correct?
         self.never_initialized_mut_locals.swap_remove(&into.local);
     }
 }

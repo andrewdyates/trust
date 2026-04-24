@@ -42,7 +42,7 @@ impl OutlivesSuggestionBuilder {
     /// Returns `true` iff the `RegionNameSource` is a valid source for an outlives
     /// suggestion.
     //
-    // // NOTE: currently, we only report suggestions if the `RegionNameSource` is an early-bound if the `RegionNameSource` is an early-bound
+    // FIXME: Currently, we only report suggestions if the `RegionNameSource` is an early-bound
     // region or a named region, avoiding using regions with synthetic names altogether. This
     // allows us to avoid giving impossible suggestions (e.g. adding bounds to closure args).
     // We can probably be less conservative, since some inferred free regions are namable (e.g.
@@ -187,7 +187,7 @@ impl OutlivesSuggestionBuilder {
         // If there is only one constraint to suggest, then we already suggested it in the
         // intermediate suggestion above.
         if self.constraints_to_add.len() == 1
-            && self.constraints_to_add.values().next().expect("invariant: iterator must have next element").len() == 1
+            && self.constraints_to_add.values().next().unwrap().len() == 1
         {
             debug!("Only 1 suggestion. Skipping.");
             return;

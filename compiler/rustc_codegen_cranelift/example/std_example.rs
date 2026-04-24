@@ -113,7 +113,6 @@ fn main() {
     println!("{:?}", std::intrinsics::caller_location());
 
     #[cfg(target_arch = "x86_64")]
-    // SAFETY: calling unsafe test function in a controlled test environment.
     unsafe {
         test_simd();
     }
@@ -192,7 +191,6 @@ type TwoPtrs = i64;
 type TwoPtrs = i128;
 
 fn transmute_wide_pointer() -> TwoPtrs {
-    // SAFETY: transmute between types of identical size and compatible layout.
     unsafe { transmute::<_, TwoPtrs>("true !") }
 }
 
@@ -229,7 +227,6 @@ unsafe fn test_crc32() {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2")]
 unsafe fn test_simd() {
-    // SAFETY: SSE/AVX intrinsics require the target feature to be available, which is ensured by the enclosing target_feature attribute or runtime detection.
     unsafe {
         assert!(is_x86_feature_detected!("sse2"));
 
@@ -370,7 +367,6 @@ unsafe fn test_mm_add_pd() {
 
 #[cfg(target_arch = "x86_64")]
 fn assert_eq_m128i(x: std::arch::x86_64::__m128i, y: std::arch::x86_64::__m128i) {
-    // SAFETY: transmute between types of identical size and compatible layout.
     unsafe {
         assert_eq!(std::mem::transmute::<_, [u8; 16]>(x), std::mem::transmute::<_, [u8; 16]>(y));
     }
@@ -387,7 +383,6 @@ pub fn assert_eq_m128d(a: __m128d, b: __m128d) {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 pub fn assert_eq_m256i(a: __m256i, b: __m256i) {
-    // SAFETY: transmute between types of identical size and compatible layout.
     unsafe {
         assert_eq!(std::mem::transmute::<_, [u64; 4]>(a), std::mem::transmute::<_, [u64; 4]>(b))
     }
@@ -396,7 +391,6 @@ pub fn assert_eq_m256i(a: __m256i, b: __m256i) {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2")]
 unsafe fn test_mm_cvtsi128_si64() {
-    // SAFETY: SSE/AVX intrinsics require the target feature to be available, which is ensured by the enclosing target_feature attribute or runtime detection.
     unsafe {
         let r = _mm_cvtsi128_si64(std::mem::transmute::<[i64; 2], _>([5, 0]));
         assert_eq!(r, 5);
@@ -468,7 +462,6 @@ unsafe fn test_mm_shuffle_epi8() {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse4.2")]
 unsafe fn str_to_m128i(s: &[u8]) -> __m128i {
-    // SAFETY: SSE/AVX intrinsics require the target feature to be available, which is ensured by the enclosing target_feature attribute or runtime detection.
     unsafe {
         assert!(s.len() <= 16);
         let slice = &mut [0u8; 16];
@@ -481,7 +474,6 @@ unsafe fn str_to_m128i(s: &[u8]) -> __m128i {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse4.2")]
 unsafe fn test_mm_cmpestri() {
-    // SAFETY: SSE/AVX intrinsics require the target feature to be available, which is ensured by the enclosing target_feature attribute or runtime detection.
     unsafe {
         let a = str_to_m128i(b"bar - garbage");
         let b = str_to_m128i(b"foobar");
@@ -542,7 +534,6 @@ unsafe fn test_mm256_permutevar8x32_epi32() {
 #[target_feature(enable = "avx2")]
 #[cfg(not(jit))]
 unsafe fn test_mm_cvtps_epi32() {
-    // SAFETY: SSE/AVX intrinsics require the target feature to be available, which is ensured by the enclosing target_feature attribute or runtime detection.
     unsafe {
         let floats: [f32; 4] = [1.5, -2.5, i32::MAX as f32 + 1.0, f32::NAN];
 
@@ -562,7 +553,6 @@ unsafe fn test_mm_cvtps_epi32() {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
 unsafe fn test_mm_cvttps_epi32() {
-    // SAFETY: SSE/AVX intrinsics require the target feature to be available, which is ensured by the enclosing target_feature attribute or runtime detection.
     unsafe {
         let floats: [f32; 4] = [1.5, -2.5, i32::MAX as f32 + 1.0, f32::NAN];
 
@@ -597,7 +587,6 @@ unsafe fn test_mm_cvtps_ph() {
 #[cfg(target_arch = "x86_64")]
 #[cfg(not(jit))]
 unsafe fn test_xmm_roundtrip() {
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         let input = [1u8; 16];
         let mut output = [0u8; 16];
@@ -618,7 +607,6 @@ unsafe fn test_xmm_roundtrip() {
 #[target_feature(enable = "avx")]
 #[cfg(not(jit))]
 unsafe fn test_ymm_roundtrip() {
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         let input = [1u8; 32];
         let mut output = [0u8; 32];
@@ -639,7 +627,6 @@ unsafe fn test_ymm_roundtrip() {
 #[target_feature(enable = "avx512f")]
 #[cfg(not(jit))]
 unsafe fn test_zmm_roundtrip() {
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         let input = [1u8; 64];
         let mut output = [0u8; 64];

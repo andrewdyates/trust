@@ -14,14 +14,14 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::fx::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use trust_types::fx::FxHashMap;
 
 use trust_types::{
-    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula, LocalDecl,
-    Operand, Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty,
-    VerifiableBody, VerifiableFunction, VerificationCondition, VerificationResult,
+    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula, LocalDecl, Operand,
+    Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, VerifiableBody,
+    VerifiableFunction, VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -120,9 +120,7 @@ fn count_functions(source: &str) -> FunctionStats {
             }
             if let Some(fn_pos) = trimmed.find("fn ") {
                 let after_fn = &trimmed[fn_pos + 3..];
-                let end = after_fn
-                    .find(['(', '<'])
-                    .unwrap_or(after_fn.len());
+                let end = after_fn.find(['(', '<']).unwrap_or(after_fn.len());
                 let name = after_fn[..end].trim();
                 if !name.is_empty() {
                     stats.names.push(name.to_string());
@@ -177,11 +175,7 @@ fn checked_add_fn(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u64(), name: None },
                 LocalDecl { index: 1, ty: Ty::u64(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u64(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -437,14 +431,8 @@ fn build_fixture_functions() -> Vec<VerifiableFunction> {
 fn test_fixture_crate_exists_and_has_100_plus_functions() {
     let root = fixture_crate_root();
     assert!(root.exists(), "fixture crate should exist at {}", root.display());
-    assert!(
-        root.join("Cargo.toml").exists(),
-        "fixture crate should have Cargo.toml"
-    );
-    assert!(
-        root.join("src/lib.rs").exists(),
-        "fixture crate should have src/lib.rs"
-    );
+    assert!(root.join("Cargo.toml").exists(), "fixture crate should have Cargo.toml");
+    assert!(root.join("src/lib.rs").exists(), "fixture crate should have src/lib.rs");
 
     // Count source files
     let rs_files = find_rs_files(&root.join("src"));
@@ -614,7 +602,10 @@ fn test_fixture_pipeline_120_functions() {
     eprintln!("  Failed VCs: {failed}");
     eprintln!("  Unknown VCs: {unknown}");
     eprintln!("  VC kinds: {vc_kind_counts:?}");
-    eprintln!("  Functions proved: {functions_fully_proved}/{} ({proved_pct:.1}%)", functions.len());
+    eprintln!(
+        "  Functions proved: {functions_fully_proved}/{} ({proved_pct:.1}%)",
+        functions.len()
+    );
     eprintln!("=========================================");
 }
 
@@ -657,8 +648,10 @@ fn test_fixture_report_generation() {
     // Obligation counts are consistent
     assert_eq!(
         report.summary.total_obligations,
-        report.summary.total_proved + report.summary.total_failed
-            + report.summary.total_unknown + report.summary.total_runtime_checked,
+        report.summary.total_proved
+            + report.summary.total_failed
+            + report.summary.total_unknown
+            + report.summary.total_runtime_checked,
         "obligation counts should sum correctly"
     );
 
@@ -688,9 +681,8 @@ fn test_fixture_report_generation() {
 #[test]
 fn test_fixture_no_false_positives() {
     // Trivial/noop functions should produce 0 VCs and thus 0 failures.
-    let safe_functions: Vec<VerifiableFunction> = (0..40)
-        .map(|i| noop_fn(&format!("safe_{i:03}")))
-        .collect();
+    let safe_functions: Vec<VerifiableFunction> =
+        (0..40).map(|i| noop_fn(&format!("safe_{i:03}"))).collect();
 
     for func in &safe_functions {
         let vcs = trust_vcgen::generate_vcs(func);
@@ -844,12 +836,7 @@ fn test_fixture_module_distribution() {
 
     // Every module should have at least 5 functions
     for (name, count) in &module_counts {
-        assert!(
-            *count >= 5,
-            "module {} should have >= 5 functions, got {}",
-            name,
-            count
-        );
+        assert!(*count >= 5, "module {} should have >= 5 functions, got {}", name, count);
     }
 
     eprintln!("=== Module Distribution ===");

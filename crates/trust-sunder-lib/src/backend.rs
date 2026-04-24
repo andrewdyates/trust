@@ -43,8 +43,5 @@ pub trait SunderBackend {
     /// # Errors
     ///
     /// Returns `SunderLibError` if invariant inference fails.
-    fn infer_invariants(
-        &self,
-        function_name: &str,
-    ) -> Result<Vec<LoopInvariant>, SunderLibError>;
+    fn infer_invariants(&self, function_name: &str) -> Result<Vec<LoopInvariant>, SunderLibError>;
 }

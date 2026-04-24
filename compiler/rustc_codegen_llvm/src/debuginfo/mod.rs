@@ -82,7 +82,6 @@ impl<'ll, 'tcx> CodegenUnitDebugContext<'ll, 'tcx> {
     }
 
     pub(crate) fn finalize(&self, sess: &Session) {
-        // SAFETY: The `DIBuilder` is a valid reference that has not been finalized yet.
         unsafe { llvm::LLVMDIBuilderFinalize(self.builder.as_ref()) };
 
         match sess.target.debuginfo_kind {
@@ -120,7 +119,6 @@ impl<'ll, 'tcx> CodegenUnitDebugContext<'ll, 'tcx> {
             self.llmod,
             llvm::ModuleFlagMergeBehavior::Warning,
             "Debug Info Version",
-            // SAFETY: Calling a stateless LLVM function that returns the debug metadata version constant.
             unsafe { llvm::LLVMRustDebugMetadataVersion() },
         );
     }
@@ -145,13 +143,12 @@ pub(crate) fn finalize(cx: &CodegenCx<'_, '_>) {
 
 impl<'ll> Builder<'_, 'll, '_> {
     pub(crate) fn get_dbg_loc(&self) -> Option<&'ll DILocation> {
-        // SAFETY: `self.llbuilder` is a valid LLVM builder.
         unsafe { llvm::LLVMGetCurrentDebugLocation2(self.llbuilder) }
     }
 }
 
 impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
-    // tRust: known issue — (eddyb) find a common convention for all of the debuginfo-related
+    // FIXME(eddyb) find a common convention for all of the debuginfo-related
     // names (choose between `dbg`, `debug`, `debuginfo`, `debug_info` etc.).
     fn dbg_var_addr(
         &mut self,
@@ -188,7 +185,6 @@ impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
 
         let di_builder = DIB(self.cx());
         let addr_expr = di_builder.create_expression(&addr_ops);
-        // SAFETY: The builder, storage value, variable info, expression, debug location, and insertion block are all valid LLVM debug info references.
         unsafe {
             llvm::LLVMDIBuilderInsertDeclareRecordAtEnd(
                 di_builder,
@@ -236,11 +232,9 @@ impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         }
 
         let di_builder = DIB(self.cx());
-        // SAFETY: The `DIBuilder` is valid, and the address operations slice and length are valid.
         let addr_expr = unsafe {
             llvm::LLVMDIBuilderCreateExpression(di_builder, addr_ops.as_ptr(), addr_ops.len())
         };
-        // SAFETY: The builder, value, variable info, expression, debug location, and insertion block are all valid LLVM debug info references.
         unsafe {
             llvm::LLVMDIBuilderInsertDbgValueRecordAtEnd(
                 di_builder,
@@ -254,14 +248,12 @@ impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
     }
 
     fn set_dbg_loc(&mut self, dbg_loc: &'ll DILocation) {
-        // SAFETY: `self.llbuilder` is a valid builder, and the debug location (if non-null) is a valid `DILocation` in the same context.
         unsafe {
             llvm::LLVMSetCurrentDebugLocation2(self.llbuilder, dbg_loc);
         }
     }
 
     fn clear_dbg_loc(&mut self) {
-        // SAFETY: `self.llbuilder` is a valid builder, and the debug location (if non-null) is a valid `DILocation` in the same context.
         unsafe {
             llvm::LLVMSetCurrentDebugLocation2(self.llbuilder, ptr::null());
         }
@@ -279,7 +271,6 @@ impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
 
         // Only function parameters and instructions are local to a function,
         // don't change the name of anything else (e.g. globals).
-        // SAFETY: The value is a valid LLVM reference. `LLVMIsAInstruction` returns null if the value is not an instruction, which is handled by the caller.
         let param_or_inst = unsafe {
             llvm::LLVMIsAArgument(value).is_some() || llvm::LLVMIsAInstruction(value).is_some()
         };
@@ -319,7 +310,7 @@ impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
             .fn_abi_of_instance(
                 self.cx().typing_env().as_query_input((instance, ty::List::empty())),
             )
-            .expect("invariant: namespace scope is created");
+            .unwrap();
 
         let di_scope = self.cx().dbg_scope_fn(instance, fn_abi, None);
 
@@ -348,7 +339,7 @@ impl<'ll, 'tcx> DebugInfoBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
 }
 
 /// A source code location used to generate debug information.
-// tRust: known issue — (eddyb) rename this to better indicate it's a duplicate of
+// FIXME(eddyb) rename this to better indicate it's a duplicate of
 // `rustc_span::Loc` rather than `DILocation`, perhaps by making
 // `lookup_char_pos` return the right information instead.
 struct DebugLoc {
@@ -362,7 +353,7 @@ struct DebugLoc {
 
 impl<'ll> CodegenCx<'ll, '_> {
     /// Looks up debug source information about a `BytePos`.
-    // tRust: known issue — (eddyb) rename this to better indicate it's a duplicate of
+    // FIXME(eddyb) rename this to better indicate it's a duplicate of
     // `lookup_char_pos` rather than `dbg_loc`, perhaps by making
     // `lookup_char_pos` return the right information instead.
     fn lookup_debug_loc(&self, pos: BytePos) -> DebugLoc {
@@ -394,7 +385,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         name: &str,
         actual_type_metadata: &'ll DIType,
     ) -> &'ll DITemplateTypeParameter {
-        // SAFETY: The `DIBuilder` is valid, the scope and type references are valid, and the name buffer is valid.
         unsafe {
             llvm::LLVMRustDIBuilderCreateTemplateTypeParameter(
                 DIB(self),
@@ -478,7 +468,7 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         // Omit the linkage_name if it is the same as subprogram name.
         let linkage_name = if &name == linkage_name { "" } else { linkage_name };
 
-        // tRust: known issue — (eddyb) does this need to be separate from `loc.line` for some reason?
+        // FIXME(eddyb) does this need to be separate from `loc.line` for some reason?
         let scope_line = loc.line;
 
         let mut flags = DIFlags::FlagPrototyped | DIFlags::FlagAllCallsDescribed;
@@ -507,7 +497,6 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         // FlagAllCallsDescribed cannot appear on the method declaration DIE
         // because it has no body, which LLVM's verifier rejects.
         let decl_flags = flags & !DIFlags::FlagAllCallsDescribed;
-        // SAFETY: The DIBuilder is valid, and all referenced debug info nodes and string buffers are valid.
         let decl = is_method.then(|| unsafe {
             llvm::LLVMRustDIBuilderCreateMethod(
                 DIB(self),
@@ -525,7 +514,6 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
             )
         });
 
-        // SAFETY: The `DIBuilder` is valid, the scope and type references are valid, and all string parameters have valid buffers and lengths.
         return unsafe {
             llvm::LLVMRustDIBuilderCreateFunction(
                 DIB(self),
@@ -565,7 +553,7 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
 
             // Arguments types
             if cx.sess().target.is_like_msvc {
-                // tRust: known issue — (#42800):
+                // FIXME(#42800):
                 // There is a bug in MSDIA that leads to a crash when it encounters
                 // a fixed-size array of `u8` or something zero-sized in a
                 // function-type (see #40477).
@@ -699,7 +687,6 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
             (line, col)
         };
 
-        // SAFETY: The LLVM context and scope are valid. The inlined-at location (if present) is valid.
         unsafe { llvm::LLVMDIBuilderCreateDebugLocation(self.llcx, line, col, scope, inlined_at) }
     }
 
@@ -724,7 +711,7 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         finalize(self)
     }
 
-    // tRust: known issue — (eddyb) find a common convention for all of the debuginfo-related
+    // FIXME(eddyb) find a common convention for all of the debuginfo-related
     // names (choose between `dbg`, `debug`, `debuginfo`, `debug_info` etc.).
     fn create_dbg_var(
         &self,
@@ -744,7 +731,6 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         let name = variable_name.as_str();
 
         match variable_kind {
-            // SAFETY: The `DIBuilder` is valid, the scope and type references are valid, and the name buffer and length are valid.
             ArgumentVariable(arg_index) => unsafe {
                 llvm::LLVMDIBuilderCreateParameterVariable(
                     DIB(self),
@@ -759,7 +745,6 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
                     DIFlags::FlagZero,
                 )
             },
-            // SAFETY: The `DIBuilder` is valid, the scope and type references are valid, and the name buffer and length are valid.
             LocalVariable => unsafe {
                 llvm::LLVMDIBuilderCreateAutoVariable(
                     DIB(self),

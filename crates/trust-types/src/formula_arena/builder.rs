@@ -43,16 +43,14 @@ impl FormulaArena {
         self.push(FormulaNode::Not(a))
     }
 
-    /// Push an And node.
+    /// Push an And node (with hash-consing deduplication).
     pub fn and(&mut self, terms: &[FormulaRef]) -> FormulaRef {
-        let (start, count) = self.push_refs(terms);
-        self.push(FormulaNode::And(start, count))
+        self.push_nary(terms, true)
     }
 
-    /// Push an Or node.
+    /// Push an Or node (with hash-consing deduplication).
     pub fn or(&mut self, terms: &[FormulaRef]) -> FormulaRef {
-        let (start, count) = self.push_refs(terms);
-        self.push(FormulaNode::Or(start, count))
+        self.push_nary(terms, false)
     }
 
     /// Push an Implies node.
@@ -111,12 +109,14 @@ impl FormulaArena {
     }
 
     /// Push a Forall quantifier.
-    pub fn forall(&mut self, bindings: Vec<(String, Sort)>, body: FormulaRef) -> FormulaRef {
+    // tRust #883: Bindings use interned Symbol.
+    pub fn forall(&mut self, bindings: Vec<(crate::Symbol, Sort)>, body: FormulaRef) -> FormulaRef {
         self.push(FormulaNode::Forall(bindings, body))
     }
 
     /// Push an Exists quantifier.
-    pub fn exists(&mut self, bindings: Vec<(String, Sort)>, body: FormulaRef) -> FormulaRef {
+    // tRust #883: Bindings use interned Symbol.
+    pub fn exists(&mut self, bindings: Vec<(crate::Symbol, Sort)>, body: FormulaRef) -> FormulaRef {
         self.push(FormulaNode::Exists(bindings, body))
     }
 

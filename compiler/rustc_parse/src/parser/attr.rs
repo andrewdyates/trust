@@ -53,7 +53,7 @@ impl<'a> Parser<'a> {
 
                 let inner_error_reason = if just_parsed_doc_comment {
                     Some(InnerAttrForbiddenReason::AfterOuterDocComment {
-                        prev_doc_comment_span: prev_outer_attr_sp.expect("invariant: previous outer attribute span exists"), // tRust: unwrap -> expect
+                        prev_doc_comment_span: prev_outer_attr_sp.unwrap(),
                     })
                 } else {
                     prev_outer_attr_sp.map(|prev_outer_attr_sp| {
@@ -319,8 +319,6 @@ impl<'a> Parser<'a> {
         // Attr items don't have attributes.
         self.collect_tokens(None, AttrWrapper::empty(), force_collect, |this, _empty_attrs| {
             let is_unsafe = this.eat_keyword(exp!(Unsafe));
-            // SAFETY: The invariants required by this unsafe operation are
-            // upheld by the caller's contract and preceding checks.
             let unsafety = if is_unsafe {
                 let unsafe_span = this.prev_token.span;
                 this.expect(exp!(OpenParen))?;
@@ -331,8 +329,6 @@ impl<'a> Parser<'a> {
 
             let path = this.parse_path(PathStyle::Mod)?;
             let args = this.parse_attr_args()?;
-            // SAFETY: The invariants required by this unsafe operation are
-            // upheld by the caller's contract and preceding checks.
             if is_unsafe {
                 this.expect(exp!(CloseParen))?;
             }
@@ -430,8 +426,8 @@ impl<'a> Parser<'a> {
                     .eat_metavar_seq(MetaVarKind::Meta { has_meta_form: true }, |this| {
                         this.parse_attr_item(ForceCollect::No)
                     })
-                    .expect("invariant: value is present"); // tRust: unwrap -> expect
-                Ok(attr_item.meta(attr_item.path.span).expect("invariant: attribute has meta")) // tRust: unwrap -> expect
+                    .unwrap();
+                Ok(attr_item.meta(attr_item.path.span).unwrap())
             } else {
                 self.unexpected_any()
             };
@@ -443,8 +439,6 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         let unsafety = if is_unsafe {
             let unsafe_span = self.prev_token.span;
             self.expect(exp!(OpenParen))?;
@@ -456,8 +450,6 @@ impl<'a> Parser<'a> {
 
         let path = self.parse_path(PathStyle::Mod)?;
         let kind = self.parse_meta_item_kind()?;
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         if is_unsafe {
             self.expect(exp!(CloseParen))?;
         }

@@ -3,17 +3,40 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use trust_types::{
-    Formula, SourceSpan, VcKind,
-    VerificationCondition as TrustVc,
+    Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition as TrustVc,
     VerificationResult as TrustVr,
-    ProofStrength,
 };
 
 use crate::types::{OutputFormat, VerificationOutcome, VerificationResult};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReportArtifact {
+    Json,
+    Ndjson,
+    Html,
+}
+
+impl ReportArtifact {
+    fn file_name(self) -> &'static str {
+        match self {
+            Self::Json => "report.json",
+            Self::Ndjson => "report.ndjson",
+            Self::Html => "report.html",
+        }
+    }
+
+    fn write_label(self) -> &'static str {
+        match self {
+            Self::Json => "JSON report",
+            Self::Ndjson => "NDJSON report",
+            Self::Html => "HTML report",
+        }
+    }
+}
 
 /// A non-verification diagnostic line captured from compiler output.
 #[derive(Debug, Clone, Serialize)]
@@ -38,6 +61,7 @@ pub(crate) struct VerificationReport {
     pub(crate) proved: usize,
     pub(crate) failed: usize,
     pub(crate) unknown: usize,
+    pub(crate) runtime_checked: usize,
     pub(crate) total: usize,
     pub(crate) results: Vec<VerificationResult>,
     pub(crate) compiler_diagnostics: Vec<CompilerDiagnostic>,
@@ -49,6 +73,8 @@ impl VerificationReport {
     pub(crate) fn render(&self, format: OutputFormat, report_dir: Option<&str>) {
         // tRust #531: Delegate JSON and HTML to trust-report for parallel reporting.
         let trust_report = self.to_trust_report();
+        let html_report = (matches!(format, OutputFormat::Html) || report_dir.is_some())
+            .then(|| trust_report::html_report::generate_html_report(&trust_report));
 
         match format {
             OutputFormat::Terminal => {
@@ -66,73 +92,67 @@ impl VerificationReport {
             }
             OutputFormat::Html => {
                 // tRust #531: Use trust-report HTML generator with dashboard.
-                let html = trust_report::html_report::generate_html_report(&trust_report);
-                println!("{html}");
+                println!(
+                    "{}",
+                    html_report
+                        .as_deref()
+                        .expect("HTML output should be rendered when format=html")
+                );
             }
         }
 
         // tRust #531: Write report files to --report-dir if specified.
         if let Some(dir) = report_dir {
-            let output_dir = Path::new(dir);
-            if let Err(e) = trust_report::write_json_report(&trust_report, output_dir) {
-                eprintln!("cargo-trust: failed to write JSON report: {e}");
-            } else {
-                eprintln!("cargo-trust: wrote {}/report.json", dir);
-            }
-            if let Err(e) = trust_report::write_ndjson_report(&trust_report, output_dir) {
-                eprintln!("cargo-trust: failed to write NDJSON report: {e}");
-            } else {
-                eprintln!("cargo-trust: wrote {}/report.ndjson", dir);
-            }
-            let html = trust_report::html_report::generate_html_report(&trust_report);
-            let html_path = output_dir.join("report.html");
-            if let Err(e) = std::fs::create_dir_all(output_dir)
-                .and_then(|()| std::fs::write(&html_path, &html))
-            {
-                eprintln!("cargo-trust: failed to write HTML report: {e}");
-            } else {
-                eprintln!("cargo-trust: wrote {}", html_path.display());
-            }
+            write_report_artifacts(
+                &trust_report,
+                Path::new(dir),
+                html_report
+                    .as_deref()
+                    .expect("HTML report should be rendered when writing report artifacts"),
+            );
         }
     }
 
     fn render_terminal(&self) {
-        eprintln!();
-        eprintln!("=== tRust Verification Report ===");
-        eprintln!(
+        for line in self.terminal_lines() {
+            eprintln!("{line}");
+        }
+    }
+
+    fn terminal_lines(&self) -> Vec<String> {
+        let mut lines = Vec::with_capacity(self.results.len() + 8);
+        lines.push(String::new());
+        lines.push("=== tRust Verification Report ===".to_string());
+        lines.push(format!(
             "Level: {} | Timeout: {}ms | Duration: {}ms",
             self.config.level, self.config.timeout_ms, self.duration_ms
-        );
-        eprintln!();
+        ));
+        lines.push(String::new());
 
         if self.results.is_empty() {
-            eprintln!("  No verification obligations found.");
+            lines.push("  No verification obligations found.".to_string());
         } else {
-            for result in &self.results {
-                let icon = match result.outcome {
-                    VerificationOutcome::Proved => "PROVED",
-                    VerificationOutcome::Failed => "FAILED",
-                    VerificationOutcome::Unknown => "UNKNOWN",
-                };
-                let time_str = result
-                    .time_ms
-                    .map(|ms| format!(" ({}, {}ms)", result.backend, ms))
-                    .unwrap_or_default();
-                eprintln!(
-                    "  [{icon}] [{}] {}{time_str}",
-                    result.kind, result.message
-                );
-            }
+            lines.extend(self.results.iter().map(terminal_result_line));
         }
 
-        eprintln!();
-        eprintln!(
-            "Summary: {} proved, {} failed, {} unknown ({} total)",
-            self.proved, self.failed, self.unknown, self.total
-        );
-        let status = if self.success { "PASS" } else { "FAIL" };
-        eprintln!("Result: {status}");
-        eprintln!("=================================");
+        lines.push(String::new());
+        lines.push(format!(
+            "Summary: {} proved, {} failed, {} runtime-checked, {} inconclusive ({} total)",
+            self.proved, self.failed, self.runtime_checked, self.unknown, self.total
+        ));
+        lines.push(format!("Result: {}", self.terminal_status_label()));
+        lines.push("=================================".to_string());
+        lines
+    }
+
+    fn terminal_status_label(&self) -> &'static str {
+        if self.success {
+            "PASS"
+        } else if self.failed > 0 || self.exit_code != 0 {
+            "FAIL"
+        } else {
+            "INCONCLUSIVE"
+        }
     }
 
     /// Convert cargo-trust parsed results to trust-types pairs and build a
@@ -147,28 +167,40 @@ impl VerificationReport {
             .map(|r| {
                 let vc = TrustVc {
                     kind: parse_vc_kind(&r.kind),
-                    function: r.kind.clone(),
-                    location: SourceSpan::default(),
+                    function: if r.function.is_empty() {
+                        r.kind.clone().into()
+                    } else {
+                        r.function.clone().into()
+                    },
+                    location: r.location.clone().unwrap_or_else(SourceSpan::default),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 };
                 let vr = match r.outcome {
                     VerificationOutcome::Proved => TrustVr::Proved {
-                        solver: r.backend.clone(),
+                        solver: r.backend.clone().into(),
                         time_ms: r.time_ms.unwrap_or(0),
                         strength: ProofStrength::smt_unsat(),
                         proof_certificate: None,
                         solver_warnings: None,
                     },
                     VerificationOutcome::Failed => TrustVr::Failed {
-                        solver: r.backend.clone(),
+                        solver: r.backend.clone().into(),
                         time_ms: r.time_ms.unwrap_or(0),
-                        counterexample: None,
+                        counterexample: r.counterexample.clone(),
                     },
-                    VerificationOutcome::Unknown => TrustVr::Unknown {
-                        solver: r.backend.clone(),
-                        time_ms: r.time_ms.unwrap_or(0),
-                        reason: "unknown".to_string(),
+                    VerificationOutcome::RuntimeChecked | VerificationOutcome::Unknown => {
+                        TrustVr::Unknown {
+                            solver: r.backend.clone().into(),
+                            time_ms: r.time_ms.unwrap_or(0),
+                            reason: r.reason.clone().unwrap_or_else(|| {
+                                "unproved obligation with runtime check".to_string()
+                            }),
+                        }
+                    }
+                    VerificationOutcome::Timeout => TrustVr::Timeout {
+                        solver: r.backend.clone().into(),
+                        timeout_ms: r.time_ms.unwrap_or(0),
                     },
                 };
                 (vc, vr)
@@ -205,17 +237,68 @@ pub(crate) fn parse_vc_kind(kind: &str) -> VcKind {
                 operand_tys: (trust_types::Ty::u64(), trust_types::Ty::u64()),
             }
         }
-        _ => VcKind::Assertion {
-            message: kind.to_string(),
-        },
+        _ => VcKind::Assertion { message: kind.to_string() },
     }
 }
 
 /// Minimal HTML escaping for report output.
 #[allow(dead_code)] // Used in tests; available for future HTML diff output.
 pub(crate) fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+fn terminal_result_line(result: &VerificationResult) -> String {
+    format!(
+        "  [{}] [{}] {}{}",
+        result.outcome.label(),
+        result.kind,
+        result.message,
+        terminal_result_detail_suffix(result)
+    )
+}
+
+fn terminal_result_detail_suffix(result: &VerificationResult) -> String {
+    match (display_backend(&result.backend), result.time_ms) {
+        (Some(backend), Some(time_ms)) => format!(" ({backend}, {time_ms}ms)"),
+        (Some(backend), None) => format!(" ({backend})"),
+        (None, Some(time_ms)) => format!(" ({time_ms}ms)"),
+        (None, None) => String::new(),
+    }
+}
+
+fn display_backend(backend: &str) -> Option<&str> {
+    let backend = backend.trim();
+    (!backend.is_empty() && backend != "unknown").then_some(backend)
+}
+
+fn report_artifact_path(output_dir: &Path, artifact: ReportArtifact) -> PathBuf {
+    output_dir.join(artifact.file_name())
+}
+
+fn write_report_artifacts(
+    report: &trust_types::JsonProofReport,
+    output_dir: &Path,
+    html_report: &str,
+) {
+    write_report_artifact(output_dir, ReportArtifact::Json, || {
+        trust_report::write_json_report(report, output_dir)
+    });
+    write_report_artifact(output_dir, ReportArtifact::Ndjson, || {
+        trust_report::write_ndjson_report(report, output_dir)
+    });
+    write_report_artifact(output_dir, ReportArtifact::Html, || {
+        std::fs::create_dir_all(output_dir)?;
+        std::fs::write(report_artifact_path(output_dir, ReportArtifact::Html), html_report)
+    });
+}
+
+fn write_report_artifact<F>(output_dir: &Path, artifact: ReportArtifact, write: F)
+where
+    F: FnOnce() -> std::io::Result<()>,
+{
+    let artifact_path = report_artifact_path(output_dir, artifact);
+    match write() {
+        Ok(()) => eprintln!("cargo-trust: wrote {}", artifact_path.display()),
+        Err(e) => eprintln!("cargo-trust: failed to write {}: {e}", artifact.write_label()),
+    }
 }

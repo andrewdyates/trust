@@ -182,7 +182,9 @@ fn encode_vc_kind(kind: &VcKind, buf: &mut Vec<u8>) {
             buf.push(0x2b);
             encode_str(desc, buf);
         }
-        _ => { buf.push(0xFF); /* unknown Ty variant */ }
+        _ => {
+            buf.push(0xFF); /* unknown Ty variant */
+        }
     }
 }
 
@@ -215,7 +217,7 @@ fn encode_formula(formula: &Formula, buf: &mut Vec<u8>) {
         // Variables
         Formula::Var(name, sort) => {
             buf.push(0x13);
-            encode_str(name, buf);
+            encode_str(name.as_str(), buf);
             encode_sort(sort, buf);
         }
 
@@ -460,7 +462,7 @@ fn encode_formula(formula: &Formula, buf: &mut Vec<u8>) {
             buf.push(0x90);
             encode_u32(bindings.len() as u32, buf);
             for (name, sort) in bindings {
-                encode_str(name, buf);
+                encode_str(name.as_str(), buf);
                 encode_sort(sort, buf);
             }
             encode_formula(body, buf);
@@ -469,7 +471,7 @@ fn encode_formula(formula: &Formula, buf: &mut Vec<u8>) {
             buf.push(0x91);
             encode_u32(bindings.len() as u32, buf);
             for (name, sort) in bindings {
-                encode_str(name, buf);
+                encode_str(name.as_str(), buf);
                 encode_sort(sort, buf);
             }
             encode_formula(body, buf);
@@ -487,7 +489,9 @@ fn encode_formula(formula: &Formula, buf: &mut Vec<u8>) {
             encode_formula(index, buf);
             encode_formula(value, buf);
         }
-        _ => { buf.push(0xFF); /* unknown Ty variant */ }
+        _ => {
+            buf.push(0xFF); /* unknown Ty variant */
+        }
     }
 }
 
@@ -505,7 +509,9 @@ fn encode_sort(sort: &Sort, buf: &mut Vec<u8>) {
             encode_sort(idx, buf);
             encode_sort(elem, buf);
         }
-        _ => { buf.push(0xFF); /* unknown Ty variant */ }
+        _ => {
+            buf.push(0xFF); /* unknown Ty variant */
+        }
     }
 }
 
@@ -574,7 +580,7 @@ fn encode_ty(ty: &Ty, buf: &mut Vec<u8>) {
         }
         Ty::Adt { name, fields } => {
             buf.push(0x09);
-            encode_str(name, buf);
+            encode_str(name.as_str(), buf);
             encode_u32(fields.len() as u32, buf);
             for (fname, fty) in fields {
                 encode_str(fname, buf);
@@ -583,7 +589,9 @@ fn encode_ty(ty: &Ty, buf: &mut Vec<u8>) {
         }
         Ty::Unit => buf.push(0x0A),
         Ty::Never => buf.push(0x0B),
-        _ => { buf.push(0xFF); /* unknown Ty variant */ }
+        _ => {
+            buf.push(0xFF); /* unknown Ty variant */
+        }
     }
 }
 
@@ -608,7 +616,7 @@ mod tests {
     fn canonical_deterministic_simple() {
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -622,7 +630,7 @@ mod tests {
     fn canonical_starts_with_magic() {
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -635,7 +643,7 @@ mod tests {
     fn canonical_ignores_location() {
         let vc1 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "func_a".to_string(),
+            function: "func_a".into(),
             location: SourceSpan {
                 file: "a.rs".to_string(),
                 line_start: 1,
@@ -648,7 +656,7 @@ mod tests {
         };
         let vc2 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "func_b".to_string(),
+            function: "func_b".into(),
             location: SourceSpan {
                 file: "z.rs".to_string(),
                 line_start: 999,
@@ -670,14 +678,14 @@ mod tests {
     fn canonical_different_kinds_differ() {
         let vc1 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
         let vc2 = VerificationCondition {
             kind: VcKind::RemainderByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -713,7 +721,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "midpoint".to_string(),
+            function: "midpoint".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,

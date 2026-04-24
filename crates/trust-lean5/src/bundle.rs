@@ -169,7 +169,7 @@ mod tests {
     fn sample_vc(name: &str, formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: name.to_string(),
+            function: name.into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -179,10 +179,12 @@ mod tests {
     fn sample_cert(name: &str) -> TrustProofCertificate {
         let vc = sample_vc(name, Formula::Bool(false));
         let result = VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 1,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, };
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        };
         crate::certificate::generate_certificate_unchecked(
             &vc,
             &result,

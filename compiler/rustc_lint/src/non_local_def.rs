@@ -52,7 +52,7 @@ pub(crate) struct NonLocalDefinitions {
 
 impl_lint_pass!(NonLocalDefinitions => [NON_LOCAL_DEFINITIONS]);
 
-// tRust: known issue — (Urgau) Figure out how to handle modules nested in bodies.
+// FIXME(Urgau): Figure out how to handle modules nested in bodies.
 // It's currently not handled by the current logic because modules are not bodies.
 // They don't even follow the correct order (check_body -> check_mod -> check_body_post)
 // instead check_mod is called after every body has been handled.
@@ -343,7 +343,7 @@ fn peel_parent_while(
 
 /// Return for a given `Path` the span until the last args
 fn path_span_without_args(path: &Path<'_>) -> Span {
-    if let Some(args) = &path.segments.last().expect("invariant: path segments non-empty for valid paths").args { // tRust: unwrap -> expect
+    if let Some(args) = &path.segments.last().unwrap().args {
         path.span.until(args.span_ext)
     } else {
         path.span
@@ -352,5 +352,5 @@ fn path_span_without_args(path: &Path<'_>) -> Span {
 
 /// Return a "error message-able" ident for the last segment of the `Path`
 fn path_name_to_string(path: &Path<'_>) -> String {
-    path.segments.last().expect("invariant: path segments non-empty for valid paths").ident.to_string() // tRust: unwrap -> expect
+    path.segments.last().unwrap().ident.to_string()
 }

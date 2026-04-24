@@ -17,7 +17,7 @@ use crate::llvm;
 use crate::llvm::debuginfo::{DILocation, DIScope};
 
 /// Produces DIScope DIEs for each MIR Scope which has variables defined in it.
-// tRust: known issue — almost all of this should be in `rustc_codegen_ssa::mir::debuginfo`.
+// FIXME(eddyb) almost all of this should be in `rustc_codegen_ssa::mir::debuginfo`.
 pub(crate) fn compute_mir_scopes<'ll, 'tcx>(
     cx: &CodegenCx<'ll, 'tcx>,
     instance: Instance<'tcx>,
@@ -27,7 +27,7 @@ pub(crate) fn compute_mir_scopes<'ll, 'tcx>(
     // Find all scopes with variables defined in them.
     let variables = if cx.sess().opts.debuginfo == DebugInfo::Full {
         let mut vars = DenseBitSet::new_empty(mir.source_scopes.len());
-        // tRust: known issue — take into account that arguments always have debuginfo,
+        // FIXME(eddyb) take into account that arguments always have debuginfo,
         // irrespective of their name (assuming full debuginfo is enabled).
         // NOTE(eddyb) actually, on second thought, those are always in the
         // function scope, which always exists.
@@ -112,7 +112,7 @@ fn make_mir_scope<'ll, 'tcx>(
 
     let dbg_scope = match scope_data.inlined {
         Some((callee, _)) => {
-            // tRust: known issue — this would be `self.monomorphize(&callee)`
+            // FIXME(eddyb) this would be `self.monomorphize(&callee)`
             // if this is moved to `rustc_codegen_ssa::mir::debuginfo`.
             let callee = cx.tcx.instantiate_and_normalize_erasing_regions(
                 instance.args,
@@ -124,7 +124,6 @@ fn make_mir_scope<'ll, 'tcx>(
                 cx.dbg_scope_fn(callee, callee_fn_abi, None)
             })
         }
-        // SAFETY: The `DIBuilder` is valid, and the scope and file references are valid.
         None => unsafe {
             llvm::LLVMDIBuilderCreateLexicalBlock(
                 DIB(cx),
@@ -165,7 +164,6 @@ fn make_mir_scope<'ll, 'tcx>(
                 // NB: We have to emit *something* here or we'll fail LLVM IR verification
                 // in at least some circumstances (see issue #135322) so if the required
                 // discriminant cannot be encoded fall back to the dummy location.
-                // SAFETY: The debug location is a valid DILocation reference, and the discriminator value is valid.
                 unsafe { llvm::LLVMRustDILocationCloneWithBaseDiscriminator(loc, *o.get()) }
                     .unwrap_or_else(|| {
                         cx.dbg_loc(callsite_scope, parent_scope.inlined_at, DUMMY_SP)

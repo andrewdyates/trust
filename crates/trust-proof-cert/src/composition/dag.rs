@@ -6,7 +6,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -38,27 +38,21 @@ pub struct CompositionNode {
 /// every reachable node has a valid certificate and the DAG is acyclic.
 #[derive(Debug, Clone)]
 pub struct ProofComposition {
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Nodes indexed by function name.
-    pub(crate) nodes: FxHashMap<String, CompositionNode>,
+    pub(crate) nodes: BTreeMap<String, CompositionNode>,
     /// Certificates indexed by function name.
-    certificates: FxHashMap<String, ProofCertificate>,
+    certificates: BTreeMap<String, ProofCertificate>,
 }
 
 impl ProofComposition {
     /// Create a new empty composition.
     pub fn new() -> Self {
-        ProofComposition {
-            nodes: FxHashMap::default(),
-            certificates: FxHashMap::default(),
-        }
+        ProofComposition { nodes: BTreeMap::new(), certificates: BTreeMap::new() }
     }
 
     /// Add a certificate for a function with its call dependencies.
-    pub fn add_certificate(
-        &mut self,
-        cert: ProofCertificate,
-        dependencies: Vec<String>,
-    ) {
+    pub fn add_certificate(&mut self, cert: ProofCertificate, dependencies: Vec<String>) {
         let function = cert.function.clone();
         let cert_id = cert.id.0.clone();
         let status = if cert.chain.verify_integrity().is_ok() {
@@ -83,7 +77,7 @@ impl ProofComposition {
         self.nodes.insert(
             function.to_string(),
             CompositionNode {
-                function: function.to_string(),
+                function: function.into(),
                 cert_id: None,
                 dependencies,
                 status: CompositionNodeStatus::Missing,
@@ -134,7 +128,7 @@ impl ProofComposition {
     pub fn detect_cycle(&self) -> Option<Vec<String>> {
         // Standard DFS cycle detection with coloring
         // White=0, Gray=1, Black=2
-        let mut color: FxHashMap<&str, u8> = FxHashMap::default();
+        let mut color: BTreeMap<&str, u8> = BTreeMap::new();
         for key in self.nodes.keys() {
             color.insert(key.as_str(), 0);
         }
@@ -145,9 +139,7 @@ impl ProofComposition {
             if color[key.as_str()] == 0
                 && let Some(cycle) = self.dfs_cycle(key, &mut color, &mut path)
             {
-
-                    return Some(cycle);
-
+                return Some(cycle);
             }
         }
         None
@@ -157,7 +149,7 @@ impl ProofComposition {
     fn dfs_cycle<'a>(
         &'a self,
         node: &'a str,
-        color: &mut FxHashMap<&'a str, u8>,
+        color: &mut BTreeMap<&'a str, u8>,
         path: &mut Vec<String>,
     ) -> Option<Vec<String>> {
         color.insert(node, 1); // Gray
@@ -192,19 +184,14 @@ impl ProofComposition {
     /// Returns `Err` if the graph contains a cycle.
     pub fn topological_order(&self) -> Result<Vec<String>, CompositionError> {
         if let Some(cycle) = self.detect_cycle() {
-            return Err(CompositionError::CircularDependency {
-                cycle: cycle.join(" -> "),
-            });
+            return Err(CompositionError::CircularDependency { cycle: cycle.join(" -> ") });
         }
 
-        let mut in_degree: FxHashMap<&str, usize> = FxHashMap::default();
+        let mut in_degree: BTreeMap<&str, usize> = BTreeMap::new();
         // Count in-degrees: number of within-DAG dependencies each node has
         for node in self.nodes.values() {
-            let count = node
-                .dependencies
-                .iter()
-                .filter(|d| self.nodes.contains_key(d.as_str()))
-                .count();
+            let count =
+                node.dependencies.iter().filter(|d| self.nodes.contains_key(d.as_str())).count();
             in_degree.insert(node.function.as_str(), count);
         }
 
@@ -221,13 +208,14 @@ impl ProofComposition {
             // For each node that depends on `func`, decrement its in-degree
             for node in self.nodes.values() {
                 if node.dependencies.contains(&func)
-                    && let Some(deg) = in_degree.get_mut(node.function.as_str()) {
-                        *deg = deg.saturating_sub(1);
-                        if *deg == 0 {
-                            queue.push(node.function.clone());
-                            queue.sort();
-                        }
+                    && let Some(deg) = in_degree.get_mut(node.function.as_str())
+                {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 {
+                        queue.push(node.function.clone());
+                        queue.sort();
                     }
+                }
             }
         }
 
@@ -251,11 +239,11 @@ pub struct IncrementalComposition {
     /// The underlying proof composition DAG.
     dag: ProofComposition,
     /// SHA-256 hash of each function's spec (annotations + signature).
-    spec_hashes: FxHashMap<String, [u8; 32]>,
+    spec_hashes: BTreeMap<String, [u8; 32]>,
     /// SHA-256 hash of each function's MIR body.
-    body_hashes: FxHashMap<String, [u8; 32]>,
+    body_hashes: BTreeMap<String, [u8; 32]>,
     /// Functions currently marked as stale (need re-verification).
-    stale: FxHashSet<String>,
+    stale: BTreeSet<String>,
 }
 
 impl IncrementalComposition {
@@ -263,9 +251,9 @@ impl IncrementalComposition {
     pub fn new() -> Self {
         IncrementalComposition {
             dag: ProofComposition::new(),
-            spec_hashes: FxHashMap::default(),
-            body_hashes: FxHashMap::default(),
-            stale: FxHashSet::default(),
+            spec_hashes: BTreeMap::new(),
+            body_hashes: BTreeMap::new(),
+            stale: BTreeSet::new(),
         }
     }
 
@@ -297,18 +285,20 @@ impl IncrementalComposition {
             // BFS to find all transitive callers.
             let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
             queue.push_back(changed_fn.to_string());
-            let mut visited: FxHashSet<String> = FxHashSet::default();
+            let mut visited: BTreeSet<String> = BTreeSet::new();
             visited.insert(changed_fn.to_string());
 
             while let Some(current) = queue.pop_front() {
                 // Find all functions that depend on (call) current.
                 for func in self.dag.functions() {
                     if let Some(node) = self.dag.get_node(&func)
-                        && node.dependencies.contains(&current) && visited.insert(func.clone()) {
-                            invalidated.push(func.clone());
-                            self.stale.insert(func.clone());
-                            queue.push_back(func);
-                        }
+                        && node.dependencies.contains(&current)
+                        && visited.insert(func.clone())
+                    {
+                        invalidated.push(func.clone());
+                        self.stale.insert(func.clone());
+                        queue.push_back(func);
+                    }
                 }
             }
         }
@@ -433,10 +423,8 @@ pub fn verify_composition(composition: &ProofComposition) -> CompositionVerifica
 
     // Build composed proof if sound
     let composed = if sound && !valid_functions.is_empty() {
-        let certs: Vec<&ProofCertificate> = valid_functions
-            .iter()
-            .filter_map(|f| composition.get_certificate(f))
-            .collect();
+        let certs: Vec<&ProofCertificate> =
+            valid_functions.iter().filter_map(|f| composition.get_certificate(f)).collect();
         compose_proofs(&certs).ok()
     } else {
         None

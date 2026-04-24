@@ -41,11 +41,7 @@ impl FnContract {
     /// Create a new contract for the given function path.
     #[must_use]
     pub fn new(fn_path: impl Into<String>) -> Self {
-        Self {
-            fn_path: fn_path.into(),
-            preconditions: Vec::new(),
-            postconditions: Vec::new(),
-        }
+        Self { fn_path: fn_path.into(), preconditions: Vec::new(), postconditions: Vec::new() }
     }
 
     /// Add a precondition formula.
@@ -204,83 +200,50 @@ fn vec_specs() -> Vec<FnContract> {
     vec![
         // Vec::push(&mut self, value: T)
         // Post: len increases by 1
-        FnContract::new("std::vec::Vec::push")
-            .post(Formula::Eq(
-                Box::new(int_var("self_len")),
-                Box::new(Formula::Add(
-                    Box::new(int_var("old_len")),
-                    Box::new(int_lit(1)),
-                )),
-            )),
-
+        FnContract::new("std::vec::Vec::push").post(Formula::Eq(
+            Box::new(int_var("self_len")),
+            Box::new(Formula::Add(Box::new(int_var("old_len")), Box::new(int_lit(1)))),
+        )),
         // Vec::pop(&mut self) -> Option<T>
         // Pre: (none — pop on empty returns None)
         // Post: if old_len > 0 then new_len == old_len - 1
         // Post: if old_len == 0 then result_is_none
         FnContract::new("std::vec::Vec::pop")
             .post(Formula::Implies(
-                Box::new(Formula::Gt(
-                    Box::new(int_var("old_len")),
-                    Box::new(int_lit(0)),
-                )),
+                Box::new(Formula::Gt(Box::new(int_var("old_len")), Box::new(int_lit(0)))),
                 Box::new(Formula::Eq(
                     Box::new(int_var("self_len")),
-                    Box::new(Formula::Sub(
-                        Box::new(int_var("old_len")),
-                        Box::new(int_lit(1)),
-                    )),
+                    Box::new(Formula::Sub(Box::new(int_var("old_len")), Box::new(int_lit(1)))),
                 )),
             ))
             .post(Formula::Implies(
-                Box::new(Formula::Eq(
-                    Box::new(int_var("old_len")),
-                    Box::new(int_lit(0)),
-                )),
+                Box::new(Formula::Eq(Box::new(int_var("old_len")), Box::new(int_lit(0)))),
                 Box::new(bool_var("result_is_none")),
             )),
-
         // Vec::get(&self, index: usize) -> Option<&T>
         // Post: if index < len then result_is_some
         // Post: if index >= len then result_is_none
         FnContract::new("std::vec::Vec::get")
             .post(Formula::Implies(
-                Box::new(Formula::Lt(
-                    Box::new(int_var("arg0")),
-                    Box::new(int_var("self_len")),
-                )),
+                Box::new(Formula::Lt(Box::new(int_var("arg0")), Box::new(int_var("self_len")))),
                 Box::new(bool_var("result_is_some")),
             ))
             .post(Formula::Implies(
-                Box::new(Formula::Ge(
-                    Box::new(int_var("arg0")),
-                    Box::new(int_var("self_len")),
-                )),
+                Box::new(Formula::Ge(Box::new(int_var("arg0")), Box::new(int_var("self_len")))),
                 Box::new(bool_var("result_is_none")),
             )),
-
         // Vec::len(&self) -> usize
         // Post: result == self_len
         // Post: result >= 0
         FnContract::new("std::vec::Vec::len")
-            .post(Formula::Eq(
-                Box::new(int_var("result")),
-                Box::new(int_var("self_len")),
-            ))
-            .post(Formula::Ge(
-                Box::new(int_var("result")),
-                Box::new(int_lit(0)),
-            )),
-
+            .post(Formula::Eq(Box::new(int_var("result")), Box::new(int_var("self_len"))))
+            .post(Formula::Ge(Box::new(int_var("result")), Box::new(int_lit(0)))),
         // Vec::is_empty(&self) -> bool
         // Post: result == (self_len == 0)
-        FnContract::new("std::vec::Vec::is_empty")
-            .post(Formula::Eq(
-                Box::new(bool_var("result")),
-                Box::new(Formula::Eq(
-                    Box::new(int_var("self_len")),
-                    Box::new(int_lit(0)),
-                )),
-            )),
+        FnContract::new("std::vec::Vec::is_empty").post(Formula::Eq(
+            Box::new(bool_var("result")),
+            Box::new(Formula::Eq(Box::new(int_var("self_len")), Box::new(int_lit(0)))),
+        )),
     ]
 }
 
@@ -300,9 +263,7 @@ fn option_specs() -> Vec<FnContract> {
     vec![
         // Option::unwrap(self) -> T
         // Pre: self must be Some (panics otherwise)
-        FnContract::new("std::option::Option::unwrap")
-            .pre(bool_var("self_is_some")),
-
+        FnContract::new("std::option::Option::unwrap").pre(bool_var("self_is_some")),
         // Option::map(self, f: F) -> Option<U>
         // Post: if self is Some then result is Some
         // Post: if self is None then result is None
@@ -315,7 +276,6 @@ fn option_specs() -> Vec<FnContract> {
                 Box::new(Formula::Not(Box::new(bool_var("self_is_some")))),
                 Box::new(bool_var("result_is_none")),
             )),
-
         // Option::unwrap_or(self, default: T) -> T
         // Post: always returns a value (never panics)
         // Post: if self is Some then result == self_value
@@ -323,34 +283,22 @@ fn option_specs() -> Vec<FnContract> {
         FnContract::new("std::option::Option::unwrap_or")
             .post(Formula::Implies(
                 Box::new(bool_var("self_is_some")),
-                Box::new(Formula::Eq(
-                    Box::new(int_var("result")),
-                    Box::new(int_var("self_value")),
-                )),
+                Box::new(Formula::Eq(Box::new(int_var("result")), Box::new(int_var("self_value")))),
             ))
             .post(Formula::Implies(
                 Box::new(Formula::Not(Box::new(bool_var("self_is_some")))),
-                Box::new(Formula::Eq(
-                    Box::new(int_var("result")),
-                    Box::new(int_var("arg0")),
-                )),
+                Box::new(Formula::Eq(Box::new(int_var("result")), Box::new(int_var("arg0")))),
             )),
-
         // Option::is_some(&self) -> bool
         // Post: result == self_is_some
         FnContract::new("std::option::Option::is_some")
-            .post(Formula::Eq(
-                Box::new(bool_var("result")),
-                Box::new(bool_var("self_is_some")),
-            )),
-
+            .post(Formula::Eq(Box::new(bool_var("result")), Box::new(bool_var("self_is_some")))),
         // Option::is_none(&self) -> bool
         // Post: result == !self_is_some
-        FnContract::new("std::option::Option::is_none")
-            .post(Formula::Eq(
-                Box::new(bool_var("result")),
-                Box::new(Formula::Not(Box::new(bool_var("self_is_some")))),
-            )),
+        FnContract::new("std::option::Option::is_none").post(Formula::Eq(
+            Box::new(bool_var("result")),
+            Box::new(Formula::Not(Box::new(bool_var("self_is_some")))),
+        )),
     ]
 }
 
@@ -370,9 +318,7 @@ fn result_specs() -> Vec<FnContract> {
     vec![
         // Result::unwrap(self) -> T
         // Pre: self must be Ok (panics on Err)
-        FnContract::new("std::result::Result::unwrap")
-            .pre(bool_var("self_is_ok")),
-
+        FnContract::new("std::result::Result::unwrap").pre(bool_var("self_is_ok")),
         // Result::map(self, f: F) -> Result<U, E>
         // Post: preserves Ok/Err variant
         FnContract::new("std::result::Result::map")
@@ -384,7 +330,6 @@ fn result_specs() -> Vec<FnContract> {
                 Box::new(Formula::Not(Box::new(bool_var("self_is_ok")))),
                 Box::new(bool_var("result_is_err")),
             )),
-
         // Result::map_err(self, f: F) -> Result<T, F>
         // Post: preserves Ok/Err variant
         FnContract::new("std::result::Result::map_err")
@@ -396,7 +341,6 @@ fn result_specs() -> Vec<FnContract> {
                 Box::new(Formula::Not(Box::new(bool_var("self_is_ok")))),
                 Box::new(bool_var("result_is_err")),
             )),
-
         // Result::? operator (try)
         // Pre: (none — always safe)
         // Post: if self is Ok then result == self_ok_value (continues execution)
@@ -413,20 +357,14 @@ fn result_specs() -> Vec<FnContract> {
                 Box::new(Formula::Not(Box::new(bool_var("self_is_ok")))),
                 Box::new(bool_var("early_return")),
             )),
-
         // Result::is_ok(&self) -> bool
         FnContract::new("std::result::Result::is_ok")
-            .post(Formula::Eq(
-                Box::new(bool_var("result")),
-                Box::new(bool_var("self_is_ok")),
-            )),
-
+            .post(Formula::Eq(Box::new(bool_var("result")), Box::new(bool_var("self_is_ok")))),
         // Result::is_err(&self) -> bool
-        FnContract::new("std::result::Result::is_err")
-            .post(Formula::Eq(
-                Box::new(bool_var("result")),
-                Box::new(Formula::Not(Box::new(bool_var("self_is_ok")))),
-            )),
+        FnContract::new("std::result::Result::is_err").post(Formula::Eq(
+            Box::new(bool_var("result")),
+            Box::new(Formula::Not(Box::new(bool_var("self_is_ok")))),
+        )),
     ]
 }
 
@@ -449,10 +387,7 @@ fn iterator_specs() -> Vec<FnContract> {
         // Post: if remaining == 0 then result_is_none
         FnContract::new("std::iter::Iterator::next")
             .post(Formula::Implies(
-                Box::new(Formula::Gt(
-                    Box::new(int_var("iter_remaining")),
-                    Box::new(int_lit(0)),
-                )),
+                Box::new(Formula::Gt(Box::new(int_var("iter_remaining")), Box::new(int_lit(0)))),
                 Box::new(Formula::And(vec![
                     bool_var("result_is_some"),
                     Formula::Eq(
@@ -465,42 +400,26 @@ fn iterator_specs() -> Vec<FnContract> {
                 ])),
             ))
             .post(Formula::Implies(
-                Box::new(Formula::Eq(
-                    Box::new(int_var("iter_remaining")),
-                    Box::new(int_lit(0)),
-                )),
+                Box::new(Formula::Eq(Box::new(int_var("iter_remaining")), Box::new(int_lit(0)))),
                 Box::new(bool_var("result_is_none")),
             )),
-
         // Iterator::count(self) -> usize
         // Post: result == total remaining elements
         // Post: result >= 0
         FnContract::new("std::iter::Iterator::count")
-            .post(Formula::Eq(
-                Box::new(int_var("result")),
-                Box::new(int_var("iter_remaining")),
-            ))
-            .post(Formula::Ge(
-                Box::new(int_var("result")),
-                Box::new(int_lit(0)),
-            )),
-
+            .post(Formula::Eq(Box::new(int_var("result")), Box::new(int_var("iter_remaining"))))
+            .post(Formula::Ge(Box::new(int_var("result")), Box::new(int_lit(0)))),
         // Iterator::sum(self) -> S
         // Post: result >= 0 (for unsigned element types)
         // Note: Full sum correctness requires induction; this is the L1 approximation.
         FnContract::new("std::iter::Iterator::sum")
-            .post(Formula::Ge(
-                Box::new(int_var("result")),
-                Box::new(int_lit(0)),
-            )),
-
+            .post(Formula::Ge(Box::new(int_var("result")), Box::new(int_lit(0)))),
         // Iterator::collect(self) -> B
         // Post: collected length == remaining elements
-        FnContract::new("std::iter::Iterator::collect")
-            .post(Formula::Eq(
-                Box::new(int_var("result_len")),
-                Box::new(int_var("iter_remaining")),
-            )),
+        FnContract::new("std::iter::Iterator::collect").post(Formula::Eq(
+            Box::new(int_var("result_len")),
+            Box::new(int_var("iter_remaining")),
+        )),
     ]
 }
 
@@ -514,9 +433,8 @@ mod tests {
 
     #[test]
     fn test_fn_contract_builder() {
-        let contract = FnContract::new("test::foo")
-            .pre(Formula::Bool(true))
-            .post(Formula::Bool(true));
+        let contract =
+            FnContract::new("test::foo").pre(Formula::Bool(true)).post(Formula::Bool(true));
         assert_eq!(contract.fn_path, "test::foo");
         assert_eq!(contract.preconditions.len(), 1);
         assert_eq!(contract.postconditions.len(), 1);
@@ -533,17 +451,15 @@ mod tests {
 
     #[test]
     fn test_fn_contract_combined_single() {
-        let contract = FnContract::new("test::single")
-            .pre(int_var("x"));
+        let contract = FnContract::new("test::single").pre(int_var("x"));
         let combined = contract.combined_precondition();
         assert_eq!(combined, int_var("x"));
     }
 
     #[test]
     fn test_fn_contract_combined_multiple() {
-        let contract = FnContract::new("test::multi")
-            .pre(Formula::Bool(true))
-            .pre(Formula::Bool(false));
+        let contract =
+            FnContract::new("test::multi").pre(Formula::Bool(true)).pre(Formula::Bool(false));
         let combined = contract.combined_precondition();
         assert!(matches!(combined, Formula::And(ref v) if v.len() == 2));
     }
@@ -596,8 +512,7 @@ mod tests {
     fn test_insert_custom_contract() {
         let mut specs = StdlibSpecs::new();
         let original_len = specs.len();
-        specs.insert(FnContract::new("custom::MyType::do_thing")
-            .pre(Formula::Bool(true)));
+        specs.insert(FnContract::new("custom::MyType::do_thing").pre(Formula::Bool(true)));
         assert_eq!(specs.len(), original_len + 1);
         assert!(specs.get("custom::MyType::do_thing").is_some());
     }

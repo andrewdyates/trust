@@ -90,7 +90,7 @@ fn associated_type_bounds<'tcx>(
             }
             // `ConstIfConst` is only interested in `[const]` bounds.
             PredicateFilter::ConstIfConst | PredicateFilter::SelfConstIfConst => {
-                // tRust: known issue — (const_trait_impl): We *could* uplift the
+                // FIXME(const_trait_impl): We *could* uplift the
                 // `where Self::Assoc: [const] Trait` bounds from the parent trait
                 // here too, but we'd need to split `const_conditions` into two
                 // queries (like we do for `trait_explicit_predicates_and_bounds`)
@@ -430,7 +430,6 @@ pub(super) fn explicit_item_bounds_with_filter(
             return ty::EarlyBinder::bind(bounds);
         }
         Some(ty::ImplTraitInTraitData::Impl { .. }) => {
-            // tRust: invariant — RPITIT in impl position should use trait bounds, not separate item bounds
             span_bug!(tcx.def_span(def_id), "RPITIT in impl should not have item bounds")
         }
         None => {}
@@ -481,7 +480,6 @@ pub(super) fn explicit_item_bounds_with_filter(
             }
         },
         hir::Node::Item(hir::Item { kind: hir::ItemKind::TyAlias(..), .. }) => &[],
-        // tRust: invariant — item_bounds is only called on nodes that can have associated type bounds
         node => bug!("item_bounds called on {def_id:?} => {node:?}"),
     };
 

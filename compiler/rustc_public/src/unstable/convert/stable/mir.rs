@@ -241,10 +241,7 @@ impl<'tcx> Stable<'tcx> for mir::Rvalue<'tcx> {
                 crate::mir::Rvalue::Aggregate(agg_kind.stable(tables, cx), operands)
             }
             CopyForDeref(place) => crate::mir::Rvalue::CopyForDeref(place.stable(tables, cx)),
-            // tRust: WrapUnsafeBinder is an experimental feature not yet in SMIR
-            WrapUnsafeBinder(..) => {
-                bug!("unimplemented: WrapUnsafeBinder rvalue is not yet supported in stable MIR")
-            }
+            WrapUnsafeBinder(..) => todo!("FIXME(unsafe_binders):"),
         }
     }
 }
@@ -445,10 +442,7 @@ impl<'tcx> Stable<'tcx> for mir::PlaceElem<'tcx> {
             // found at https://github.com/rust-lang/rust/pull/117517#issuecomment-1811683486
             Downcast(_, idx) => crate::mir::ProjectionElem::Downcast(idx.stable(tables, cx)),
             OpaqueCast(ty) => crate::mir::ProjectionElem::OpaqueCast(ty.stable(tables, cx)),
-            // tRust: UnwrapUnsafeBinder is an experimental feature not yet in SMIR
-            UnwrapUnsafeBinder(..) => {
-                bug!("unimplemented: UnwrapUnsafeBinder projection is not yet supported in stable MIR")
-            }
+            UnwrapUnsafeBinder(..) => todo!("FIXME(unsafe_binders):"),
         }
     }
 }
@@ -757,10 +751,7 @@ impl<'tcx> Stable<'tcx> for mir::TerminatorKind<'tcx> {
                 target: target.map(|t| t.as_usize()),
                 unwind: unwind.stable(tables, cx),
             },
-            // tRust: TailCall is an experimental terminator kind not yet supported in SMIR
-            mir::TerminatorKind::TailCall { func: _, args: _, fn_span: _ } => {
-                bug!("unimplemented: TailCall terminator is not yet supported in stable MIR")
-            }
+            mir::TerminatorKind::TailCall { func: _, args: _, fn_span: _ } => todo!(),
             mir::TerminatorKind::Assert { cond, expected, msg, target, unwind } => {
                 TerminatorKind::Assert {
                     cond: cond.stable(tables, cx),
@@ -783,7 +774,7 @@ impl<'tcx> Stable<'tcx> for mir::TerminatorKind<'tcx> {
                 operands: operands.iter().map(|operand| operand.stable(tables, cx)).collect(),
                 options: format!("{options:?}"),
                 line_spans: format!("{line_spans:?}"),
-                // tRust: known issue — Figure out how to do labels in SMIR
+                // FIXME: Figure out how to do labels in SMIR
                 destination: targets.first().map(|d| d.as_usize()),
                 unwind: unwind.stable(tables, cx),
             },
@@ -849,7 +840,7 @@ impl<'tcx> Stable<'tcx> for mir::interpret::GlobalAlloc<'tcx> {
                 GlobalAlloc::Function(instance.stable(tables, cx))
             }
             mir::interpret::GlobalAlloc::VTable(ty, dyn_ty) => {
-                // tRust: known issue — Should we record the whole vtable?
+                // FIXME: Should we record the whole vtable?
                 GlobalAlloc::VTable(ty.stable(tables, cx), dyn_ty.principal().stable(tables, cx))
             }
             mir::interpret::GlobalAlloc::Static(def) => {
@@ -873,7 +864,7 @@ impl<'tcx> Stable<'tcx> for rustc_middle::mir::Const<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        let id = tables.intern_mir_const(cx.lift(*self).expect("invariant: MIR Const must be liftable to current context")); // tRust: unwrap -> expect
+        let id = tables.intern_mir_const(cx.lift(*self).unwrap());
         match *self {
             mir::Const::Ty(ty, c) => MirConst::new(
                 crate::ty::ConstantKind::Ty(c.stable(tables, cx)),
@@ -894,8 +885,8 @@ impl<'tcx> Stable<'tcx> for rustc_middle::mir::Const<'tcx> {
                 MirConst::new(ConstantKind::ZeroSized, ty, id)
             }
             mir::Const::Val(val, ty) => {
-                let ty = cx.lift(ty).expect("invariant: ConstValue type must be liftable to current context"); // tRust: unwrap -> expect
-                let val = cx.lift(val).expect("invariant: ConstValue must be liftable to current context"); // tRust: unwrap -> expect
+                let ty = cx.lift(ty).unwrap();
+                let val = cx.lift(val).unwrap();
                 let kind = ConstantKind::Allocated(alloc::new_allocation(ty, val, tables, cx));
                 let ty = ty.stable(tables, cx);
                 MirConst::new(kind, ty, id)

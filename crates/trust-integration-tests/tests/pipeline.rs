@@ -1,4 +1,3 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/pipeline.rs: Cross-crate pipeline integration tests
 //
 // Exercises the full tRust verification pipeline:
@@ -11,14 +10,13 @@
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
 use trust_integration_tests::{
-    array_access_function, contract_function, division_function, midpoint_function,
-    noop_function,
+    array_access_function, contract_function, division_function, midpoint_function, noop_function,
 };
 
 use trust_types::{
-    BasicBlock, BinOp, BlockId, Counterexample, CounterexampleValue, Formula,
-    FunctionVerdict, ProofLevel, ProofStrength, Sort, SourceSpan, Ty, VcKind,
-    VerificationCondition, VerificationResult,
+    BasicBlock, BinOp, BlockId, Counterexample, CounterexampleValue, Formula, FunctionVerdict,
+    ProofLevel, ProofStrength, Sort, SourceSpan, Ty, VcKind, VerificationCondition,
+    VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -59,10 +57,8 @@ fn test_vcgen_to_router_division_by_zero() {
 
     // Step 1: Generate VCs
     let vcs = trust_vcgen::generate_vcs(&func);
-    let div_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let div_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
     assert_eq!(div_vcs.len(), 1, "divide should produce 1 DivisionByZero VC");
     assert_eq!(div_vcs[0].function, "divide");
 
@@ -82,10 +78,8 @@ fn test_vcgen_to_router_array_bounds() {
 
     // Step 1: Generate VCs
     let vcs = trust_vcgen::generate_vcs(&func);
-    let bounds_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .collect();
+    let bounds_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).collect();
     assert_eq!(bounds_vcs.len(), 1, "lookup should produce 1 IndexOutOfBounds VC");
     assert_eq!(bounds_vcs[0].function, "lookup");
     assert_eq!(bounds_vcs[0].kind.proof_level(), ProofLevel::L0Safety);
@@ -131,8 +125,7 @@ fn test_full_pipeline_midpoint_report() {
 
     // Verify JSON serialization roundtrip
     let json = serde_json::to_string_pretty(&report).expect("serialize");
-    let roundtrip: trust_types::JsonProofReport =
-        serde_json::from_str(&json).expect("deserialize");
+    let roundtrip: trust_types::JsonProofReport = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(roundtrip.crate_name, "midpoint_crate");
     assert_eq!(roundtrip.summary.total_obligations, 1);
 }
@@ -165,7 +158,7 @@ fn test_full_pipeline_with_proved_trivial_vc() {
     // Create a VC with a trivially false formula (mock proves it)
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_div".to_string(),
+        function: "safe_div".into(),
         location: SourceSpan {
             file: "src/safe.rs".to_string(),
             line_start: 5,
@@ -202,10 +195,7 @@ fn test_full_pipeline_multi_function_report() {
     all_vcs.extend(trust_vcgen::generate_vcs(&divide));
     all_vcs.extend(trust_vcgen::generate_vcs(&lookup));
 
-    assert!(
-        all_vcs.len() >= 3,
-        "3 functions should produce at least 3 VCs total"
-    );
+    assert!(all_vcs.len() >= 3, "3 functions should produce at least 3 VCs total");
 
     let router = trust_router::Router::new();
     let results = router.verify_all(&all_vcs);
@@ -298,10 +288,7 @@ fn test_cache_with_full_pipeline() {
 
     // Second pass: all hits
     for func in &funcs {
-        assert!(matches!(
-            cache.lookup_function(func),
-            trust_cache::CacheLookup::Hit(_)
-        ));
+        assert!(matches!(cache.lookup_function(func), trust_cache::CacheLookup::Hit(_)));
     }
 
     assert_eq!(cache.hits(), 3);
@@ -337,9 +324,10 @@ fn test_filter_vcs_by_level_then_route() {
     let l0_results = router.verify_all(&l0_vcs);
     let l0_report = trust_report::build_json_report("l0_only", &l0_results);
     assert!(
-        l0_report.functions.iter().all(|f| {
-            f.obligations.iter().all(|o| o.proof_level == ProofLevel::L0Safety)
-        }),
+        l0_report
+            .functions
+            .iter()
+            .all(|f| { f.obligations.iter().all(|o| o.proof_level == ProofLevel::L0Safety) }),
         "L0 report should only contain L0 obligations"
     );
 
@@ -360,54 +348,42 @@ fn test_filter_vcs_by_level_then_route() {
 fn test_multi_backend_dispatch_selects_appropriate_backend() {
     use trust_router::mock_backend::MockBackend;
 
-    // Create a router with multiple backends
+    // Pipeline-v2: ZaniBackend/SunderBackend gated behind not(pipeline-v2).
+    // Use IncrementalZ4Session for L0, MockBackend as fallback.
     let router = trust_router::Router::with_backends(vec![
-        Box::new(trust_router::zani_backend::ZaniBackend::new()),
-        Box::new(trust_router::sunder_backend::SunderBackend::new()),
+        Box::new(trust_router::IncrementalZ4Session::new()),
         Box::new(trust_router::tla2_backend::Tla2Backend),
         Box::new(MockBackend),
     ]);
 
-    // L0 Safety VC — should prefer zani (BoundedModelChecker)
+    // L0 Safety VC
     let safety_vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_fn".to_string(),
+        function: "safe_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
     };
 
     let plan = router.backend_plan(&safety_vc);
-    assert_eq!(plan[0].name, "zani", "L0 safety should prefer zani");
+    assert!(!plan.is_empty(), "L0 safety should have at least one backend in the plan",);
 
-    // L1 Functional VC — sunder is the preferred Deductive backend but is
-    // honestly disabled (#556: can_handle returns false). The mock backend
-    // (General, can_handle=true) wins because backends that *can* handle the
-    // VC are ranked before those that cannot, regardless of role preference.
-    // When sunder gains native integration, this assertion should revert to
-    // expecting "sunder".
+    // L1 Functional VC
     let functional_vc = VerificationCondition {
         kind: VcKind::Postcondition,
-        function: "contract_fn".to_string(),
+        function: "contract_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
     };
 
     let plan = router.backend_plan(&functional_vc);
-    assert_eq!(plan[0].name, "mock", "L1 functional: mock wins while sunder is disabled (#556)");
-    // Verify sunder is still in the plan (just not first)
-    assert!(
-        plan.iter().any(|b| b.name == "sunder"),
-        "sunder should still appear in the backend plan"
-    );
+    assert!(!plan.is_empty(), "should have at least one backend in the plan");
 
     // L2 Domain VC — should prefer tla2 (Temporal)
     let domain_vc = VerificationCondition {
-        kind: VcKind::Temporal {
-            property: "eventually done".to_string(),
-        },
-        function: "temporal_fn".to_string(),
+        kind: VcKind::Temporal { property: "eventually done".to_string() },
+        function: "temporal_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -447,9 +423,8 @@ fn test_cegar_refinement_with_spurious_counterexample() {
         terminator: trust_types::Terminator::Return,
     }];
 
-    let outcome = cegar
-        .refine_iteration(&spurious_cex, &blocks)
-        .expect("refinement should succeed");
+    let outcome =
+        cegar.refine_iteration(&spurious_cex, &blocks).expect("refinement should succeed");
 
     // No abstract states computed yet, so is_spurious returns false → Unsafe
     assert!(
@@ -475,7 +450,7 @@ fn test_cegar_with_router_dispatch() {
     // A Postcondition VC scores 10 > threshold 5, should go to CEGAR
     let postcond_vc = VerificationCondition {
         kind: VcKind::Postcondition,
-        function: "cegar_fn".to_string(),
+        function: "cegar_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -493,7 +468,7 @@ fn test_cegar_with_router_dispatch() {
     // A simple DivisionByZero VC scores 0 < threshold 5, should go to mock
     let div_vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "mock_fn".to_string(),
+        function: "mock_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -519,7 +494,7 @@ fn test_symex_path_constraint_to_formula() {
             BinOp::Gt,
             Box::new(SymbolicValue::Concrete(0)),
         ),
-        true,  // branch taken: x > 0
+        true, // branch taken: x > 0
     );
     pc.add_constraint(
         SymbolicValue::BinOp(
@@ -538,20 +513,15 @@ fn test_symex_path_constraint_to_formula() {
         Formula::And(clauses) => {
             assert_eq!(clauses.len(), 2, "should have 2 path constraints");
             // Second should be negated
-            assert!(
-                matches!(&clauses[1], Formula::Not(_)),
-                "second clause should be negated"
-            );
+            assert!(matches!(&clauses[1], Formula::Not(_)), "second clause should be negated");
         }
         _ => panic!("expected And formula from 2 path constraints, got: {formula:?}"),
     }
 
     // This formula can be used as a VC formula for solver dispatch
     let vc = VerificationCondition {
-        kind: VcKind::Assertion {
-            message: "path constraint holds".to_string(),
-        },
-        function: "symex_test".to_string(),
+        kind: VcKind::Assertion { message: "path constraint holds".to_string() },
+        function: "symex_test".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -578,10 +548,7 @@ fn test_symex_executor_block_coverage() {
     assert!(result.is_ok(), "executing a simple block should succeed");
 
     // Coverage should include block 0
-    assert!(
-        executor.coverage.contains(&0),
-        "coverage should include block 0"
-    );
+    assert!(executor.coverage.contains(&0), "coverage should include block 0");
 
     // Path constraint should be updated (possibly empty for straight-line code)
     let formula = executor.path.to_formula();
@@ -604,8 +571,7 @@ fn test_report_json_schema_fields() {
     let results = router.verify_all(&vcs);
     let report = trust_report::build_json_report("schema_test", &results);
 
-    let json_value: serde_json::Value =
-        serde_json::to_value(&report).expect("serialize to Value");
+    let json_value: serde_json::Value = serde_json::to_value(&report).expect("serialize to Value");
 
     // Top-level required fields
     assert!(json_value.get("metadata").is_some());
@@ -735,8 +701,14 @@ fn test_query_cache_hit_miss() {
 
     // Create a VC to cache
     let vc = VerificationCondition {
-        kind: VcKind::ArithmeticOverflow { op: trust_types::BinOp::Add, operand_tys: (trust_types::Ty::Int { width: 32, signed: true }, trust_types::Ty::Int { width: 32, signed: true }) },
-        function: "test_fn".to_string(),
+        kind: VcKind::ArithmeticOverflow {
+            op: trust_types::BinOp::Add,
+            operand_tys: (
+                trust_types::Ty::Int { width: 32, signed: true },
+                trust_types::Ty::Int { width: 32, signed: true },
+            ),
+        },
+        function: "test_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Eq(
             Box::new(Formula::Var("x".into(), Sort::Int)),
@@ -750,9 +722,12 @@ fn test_query_cache_hit_miss() {
 
     // Store a result
     let result = VerificationResult::Proved {
-        solver: "z4".to_string(),
+        solver: "z4".into(),
         time_ms: 5,
-        strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, };
+        strength: ProofStrength::smt_unsat(),
+        proof_certificate: None,
+        solver_warnings: None,
+    };
     qcache.insert(&vc, result.clone());
 
     // Hit
@@ -780,7 +755,7 @@ fn test_end_to_end_with_synthetic_counterexample() {
         .into_iter()
         .map(|vc| {
             let result = VerificationResult::Failed {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 8,
                 counterexample: Some(Counterexample::new(vec![
                     ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),

@@ -38,6 +38,7 @@ struct AddressInfo {
     mutable: bool,
 }
 
+#[cfg(test)]
 #[must_use]
 pub(crate) fn synthetic_registers(cfg: &ReconstructedCfg) -> Vec<AbstractRegister> {
     collect_register_ids(cfg)
@@ -374,8 +375,7 @@ fn collect_value_formulas(cfg: &ReconstructedCfg) -> BTreeMap<String, FormulaInf
     for node in &cfg.nodes {
         for insn in &node.instructions {
             match &insn.op {
-                AbstractOp::BinArith { lhs, rhs, .. }
-                | AbstractOp::Compare { lhs, rhs, .. } => {
+                AbstractOp::BinArith { lhs, rhs, .. } | AbstractOp::Compare { lhs, rhs, .. } => {
                     collect_abstract_value_formula(lhs, &mut formulas);
                     collect_abstract_value_formula(rhs, &mut formulas);
                 }
@@ -472,8 +472,7 @@ fn registers_in_instruction(insn: &AbstractInsn) -> Vec<u16> {
     match &insn.op {
         AbstractOp::Load { dst, .. } => registers.push(*dst),
         AbstractOp::Store { .. } | AbstractOp::Branch { .. } | AbstractOp::Nop => {}
-        AbstractOp::BinArith { dst, lhs, rhs, .. }
-        | AbstractOp::Compare { dst, lhs, rhs, .. } => {
+        AbstractOp::BinArith { dst, lhs, rhs, .. } | AbstractOp::Compare { dst, lhs, rhs, .. } => {
             registers.push(*dst);
             collect_abstract_value_registers(lhs, &mut registers);
             collect_abstract_value_registers(rhs, &mut registers);
@@ -535,7 +534,8 @@ pub(crate) fn infer_formula_ty(formula: &Formula) -> Ty {
         | Formula::BvSLe(_, _, _)
         | Formula::Forall(_, _)
         | Formula::Exists(_, _) => Ty::Bool,
-        Formula::Int(_) | Formula::UInt(_)
+        Formula::Int(_)
+        | Formula::UInt(_)
         | Formula::Add(_, _)
         | Formula::Sub(_, _)
         | Formula::Mul(_, _)
@@ -559,7 +559,9 @@ pub(crate) fn infer_formula_ty(formula: &Formula) -> Ty {
         | Formula::BvLShr(_, _, width)
         | Formula::BvAShr(_, _, width)
         | Formula::IntToBv(_, width) => Ty::Int { width: *width, signed: false },
-        Formula::BvExtract { high, low, .. } => Ty::Int { width: high.saturating_sub(*low) + 1, signed: false },
+        Formula::BvExtract { high, low, .. } => {
+            Ty::Int { width: high.saturating_sub(*low) + 1, signed: false }
+        }
         Formula::BvConcat(lhs, rhs) => {
             let lhs_width = infer_formula_ty(lhs).int_width().unwrap_or(64);
             let rhs_width = infer_formula_ty(rhs).int_width().unwrap_or(64);
@@ -593,7 +595,9 @@ fn ty_for_sort(sort: &Sort) -> Ty {
         Sort::Bool => Ty::Bool,
         Sort::Int => Ty::isize(),
         Sort::BitVec(width) => Ty::Int { width: *width, signed: false },
-        Sort::Array(_, _) => Ty::Ref { mutable: true, inner: Box::new(Ty::Int { width: 8, signed: false }) },
+        Sort::Array(_, _) => {
+            Ty::Ref { mutable: true, inner: Box::new(Ty::Int { width: 8, signed: false }) }
+        }
         _ => Ty::Unit,
     }
 }

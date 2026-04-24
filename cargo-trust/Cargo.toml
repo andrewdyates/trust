@@ -25,7 +25,8 @@ serde_json = "1"
 toml = "0.8"
 trust-backprop = { path = "../crates/trust-backprop" }
 trust-cache = { path = "../crates/trust-cache" }
-trust-driver = { path = "../crates/trust-driver" }
 trust-strengthen = { path = "../crates/trust-strengthen" }
 trust-report = { path = "../crates/trust-report" }
+trust-lift = { path = "../crates/trust-lift", features = ["elf", "macho"] }
 trust-types = { path = "../crates/trust-types" }
+trust-vcgen = { path = "../crates/trust-vcgen" }

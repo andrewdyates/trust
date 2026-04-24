@@ -161,7 +161,7 @@ impl<'a, 'tcx> SpanEncoder for EncodeContext<'a, 'tcx> {
         if expn_id.krate == LOCAL_CRATE {
             // We will only write details for local expansions. Non-local expansions will fetch
             // data from the corresponding crate's metadata.
-            // tRust: known issue — (#43047) (#74731) We may eventually want to avoid relying on external
+            // FIXME(#43047) FIXME(#74731) We may eventually want to avoid relying on external
             // metadata from proc-macro crates.
             self.hygiene_ctxt.schedule_expn_data_for_encoding(expn_id);
         }
@@ -443,7 +443,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                 position.get() - last_pos.get()
             }
         };
-        self.lazy_state = LazyState::Previous(NonZero::new(pos).expect("invariant: encoded position must be non-zero")); // tRust: unwrap -> expect
+        self.lazy_state = LazyState::Previous(NonZero::new(pos).unwrap());
         self.emit_usize(distance);
     }
 
@@ -451,7 +451,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
     where
         T::Value<'tcx>: Encodable<EncodeContext<'a, 'tcx>>,
     {
-        let pos = NonZero::new(self.position()).expect("invariant: encoder position must be non-zero"); // tRust: unwrap -> expect
+        let pos = NonZero::new(self.position()).unwrap();
 
         assert_eq!(self.lazy_state, LazyState::NoNode);
         self.lazy_state = LazyState::NodeStart(pos);
@@ -470,7 +470,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
     where
         T::Value<'tcx>: Encodable<EncodeContext<'a, 'tcx>>,
     {
-        let pos = NonZero::new(self.position()).expect("invariant: encoder position must be non-zero"); // tRust: unwrap -> expect
+        let pos = NonZero::new(self.position()).unwrap();
 
         assert_eq!(self.lazy_state, LazyState::NoNode);
         self.lazy_state = LazyState::NodeStart(pos);
@@ -540,7 +540,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
         // By replacing the `Option` with `None`, we ensure that we can't
         // accidentally serialize any more `Span`s after the source map encoding
         // is done.
-        let required_source_files = self.required_source_files.take().expect("invariant: required_source_files must be set before encoding source map"); // tRust: unwrap -> expect
+        let required_source_files = self.required_source_files.take().unwrap();
 
         let mut adapted = TableBuilder::default();
 
@@ -786,16 +786,16 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             self.opaque.flush();
 
             // Rewind and re-read all the metadata to count the zero bytes we wrote.
-            let pos_before_rewind = self.opaque.file().stream_position().expect("invariant: metadata file must support stream_position"); // tRust: unwrap -> expect
+            let pos_before_rewind = self.opaque.file().stream_position().unwrap();
             let mut zero_bytes = 0;
-            self.opaque.file().rewind().expect("invariant: metadata file must support rewind"); // tRust: unwrap -> expect
+            self.opaque.file().rewind().unwrap();
             let file = std::io::BufReader::new(self.opaque.file());
             for e in file.bytes() {
-                if e.expect("invariant: metadata file bytes must be readable") == 0 { // tRust: unwrap -> expect
+                if e.unwrap() == 0 {
                     zero_bytes += 1;
                 }
             }
-            assert_eq!(self.opaque.file().stream_position().expect("invariant: metadata file must support stream_position"), pos_before_rewind); // tRust: unwrap -> expect
+            assert_eq!(self.opaque.file().stream_position().unwrap(), pos_before_rewind);
 
             stats.sort_by_key(|&(_, usize)| usize);
             stats.reverse(); // bigger items first
@@ -1338,7 +1338,7 @@ fn should_encode_constness(def_kind: DefKind) -> bool {
 
 fn should_encode_const(def_kind: DefKind) -> bool {
     match def_kind {
-        // tRust: known issue — should we remove Const and AssocConst here? (upstream FIXME by mgca)
+        // FIXME(mgca): should we remove Const and AssocConst here?
         DefKind::Const { .. }
         | DefKind::AssocConst { .. }
         | DefKind::AnonConst
@@ -1588,7 +1588,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             }
             if let DefKind::Static { .. } = def_kind {
                 if !self.tcx.is_foreign_item(def_id) {
-                    let data = self.tcx.eval_static_initializer(def_id).expect("invariant: non-foreign static must have evaluable initializer"); // tRust: unwrap -> expect
+                    let data = self.tcx.eval_static_initializer(def_id).unwrap();
                     record!(self.tables.eval_static_initializer[def_id] <- data);
                 }
             }
@@ -1704,7 +1704,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
 
             if let Some((CtorKind::Fn, ctor_def_id)) = variant.ctor {
                 let fn_sig = tcx.fn_sig(ctor_def_id);
-                // tRust: known issue — only encode signature for ctor_def_id
+                // FIXME only encode signature for ctor_def_id
                 record!(self.tables.fn_sig[variant.def_id] <- fn_sig);
             }
         }
@@ -1844,7 +1844,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                     record!(self.tables.mir_for_ctfe[def_id.to_def_id()] <- tcx.mir_for_ctfe(def_id));
                 }
 
-                // tRust: known issue — this feels wrong to have in `encode_mir` (upstream FIXME by generic_const_exprs)
+                // FIXME(generic_const_exprs): this feels wrong to have in `encode_mir`
                 let abstract_const = tcx.thir_abstract_const(def_id);
                 if let Ok(Some(abstract_const)) = abstract_const {
                     record!(self.tables.thir_abstract_const[def_id.to_def_id()] <- abstract_const);
@@ -1977,7 +1977,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
         let is_proc_macro = self.tcx.crate_types().contains(&CrateType::ProcMacro);
         if is_proc_macro {
             let tcx = self.tcx;
-            let proc_macro_decls_static = tcx.proc_macro_decls_static(()).expect("invariant: proc macro crate must have decls static").local_def_index; // tRust: unwrap -> expect
+            let proc_macro_decls_static = tcx.proc_macro_decls_static(()).unwrap().local_def_index;
             let stability = tcx.lookup_stability(CRATE_DEF_ID);
             let macros =
                 self.lazy_array(tcx.resolutions(()).proc_macros.iter().map(|p| p.local_def_index));
@@ -2093,7 +2093,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
 
         // We're just going to write a list of crate 'name-hash-version's, with
         // the assumption that they are numbered 1 to n.
-        // tRust: known issue — (#2166): This is not nearly enough to support correct versioning
+        // FIXME (#2166): This is not nearly enough to support correct versioning
         // but is enough to get transitive crate dependencies working.
         self.lazy_array(deps.iter().map(|(_, dep)| dep))
     }
@@ -2195,7 +2195,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                 // if this is an impl of `CoerceUnsized`, create its
                 // "unsized info", else just store None
                 if tcx.is_lang_item(trait_ref.def_id, LangItem::CoerceUnsized) {
-                    let coerce_unsized_info = tcx.coerce_unsized_info(def_id).expect("invariant: CoerceUnsized impl must have coerce_unsized_info"); // tRust: unwrap -> expect
+                    let coerce_unsized_info = tcx.coerce_unsized_info(def_id).unwrap();
                     record!(self.tables.coerce_unsized_info[def_id] <- coerce_unsized_info);
                 }
             }
@@ -2358,8 +2358,6 @@ impl EncodedMetadata {
                 _temp_dir: None,
             });
         }
-        // SAFETY: The file is valid and remains open for the duration of
-        // the mapping. The mapped memory is only used for reading.
         let full_mmap = unsafe { Some(Mmap::map(file)?) };
 
         let stub =
@@ -2404,9 +2402,9 @@ impl<D: Decoder> Decodable<D> for EncodedMetadata {
 
         let len = d.read_usize();
         let full_metadata = if len > 0 {
-            let mut mmap = MmapMut::map_anon(len).expect("invariant: anonymous mmap allocation must succeed for metadata"); // tRust: unwrap -> expect
+            let mut mmap = MmapMut::map_anon(len).unwrap();
             mmap.copy_from_slice(d.read_raw_bytes(len));
-            Some(mmap.make_read_only().expect("invariant: mmap must be convertible to read-only")) // tRust: unwrap -> expect
+            Some(mmap.make_read_only().unwrap())
         } else {
             None
         };
@@ -2448,7 +2446,7 @@ pub fn encode_metadata(tcx: TyCtxt<'_>, path: &Path, ref_path: Option<&Path>) {
         && tcx.dep_graph.try_mark_green(tcx, &dep_node).is_some()
     {
         let saved_path = &work_product.saved_files["rmeta"];
-        let incr_comp_session_dir = tcx.sess.incr_comp_session_dir_opt().expect("invariant: incremental compilation session dir must exist when reusing metadata"); // tRust: unwrap -> expect
+        let incr_comp_session_dir = tcx.sess.incr_comp_session_dir_opt().unwrap();
         let source_file = rustc_incremental::in_incr_comp_dir(&incr_comp_session_dir, saved_path);
         debug!("copying preexisting metadata from {source_file:?} to {path:?}");
         match rustc_fs_util::link_or_copy(&source_file, path) {
@@ -2489,7 +2487,7 @@ pub fn encode_metadata(tcx: TyCtxt<'_>, path: &Path, ref_path: Option<&Path>) {
                 tcx.prof.artifact_size(
                     "crate_metadata",
                     "crate_metadata",
-                    ecx.opaque.file().metadata().expect("invariant: metadata file must have accessible metadata").len(), // tRust: unwrap -> expect
+                    ecx.opaque.file().metadata().unwrap().len(),
                 );
 
                 root.position.get()
@@ -2555,7 +2553,7 @@ fn with_encode_metadata_header(
 
 fn encode_root_position(mut file: &File, pos: usize) -> Result<(), std::io::Error> {
     // We will return to this position after writing the root position.
-    let pos_before_seek = file.stream_position().expect("invariant: metadata file must support stream_position"); // tRust: unwrap -> expect
+    let pos_before_seek = file.stream_position().unwrap();
 
     // Encode the root position.
     let header = METADATA_HEADER.len();
@@ -2641,7 +2639,7 @@ pub fn rendered_const<'tcx>(tcx: TyCtxt<'tcx>, body: &hir::Body<'_>, def_id: Loc
             hir::ExprKind::Path(hir::QPath::Resolved(_, hir::Path { segments, .. })) => {
                 if segments.iter().all(|segment| segment.args.is_none()) { Simple } else { Complex }
             }
-            // tRust: known issue — Claiming that those kinds of QPaths are simple is probably not true if the Ty
+            // FIXME: Claiming that those kinds of QPaths are simple is probably not true if the Ty
             //        contains const arguments. Is there a *concise* way to check for this?
             hir::ExprKind::Path(hir::QPath::TypeRelative(..)) => Simple,
             _ => Complex,
@@ -2657,7 +2655,7 @@ pub fn rendered_const<'tcx>(tcx: TyCtxt<'tcx>, body: &hir::Body<'_>, def_id: Loc
         // * underscores
         // * character escapes
         //
-        // tRust: known issue — This passes through `-/*spacer*/0` verbatim.
+        // FIXME: This passes through `-/*spacer*/0` verbatim.
         Literal
             if !value.span.from_expansion()
                 && let Ok(snippet) = tcx.sess.source_map().span_to_snippet(value.span) =>
@@ -2669,7 +2667,7 @@ pub fn rendered_const<'tcx>(tcx: TyCtxt<'tcx>, body: &hir::Body<'_>, def_id: Loc
         // other formatting artifacts.
         Literal | Simple => id_to_string(&tcx, body.id().hir_id),
 
-        // tRust: known issue — Omit the curly braces if the enclosing expression is an array literal
+        // FIXME: Omit the curly braces if the enclosing expression is an array literal
         //        with a repeated element (an `ExprKind::Repeat`) as in such case it
         //        would not actually need any disambiguation.
         Complex => {

@@ -103,7 +103,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> ItemLowerer<'_, 'hir, R> {
                     assert_eq!(self.resolver.local_def_id(CRATE_NODE_ID), CRATE_DEF_ID);
                     self.with_lctx(CRATE_NODE_ID, |lctx| {
                         let module = lctx.lower_mod(&c.items, &c.spans);
-                        // tRust: known issue — (jdonszelman) is dummy span ever a problem here?
+                        // FIXME(jdonszelman): is dummy span ever a problem here?
                         lctx.lower_attrs(hir::CRATE_HIR_ID, &c.attrs, DUMMY_SP, Target::Crate);
                         hir::OwnerNode::Crate(module)
                     })
@@ -536,7 +536,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                 constness,
                 is_auto,
                 safety,
-                // tRust: known issue — (impl_restrictions) lower to HIR
+                // FIXME(impl_restrictions): lower to HIR
                 impl_restriction: _,
                 ident,
                 generics,
@@ -646,11 +646,11 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
 
                 // Correctly resolve `self` imports.
                 if path.segments.len() > 1
-                    && path.segments.last().expect("invariant: path has at least one segment").ident.name == kw::SelfLower // tRust:
+                    && path.segments.last().unwrap().ident.name == kw::SelfLower
                 {
                     let _ = path.segments.pop();
                     if rename.is_none() {
-                        ident = path.segments.last().expect("invariant: path has at least one segment").ident; // tRust:;
+                        ident = path.segments.last().unwrap().ident;
                     }
                 }
 
@@ -939,7 +939,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             def_id: self.local_def_id(f.id),
             ident: match f.ident {
                 Some(ident) => self.lower_ident(ident),
-                // tRust: known issue — (jseyfried) positional field hygiene.
+                // FIXME(jseyfried): positional field hygiene.
                 None => Ident::new(sym::integer(index), self.lower_span(f.span)),
             },
             vis_span: self.lower_span(f.vis.span),
@@ -1006,7 +1006,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             AssocItemKind::Fn(box Fn {
                 sig, ident, generics, body: None, define_opaque, ..
             }) => {
-                // tRust: known issue — (contracts) Deny contract here since it won't apply to
+                // FIXME(contracts): Deny contract here since it won't apply to
                 // any impl method or callees.
                 let idents = self.lower_fn_params_to_idents(&sig.decl);
                 let (generics, sig) = self.lower_method_sig(
@@ -1478,7 +1478,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     );
                     hir::Expr { hir_id: this.next_id(), kind: loop_, span }
                 } else {
-                    this.expr_err(span, this.dcx().has_errors().expect("invariant: errors were already emitted for this error path")) // tRust:)
+                    this.expr_err(span, this.dcx().has_errors().unwrap())
                 }
             });
         };
@@ -1486,7 +1486,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             // Typical case: not a coroutine.
             return self.lower_fn_body_block(decl, body, contract, constness);
         };
-        // tRust: known issue — (contracts) Support contracts on async fn.
+        // FIXME(contracts): Support contracts on async fn.
         self.lower_body(|this| {
             let (parameters, expr) = this.lower_coroutine_body_with_moved_arguments(
                 decl,
@@ -1497,7 +1497,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                 hir::CoroutineSource::Fn,
             );
 
-            // tRust: known issue — (async_fn_track_caller) Can this be moved above?
+            // FIXME(async_fn_track_caller): Can this be moved above?
             let hir_id = expr.hir_id;
             this.maybe_forward_track_caller(body.span, fn_id, hir_id);
 

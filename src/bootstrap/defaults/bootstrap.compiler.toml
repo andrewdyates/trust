@@ -1,5 +1,8 @@
 # These defaults are meant for contributors to the compiler who do not modify codegen or LLVM
 [build]
+# tRust: compiler contributors expect a usable linked local toolchain.
+extended = true
+tools = ["cargo", "cargo-trust", "rustdoc", "clippy", "rustfmt", "rust-analyzer", "miri", "src", "llvm-tools"]
 # Contributors working on the compiler will probably expect compiler docs to be generated.
 compiler-docs = true
 

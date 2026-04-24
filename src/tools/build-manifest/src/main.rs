@@ -202,19 +202,12 @@ impl Builder {
         profile("minimal", &minimal);
 
         let mut default = minimal;
-        default.extend([HtmlDocs, Rustfmt, Clippy]);
+        default.extend([HtmlDocs, Rustfmt, Clippy, CargoTrust, RustAnalyzer, RustSrc, LlvmTools]);
         profile("default", &default);
 
         // NOTE: this profile is effectively deprecated; do not add new components to it.
         let mut complete = default;
-        complete.extend([
-            RustAnalyzer,
-            RustSrc,
-            LlvmTools,
-            RustAnalysis,
-            Miri,
-            RustcCodegenCranelift,
-        ]);
+        complete.extend([RustAnalysis, Miri, RustcCodegenCranelift]);
         profile("complete", &complete);
 
         // The compiler libraries are not stable for end users, and they're also huge, so we only
@@ -303,6 +296,7 @@ impl Builder {
                 // Tools are always present in the manifest,
                 // but might be marked as unavailable if they weren't built.
                 PkgType::Clippy
+                | PkgType::CargoTrust
                 | PkgType::Miri
                 | PkgType::RustAnalyzer
                 | PkgType::Rustfmt
@@ -473,5 +467,126 @@ impl Builder {
         let content = format!("{}\n", files.join("\n"));
 
         t!(std::fs::write(path, content.as_bytes()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn empty_manifest() -> Manifest {
+        Manifest {
+            manifest_version: "2".to_string(),
+            date: "2026-04-23".to_string(),
+            pkg: BTreeMap::new(),
+            artifacts: BTreeMap::new(),
+            renames: BTreeMap::new(),
+            profiles: BTreeMap::new(),
+        }
+    }
+
+    fn test_builder(input: PathBuf) -> Builder {
+        Builder {
+            versions: Versions::new("nightly", &input).unwrap(),
+            checksums: Checksums::new().unwrap(),
+            shipped_files: HashSet::new(),
+            input: input.clone(),
+            output: input,
+            s3_address: "https://static.example.test/dist".to_string(),
+            date: "2026-04-23".to_string(),
+        }
+    }
+
+    fn temp_dist_dir(test_name: &str) -> PathBuf {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = env::temp_dir()
+            .join(format!("build-manifest-{test_name}-{}-{nanos}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        dir
+    }
+
+    fn package_available_for(target: &str) -> Package {
+        Package {
+            version: String::new(),
+            git_commit_hash: None,
+            target: BTreeMap::from([(
+                target.to_string(),
+                Target { available: true, ..Target::default() },
+            )]),
+        }
+    }
+
+    fn has_component(components: &[Component], pkg: &str, target: &str) -> bool {
+        components.iter().any(|component| component.pkg == pkg && component.target == target)
+    }
+
+    fn assert_profile_has_no_duplicates(name: &str, components: &[String]) {
+        let mut seen = HashSet::new();
+        for component in components {
+            assert!(
+                seen.insert(component),
+                "{name} profile contains duplicate component {component}: {components:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_profile_contains_daily_driver_tools() {
+        let mut builder = test_builder(PathBuf::new());
+        let mut manifest = empty_manifest();
+
+        builder.add_profiles_to(&mut manifest);
+
+        let default = manifest.profiles.get("default").expect("default profile");
+        assert_profile_has_no_duplicates("default", default);
+        for component in [
+            "rustc",
+            "cargo",
+            "rust-std",
+            "rust-docs",
+            "cargo-trust",
+            "rustfmt-preview",
+            "clippy-preview",
+            "rust-analyzer-preview",
+            "rust-src",
+            "llvm-tools-preview",
+        ] {
+            assert!(
+                default.iter().any(|actual| actual == component),
+                "default profile is missing {component}; components: {default:?}"
+            );
+        }
+
+        let complete = manifest.profiles.get("complete").expect("complete profile");
+        assert_profile_has_no_duplicates("complete", complete);
+    }
+
+    #[test]
+    fn rust_package_host_extensions_contain_cargo_trust() {
+        let host = HOSTS[0];
+        let input = temp_dist_dir("cargo-trust-extension");
+        let mut builder = test_builder(input.clone());
+        let rust_tarball = builder.versions.tarball_name(&PkgType::Rust, host).unwrap();
+        fs::write(input.join(rust_tarball), b"").unwrap();
+
+        let mut manifest = empty_manifest();
+        manifest.pkg.insert("cargo-trust".to_string(), package_available_for(host));
+
+        let target = builder
+            .target_host_combination(host, &manifest)
+            .expect("rust package target is available");
+        let extensions = target.extensions.expect("rust package extensions");
+
+        assert!(
+            has_component(&extensions, "cargo-trust", host),
+            "rust package extensions for {host}: {:?}",
+            extensions
+                .iter()
+                .map(|component| (&component.pkg, &component.target))
+                .collect::<Vec<_>>()
+        );
+
+        fs::remove_dir_all(input).unwrap();
     }
 }

@@ -15,6 +15,9 @@
       <line choice="rustc"/>
       <line choice="rust-std"/>
       <line choice="cargo"/>
+      <!-- tool-cargo-trust-start -->
+      <line choice="cargo-trust"/>
+      <!-- tool-cargo-trust-end -->
       <!-- tool-rust-docs-start -->
       <line choice="rust-docs"/>
       <!-- tool-rust-docs-end -->
@@ -27,14 +30,14 @@
     the installer uses to traverse the options after one is toggled.
       -->
     <choice id="install" visible="true"
-        title="Install Rust" description="Install the Rust compiler, package manager and documentation."
+        title="Install Rust" description="Install the Rust compiler, package manager, verification tool, and documentation."
         customLocation="/usr/local"
         selected="!choices.uninstall.selected"
         />
     <choice id="uninstall" visible="true"
         title="Uninstall Rust" description="Select this option to uninstall an existing Rust installation."
         customLocation="/usr/local"
-        selected="!(choices.install.selected || choices.rustc.selected || choices.cargo.selected || choices['rust-docs'].selected)"
+        selected="!(choices.install.selected || choices.rustc.selected || choices.cargo.selected || choices['cargo-trust'].selected || choices['rust-docs'].selected)"
         start_selected="false"
         >
         <pkg-ref id="org.rust-lang.uninstall"/>
@@ -51,6 +54,14 @@
         >
         <pkg-ref id="org.rust-lang.cargo"/>
     </choice>
+    <!-- tool-cargo-trust-start -->
+    <choice id="cargo-trust" visible="true"
+        title="cargo-trust" description="cargo trust, the tRust verification command."
+        selected="(!choices.uninstall.selected &amp;&amp; choices['cargo-trust'].selected) || (choices.uninstall.selected &amp;&amp; choices.install.selected)"
+        >
+        <pkg-ref id="org.rust-lang.cargo-trust"/>
+    </choice>
+    <!-- tool-cargo-trust-end -->
     <choice id="rust-std" visible="true"
         title="Standard Library" description="The Rust standard library."
         selected="(!choices.uninstall.selected &amp;&amp; choices['rust-std'].selected) || (choices.uninstall.selected &amp;&amp; choices.install.selected)"
@@ -67,6 +78,9 @@
     <!-- tool-rust-docs-end -->
     <pkg-ref id="org.rust-lang.rustc" version="0" onConclusion="none">rustc.pkg</pkg-ref>
     <pkg-ref id="org.rust-lang.cargo" version="0" onConclusion="none">cargo.pkg</pkg-ref>
+    <!-- tool-cargo-trust-start -->
+    <pkg-ref id="org.rust-lang.cargo-trust" version="0" onConclusion="none">cargo-trust.pkg</pkg-ref>
+    <!-- tool-cargo-trust-end -->
     <!-- tool-rust-docs-start -->
     <pkg-ref id="org.rust-lang.rust-docs" version="0" onConclusion="none">rust-docs.pkg</pkg-ref>
     <!-- tool-rust-docs-end -->

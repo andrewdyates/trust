@@ -12,19 +12,13 @@ use crate::instruction::{ControlFlow, Instruction};
 use crate::opcode::Opcode;
 use crate::operand::{Condition, Operand};
 
-use super::modrm::{decode_rm_operand, gpr, ModRM};
+use super::modrm::{ModRM, decode_rm_operand, gpr};
 use super::prefix::Prefixes;
 
 /// Decode one x86-64 instruction from `bytes` at the given virtual address.
-pub(crate) fn decode_instruction(
-    bytes: &[u8],
-    addr: u64,
-) -> Result<Instruction, DisasmError> {
+pub(crate) fn decode_instruction(bytes: &[u8], addr: u64) -> Result<Instruction, DisasmError> {
     if bytes.is_empty() {
-        return Err(DisasmError::InsufficientBytes {
-            needed: 1,
-            available: 0,
-        });
+        return Err(DisasmError::InsufficientBytes { needed: 1, available: 0 });
     }
 
     let prefixes = Prefixes::parse(bytes);
@@ -63,7 +57,8 @@ fn decode_one_byte_opcode(
                 // XCHG RAX, R8 (REX.B changes the meaning)
                 let reg2 = gpr(8, prefixes.operand_size());
                 let reg1 = gpr(0, prefixes.operand_size());
-                let mut insn = make_insn(addr, offset, 0x90, Opcode::Xchg, ControlFlow::Fallthrough);
+                let mut insn =
+                    make_insn(addr, offset, 0x90, Opcode::Xchg, ControlFlow::Fallthrough);
                 insn.push_operand(Operand::Reg(reg1));
                 insn.push_operand(Operand::Reg(reg2));
                 Ok(insn)
@@ -75,7 +70,8 @@ fn decode_one_byte_opcode(
         // --- PUSH r64 (0x50+rd) ---
         0x50..=0x57 => {
             let reg_idx = (opcode - 0x50) | if prefixes.rex.b { 8 } else { 0 };
-            let mut insn = make_insn(addr, offset, opcode as u32, Opcode::Push, ControlFlow::Fallthrough);
+            let mut insn =
+                make_insn(addr, offset, opcode as u32, Opcode::Push, ControlFlow::Fallthrough);
             insn.push_operand(Operand::Reg(gpr(reg_idx, 64)));
             Ok(insn)
         }
@@ -83,7 +79,8 @@ fn decode_one_byte_opcode(
         // --- POP r64 (0x58+rd) ---
         0x58..=0x5F => {
             let reg_idx = (opcode - 0x58) | if prefixes.rex.b { 8 } else { 0 };
-            let mut insn = make_insn(addr, offset, opcode as u32, Opcode::Pop, ControlFlow::Fallthrough);
+            let mut insn =
+                make_insn(addr, offset, opcode as u32, Opcode::Pop, ControlFlow::Fallthrough);
             insn.push_operand(Operand::Reg(gpr(reg_idx, 64)));
             Ok(insn)
         }
@@ -146,7 +143,8 @@ fn decode_one_byte_opcode(
             };
             let width = prefixes.operand_size();
             let total = offset + imm_size;
-            let mut insn = make_insn(addr, total, opcode as u32, Opcode::Mov, ControlFlow::Fallthrough);
+            let mut insn =
+                make_insn(addr, total, opcode as u32, Opcode::Mov, ControlFlow::Fallthrough);
             insn.push_operand(Operand::Reg(gpr(reg_idx, width)));
             if prefixes.rex.w {
                 insn.push_operand(Operand::Imm(imm as u64));
@@ -164,7 +162,8 @@ fn decode_one_byte_opcode(
             }
             let imm = rest[0] as i8 as i64;
             let total = offset + 1;
-            let mut insn = make_insn(addr, total, opcode as u32, Opcode::Mov, ControlFlow::Fallthrough);
+            let mut insn =
+                make_insn(addr, total, opcode as u32, Opcode::Mov, ControlFlow::Fallthrough);
             insn.push_operand(Operand::Reg(gpr(reg_idx, 8)));
             insn.push_operand(Operand::SignedImm(imm));
             Ok(insn)
@@ -311,7 +310,8 @@ fn decode_one_byte_opcode(
             let rel = rest[0] as i8;
             let total = offset + 1;
             let target = addr.wrapping_add(total as u64).wrapping_add(rel as i64 as u64);
-            let mut insn = make_insn(addr, total, opcode as u32, Opcode::Jcc, ControlFlow::ConditionalBranch);
+            let mut insn =
+                make_insn(addr, total, opcode as u32, Opcode::Jcc, ControlFlow::ConditionalBranch);
             insn.push_operand(Operand::Cond(x86_cc_to_condition(cc)));
             insn.push_operand(Operand::PcRelAddr(target));
             Ok(insn)
@@ -358,7 +358,8 @@ fn decode_one_byte_opcode(
         0x91..=0x97 => {
             let reg_idx = (opcode - 0x90) | if prefixes.rex.b { 8 } else { 0 };
             let width = prefixes.operand_size();
-            let mut insn = make_insn(addr, offset, opcode as u32, Opcode::Xchg, ControlFlow::Fallthrough);
+            let mut insn =
+                make_insn(addr, offset, opcode as u32, Opcode::Xchg, ControlFlow::Fallthrough);
             insn.push_operand(Operand::Reg(gpr(0, width)));
             insn.push_operand(Operand::Reg(gpr(reg_idx, width)));
             Ok(insn)
@@ -374,7 +375,8 @@ fn decode_one_byte_opcode(
                 let modrm = ModRM::decode(rest[0], prefixes);
                 let rm_result = decode_rm_operand(&modrm, &rest[1..], prefixes, 32, addr)?;
                 let total = offset + 1 + rm_result.extra_bytes;
-                let mut insn = make_insn(addr, total, 0x63, Opcode::Movsxd, ControlFlow::Fallthrough);
+                let mut insn =
+                    make_insn(addr, total, 0x63, Opcode::Movsxd, ControlFlow::Fallthrough);
                 insn.push_operand(Operand::Reg(gpr(modrm.reg, 64)));
                 insn.push_operand(rm_result.operand);
                 Ok(insn)
@@ -388,7 +390,8 @@ fn decode_one_byte_opcode(
                 let op_width = prefixes.operand_size();
                 let rm_result = decode_rm_operand(&modrm, &rest[1..], prefixes, op_width, addr)?;
                 let total = offset + 1 + rm_result.extra_bytes;
-                let mut insn = make_insn(addr, total, 0x63, Opcode::Movsxd, ControlFlow::Fallthrough);
+                let mut insn =
+                    make_insn(addr, total, 0x63, Opcode::Movsxd, ControlFlow::Fallthrough);
                 insn.push_operand(Operand::Reg(gpr(modrm.reg, op_width)));
                 insn.push_operand(rm_result.operand);
                 Ok(insn)
@@ -427,7 +430,13 @@ fn decode_two_byte_opcode(
             let rel = i32::from_le_bytes([after[0], after[1], after[2], after[3]]);
             let total = offset2 + 4;
             let target = addr.wrapping_add(total as u64).wrapping_add(rel as i64 as u64);
-            let mut insn = make_insn(addr, total, 0x0F00 | opcode2 as u32, Opcode::Jcc, ControlFlow::ConditionalBranch);
+            let mut insn = make_insn(
+                addr,
+                total,
+                0x0F00 | opcode2 as u32,
+                Opcode::Jcc,
+                ControlFlow::ConditionalBranch,
+            );
             insn.push_operand(Operand::Cond(x86_cc_to_condition(cc)));
             insn.push_operand(Operand::PcRelAddr(target));
             Ok(insn)
@@ -537,7 +546,13 @@ fn decode_two_byte_opcode(
             let op_width = prefixes.operand_size();
             let rm_result = decode_rm_operand(&modrm, &after[1..], prefixes, op_width, addr)?;
             let total = offset2 + 1 + rm_result.extra_bytes;
-            let mut insn = make_insn(addr, total, 0x0F00 | opcode2 as u32, Opcode::Cmovcc, ControlFlow::Fallthrough);
+            let mut insn = make_insn(
+                addr,
+                total,
+                0x0F00 | opcode2 as u32,
+                Opcode::Cmovcc,
+                ControlFlow::Fallthrough,
+            );
             insn.push_operand(Operand::Cond(x86_cc_to_condition(cc)));
             insn.push_operand(Operand::Reg(gpr(modrm.reg, op_width)));
             insn.push_operand(rm_result.operand);
@@ -553,7 +568,13 @@ fn decode_two_byte_opcode(
             let modrm = ModRM::decode(after[0], prefixes);
             let rm_result = decode_rm_operand(&modrm, &after[1..], prefixes, 8, addr)?;
             let total = offset2 + 1 + rm_result.extra_bytes;
-            let mut insn = make_insn(addr, total, 0x0F00 | opcode2 as u32, Opcode::Setcc, ControlFlow::Fallthrough);
+            let mut insn = make_insn(
+                addr,
+                total,
+                0x0F00 | opcode2 as u32,
+                Opcode::Setcc,
+                ControlFlow::Fallthrough,
+            );
             insn.push_operand(Operand::Cond(x86_cc_to_condition(cc)));
             insn.push_operand(rm_result.operand);
             Ok(insn)
@@ -568,7 +589,8 @@ fn decode_two_byte_opcode(
             let op_width = prefixes.operand_size();
             let rm_result = decode_rm_operand(&modrm, &after[1..], prefixes, op_width, addr)?;
             let total = offset2 + 1 + rm_result.extra_bytes;
-            let mut insn = make_insn(addr, total, 0x0FB1, Opcode::Cmpxchg, ControlFlow::Fallthrough);
+            let mut insn =
+                make_insn(addr, total, 0x0FB1, Opcode::Cmpxchg, ControlFlow::Fallthrough);
             insn.push_operand(rm_result.operand);
             insn.push_operand(Operand::Reg(gpr(modrm.reg, op_width)));
             Ok(insn)
@@ -862,8 +884,8 @@ fn decode_group5(
     let (opcode, flow) = match reg_field {
         0 => (Opcode::Inc, ControlFlow::Fallthrough),
         1 => (Opcode::Dec, ControlFlow::Fallthrough),
-        2 => (Opcode::Call, ControlFlow::Call),      // CALL r/m64
-        4 => (Opcode::Jmp, ControlFlow::Branch),     // JMP r/m64
+        2 => (Opcode::Call, ControlFlow::Call),  // CALL r/m64
+        4 => (Opcode::Jmp, ControlFlow::Branch), // JMP r/m64
         6 => (Opcode::Push, ControlFlow::Fallthrough), // PUSH r/m64
         _ => return Err(unknown_enc(addr, 0xFF)),
     };
@@ -1004,7 +1026,13 @@ fn decode_imul_imm32(
 // === Helpers ===
 
 /// Create an instruction with variable size.
-fn make_insn(addr: u64, total_len: usize, encoding: u32, opcode: Opcode, flow: ControlFlow) -> Instruction {
+fn make_insn(
+    addr: u64,
+    total_len: usize,
+    encoding: u32,
+    opcode: Opcode,
+    flow: ControlFlow,
+) -> Instruction {
     Instruction::with_size(addr, total_len as u8, encoding, opcode, flow)
 }
 
@@ -1039,24 +1067,24 @@ fn shift_opcode(reg: u8) -> Result<Opcode, DisasmError> {
 /// D=NL/GE, E=LE/NG, F=NLE/G
 fn x86_cc_to_condition(cc: u8) -> Condition {
     match cc & 0x0F {
-        0x0 => Condition::Vs,  // O (overflow) -> Vs
-        0x1 => Condition::Vc,  // NO -> Vc
-        0x2 => Condition::Cs,  // B/C (carry set) -> Cs (= below)
-        0x3 => Condition::Cc,  // NB/NC -> Cc
-        0x4 => Condition::Eq,  // Z/E -> Eq
-        0x5 => Condition::Ne,  // NZ/NE -> Ne
-        0x6 => Condition::Ls,  // BE (below or equal) -> Ls
-        0x7 => Condition::Hi,  // A (above) -> Hi
-        0x8 => Condition::Mi,  // S (sign) -> Mi
-        0x9 => Condition::Pl,  // NS -> Pl
+        0x0 => Condition::Vs, // O (overflow) -> Vs
+        0x1 => Condition::Vc, // NO -> Vc
+        0x2 => Condition::Cs, // B/C (carry set) -> Cs (= below)
+        0x3 => Condition::Cc, // NB/NC -> Cc
+        0x4 => Condition::Eq, // Z/E -> Eq
+        0x5 => Condition::Ne, // NZ/NE -> Ne
+        0x6 => Condition::Ls, // BE (below or equal) -> Ls
+        0x7 => Condition::Hi, // A (above) -> Hi
+        0x8 => Condition::Mi, // S (sign) -> Mi
+        0x9 => Condition::Pl, // NS -> Pl
         // 0xA => Parity (no direct AArch64 equivalent, use Al as placeholder)
         0xA => Condition::Al,
         // 0xB => No parity
         0xB => Condition::Al,
-        0xC => Condition::Lt,  // L (less) -> Lt
-        0xD => Condition::Ge,  // GE (greater or equal) -> Ge
-        0xE => Condition::Le,  // LE -> Le
-        0xF => Condition::Gt,  // G (greater) -> Gt
+        0xC => Condition::Lt, // L (less) -> Lt
+        0xD => Condition::Ge, // GE (greater or equal) -> Ge
+        0xE => Condition::Le, // LE -> Le
+        0xF => Condition::Gt, // G (greater) -> Gt
         _ => Condition::Al,
     }
 }
@@ -1092,10 +1120,7 @@ fn insufficient(needed: usize, available: usize) -> DisasmError {
 }
 
 fn unknown_enc(addr: u64, opcode: u8) -> DisasmError {
-    DisasmError::UnknownEncoding {
-        encoding: opcode as u32,
-        address: addr,
-    }
+    DisasmError::UnknownEncoding { encoding: opcode as u32, address: addr }
 }
 
 fn opcode_to_enc(opcode: Opcode) -> u32 {

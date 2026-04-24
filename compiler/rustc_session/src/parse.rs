@@ -48,7 +48,7 @@ impl GatedSpans {
     ///
     /// Using this is discouraged unless you have a really good reason to.
     pub fn ungate_last(&self, feature: Symbol, span: Span) {
-        let removed_span = self.spans.borrow_mut().entry(feature).or_default().pop().expect("invariant: ungate_last called only when feature has been gated"); // tRust: unwrap -> expect
+        let removed_span = self.spans.borrow_mut().entry(feature).or_default().pop().unwrap();
         debug_assert_eq!(span, removed_span);
     }
 
@@ -79,7 +79,7 @@ impl SymbolGallery {
     }
 }
 
-// tRust: known issue — this function now accepts `Session` instead of `ParseSess` and should be relocated
+// FIXME: this function now accepts `Session` instead of `ParseSess` and should be relocated
 /// Construct a diagnostic for a language feature error due to the given `span`.
 /// The `feature`'s `Symbol` is the one you used in `unstable.rs` and `rustc_span::symbol`.
 #[track_caller]
@@ -145,7 +145,7 @@ pub fn feature_warn_issue(
 
     // Decorate this as a future-incompatibility lint as in rustc_middle::lint::lint_level
     let lint = UNSTABLE_SYNTAX_PRE_EXPANSION;
-    let future_incompatible = lint.future_incompatible.as_ref().expect("invariant: UNSTABLE_SYNTAX_PRE_EXPANSION lint always has future_incompatible"); // tRust: unwrap -> expect
+    let future_incompatible = lint.future_incompatible.as_ref().unwrap();
     err.is_lint(lint.name_lower(), /* has_future_breakage */ false);
     err.warn(lint.desc);
     err.note(format!("for more information, see {}", future_incompatible.reason.reference()));

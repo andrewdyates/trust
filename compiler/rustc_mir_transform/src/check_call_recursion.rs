@@ -1,5 +1,3 @@
-//! tRust: MIR lint that detects unconditional recursion in function calls.
-
 use std::ops::ControlFlow;
 
 use rustc_data_structures::graph::iterate::{
@@ -156,8 +154,7 @@ impl<'tcx> TerminatorClassifier<'tcx> for CallRecursion<'tcx> {
                 (callee, normalized_args)
             };
 
-            // NOTE(#57965): Recursion detection is intra-function only; cross-function
-            // analysis not yet implemented.
+            // FIXME(#57965): Make this work across function boundaries
 
             // If this is a trait fn, the args on the trait have to match, or we might be
             // calling into an entirely different method (for example, a call from the default
@@ -240,8 +237,7 @@ impl<'mir, 'tcx, C: TerminatorClassifier<'tcx>> TriColorVisitor<BasicBlocks<'tcx
         // When we examine a node for the last time, remember it if it is a recursive call.
         let terminator = self.body[bb].terminator();
 
-        // tRust: Upstream TODO -- tracked by rust-lang explicit_tail_calls feature gate.
-        // TODO(explicit_tail_calls): Highlight tail calls as recursive call sites.
+        // FIXME(explicit_tail_calls): highlight tail calls as "recursive call site"
         //
         // We don't want to lint functions that recurse only through tail calls
         // (such as `fn g() { become () }`), so just adding `| TailCall { ... }`

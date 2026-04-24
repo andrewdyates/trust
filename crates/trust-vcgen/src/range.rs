@@ -26,11 +26,7 @@ pub(crate) fn type_max_formula(width: u32, signed: bool) -> Formula {
 /// Return a formula representing the minimum value for an integer type.
 #[must_use]
 pub(crate) fn type_min_formula(width: u32, signed: bool) -> Formula {
-    if signed {
-        Formula::Int(signed_min(width))
-    } else {
-        Formula::Int(0)
-    }
+    if signed { Formula::Int(signed_min(width)) } else { Formula::Int(0) }
 }
 
 /// Minimum value for a signed integer of the given bit width.

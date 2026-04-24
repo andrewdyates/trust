@@ -41,7 +41,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     pub(super) fn initialize_locals(&mut self, values: Vec<LocalRef<'tcx, Bx::Value>>) {
         assert!(self.locals.values.is_empty());
         self.locals.values = IndexVec::from_raw(values);
-        // NOTE(#115215): This workaround may be removable after #115025 lands.
+        // FIXME(#115215): After #115025 get's merged this might not be necessary
         for (local, value) in self.locals.values.iter_enumerated() {
             match value {
                 LocalRef::Place(_) | LocalRef::UnsizedPlace(_) | LocalRef::PendingOperand => (),
@@ -69,7 +69,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             LocalRef::Operand(ref mut op) => {
                 let local_ty = self.monomorphize(self.mir.local_decls[local].ty);
                 if local_ty != op.layout.ty {
-                    // NOTE(#112651): Could be changed to ICE after subtyping changes land.
+                    // FIXME(#112651): This can be changed to an ICE afterwards.
                     debug!("updating type of operand due to subtyping");
                     with_no_trimmed_paths!(debug!(?op.layout.ty));
                     with_no_trimmed_paths!(debug!(?local_ty));

@@ -439,6 +439,15 @@ pub fn diff_configs(old: &TrustConfig, new: &TrustConfig) -> Vec<ConfigChange> {
         });
     }
 
+    // tRust #882: Compare solver_memory_limit_mb field.
+    if old.solver_memory_limit_mb != new.solver_memory_limit_mb {
+        changes.push(ConfigChange {
+            key: "solver_memory_limit_mb".to_string(),
+            old_value: format!("{:?}", old.solver_memory_limit_mb),
+            new_value: format!("{:?}", new.solver_memory_limit_mb),
+        });
+    }
+
     changes
 }
 
@@ -541,9 +550,10 @@ mod tests {
             certify: false,
             tv: false,
             report_format: Some("json".to_string()),
+            solver_memory_limit_mb: Some(4096),
         };
         let changes = diff_configs(&old, &new);
-        assert_eq!(changes.len(), 14);
+        assert_eq!(changes.len(), 15);
 
         let keys: Vec<&str> = changes.iter().map(|c| c.key.as_str()).collect();
         assert!(keys.contains(&"enabled"));
@@ -560,6 +570,7 @@ mod tests {
         assert!(keys.contains(&"certify"));
         assert!(keys.contains(&"tv"));
         assert!(keys.contains(&"report_format"));
+        assert!(keys.contains(&"solver_memory_limit_mb"));
     }
 
     #[test]

@@ -95,7 +95,7 @@ impl<FieldIdx: Idx, VariantIdx: Idx> LayoutData<FieldIdx, VariantIdx> {
         let b_offset = a.size(dl).align_to(b_align);
         let size = (b_offset + b.size(dl)).align_to(align);
 
-        // tRust: known issue (nox) — We iter on `b` and then `a` because `max_by_key`
+        // HACK(nox): We iter on `b` and then `a` because `max_by_key`
         // returns the last maximum.
         let largest_niche = Niche::from_scalar(dl, b_offset, b)
             .into_iter()

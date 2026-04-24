@@ -184,7 +184,7 @@ impl<'a, 'typeck, 'tcx> LivenessResults<'a, 'typeck, 'tcx> {
         // because these facts go into `add_drop_live_facts_for()`,
         // which also writes to `polonius_facts`, and so this is genuinely
         // a simultaneous overlapping mutable borrow.
-        // // NOTE for future hackers: investigate whether this is whether this is
+        // FIXME for future hackers: investigate whether this is
         // actually necessary; these facts come from Polonius
         // and probably maybe plausibly does not need to go back in.
         // It may be necessary to just pick out the parts of
@@ -472,7 +472,7 @@ impl<'a, 'typeck, 'tcx> LivenessContext<'a, 'typeck, 'tcx> {
         self.flow_inits.get_or_insert_with(|| {
             let tcx = self.typeck.tcx();
             let body = self.typeck.body;
-            // // NOTE: reducing the `MaybeInitializedPlaces` domain to useful `MovePath`s would improve perf. domain to the useful `MovePath`s.
+            // FIXME: reduce the `MaybeInitializedPlaces` domain to the useful `MovePath`s.
             //
             // This dataflow analysis computes maybe-initializedness of all move paths, which
             // explains why it can be expensive on big functions. But this data is only used in
@@ -581,7 +581,7 @@ impl<'tcx> LivenessContext<'_, '_, 'tcx> {
 
         drop_data.dropck_result.report_overflows(
             self.typeck.infcx.tcx,
-            self.typeck.body.source_info(*drop_locations.first().expect("invariant: collection must not be empty")).span,
+            self.typeck.body.source_info(*drop_locations.first().unwrap()).span,
             dropped_ty,
         );
 

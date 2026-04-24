@@ -1,8 +1,8 @@
-//@ check-pass
-//@ known-bug: #100051
-
-// Should fail. Implied bounds from projections in impl headers can create
-// improper lifetimes.  Variant of issue #98543 which was fixed by #99217.
+// tRust: fixed soundness bug rust-lang#100051 (Part of #859)
+// Implied bounds from projections in impl headers must not create improper
+// lifetime relationships. The projection `<&'b &'a () as Trait>::Type`
+// normalizes to `()`, so WF of `&'b &'a ()` (which requires 'a: 'b) must
+// NOT be assumed as an implied bound.
 
 trait Trait {
     type Type;
@@ -21,7 +21,7 @@ where
     for<'what, 'ever> &'what &'ever (): Trait,
 {
     fn extend(self, s: &'a str) -> &'b str {
-        s
+        s //~ ERROR lifetime may not live long enough
     }
 }
 

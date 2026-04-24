@@ -107,7 +107,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for LatticeOp<'_, 'tcx> {
                 Ok(a)
             }
             ty::Covariant => self.relate(a, b),
-            // tRust: known issue —(#41044) -- not correct, need test
+            // FIXME(#41044) -- not correct, need test
             ty::Bivariant => Ok(a),
             ty::Contravariant => {
                 self.kind = self.kind.invert();
@@ -295,7 +295,7 @@ impl<'tcx> PredicateEmittingRelation<InferCtxt<'tcx>> for LatticeOp<'_, 'tcx> {
         self.register_predicates([ty::Binder::dummy(ty::PredicateKind::AliasRelate(
             a.into(),
             b.into(),
-            // tRust: known issue —(deferred_projection_equality): This isn't right, I think?
+            // FIXME(deferred_projection_equality): This isn't right, I think?
             ty::AliasRelationDirection::Equate,
         ))]);
     }

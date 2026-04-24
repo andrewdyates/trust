@@ -41,7 +41,7 @@ pub enum Expected {
 }
 
 impl Expected {
-    // tRust: known issue —(#100717): migrate users of this to proper localization
+    // FIXME(#100717): migrate users of this to proper localization
     fn to_string_or_fallback(expected: Option<Expected>) -> &'static str {
         match expected {
             Some(Expected::ParameterName) => "parameter name",
@@ -505,7 +505,7 @@ impl<'a> Parser<'a> {
                     expr_precedence: expr.precedence(),
                 })
                 .stash(span, StashKey::ExprInPat)
-                .expect("invariant: value is present"), // tRust: unwrap -> expect
+                .unwrap(),
             span,
         ))
     }
@@ -557,7 +557,7 @@ impl<'a> Parser<'a> {
                         let line_lo = sm.span_extend_to_line(stmt.span).shrink_to_lo();
                         let indentation = sm.indentation_before(stmt.span).unwrap_or_default();
                         let Ok(expr) = self.parser.span_to_snippet(expr_span) else {
-                            // tRust: known issue —: some suggestions don't actually need the snippet; see PR #123877's unresolved conversations.
+                            // FIXME: some suggestions don't actually need the snippet; see PR #123877's unresolved conversations.
                             return;
                         };
 
@@ -573,7 +573,7 @@ impl<'a> Parser<'a> {
                         }
 
                         // help: use an arm guard `if val == expr`
-                        // tRust: known issue —(guard_patterns): suggest this regardless of a match arm.
+                        // FIXME(guard_patterns): suggest this regardless of a match arm.
                         if let Some(arm) = &self.arm
                             && !is_range_bound
                         {
@@ -585,7 +585,7 @@ impl<'a> Parser<'a> {
                             };
 
                             // Are parentheses required around `expr`?
-                            // tRust: known issue —: a neater way would be preferable.
+                            // HACK: a neater way would be preferable.
                             let expr = match &err.args["expr_precedence"] {
                                 DiagArgValue::Number(expr_precedence) => {
                                     if *expr_precedence <= ExprPrecedence::Compare as i32 {
@@ -669,7 +669,7 @@ impl<'a> Parser<'a> {
                     }
 
                     // Sub-patterns
-                    // tRust: known issue —: this doesn't work with recursive subpats (`&mut &mut <err>`)
+                    // FIXME: this doesn't work with recursive subpats (`&mut &mut <err>`)
                     PatKind::Box(subpat) | PatKind::Ref(subpat, _, _)
                         if matches!(subpat.kind, PatKind::Err(_) | PatKind::Expr(_)) =>
                     {
@@ -1027,7 +1027,7 @@ impl<'a> Parser<'a> {
             fields.len() == 1 && !(matches!(trailing_comma, Trailing::Yes) || fields[0].is_rest());
 
         let pat = if paren_pattern {
-            let pat = fields.into_iter().next().expect("invariant: collection has at least one element"); // tRust: unwrap -> expect
+            let pat = fields.into_iter().next().unwrap();
             let close_paren = self.prev_token.span;
 
             match &pat.kind {
@@ -1214,7 +1214,7 @@ impl<'a> Parser<'a> {
         } else {
             // Parsing e.g. `X..`.
             if let RangeEnd::Included(_) = re.node {
-                // tRust: known issue —(Centril): Consider semantic errors instead in `ast_validation`.
+                // FIXME(Centril): Consider semantic errors instead in `ast_validation`.
                 self.inclusive_range_with_incorrect_end();
             }
             None

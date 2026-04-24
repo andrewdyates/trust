@@ -17,7 +17,7 @@ pub(super) struct PatMigration<'a> {
     /// lowered, with the span where it was introduced. `None` for a by-value default mode.
     default_mode_span: Option<(Span, ty::Mutability)>,
     /// Labels for where incompatibility-causing by-ref default binding modes were introduced.
-    // tRust: known issue — To track the default binding mode, we duplicate (upstream FIXME by ref_pat_eat_one_layer_2024_structural)
+    // FIXME(ref_pat_eat_one_layer_2024_structural): To track the default binding mode, we duplicate
     // logic from HIR typeck (in order to avoid needing to store all changes to the dbm in
     // TypeckResults). Since the default binding mode acts differently under this feature gate, the
     // labels will be wrong.
@@ -131,7 +131,7 @@ impl<'a> PatMigration<'a> {
             };
             format!("{match_on_these_references}{and_explain_modes}")
         };
-        // tRust: known issue — for peace of mind, don't risk emitting a 0-part suggestion (that panics!) (upstream FIXME by dianne)
+        // FIXME(dianne): for peace of mind, don't risk emitting a 0-part suggestion (that panics!)
         debug_assert!(!self.suggestion.is_empty());
         if !self.suggestion.is_empty() {
             diag.multipart_suggestion(msg, self.suggestion, applicability);
@@ -163,7 +163,7 @@ impl<'a> PatMigration<'a> {
         }
 
         // Remember if this changed the default binding mode, in case we want to label it.
-        let min_mutbl = implicit_deref_mutbls.min().expect("invariant: collection is non-empty"); // tRust: unwrap -> expect
+        let min_mutbl = implicit_deref_mutbls.min().unwrap();
         if self.default_mode_span.is_none_or(|(_, old_mutbl)| min_mutbl < old_mutbl) {
             // This changes the default binding mode to `ref` or `ref mut`. Return the old mode so
             // it can be reinstated when we leave the pattern.

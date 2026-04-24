@@ -19,7 +19,6 @@ declare_lint! {
     ///     static mut X: i32 = 23;
     ///     static mut Y: i32 = 24;
     ///
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe {
     ///         let y = &X;
     ///         let ref x = X;

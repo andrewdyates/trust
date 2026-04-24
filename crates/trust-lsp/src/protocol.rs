@@ -16,7 +16,6 @@ use trust_types::fx::FxHashMap;
 /// A JSON-RPC 2.0 request message.
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct Request {
-    pub(crate) jsonrpc: String,
     pub(crate) id: Option<RequestId>,
     pub(crate) method: String,
     #[serde(default)]
@@ -93,7 +92,6 @@ pub(crate) struct ResponseError {
 
 /// Standard JSON-RPC error codes used by LSP.
 pub(crate) mod error_codes {
-    pub(crate) const PARSE_ERROR: i32 = -32700;
     pub(crate) const INVALID_REQUEST: i32 = -32600;
     pub(crate) const METHOD_NOT_FOUND: i32 = -32601;
     pub(crate) const SERVER_NOT_INITIALIZED: i32 = -32002;
@@ -109,8 +107,6 @@ pub(crate) mod error_codes {
 pub(crate) struct InitializeParams {
     #[serde(default)]
     pub(crate) root_uri: Option<String>,
-    #[serde(default)]
-    pub(crate) root_path: Option<String>,
 }
 
 /// LSP InitializeResult.
@@ -350,9 +346,6 @@ pub(crate) struct TextDocumentIdentifier {
 pub(crate) struct DidSaveTextDocumentParams {
     /// The document that was saved.
     pub(crate) text_document: TextDocumentIdentifier,
-    /// The content when saved (if `SaveOptions.includeText` was true).
-    #[serde(default)]
-    pub(crate) text: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -365,8 +358,6 @@ pub(crate) struct DidSaveTextDocumentParams {
 pub(crate) struct CodeActionParams {
     /// The document in which the command was invoked.
     pub(crate) text_document: TextDocumentIdentifier,
-    /// The range for which the command was invoked.
-    pub(crate) range: Range,
     /// Context carrying additional information.
     pub(crate) context: CodeActionContext,
 }
@@ -488,14 +479,6 @@ pub(crate) enum WorkDoneProgress {
         #[serde(skip_serializing_if = "Option::is_none")]
         cancellable: Option<bool>,
     },
-    Report {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        percentage: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cancellable: Option<bool>,
-    },
     End {
         #[serde(skip_serializing_if = "Option::is_none")]
         message: Option<String>,
@@ -535,7 +518,8 @@ mod tests {
 
     #[test]
     fn test_response_success_serialize() {
-        let resp = Response::success(Some(RequestId::Integer(1)), serde_json::json!({"capabilities": {}}));
+        let resp =
+            Response::success(Some(RequestId::Integer(1)), serde_json::json!({"capabilities": {}}));
         let json = serde_json::to_string(&resp).expect("serialize response");
         assert!(json.contains("\"jsonrpc\":\"2.0\""));
         assert!(json.contains("\"id\":1"));
@@ -545,7 +529,11 @@ mod tests {
 
     #[test]
     fn test_response_error_serialize() {
-        let resp = Response::error(Some(RequestId::Integer(1)), error_codes::METHOD_NOT_FOUND, "not found".into());
+        let resp = Response::error(
+            Some(RequestId::Integer(1)),
+            error_codes::METHOD_NOT_FOUND,
+            "not found".into(),
+        );
         let json = serde_json::to_string(&resp).expect("serialize error response");
         assert!(json.contains("\"error\""));
         assert!(json.contains("-32601"));
@@ -605,14 +593,13 @@ mod tests {
         let json = r#"{"textDocument":{"uri":"file:///src/lib.rs"}}"#;
         let params: DidSaveTextDocumentParams = serde_json::from_str(json).expect("parse");
         assert_eq!(params.text_document.uri, "file:///src/lib.rs");
-        assert!(params.text.is_none());
     }
 
     #[test]
     fn test_did_save_params_with_text() {
         let json = r#"{"textDocument":{"uri":"file:///src/lib.rs"},"text":"fn main() {}"}"#;
         let params: DidSaveTextDocumentParams = serde_json::from_str(json).expect("parse");
-        assert_eq!(params.text.as_deref(), Some("fn main() {}"));
+        assert_eq!(params.text_document.uri, "file:///src/lib.rs");
     }
 
     #[test]
@@ -661,9 +648,7 @@ mod tests {
 
     #[test]
     fn test_work_done_progress_end_serialize() {
-        let progress = WorkDoneProgress::End {
-            message: Some("Verification complete".to_string()),
-        };
+        let progress = WorkDoneProgress::End { message: Some("Verification complete".to_string()) };
         let json = serde_json::to_string(&progress).expect("serialize");
         assert!(json.contains("\"kind\":\"end\""));
         assert!(json.contains("\"Verification complete\""));
@@ -678,7 +663,6 @@ mod tests {
         }"#;
         let params: CodeActionParams = serde_json::from_str(json).expect("parse");
         assert_eq!(params.text_document.uri, "file:///src/lib.rs");
-        assert_eq!(params.range.start.line, 4);
         assert!(params.context.diagnostics.is_empty());
     }
 

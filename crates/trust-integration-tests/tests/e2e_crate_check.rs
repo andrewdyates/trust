@@ -19,13 +19,13 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::fx::FxHashMap;
 use std::path::{Path, PathBuf};
+use trust_types::fx::FxHashMap;
 
 use trust_types::{
-    BasicBlock, BinOp, BlockId, ConstValue, Contract, ContractKind, LocalDecl, Operand,
-    Place, Projection, Rvalue, SourceSpan, Statement, Terminator, Ty, VerifiableBody,
-    VerifiableFunction, VerificationCondition, VerificationResult,
+    BasicBlock, BinOp, BlockId, ConstValue, Contract, ContractKind, LocalDecl, Operand, Place,
+    Projection, Rvalue, SourceSpan, Statement, Terminator, Ty, VerifiableBody, VerifiableFunction,
+    VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,6 @@ struct ParsedFunction {
     file: PathBuf,
     line: usize,
     is_public: bool,
-    #[allow(dead_code)]
     is_unsafe: bool,
     has_requires: bool,
     has_ensures: bool,
@@ -228,11 +227,7 @@ fn try_parse_fn(line: &str, file: &Path, line_num: usize) -> Option<ParsedFuncti
     let param_count = if let Some(paren_start) = rest.find('(') {
         if let Some(paren_end) = rest[paren_start..].find(')') {
             let params = &rest[paren_start + 1..paren_start + paren_end];
-            if params.trim().is_empty() {
-                0
-            } else {
-                params.split(',').count()
-            }
+            if params.trim().is_empty() { 0 } else { params.split(',').count() }
         } else {
             0
         }
@@ -243,9 +238,7 @@ fn try_parse_fn(line: &str, file: &Path, line_num: usize) -> Option<ParsedFuncti
     // Extract return type.
     let return_type = rest.find("->").map(|arrow| {
         let after = rest[arrow + 2..].trim();
-        let end = after
-            .find(['{', '\n'])
-            .unwrap_or(after.len());
+        let end = after.find(['{', '\n']).unwrap_or(after.len());
         after[..end].trim().to_string()
     });
 
@@ -283,11 +276,7 @@ fn try_parse_fn(line: &str, file: &Path, line_num: usize) -> Option<ParsedFuncti
 fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
     let def_path = format!(
         "{}::{}",
-        parsed
-            .file
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy(),
+        parsed.file.file_stem().unwrap_or_default().to_string_lossy(),
         parsed.name
     );
 
@@ -304,11 +293,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
 
     // Build locals: _0 = return, _1.._N = args.
     let arg_count = parsed.param_count;
-    let mut locals = vec![LocalDecl {
-        index: 0,
-        ty: return_ty.clone(),
-        name: None,
-    }];
+    let mut locals = vec![LocalDecl { index: 0, ty: return_ty.clone(), name: None }];
     for i in 1..=arg_count {
         locals.push(LocalDecl {
             index: i,
@@ -326,11 +311,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
     if parsed.has_arithmetic && arg_count >= 2 {
         // _tmp = CheckedAdd(_1, _2)
         let tmp = next_local;
-        locals.push(LocalDecl {
-            index: tmp,
-            ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-            name: None,
-        });
+        locals.push(LocalDecl { index: tmp, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None });
         next_local += 1;
 
         stmts.push(Statement::Assign {
@@ -359,11 +340,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
 
         // Result block: _0 = _tmp.0
         let result_local = next_local;
-        locals.push(LocalDecl {
-            index: result_local,
-            ty: Ty::u64(),
-            name: None,
-        });
+        locals.push(LocalDecl { index: result_local, ty: Ty::u64(), name: None });
         let _ = next_local;
 
         stmts.push(Statement::Assign {
@@ -376,11 +353,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
             rvalue: Rvalue::Use(Operand::Copy(Place::local(result_local))),
             span: span.clone(),
         });
-        blocks.push(BasicBlock {
-            id: BlockId(1),
-            stmts,
-            terminator: Terminator::Return,
-        });
+        blocks.push(BasicBlock { id: BlockId(1), stmts, terminator: Terminator::Return });
     }
     // Pattern 2: Division -> Div rvalue (produces DivisionByZero VC).
     else if parsed.has_division && arg_count >= 2 {
@@ -393,11 +366,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
             ),
             span: span.clone(),
         });
-        blocks.push(BasicBlock {
-            id: BlockId(0),
-            stmts,
-            terminator: Terminator::Return,
-        });
+        blocks.push(BasicBlock { id: BlockId(0), stmts, terminator: Terminator::Return });
     }
     // Pattern 3: Indexing -> array bounds check.
     else if parsed.has_indexing && arg_count >= 1 {
@@ -414,21 +383,14 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
 
         // _result = _array[_idx]
         let result_local = next_local;
-        locals.push(LocalDecl {
-            index: result_local,
-            ty: Ty::u64(),
-            name: None,
-        });
+        locals.push(LocalDecl { index: result_local, ty: Ty::u64(), name: None });
         #[allow(unused_assignments)]
         {
             next_local += 1;
         }
 
         stmts.push(Statement::Assign {
-            place: Place {
-                local: arr_local,
-                projections: vec![Projection::Index(idx_local)],
-            },
+            place: Place { local: arr_local, projections: vec![Projection::Index(idx_local)] },
             rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(0))),
             span: span.clone(),
         });
@@ -440,11 +402,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
             })),
             span: span.clone(),
         });
-        blocks.push(BasicBlock {
-            id: BlockId(0),
-            stmts,
-            terminator: Terminator::Return,
-        });
+        blocks.push(BasicBlock { id: BlockId(0), stmts, terminator: Terminator::Return });
     }
     // Pattern 4: Default -- simple return (produces no VCs, which is correct
     // for functions with no risky operations).
@@ -456,11 +414,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
                 span: span.clone(),
             });
         }
-        blocks.push(BasicBlock {
-            id: BlockId(0),
-            stmts,
-            terminator: Terminator::Return,
-        });
+        blocks.push(BasicBlock { id: BlockId(0), stmts, terminator: Terminator::Return });
     }
 
     // Build contracts from spec attributes.
@@ -484,12 +438,7 @@ fn to_verifiable_function(parsed: &ParsedFunction) -> VerifiableFunction {
         name: parsed.name.clone(),
         def_path,
         span,
-        body: VerifiableBody {
-            locals,
-            blocks,
-            arg_count,
-            return_ty,
-        },
+        body: VerifiableBody { locals, blocks, arg_count, return_ty },
         contracts,
         preconditions: Vec::new(),
         postconditions: Vec::new(),
@@ -512,7 +461,9 @@ fn infer_ty(return_type: &Option<String>) -> Ty {
         Some("i32") => Ty::i32(),
         Some("i64") => Ty::i64(),
         Some("isize") => Ty::isize(),
-        Some(s) if s.starts_with("&str") || s.contains("String") => Ty::Ref { mutable: false, inner: Box::new(Ty::u8()) },
+        Some(s) if s.starts_with("&str") || s.contains("String") => {
+            Ty::Ref { mutable: false, inner: Box::new(Ty::u8()) }
+        }
         Some(s) if s.starts_with("Vec<") => Ty::Slice { elem: Box::new(Ty::u64()) },
         Some(s) if s.starts_with("Option<") => Ty::Tuple(vec![Ty::Bool, Ty::u64()]),
         Some(s) if s.starts_with("Result<") => Ty::Tuple(vec![Ty::Bool, Ty::u64()]),
@@ -536,11 +487,7 @@ fn trust_types_src() -> PathBuf {
 #[test]
 fn test_e2e_pipeline_on_trust_types_crate() {
     let src_dir = trust_types_src();
-    assert!(
-        src_dir.is_dir(),
-        "trust-types/src not found at {}",
-        src_dir.display()
-    );
+    assert!(src_dir.is_dir(), "trust-types/src not found at {}", src_dir.display());
 
     // Step 1: Find all source files.
     let files = find_rs_files(&src_dir);
@@ -562,11 +509,7 @@ fn test_e2e_pipeline_on_trust_types_crate() {
         all_parsed.len(),
         all_parsed.iter().filter(|f| f.is_public).count()
     );
-    assert!(
-        all_parsed.len() >= 100,
-        "Expected at least 100 functions, found {}",
-        all_parsed.len()
-    );
+    assert!(all_parsed.len() >= 100, "Expected at least 100 functions, found {}", all_parsed.len());
 
     // Step 3: Convert to VerifiableFunction objects.
     let verifiable: Vec<VerifiableFunction> =
@@ -607,40 +550,24 @@ fn test_e2e_pipeline_on_trust_types_crate() {
     let results = router.verify_all(&all_vcs);
     eprintln!("Router returned {} results", results.len());
 
-    assert_eq!(
-        results.len(),
-        all_vcs.len(),
-        "Router should return one result per VC"
-    );
+    assert_eq!(results.len(), all_vcs.len(), "Router should return one result per VC");
 
     // Count outcomes.
-    let proved = results
-        .iter()
-        .filter(|(_, r)| matches!(r, VerificationResult::Proved { .. }))
-        .count();
-    let failed = results
-        .iter()
-        .filter(|(_, r)| matches!(r, VerificationResult::Failed { .. }))
-        .count();
-    let unknown = results
-        .iter()
-        .filter(|(_, r)| matches!(r, VerificationResult::Unknown { .. }))
-        .count();
+    let proved =
+        results.iter().filter(|(_, r)| matches!(r, VerificationResult::Proved { .. })).count();
+    let failed =
+        results.iter().filter(|(_, r)| matches!(r, VerificationResult::Failed { .. })).count();
+    let unknown =
+        results.iter().filter(|(_, r)| matches!(r, VerificationResult::Unknown { .. })).count();
 
-    eprintln!(
-        "Outcomes: {} proved, {} failed, {} unknown",
-        proved, failed, unknown
-    );
+    eprintln!("Outcomes: {} proved, {} failed, {} unknown", proved, failed, unknown);
 
     // Step 6: Build JSON proof report via trust-report.
     let report = trust_report::build_json_report("trust-types", &results);
 
     // Validate report structure.
     let json = serde_json::to_string_pretty(&report).expect("Report should serialize to JSON");
-    assert!(
-        !json.is_empty(),
-        "JSON report should not be empty"
-    );
+    assert!(!json.is_empty(), "JSON report should not be empty");
 
     // Parse back to verify valid JSON.
     let parsed: serde_json::Value =
@@ -650,33 +577,18 @@ fn test_e2e_pipeline_on_trust_types_crate() {
     // Check report has expected top-level fields.
     let obj = parsed.as_object().unwrap();
     // tRust #744: schema_version is nested under metadata, not top-level.
-    assert!(
-        obj.contains_key("metadata"),
-        "Report should have metadata (contains schema_version)"
-    );
-    assert!(
-        obj.contains_key("functions"),
-        "Report should have functions"
-    );
-    assert!(
-        obj.contains_key("summary"),
-        "Report should have summary"
-    );
+    assert!(obj.contains_key("metadata"), "Report should have metadata (contains schema_version)");
+    assert!(obj.contains_key("functions"), "Report should have functions");
+    assert!(obj.contains_key("summary"), "Report should have summary");
 
     // Verify function count in report.
-    let report_functions = obj
-        .get("functions")
-        .and_then(|v| v.as_array())
-        .map(|a| a.len())
-        .unwrap_or(0);
+    let report_functions =
+        obj.get("functions").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
     eprintln!("Report contains {} function entries", report_functions);
 
     // Also render the text summary to verify no panics.
     let text_summary = trust_report::format_json_summary(&report);
-    assert!(
-        !text_summary.is_empty(),
-        "Text summary should not be empty"
-    );
+    assert!(!text_summary.is_empty(), "Text summary should not be empty");
     eprintln!("\n{text_summary}");
 
     // Step 7: Acceptance criteria validation.
@@ -685,42 +597,17 @@ fn test_e2e_pipeline_on_trust_types_crate() {
         "AC: At least 100 functions verified (got {})",
         verifiable.len()
     );
-    assert_eq!(
-        errors, 0,
-        "AC: Pipeline should complete without crashing (got {} errors)",
-        errors
-    );
-    assert!(
-        all_vcs.len() >= 10,
-        "AC: Should generate at least 10 VCs (got {})",
-        all_vcs.len()
-    );
+    assert_eq!(errors, 0, "AC: Pipeline should complete without crashing (got {} errors)", errors);
+    assert!(all_vcs.len() >= 10, "AC: Should generate at least 10 VCs (got {})", all_vcs.len());
 
     eprintln!("\n=== E2E Pipeline Test PASSED ===");
-    eprintln!(
-        "  Files:     {}",
-        files.len()
-    );
-    eprintln!(
-        "  Functions: {}",
-        verifiable.len()
-    );
-    eprintln!(
-        "  VCs:       {}",
-        all_vcs.len()
-    );
-    eprintln!(
-        "  Proved:    {proved}"
-    );
-    eprintln!(
-        "  Failed:    {failed}"
-    );
-    eprintln!(
-        "  Unknown:   {unknown}"
-    );
-    eprintln!(
-        "  Errors:    {errors}"
-    );
+    eprintln!("  Files:     {}", files.len());
+    eprintln!("  Functions: {}", verifiable.len());
+    eprintln!("  VCs:       {}", all_vcs.len());
+    eprintln!("  Proved:    {proved}");
+    eprintln!("  Failed:    {failed}");
+    eprintln!("  Unknown:   {unknown}");
+    eprintln!("  Errors:    {errors}");
     eprintln!("================================");
 }
 
@@ -748,14 +635,8 @@ fn test_e2e_json_report_valid_structure() {
 
     // Validate summary.
     let summary = parsed.get("summary").expect("should have summary");
-    assert!(
-        summary.get("total_obligations").is_some(),
-        "summary should have total_obligations"
-    );
-    assert!(
-        summary.get("verdict").is_some(),
-        "summary should have verdict"
-    );
+    assert!(summary.get("total_obligations").is_some(), "summary should have total_obligations");
+    assert!(summary.get("verdict").is_some(), "summary should have verdict");
 }
 
 #[test]
@@ -772,17 +653,10 @@ fn test_source_extraction_finds_real_functions() {
     let funcs = extract_functions(&formula_rs);
 
     // trust-types/src/formula.rs should have public functions (Formula methods, etc.).
-    assert!(
-        !funcs.is_empty(),
-        "Should find functions in trust-types/src/formula.rs"
-    );
+    assert!(!funcs.is_empty(), "Should find functions in trust-types/src/formula.rs");
 
     let public_count = funcs.iter().filter(|f| f.is_public).count();
-    eprintln!(
-        "Found {} functions ({} public) in lib.rs",
-        funcs.len(),
-        public_count
-    );
+    eprintln!("Found {} functions ({} public) in lib.rs", funcs.len(), public_count);
 }
 
 #[test]
@@ -883,11 +757,7 @@ fn make_simple_add(name: &str, ty: Ty) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: ty.clone(), name: None },
                 LocalDecl { index: 1, ty: ty.clone(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: ty.clone(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![ty.clone(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![ty.clone(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -969,11 +839,7 @@ fn make_noop(name: &str) -> VerifiableFunction {
         def_path: format!("test::{name}"),
         span: SourceSpan::default(),
         body: VerifiableBody {
-            locals: vec![LocalDecl {
-                index: 0,
-                ty: Ty::Unit,
-                name: None,
-            }],
+            locals: vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
             blocks: vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![],

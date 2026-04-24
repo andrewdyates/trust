@@ -81,7 +81,6 @@ pub(crate) fn categorize(context: PlaceContext) -> Option<DefUse> {
         PlaceContext::NonUse(NonUseContext::BackwardIncompatibleDropHint) => None,
 
         PlaceContext::MutatingUse(MutatingUseContext::SetDiscriminant) => {
-            // tRust: invariant: MIR phase guarantee — these statements are lowered before the borrowck MIR phase
             bug!("These statements are not allowed in this MIR phase")
         }
     }

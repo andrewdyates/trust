@@ -57,7 +57,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 block.unit()
             }
             ExprKind::AssignOp { op, lhs, rhs } => {
-                // tRust: known issue — there is an interesting semantics (upstream #28160)
+                // FIXME(#28160) there is an interesting semantics
                 // question raised here -- should we "freeze" the
                 // value of the lhs here?  I'm inclined to think not,
                 // since it seems closer to the semantics of the
@@ -107,13 +107,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             ExprKind::Become { value } => {
                 let v = &this.thir[value];
                 let ExprKind::Scope { value, hir_id, region_scope } = v.kind else {
-                    // tRust: invariant — after `thir_check_tail_calls`, every `Become` operand is a scoped expression carrying the region and lint scope for lowering.
                     span_bug!(v.span, "`thir_check_tail_calls` should have disallowed this {v:?}")
                 };
 
                 let v = &this.thir[value];
                 let ExprKind::Call { ref args, fun, fn_span, .. } = v.kind else {
-                    // tRust: invariant — after tail-call validation, the inner expression of `Become` is guaranteed to be a direct call.
                     span_bug!(v.span, "`thir_check_tail_calls` should have disallowed this {v:?}")
                 };
 

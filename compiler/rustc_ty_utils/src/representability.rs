@@ -37,7 +37,7 @@ fn check_representability_ty<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) {
         ty::Adt(..) => {
             tcx.ensure_ok().check_representability_adt_ty(ty);
         }
-        // tRust: known issue (#11924) — allow zero-length arrays?
+        // FIXME(#11924) allow zero-length arrays?
         ty::Array(ty, _) => {
             check_representability_ty(tcx, ty);
         }

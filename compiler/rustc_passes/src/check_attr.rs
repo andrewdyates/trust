@@ -1,4 +1,4 @@
-// tRust: known issue — (jdonszelmann) should become rustc_attr_validation
+// FIXME(jdonszelmann): should become rustc_attr_validation
 //! This module implements some validity checks for attributes.
 //! In particular it verifies that `#[inline]` and `#[repr]` attributes are
 //! attached to items that actually support them and if there are
@@ -82,7 +82,6 @@ fn target_from_impl_item<'tcx>(tcx: TyCtxt<'tcx>, impl_item: &hir::ImplItem<'_>)
             let containing_item = tcx.hir_expect_item(parent_def_id);
             let containing_impl_is_for_trait = match &containing_item.kind {
                 hir::ItemKind::Impl(impl_) => impl_.of_trait.is_some(),
-                // tRust: invariant — parent of an ImplItem must be an Impl node in the HIR
                 _ => bug!("parent of an ImplItem must be an Impl"),
             };
             if containing_impl_is_for_trait {
@@ -403,7 +402,6 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                                         continue
                                     }
 
-                                    // tRust: invariant — all builtin attributes must have handling in CheckAttrVisitor
                                     span_bug!(
                                         attr.span(),
                                         "builtin attribute {name:?} not handled by `CheckAttrVisitor`"
@@ -421,7 +419,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                 match attr {
                     Attribute::Parsed(_) => { /* Already validated. */ }
                     Attribute::Unparsed(attr) => {
-                        // tRust: known issue — (jdonszelmann) remove once all crate-level attrs are parsed and caught by
+                        // FIXME(jdonszelmann): remove once all crate-level attrs are parsed and caught by
                         // the above
                         if let Some(BuiltinAttribute { type_: AttributeType::CrateLevel, .. }) =
                             attr.path
@@ -650,7 +648,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
         item: Option<ItemLike<'_>>,
     ) {
         if target == (Target::Impl { of_trait: true }) {
-            match item.expect("invariant: trait impl target always has an item") { // tRust: unwrap -> expect
+            match item.unwrap() {
                 ItemLike::Item(it) => match it.expect_impl().constness {
                     Constness::Const => {
                         let item_span = self.tcx.hir_span(hir_id);
@@ -807,7 +805,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
         match target {
             Target::Fn
             | Target::Method(MethodKind::Trait { body: true } | MethodKind::Inherent) => {
-                let fn_sig = self.tcx.hir_node(hir_id).fn_sig().expect("invariant: naked attr target is a fn with a signature"); // tRust: unwrap -> expect
+                let fn_sig = self.tcx.hir_node(hir_id).fn_sig().unwrap();
                 let abi = fn_sig.header.abi;
                 if abi.is_rustic_abi() && !self.tcx.features().naked_functions_rustic_abi() {
                     feature_err(
@@ -861,7 +859,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                 if let Some(item) = find_attr!(attrs, Lang(item, _) => item)
                     && item.is_weak()
                 {
-                    let sig = self.tcx.hir_node(hir_id).fn_sig().expect("invariant: Target::Fn node always has fn_sig"); // tRust: unwrap -> expect
+                    let sig = self.tcx.hir_node(hir_id).fn_sig().unwrap();
 
                     self.dcx().emit_err(errors::LangItemWithTrackCaller {
                         attr_span,
@@ -871,7 +869,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                 }
 
                 if let Some(impls) = find_attr!(attrs, EiiImpls(impls) => impls) {
-                    let sig = self.tcx.hir_node(hir_id).fn_sig().expect("invariant: Target::Fn node always has fn_sig"); // tRust: unwrap -> expect
+                    let sig = self.tcx.hir_node(hir_id).fn_sig().unwrap();
                     for i in impls {
                         let name = match i.resolution {
                             EiiImplResolution::Macro(def_id) => self.tcx.item_name(def_id),
@@ -935,7 +933,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                     && !self.tcx.sess.target.is_like_wasm
                     && !self.tcx.sess.opts.actually_rustdoc
                 {
-                    let sig = self.tcx.hir_node(hir_id).fn_sig().expect("invariant: Target::Fn/Method node always has fn_sig"); // tRust: unwrap -> expect
+                    let sig = self.tcx.hir_node(hir_id).fn_sig().unwrap();
 
                     self.dcx().emit_err(errors::LangItemWithTargetFeature {
                         attr_span,
@@ -1163,10 +1161,10 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
         let DocAttribute {
             aliases,
             // valid pretty much anywhere, not checked here?
-            // tRust: known issue — should we?
+            // FIXME: should we?
             hidden: _,
             inline,
-            // tRust: known issue — currently unchecked
+            // FIXME: currently unchecked
             cfg: _,
             // already checked in attr_parsing
             auto_cfg: _,
@@ -1175,7 +1173,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
             fake_variadic,
             keyword,
             masked,
-            // tRust: known issue — currently unchecked
+            // FIXME: currently unchecked
             notable_trait: _,
             search_unbox,
             // already checked in attr_parsing
@@ -1519,7 +1517,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
     /// Outputs an error for attributes that can only be applied to macros, such as
     /// `#[allow_internal_unsafe]` and `#[allow_internal_unstable]`.
     /// (Allows proc_macro functions)
-    // tRust: known issue — (jdonszelmann) if possible, move to attr parsing
+    // FIXME(jdonszelmann): if possible, move to attr parsing
     fn check_macro_only_attr(
         &self,
         attr_span: Span,
@@ -1598,12 +1596,12 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
 
     fn check_unused_attribute(&self, hir_id: HirId, attr: &Attribute, style: Option<AttrStyle>) {
         // Warn on useless empty attributes.
-        // tRust: known issue — (jdonszelmann) this lint should be moved to attribute parsing, see `AcceptContext::warn_empty_attribute`
+        // FIXME(jdonszelmann): this lint should be moved to attribute parsing, see `AcceptContext::warn_empty_attribute`
         let note =
             if attr.has_any_name(&[sym::allow, sym::expect, sym::warn, sym::deny, sym::forbid])
                 && attr.meta_item_list().is_some_and(|list| list.is_empty())
             {
-                errors::UnusedNote::EmptyList { name: attr.name().expect("invariant: lint attribute always has a name") } // tRust: unwrap -> expect
+                errors::UnusedNote::EmptyList { name: attr.name().unwrap() }
             } else if attr.has_any_name(&[
                 sym::allow,
                 sym::warn,
@@ -1616,7 +1614,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                 && let MetaItemKind::NameValue(_) = &item.kind
                 && item.path == sym::reason
             {
-                errors::UnusedNote::NoLints { name: attr.name().expect("invariant: lint attribute always has a name") } // tRust: unwrap -> expect
+                errors::UnusedNote::NoLints { name: attr.name().unwrap() }
             } else if attr.has_any_name(&[
                 sym::allow,
                 sym::warn,
@@ -1761,13 +1759,13 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                         }
                     }
                     TypeError::SafetyMismatch(_) => {
-                        // tRust: known issue — Would be nice if we had a span here..
+                        // FIXME: Would be nice if we had a span here..
                     }
                     TypeError::AbiMismatch(_) => {
-                        // tRust: known issue — Would be nice if we had a span here..
+                        // FIXME: Would be nice if we had a span here..
                     }
                     TypeError::VariadicMismatch(_) => {
-                        // tRust: known issue — Would be nice if we had a span here..
+                        // FIXME: Would be nice if we had a span here..
                     }
                     _ => {}
                 }
@@ -2031,7 +2029,7 @@ pub(crate) fn provide(providers: &mut Providers) {
     *providers = Providers { check_mod_attrs, ..*providers };
 }
 
-// tRust: known issue — (jdonszelmann) remove, check during parsing
+// FIXME(jdonszelmann): remove, check during parsing
 fn check_duplicates(
     tcx: TyCtxt<'_>,
     attr_span: Span,
@@ -2044,7 +2042,7 @@ fn check_duplicates(
     if matches!(duplicates, WarnFollowingWordOnly) && !attr.is_word() {
         return;
     }
-    let attr_name = attr.name().expect("invariant: attribute being checked for duplicates always has a name"); // tRust: unwrap -> expect
+    let attr_name = attr.name().unwrap();
     match duplicates {
         DuplicatesOk => {}
         WarnFollowing | FutureWarnFollowing | WarnFollowingWordOnly | FutureWarnPreceding => {

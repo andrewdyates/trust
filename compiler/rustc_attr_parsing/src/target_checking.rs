@@ -187,7 +187,7 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
         cx.emit_lint(rustc_session::lint::builtin::UNUSED_ATTRIBUTES, kind, attr_span);
     }
 
-    // tRust: known issue — Fix "Cannot determine resolution" error and remove built-in macros
+    // FIXME: Fix "Cannot determine resolution" error and remove built-in macros
     // from this check.
     pub(crate) fn check_invalid_crate_level_attr_item(&self, attr: &AttrItem, inner_span: Span) {
         // Check for builtin attributes at the crate level
@@ -196,7 +196,7 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
         const ATTRS_TO_CHECK: &[Symbol] =
             &[sym::derive, sym::test, sym::test_case, sym::global_allocator, sym::bench];
 
-        // tRust: known issue — (jdonszelmann) all attrs should be combined here cleaning this up some day.
+        // FIXME(jdonszelmann): all attrs should be combined here cleaning this up some day.
         if let Some(name) = ATTRS_TO_CHECK.iter().find(|attr_to_check| matches!(attr.path.segments.as_ref(), [segment] if segment == *attr_to_check)) {
             let span = attr.span;
             let name = *name;
@@ -239,11 +239,11 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
                             let line_idx = source.find('\n')?;
                             source = &source[line_idx + '\n'.len_utf8()..];
                         } else if source.starts_with("/*") {
-                            // tRust: known issue — support nested comments.
+                            // FIXME: support nested comments.
                             let close_idx = source.find("*/")?;
                             source = &source[close_idx + "*/".len()..];
                         } else if first == '#' {
-                            // tRust: known issue — properly find the end of the attributes in order to accurately
+                            // FIXME: properly find the end of the attributes in order to accurately
                             // skip them. This version just consumes the source code until the next
                             // `]`.
                             let close_idx = source.find(']')?;
@@ -272,13 +272,13 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
         &self,
         attrs: impl IntoIterator<Item = &'attr Attribute>,
     ) {
-        // tRust: known issue — (where_clause_attrs) Currently, as the following check shows,
+        // FIXME(where_clause_attrs): Currently, as the following check shows,
         // only `#[cfg]` and `#[cfg_attr]` are allowed, but it should be removed
         // if we allow more attributes (e.g., tool attributes and `allow/deny/warn`)
         // in where clauses. After that, this function would become useless.
         let spans = attrs
             .into_iter()
-            // tRust: known issue — We shouldn't need to special-case `doc`!
+            // FIXME: We shouldn't need to special-case `doc`!
             .filter(|attr| {
                 matches!(
                     attr,

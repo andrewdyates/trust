@@ -69,7 +69,7 @@ pub fn check_abi(tcx: TyCtxt<'_>, hir_id: hir::HirId, span: Span, abi: ExternAbi
             lint
         }
     }
-    // tRust: known issue — This should be checked earlier, e.g. in `rustc_ast_lowering`, as this
+    // FIXME: This should be checked earlier, e.g. in `rustc_ast_lowering`, as this
     // currently only guards function imports, function definitions, and function pointer types.
     // Functions in trait declarations can still use "deprecated" ABIs without any warning.
 
@@ -132,7 +132,7 @@ fn allowed_union_or_unsafe_field<'tcx>(
     typing_env: ty::TypingEnv<'tcx>,
     span: Span,
 ) -> bool {
-    // tRust: known issue — (not that bad of a hack don't worry): Some codegen tests don't even define proper
+    // HACK (not that bad of a hack don't worry): Some codegen tests don't even define proper
     // impls for `Copy`. Let's short-circuit here for this validity check, since a lot of them
     // use unions. We should eventually fix all the tests to define that lang item or use
     // minicore stubs.
@@ -239,7 +239,7 @@ fn check_static_inhabited(tcx: TyCtxt<'_>, def_id: LocalDefId) {
 fn check_opaque(tcx: TyCtxt<'_>, def_id: LocalDefId) {
     let hir::OpaqueTy { origin, .. } = *tcx.hir_expect_opaque_ty(def_id);
 
-    // tRust: known issue — (jynelson): trying to infer the type of `impl trait` breaks documenting
+    // HACK(jynelson): trying to infer the type of `impl trait` breaks documenting
     // `async-std` (and `pub async fn` in general).
     // Since rustdoc doesn't care about the hidden type behind `impl Trait`, just don't look at it!
     // See https://github.com/rust-lang/rust/issues/75100
@@ -309,7 +309,7 @@ fn check_opaque_meets_bounds<'tcx>(
     };
     let param_env = tcx.param_env(defining_use_anchor);
 
-    // tRust: known issue — (#132279): Once `PostBorrowckAnalysis` is supported in the old solver, this branch should be removed.
+    // FIXME(#132279): Once `PostBorrowckAnalysis` is supported in the old solver, this branch should be removed.
     let infcx = tcx.infer_ctxt().build(if tcx.next_trait_solver_globally() {
         TypingMode::post_borrowck_analysis(tcx, defining_use_anchor)
     } else {
@@ -334,7 +334,7 @@ fn check_opaque_meets_bounds<'tcx>(
     // We're ignoring them here and replacing them with fresh region variables.
     // See tests in ui/type-alias-impl-trait/closure_{parent_args,wf_outlives}.rs.
     //
-    // tRust: known issue — Consider wrapping the hidden type in an existential `Binder` and instantiating it
+    // FIXME: Consider wrapping the hidden type in an existential `Binder` and instantiating it
     // here rather than using ReErased.
     let hidden_ty = tcx.type_of(def_id.to_def_id()).instantiate(tcx, args);
     let hidden_ty = fold_regions(tcx, hidden_ty, |re, _dbi| match re.kind() {
@@ -342,7 +342,7 @@ fn check_opaque_meets_bounds<'tcx>(
         _ => re,
     });
 
-    // tRust: known issue — We eagerly instantiate some bounds to report better errors for them...
+    // HACK: We eagerly instantiate some bounds to report better errors for them...
     // This isn't necessary for correctness, since we register these bounds when
     // equating the opaque below, but we should clean this up in the new solver.
     for (predicate, pred_span) in
@@ -368,8 +368,8 @@ fn check_opaque_meets_bounds<'tcx>(
     }
 
     let misc_cause = ObligationCause::misc(span, def_id);
-    // tRust: known issue — We should just register the item bounds here, rather than equating.
-    // tRust: known issue — (const_trait_impl): When we do that, please make sure to also register
+    // FIXME: We should just register the item bounds here, rather than equating.
+    // FIXME(const_trait_impl): When we do that, please make sure to also register
     // the `[const]` bounds.
     match ocx.eq(&misc_cause, param_env, opaque_ty, hidden_ty) {
         Ok(()) => {}
@@ -411,7 +411,7 @@ fn check_opaque_meets_bounds<'tcx>(
     } else if let hir::OpaqueTyOrigin::FnReturn { .. } | hir::OpaqueTyOrigin::AsyncFn { .. } =
         origin
     {
-        // tRust: known issue — this should also fall through to the hidden type check below, but the original
+        // HACK: this should also fall through to the hidden type check below, but the original
         // implementation had a bug where equivalent lifetimes are not identical. This caused us
         // to reject existing stable code that is otherwise completely fine. The real fix is to
         // compare the hidden types via our type equivalence/relation infra instead of doing an
@@ -693,13 +693,13 @@ fn check_opaque_precise_captures<'tcx>(tcx: TyCtxt<'tcx>, opaque_def_id: LocalDe
                 }
                 ty::GenericParamDefKind::Type { .. } => {
                     if matches!(tcx.def_kind(param.def_id), DefKind::Trait | DefKind::TraitAlias) {
-                        // tRust: known issue — (precise_capturing): Structured suggestion for this would be useful
+                        // FIXME(precise_capturing): Structured suggestion for this would be useful
                         tcx.dcx().emit_err(errors::SelfTyNotCaptured {
                             trait_span: tcx.def_span(param.def_id),
                             opaque_span: tcx.def_span(opaque_def_id),
                         });
                     } else {
-                        // tRust: known issue — (precise_capturing): Structured suggestion for this would be useful
+                        // FIXME(precise_capturing): Structured suggestion for this would be useful
                         tcx.dcx().emit_err(errors::ParamNotCaptured {
                             param_span: tcx.def_span(param.def_id),
                             opaque_span: tcx.def_span(opaque_def_id),
@@ -708,7 +708,7 @@ fn check_opaque_precise_captures<'tcx>(tcx: TyCtxt<'tcx>, opaque_def_id: LocalDe
                     }
                 }
                 ty::GenericParamDefKind::Const { .. } => {
-                    // tRust: known issue — (precise_capturing): Structured suggestion for this would be useful
+                    // FIXME(precise_capturing): Structured suggestion for this would be useful
                     tcx.dcx().emit_err(errors::ParamNotCaptured {
                         param_span: tcx.def_span(param.def_id),
                         opaque_span: tcx.def_span(opaque_def_id),
@@ -811,7 +811,7 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
                 intrinsic::check_intrinsic_type(
                     tcx,
                     def_id,
-                    tcx.def_ident_span(def_id).expect("invariant: def has ident span"),
+                    tcx.def_ident_span(def_id).unwrap(),
                     i.name,
                 )
             }
@@ -968,7 +968,7 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
                 check_variances_for_type_defn(tcx, def_id);
             } else {
                 res = res.and(enter_wf_checking_ctxt(tcx, def_id, |wfcx| {
-                    // tRust: known issue — We sometimes incidentally check that const arguments have the correct
+                    // HACK: We sometimes incidentally check that const arguments have the correct
                     // type as a side effect of the anon const desugaring. To make this "consistent"
                     // for users we explicitly check `ConstArgHasType` clauses so that const args
                     // that don't go through an anon const still have their types checked.
@@ -1033,7 +1033,7 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
                     )
                     .with_span_label(span, format!("can't have {kinds} parameters"))
                     .with_help(
-                        // tRust: known issue — once we start storing spans for type arguments, turn this
+                        // FIXME: once we start storing spans for type arguments, turn this
                         // into a suggestion.
                         format!(
                             "replace the {} parameters with concrete {}{}",
@@ -1057,7 +1057,6 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
                         tcx.ensure_ok().codegen_fn_attrs(def_id);
                         tcx.ensure_ok().fn_sig(def_id);
                         let item = tcx.hir_foreign_item(item);
-                        // tRust: invariant — foreign item with function kind must have a function signature in HIR
                         let hir::ForeignItemKind::Fn(sig, ..) = item.kind else { bug!() };
                         check_c_variadic_abi(tcx, sig.decl, abi, item.span);
                     }
@@ -1154,7 +1153,6 @@ pub(crate) fn check_item_type(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(),
     }
     let node = tcx.hir_node_by_def_id(def_id);
     res.and(match node {
-        // tRust: invariant — check_well_formed is only applied to items, not the crate root
         hir::Node::Crate(_) => bug!("check_well_formed cannot be applied to the crate root"),
         hir::Node::Item(item) => wfcheck::check_item(tcx, item),
         hir::Node::ForeignItem(item) => wfcheck::check_foreign_item(tcx, item),
@@ -1449,7 +1447,7 @@ fn check_simd(tcx: TyCtxt<'_>, sp: Span, def_id: LocalDefId) {
             return;
         }
 
-        // tRust: known issue — (repr_simd): This check is nice, but perhaps unnecessary due to the fact
+        // FIXME(repr_simd): This check is nice, but perhaps unnecessary due to the fact
         // we do not expect users to implement their own `repr(simd)` types. If they could,
         // this check is easily side-steppable by hiding the const behind normalization.
         // The consequence is that the error is, in general, only observable post-mono.
@@ -1753,7 +1751,7 @@ pub(super) fn check_transparent<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>) 
         let ty = field.ty(tcx, GenericArgs::identity_for_item(tcx, field.did));
         let layout = tcx.layout_of(typing_env.as_query_input(ty));
         // We are currently checking the type this field came from, so it must be local
-        let span = tcx.hir_span_if_local(field.did).expect("invariant: value is present");
+        let span = tcx.hir_span_if_local(field.did).unwrap();
         let trivial = layout.is_ok_and(|layout| layout.is_1zst());
         FieldInfo { span, trivial, ty }
     });
@@ -1895,11 +1893,11 @@ fn check_enum(tcx: TyCtxt<'_>, def_id: LocalDefId) {
                 );
             } else {
                 err.span_label(
-                    tcx.def_span(disr_unit.expect("invariant: value is present")),
+                    tcx.def_span(disr_unit.unwrap()),
                     "explicit discriminant specified here",
                 );
                 err.span_label(
-                    tcx.def_span(non_unit.expect("invariant: value is present").def_id),
+                    tcx.def_span(non_unit.unwrap().def_id),
                     "non-unit discriminant declared here",
                 );
             }
@@ -1999,7 +1997,7 @@ fn detect_discriminant_duplicate<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>)
                 report(discrs[o].1, var_o_idx, err);
 
                 // Safe to unwrap here, as we wouldn't reach this point if `discrs` was empty
-                discrs[o] = *discrs.last().expect("invariant: non-empty collection");
+                discrs[o] = *discrs.last().unwrap();
                 discrs.pop();
             } else {
                 o += 1;
@@ -2049,7 +2047,7 @@ fn check_type_alias_type_params_are_used<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalD
                     None
                 }
             })
-            // tRust: known issue — This assumes that elaborated `Sized` bounds come first (which does hold at the
+            // FIXME: This assumes that elaborated `Sized` bounds come first (which does hold at the
             // time of writing). This is a bit fragile since we later use the span to detect elaborated
             // `Sized` bounds. If they came last for example, this would break `Trait + /*elab*/Sized`
             // since it would overwrite the span of the user-written bound. This could be fixed by

@@ -193,7 +193,7 @@ fn overlapping_impls(
             overlap_mode,
             is_of_trait,
         )
-        .expect("invariant: value is present");
+        .unwrap();
         Some(overlap)
     }
 }
@@ -360,7 +360,6 @@ fn equate_impl_headers<'tcx>(
                 impl1.self_ty,
                 impl2.self_ty,
             ),
-            // tRust: invariant — Equate_impl_headers given mismatched impl kinds
             _ => bug!("equate_impl_headers given mismatched impl kinds"),
         };
 
@@ -515,7 +514,7 @@ fn impl_intersection_has_negative_obligation(
         return false;
     };
 
-    // tRust: known issue (with_negative_coherence) — the infcx has constraints from equating
+    // FIXME(with_negative_coherence): the infcx has constraints from equating
     // the impl headers. We should use these constraints as assumptions, not as
     // requirements, when proving the negated where clauses below.
     drop(equate_obligations);
@@ -581,7 +580,6 @@ fn plug_infer_with_placeholders<'tcx>(
                         ),
                     )
                 else {
-                    // tRust: invariant — We always expect to be able to plug an infer var with placeholder
                     bug!("we always expect to be able to plug an infer var with placeholder")
                 };
                 assert_eq!(obligations.len(), 0);
@@ -608,7 +606,6 @@ fn plug_infer_with_placeholders<'tcx>(
                         ),
                     )
                 else {
-                    // tRust: invariant — We always expect to be able to plug an infer var with placeholder
                     bug!("we always expect to be able to plug an infer var with placeholder")
                 };
                 assert_eq!(obligations.len(), 0);
@@ -643,7 +640,6 @@ fn plug_infer_with_placeholders<'tcx>(
                             ),
                         )
                     else {
-                        // tRust: invariant — We always expect to be able to plug an infer var with placeholder
                         bug!("we always expect to be able to plug an infer var with placeholder")
                     };
                     assert_eq!(obligations.len(), 0);
@@ -668,7 +664,7 @@ fn try_prove_negated_where_clause<'tcx>(
     // the *existence* of a negative goal, not the non-existence of a positive goal.
     // Without this, we over-eagerly register coherence ambiguity candidates when
     // impl candidates do exist.
-    // tRust: known issue (#132279) — `TypingMode::non_body_analysis` is a bit questionable here as it
+    // FIXME(#132279): `TypingMode::non_body_analysis` is a bit questionable here as it
     // would cause us to reveal opaque types to leak their auto traits.
     let ref infcx = root_infcx.fork_with_typing_mode(TypingMode::non_body_analysis());
     let ocx = ObligationCtxt::new(infcx);
@@ -682,7 +678,7 @@ fn try_prove_negated_where_clause<'tcx>(
         return false;
     }
 
-    // tRust: known issue — We could use the assumed_wf_types from both impls, I think,
+    // FIXME: We could use the assumed_wf_types from both impls, I think,
     // if that wasn't implemented just for LocalDefId, and we'd need to do
     // the normalization ourselves since this is totally fallible...
     let errors = ocx.resolve_regions(CRATE_DEF_ID, param_env, []);
@@ -816,7 +812,7 @@ impl<'a, 'tcx> ProofTreeVisitor<'tcx> for AmbiguityCausesVisitor<'a, 'tcx> {
 
             // It is only relevant that a goal is unknowable if it would have otherwise
             // failed.
-            // tRust: known issue (#132279) — Forking with `TypingMode::non_body_analysis` is a bit questionable
+            // FIXME(#132279): Forking with `TypingMode::non_body_analysis` is a bit questionable
             // as it would allow us to reveal opaque types, potentially causing unexpected
             // cycles.
             let non_intercrate_infcx = infcx.fork_with_typing_mode(TypingMode::non_body_analysis());

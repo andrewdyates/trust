@@ -28,7 +28,7 @@ pub(super) fn fulfillment_error_for_no_solution<'tcx>(
     let code = match obligation.predicate.kind().skip_binder() {
         ty::PredicateKind::Clause(ty::ClauseKind::Projection(_)) => {
             FulfillmentErrorCode::Project(
-                // tRust: known issue — This could be a `Sorts` if the term is a type
+                // FIXME: This could be a `Sorts` if the term is a type
                 MismatchedProjectionTypes { err: TypeError::Mismatch },
             )
         }
@@ -41,7 +41,6 @@ pub(super) fn fulfillment_error_for_no_solution<'tcx>(
                     param_ct.find_const_ty_from_env(obligation.param_env)
                 }
                 ty::ConstKind::Value(cv) => cv.ty,
-                // tRust: invariant — ConstArgHasWrongType failed but we don't know how to compute type for
                 kind => span_bug!(
                     obligation.cause.span,
                     "ConstArgHasWrongType failed but we don't know how to compute type for {kind:?}"
@@ -79,7 +78,6 @@ pub(super) fn fulfillment_error_for_no_solution<'tcx>(
             FulfillmentErrorCode::Select(SelectionError::Unimplemented)
         }
         ty::PredicateKind::ConstEquate(..) => {
-            // tRust: invariant — Unexpected goal
             bug!("unexpected goal: {obligation:?}")
         }
     };
@@ -116,11 +114,10 @@ pub(super) fn fulfillment_error_for_stalled<'tcx>(
                 // recomputing the goal again during `find_best_leaf_obligation` may apply
                 // inference guidance that makes other goals go from ambig -> pass, for example.
                 //
-                // tRust: known issue — We should probably just look into overflows here.
+                // FIXME: We should probably just look into overflows here.
                 false,
             ),
             Ok(GoalEvaluation { certainty: Certainty::Yes, .. }) => {
-                // tRust: invariant — Did not expect successful goal when collecting ambiguity errors for ``
                 span_bug!(
                     root_obligation.cause.span,
                     "did not expect successful goal when collecting ambiguity errors for `{:?}`",
@@ -128,7 +125,6 @@ pub(super) fn fulfillment_error_for_stalled<'tcx>(
                 )
             }
             Err(_) => {
-                // tRust: invariant — Did not expect selection error when collecting ambiguity errors for ``
                 span_bug!(
                     root_obligation.cause.span,
                     "did not expect selection error when collecting ambiguity errors for `{:?}`",
@@ -167,7 +163,7 @@ fn find_best_leaf_obligation<'tcx>(
     consider_ambiguities: bool,
 ) -> PredicateObligation<'tcx> {
     let obligation = infcx.resolve_vars_if_possible(obligation.clone());
-    // tRust: known issue — we use a probe here as the `BestObligation` visitor does not
+    // FIXME: we use a probe here as the `BestObligation` visitor does not
     // check whether it uses candidates which get shadowed by where-bounds.
     //
     // We should probably fix the visitor to not do so instead, as this also
@@ -252,7 +248,7 @@ impl<'tcx> BestObligation<'tcx> {
         candidates
     }
 
-    /// tRust: accepted tradeoff — We walk the nested obligations for a well-formed arg manually,
+    /// HACK: We walk the nested obligations for a well-formed arg manually,
     /// since there's nontrivial logic in `wf.rs` to set up an obligation cause.
     /// Ideally we'd be able to track this better.
     fn visit_well_formed_goal(
@@ -442,7 +438,7 @@ impl<'tcx> ProofTreeVisitor<'tcx> for BestObligation<'tcx> {
             return ControlFlow::Break(self.obligation.clone());
         }
 
-        // tRust: known issue — Also, what about considering >1 layer up the stack? May be necessary
+        // FIXME: Also, what about considering >1 layer up the stack? May be necessary
         // for normalizes-to.
         let child_mode = match pred.kind().skip_binder() {
             ty::PredicateKind::Clause(ty::ClauseKind::Trait(trait_pred)) => {

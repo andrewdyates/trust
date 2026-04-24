@@ -20,7 +20,7 @@ use crate::sync::{MappedReadGuard, MappedWriteGuard, ReadGuard, RwLock, WriteGua
 /// you must treat it with caution, and make sure that you know that
 /// -- once the value is stolen -- it will never be read from again.
 //
-// tRust: known issue — (#41710) what is the best way to model linear queries?
+// FIXME(#41710): what is the best way to model linear queries?
 #[derive(Debug)]
 pub struct Steal<T> {
     value: RwLock<Option<T>>,
@@ -37,7 +37,7 @@ impl<T> Steal<T> {
         if borrow.is_none() {
             panic!("attempted to read from stolen value: {}", std::any::type_name::<T>());
         }
-        ReadGuard::map(borrow, |opt| opt.as_ref().expect("invariant: stolen value must not be accessed after steal")) // tRust: unwrap -> expect
+        ReadGuard::map(borrow, |opt| opt.as_ref().unwrap())
     }
 
     /// An escape hatch for rustc drivers to mutate `Steal` caches.
@@ -50,7 +50,7 @@ impl<T> Steal<T> {
         if borrow.is_none() {
             panic!("attempted to read from stolen value: {}", std::any::type_name::<T>());
         }
-        WriteGuard::map(borrow, |opt| opt.as_mut().expect("invariant: stolen value must not be accessed after steal")) // tRust: unwrap -> expect
+        WriteGuard::map(borrow, |opt| opt.as_mut().unwrap())
     }
 
     #[track_caller]

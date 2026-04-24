@@ -34,12 +34,10 @@ pub enum AstRewriteError {
     FunctionInMacro { name: String },
 
     /// The target expression was not found in the function body.
-    #[error("expression `{pattern}` not found in function (occurrence {occurrence}, total matches: {total_matches})")]
-    ExpressionNotFound {
-        pattern: String,
-        occurrence: usize,
-        total_matches: usize,
-    },
+    #[error(
+        "expression `{pattern}` not found in function (occurrence {occurrence}, total matches: {total_matches})"
+    )]
+    ExpressionNotFound { pattern: String, occurrence: usize, total_matches: usize },
 
     /// The expression pattern could not be parsed by syn.
     #[error("expression pattern parse error for `{pattern}`: {error}")]
@@ -98,17 +96,10 @@ pub enum AstRewriteTarget {
     ///
     /// Resolves to the byte offset just after the opening `{` of the
     /// function body.
-    FunctionBodyStart {
-        fn_name: String,
-        occurrence: usize,
-    },
+    FunctionBodyStart { fn_name: String, occurrence: usize },
 
     /// Insert a statement before a specific statement index in a function body.
-    FunctionBodyBefore {
-        fn_name: String,
-        stmt_index: usize,
-        occurrence: usize,
-    },
+    FunctionBodyBefore { fn_name: String, stmt_index: usize, occurrence: usize },
 }
 
 /// A source rewrite identified by semantic target rather than byte offset.
@@ -135,9 +126,6 @@ pub struct SemanticRewrite {
 pub(crate) struct ResolvedTarget {
     /// Byte offset for insertion or replacement start.
     pub(crate) offset: usize,
-    /// For expression replacement: byte offset of expression end.
-    #[allow(dead_code)] // Populated during resolution for future expression-replacement rewrites.
-    pub(crate) end_offset: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -167,11 +155,7 @@ impl LineOffsets {
     /// `line` is 1-based (as returned by `Span::start().line`).
     /// `column` is 0-based (as returned by `Span::start().column`).
     fn byte_offset(&self, line: usize, column: usize) -> usize {
-        let line_start = self
-            .offsets
-            .get(line.saturating_sub(1))
-            .copied()
-            .unwrap_or(0);
+        let line_start = self.offsets.get(line.saturating_sub(1)).copied().unwrap_or(0);
         line_start + column
     }
 }
@@ -202,10 +186,8 @@ pub fn compute_indentation(source: &str, offset: usize, kind: &RewriteKind) -> S
     let line_start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
 
     // Extract leading whitespace from that line
-    let base_indent: String = source[line_start..]
-        .chars()
-        .take_while(|c| *c == ' ' || *c == '\t')
-        .collect();
+    let base_indent: String =
+        source[line_start..].chars().take_while(|c| *c == ' ' || *c == '\t').collect();
 
     match kind {
         RewriteKind::InsertAttribute { .. } => {
@@ -268,8 +250,8 @@ pub fn resolve_target(
     source: &str,
     rewrite: &SemanticRewrite,
 ) -> Result<SourceRewrite, AstRewriteError> {
-    let file = syn::parse_file(source)
-        .map_err(|e| AstRewriteError::SourceParseError(e.to_string()))?;
+    let file =
+        syn::parse_file(source).map_err(|e| AstRewriteError::SourceParseError(e.to_string()))?;
 
     let resolved = resolve_target_from_ast(&file, source, &rewrite.target)?;
 
@@ -289,49 +271,23 @@ pub(crate) fn resolve_target_from_ast(
     target: &AstRewriteTarget,
 ) -> Result<ResolvedTarget, AstRewriteError> {
     match target {
-        AstRewriteTarget::FunctionAttribute {
-            fn_name,
-            occurrence,
-        } => {
+        AstRewriteTarget::FunctionAttribute { fn_name, occurrence } => {
             let offset = resolve_function_attribute(file, source, fn_name, *occurrence)?;
-            Ok(ResolvedTarget {
-                offset,
-                end_offset: None,
-            })
+            Ok(ResolvedTarget { offset })
         }
-        AstRewriteTarget::ExpressionInFunction {
-            fn_name,
-            expr_pattern,
-            occurrence,
-        } => {
-            let (start, end) =
+        AstRewriteTarget::ExpressionInFunction { fn_name, expr_pattern, occurrence } => {
+            let (start, _end) =
                 resolve_expression_in_function(file, source, fn_name, expr_pattern, *occurrence)?;
-            Ok(ResolvedTarget {
-                offset: start,
-                end_offset: Some(end),
-            })
+            Ok(ResolvedTarget { offset: start })
         }
-        AstRewriteTarget::FunctionBodyStart {
-            fn_name,
-            occurrence,
-        } => {
+        AstRewriteTarget::FunctionBodyStart { fn_name, occurrence } => {
             let offset = resolve_function_body_start(file, source, fn_name, *occurrence)?;
-            Ok(ResolvedTarget {
-                offset,
-                end_offset: None,
-            })
+            Ok(ResolvedTarget { offset })
         }
-        AstRewriteTarget::FunctionBodyBefore {
-            fn_name,
-            stmt_index,
-            occurrence,
-        } => {
+        AstRewriteTarget::FunctionBodyBefore { fn_name, stmt_index, occurrence } => {
             let offset =
                 resolve_function_body_before(file, source, fn_name, *stmt_index, *occurrence)?;
-            Ok(ResolvedTarget {
-                offset,
-                end_offset: None,
-            })
+            Ok(ResolvedTarget { offset })
         }
     }
 }
@@ -360,40 +316,36 @@ fn find_function_in_ast<'a>(
 
     for item in &file.items {
         if let syn::Item::Fn(item_fn) = item
-            && item_fn.sig.ident == fn_name {
-                if found == occurrence {
-                    return Ok(FoundFn {
-                        attrs_span_start: item_fn.attrs.first().map(|a| a.pound_token.span),
-                        item_start_span: item_start_span_fn(&item_fn.vis, &item_fn.sig),
-                        block: &item_fn.block,
-                    });
-                }
-                found += 1;
+            && item_fn.sig.ident == fn_name
+        {
+            if found == occurrence {
+                return Ok(FoundFn {
+                    attrs_span_start: item_fn.attrs.first().map(|a| a.pound_token.span),
+                    item_start_span: item_start_span_fn(&item_fn.vis, &item_fn.sig),
+                    block: &item_fn.block,
+                });
             }
+            found += 1;
+        }
         if let syn::Item::Impl(item_impl) = item {
             for impl_item in &item_impl.items {
                 if let syn::ImplItem::Fn(method) = impl_item
-                    && method.sig.ident == fn_name {
-                        if found == occurrence {
-                            return Ok(FoundFn {
-                                attrs_span_start: method
-                                    .attrs
-                                    .first()
-                                    .map(|a| a.pound_token.span),
-                                item_start_span: item_start_span_fn(&method.vis, &method.sig),
-                                block: &method.block,
-                            });
-                        }
-                        found += 1;
+                    && method.sig.ident == fn_name
+                {
+                    if found == occurrence {
+                        return Ok(FoundFn {
+                            attrs_span_start: method.attrs.first().map(|a| a.pound_token.span),
+                            item_start_span: item_start_span_fn(&method.vis, &method.sig),
+                            block: &method.block,
+                        });
                     }
+                    found += 1;
+                }
             }
         }
     }
 
-    Err(AstRewriteError::FunctionNotFound {
-        name: fn_name.to_string(),
-        occurrence,
-    })
+    Err(AstRewriteError::FunctionNotFound { name: fn_name.to_string(), occurrence })
 }
 
 /// Get the span of the first real token in a function declaration.
@@ -423,20 +375,14 @@ fn resolve_function_attribute(
 ) -> Result<usize, AstRewriteError> {
     let found = find_function_in_ast(file, fn_name, occurrence)?;
 
-    let target_span = found
-        .attrs_span_start
-        .unwrap_or(found.item_start_span);
+    let target_span = found.attrs_span_start.unwrap_or(found.item_start_span);
 
     let offset = span_start_byte_offset(source, target_span);
 
     // Walk back to the start of the line so the attribute gets its own line.
     let line_start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
     let between = &source[line_start..offset];
-    if between.chars().all(|c| c == ' ' || c == '\t') {
-        Ok(line_start)
-    } else {
-        Ok(offset)
-    }
+    if between.chars().all(|c| c == ' ' || c == '\t') { Ok(line_start) } else { Ok(offset) }
 }
 
 /// Resolve the byte offset just after the opening `{` of a function body.
@@ -477,11 +423,7 @@ fn resolve_function_body_before(
     // Walk back to line start for clean insertion.
     let line_start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
     let between = &source[line_start..offset];
-    if between.chars().all(|c| c == ' ' || c == '\t') {
-        Ok(line_start)
-    } else {
-        Ok(offset)
-    }
+    if between.chars().all(|c| c == ' ' || c == '\t') { Ok(line_start) } else { Ok(offset) }
 }
 
 /// Get the span of a statement.
@@ -507,12 +449,11 @@ fn resolve_expression_in_function(
     occurrence: usize,
 ) -> Result<(usize, usize), AstRewriteError> {
     // 1. Parse the pattern as a syn::Expr
-    let pattern: syn::Expr = syn::parse_str(expr_pattern).map_err(|e| {
-        AstRewriteError::PatternParseError {
+    let pattern: syn::Expr =
+        syn::parse_str(expr_pattern).map_err(|e| AstRewriteError::PatternParseError {
             pattern: expr_pattern.to_string(),
             error: e.to_string(),
-        }
-    })?;
+        })?;
 
     // 2. Find the function in the file
     let found = find_function_in_ast(file, fn_name, 0)?;
@@ -532,20 +473,16 @@ fn resolve_expression_in_function(
         }
     }
 
-    let mut finder = ExprFinder {
-        pattern: &pattern,
-        matches: Vec::new(),
-    };
+    let mut finder = ExprFinder { pattern: &pattern, matches: Vec::new() };
     syn::visit::visit_block(&mut finder, found.block);
 
     // 4. Select the requested occurrence
-    let span = finder.matches.get(occurrence).ok_or_else(|| {
-        AstRewriteError::ExpressionNotFound {
+    let span =
+        finder.matches.get(occurrence).ok_or_else(|| AstRewriteError::ExpressionNotFound {
             pattern: expr_pattern.to_string(),
             occurrence,
             total_matches: finder.matches.len(),
-        }
-    })?;
+        })?;
 
     let start = span_start_byte_offset(source, *span);
     let end = span_end_byte_offset(source, *span);
@@ -644,9 +581,7 @@ mod tests {
         let indent = compute_indentation(
             source,
             4, // offset of "fn"
-            &RewriteKind::InsertAttribute {
-                attribute: "#[requires(\"x > 0\")]".into(),
-            },
+            &RewriteKind::InsertAttribute { attribute: "#[requires(\"x > 0\")]".into() },
         );
         assert_eq!(indent, "    ");
     }
@@ -657,9 +592,7 @@ mod tests {
         let indent = compute_indentation(
             source,
             11, // offset of "    let"
-            &RewriteKind::InsertAssertion {
-                assertion: "assert!(x > 0);".into(),
-            },
+            &RewriteKind::InsertAssertion { assertion: "assert!(x > 0);".into() },
         );
         assert_eq!(indent, "        ");
     }
@@ -704,10 +637,7 @@ mod tests {
         let source = "fn foo() {}\n";
         let file = syn::parse_file(source).unwrap();
         let result = resolve_function_attribute(&file, source, "bar", 0);
-        assert!(matches!(
-            result,
-            Err(AstRewriteError::FunctionNotFound { .. })
-        ));
+        assert!(matches!(result, Err(AstRewriteError::FunctionNotFound { .. })));
     }
 
     #[test]
@@ -770,10 +700,7 @@ mod tests {
         let source = "fn foo() {\n    let x = 1;\n}\n";
         let file = syn::parse_file(source).unwrap();
         let result = resolve_function_body_before(&file, source, "foo", 5, 0);
-        assert!(matches!(
-            result,
-            Err(AstRewriteError::StatementIndexOutOfRange { .. })
-        ));
+        assert!(matches!(result, Err(AstRewriteError::StatementIndexOutOfRange { .. })));
     }
 
     // --- Expression resolution ---
@@ -794,10 +721,7 @@ mod tests {
         let result = resolve_expression_in_function(&file, source, "foo", "a + b", 0);
         assert!(matches!(
             result,
-            Err(AstRewriteError::ExpressionNotFound {
-                total_matches: 0,
-                ..
-            })
+            Err(AstRewriteError::ExpressionNotFound { total_matches: 0, .. })
         ));
     }
 
@@ -806,10 +730,7 @@ mod tests {
         let source = "fn foo() { 1 }\n";
         let file = syn::parse_file(source).unwrap();
         let result = resolve_expression_in_function(&file, source, "foo", "{{invalid", 0);
-        assert!(matches!(
-            result,
-            Err(AstRewriteError::PatternParseError { .. })
-        ));
+        assert!(matches!(result, Err(AstRewriteError::PatternParseError { .. })));
     }
 
     // --- Structural equality ---
@@ -886,13 +807,8 @@ mod tests {
         let source = "fn foo() {\n    let x = 1;\n}\n";
         let rewrite = SemanticRewrite {
             file_path: "test.rs".into(),
-            target: AstRewriteTarget::FunctionBodyStart {
-                fn_name: "foo".into(),
-                occurrence: 0,
-            },
-            kind: RewriteKind::InsertAssertion {
-                assertion: "assert!(true);".into(),
-            },
+            target: AstRewriteTarget::FunctionBodyStart { fn_name: "foo".into(), occurrence: 0 },
+            kind: RewriteKind::InsertAssertion { assertion: "assert!(true);".into() },
             function_name: "foo".into(),
             rationale: "test".into(),
         };
@@ -906,13 +822,8 @@ mod tests {
         let source = "fn foo( {{ broken";
         let rewrite = SemanticRewrite {
             file_path: "test.rs".into(),
-            target: AstRewriteTarget::FunctionAttribute {
-                fn_name: "foo".into(),
-                occurrence: 0,
-            },
-            kind: RewriteKind::InsertAttribute {
-                attribute: "#[requires(\"x\")]".into(),
-            },
+            target: AstRewriteTarget::FunctionAttribute { fn_name: "foo".into(), occurrence: 0 },
+            kind: RewriteKind::InsertAttribute { attribute: "#[requires(\"x\")]".into() },
             function_name: "foo".into(),
             rationale: "test".into(),
         };
@@ -956,10 +867,7 @@ mod tests {
         let source = "impl Calculator {\n    fn add(&self, a: u64, b: u64) -> u64 {\n        a + b\n    }\n}\n";
         let rewrite = SemanticRewrite {
             file_path: "test.rs".into(),
-            target: AstRewriteTarget::FunctionAttribute {
-                fn_name: "add".into(),
-                occurrence: 0,
-            },
+            target: AstRewriteTarget::FunctionAttribute { fn_name: "add".into(), occurrence: 0 },
             kind: RewriteKind::InsertAttribute {
                 attribute: "    #[requires(\"a + b < u64::MAX\")]".into(),
             },

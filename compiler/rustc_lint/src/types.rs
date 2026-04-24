@@ -595,7 +595,6 @@ impl<'tcx> LateLintPass<'tcx> for TypeLimits {
                 hir::BinOpKind::Gt => v >= min && v < max,
                 hir::BinOpKind::Ge => v > min && v <= max,
                 hir::BinOpKind::Eq | hir::BinOpKind::Ne => v >= min && v <= max,
-                // tRust: invariant — comparison operator must be one of the handled BinOpKind variants
                 _ => bug!(),
             }
         }
@@ -635,7 +634,6 @@ impl<'tcx> LateLintPass<'tcx> for TypeLimits {
                             ) => v.get() as i128,
                             _ => return true,
                         },
-                        // tRust: invariant — expression in integer comparison must be a literal
                         _ => bug!(),
                     };
                     is_valid(norm_binop, lit_val, min, max)
@@ -647,7 +645,6 @@ impl<'tcx> LateLintPass<'tcx> for TypeLimits {
                             ast::LitKind::Int(v, _) => v.get(),
                             _ => return true,
                         },
-                        // tRust: invariant — expression in unsigned integer comparison must be a literal
                         _ => bug!(),
                     };
                     is_valid(norm_binop, lit_val, min, max)
@@ -882,14 +879,12 @@ pub(crate) fn repr_nullable_ptr<'tcx>(
             // being applied (and we've got a problem somewhere).
             let compute_size_skeleton = |t| SizeSkeleton::compute(t, tcx, typing_env).ok();
             if !compute_size_skeleton(ty)?.same_size(compute_size_skeleton(field_ty)?) {
-                // tRust: invariant — Option nonnull optimization must equalize field and enum sizes
                 bug!("improper_ctypes: Option nonnull optimization not applied?");
             }
 
             // Return the nullable type this Option-like enum can be safely represented with.
             let field_ty_layout = tcx.layout_of(typing_env.as_query_input(field_ty));
             if field_ty_layout.is_err() && !field_ty.has_non_region_param() {
-                // tRust: invariant — layout must be computable for non-polymorphic types
                 bug!("should be able to compute the layout of non-polymorphic type");
             }
 
@@ -899,10 +894,10 @@ pub(crate) fn repr_nullable_ptr<'tcx>(
                     WrappingRange { start: 0, end }
                         if end == field_ty_scalar.size(&tcx).unsigned_int_max() - 1 =>
                     {
-                        return Some(get_nullable_type(tcx, typing_env, field_ty).expect("invariant: nullable field has nullable type")); // tRust: unwrap -> expect
+                        return Some(get_nullable_type(tcx, typing_env, field_ty).unwrap());
                     }
                     WrappingRange { start: 1, .. } => {
-                        return Some(get_nullable_type(tcx, typing_env, field_ty).expect("invariant: nullable field has nullable type")); // tRust: unwrap -> expect
+                        return Some(get_nullable_type(tcx, typing_env, field_ty).unwrap());
                     }
                     WrappingRange { start, end } => {
                         unreachable!("Unhandled start and end range: ({}, {})", start, end)

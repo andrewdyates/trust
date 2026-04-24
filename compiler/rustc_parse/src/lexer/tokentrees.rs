@@ -73,7 +73,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
             if close_delim == open_delim {
                 // Correct delimiter.
                 let (open_delimiter, open_delimiter_span) =
-                    self.diag_info.open_delimiters.pop().expect("invariant: delimiter stack is non-empty"); // tRust: unwrap -> expect
+                    self.diag_info.open_delimiters.pop().unwrap();
                 let close_delimiter_span = self.token.span;
 
                 if tts.is_empty() && close_delim == Delimiter::Brace {
@@ -117,7 +117,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
                             candidate = Some(*delimiter_span);
                         }
                     }
-                    self.diag_info.open_delimiters.pop().expect("invariant: delimiter stack is non-empty"); // tRust: unwrap -> expect
+                    self.diag_info.open_delimiters.pop().unwrap();
                     self.diag_info.unmatched_delims.push(UnmatchedDelim {
                         found_delim: Some(close_delim),
                         found_span: self.token.span,

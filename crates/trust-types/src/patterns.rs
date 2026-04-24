@@ -10,10 +10,10 @@
 
 use crate::fx::FxHashSet;
 
+use crate::VcKind;
 use crate::model::{
     BinOp, BlockId, Operand, Place, Projection, Rvalue, Statement, Terminator, VerifiableBody,
 };
-use crate::VcKind;
 
 /// Severity level for a detected vulnerability pattern.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -88,27 +88,25 @@ pub fn detect_unchecked_arithmetic(body: &VerifiableBody) -> Vec<PatternMatch> {
             .collect();
 
         for (idx, stmt) in block.stmts.iter().enumerate() {
-            if let Statement::Assign {
-                rvalue: Rvalue::BinaryOp(op, lhs, rhs), ..
-            } = stmt
-                && op.can_overflow() && !is_operand_from_checked(&checked_locals, lhs, rhs) {
-                    let op_name = format!("{op:?}");
-                    let lhs_ty = operand_ty_hint(body, lhs);
-                    let rhs_ty = operand_ty_hint(body, rhs);
-                    results.push(PatternMatch {
-                        pattern_name: "unchecked_arithmetic".to_string(),
-                        block_id: block.id,
-                        stmt_index: Some(idx),
-                        severity: Severity::High,
-                        description: format!(
-                            "Unchecked {op_name} operation without overflow guard"
-                        ),
-                        suggested_vc_kind: VcKind::ArithmeticOverflow {
-                            op: *op,
-                            operand_tys: (lhs_ty, rhs_ty),
-                        },
-                    });
-                }
+            if let Statement::Assign { rvalue: Rvalue::BinaryOp(op, lhs, rhs), .. } = stmt
+                && op.can_overflow()
+                && !is_operand_from_checked(&checked_locals, lhs, rhs)
+            {
+                let op_name = format!("{op:?}");
+                let lhs_ty = operand_ty_hint(body, lhs);
+                let rhs_ty = operand_ty_hint(body, rhs);
+                results.push(PatternMatch {
+                    pattern_name: "unchecked_arithmetic".to_string(),
+                    block_id: block.id,
+                    stmt_index: Some(idx),
+                    severity: Severity::High,
+                    description: format!("Unchecked {op_name} operation without overflow guard"),
+                    suggested_vc_kind: VcKind::ArithmeticOverflow {
+                        op: *op,
+                        operand_tys: (lhs_ty, rhs_ty),
+                    },
+                });
+            }
         }
     }
 
@@ -128,9 +126,7 @@ pub fn detect_unchecked_indexing(body: &VerifiableBody) -> Vec<PatternMatch> {
         .iter()
         .filter_map(|bb| match &bb.terminator {
             Terminator::Assert {
-                msg: crate::model::AssertMessage::BoundsCheck,
-                target,
-                ..
+                msg: crate::model::AssertMessage::BoundsCheck, target, ..
             } => Some(target.0),
             _ => None,
         })
@@ -140,17 +136,17 @@ pub fn detect_unchecked_indexing(body: &VerifiableBody) -> Vec<PatternMatch> {
         for (idx, stmt) in block.stmts.iter().enumerate() {
             if let Statement::Assign { rvalue, .. } = stmt
                 && rvalue_has_index_projection(rvalue)
-                    && !bounds_checked_targets.contains(&block.id.0)
-                {
-                    results.push(PatternMatch {
-                        pattern_name: "unchecked_indexing".to_string(),
-                        block_id: block.id,
-                        stmt_index: Some(idx),
-                        severity: Severity::High,
-                        description: "Index operation without preceding bounds check".to_string(),
-                        suggested_vc_kind: VcKind::IndexOutOfBounds,
-                    });
-                }
+                && !bounds_checked_targets.contains(&block.id.0)
+            {
+                results.push(PatternMatch {
+                    pattern_name: "unchecked_indexing".to_string(),
+                    block_id: block.id,
+                    stmt_index: Some(idx),
+                    severity: Severity::High,
+                    description: "Index operation without preceding bounds check".to_string(),
+                    suggested_vc_kind: VcKind::IndexOutOfBounds,
+                });
+            }
         }
     }
 
@@ -185,28 +181,25 @@ pub fn detect_unchecked_division(body: &VerifiableBody) -> Vec<PatternMatch> {
         }
 
         for (idx, stmt) in block.stmts.iter().enumerate() {
-            if let Statement::Assign {
-                rvalue: Rvalue::BinaryOp(op, _, _), ..
-            } = stmt
-                && op.is_division() {
-                    let vc_kind = match op {
-                        BinOp::Div => VcKind::DivisionByZero,
-                        BinOp::Rem => VcKind::RemainderByZero,
-                        _ => {
-                            unreachable!("BinOp::is_division() only returns true for Div and Rem")
-                        }
-                    };
-                    results.push(PatternMatch {
-                        pattern_name: "unchecked_division".to_string(),
-                        block_id: block.id,
-                        stmt_index: Some(idx),
-                        severity: Severity::High,
-                        description: format!(
-                            "Unchecked {op:?} operation without zero-divisor guard"
-                        ),
-                        suggested_vc_kind: vc_kind,
-                    });
-                }
+            if let Statement::Assign { rvalue: Rvalue::BinaryOp(op, _, _), .. } = stmt
+                && op.is_division()
+            {
+                let vc_kind = match op {
+                    BinOp::Div => VcKind::DivisionByZero,
+                    BinOp::Rem => VcKind::RemainderByZero,
+                    _ => {
+                        unreachable!("BinOp::is_division() only returns true for Div and Rem")
+                    }
+                };
+                results.push(PatternMatch {
+                    pattern_name: "unchecked_division".to_string(),
+                    block_id: block.id,
+                    stmt_index: Some(idx),
+                    severity: Severity::High,
+                    description: format!("Unchecked {op:?} operation without zero-divisor guard"),
+                    suggested_vc_kind: vc_kind,
+                });
+            }
         }
     }
 
@@ -229,19 +222,14 @@ pub fn detect_use_after_move(body: &VerifiableBody) -> Vec<PatternMatch> {
             if let Statement::Assign { rvalue, .. } = stmt {
                 for local in rvalue_read_locals(rvalue) {
                     if dropped_locals.contains(&local) {
-                        let name = body
-                            .locals
-                            .get(local)
-                            .and_then(|l| l.name.as_deref())
-                            .unwrap_or("_");
+                        let name =
+                            body.locals.get(local).and_then(|l| l.name.as_deref()).unwrap_or("_");
                         results.push(PatternMatch {
                             pattern_name: "use_after_move".to_string(),
                             block_id: block.id,
                             stmt_index: Some(idx),
                             severity: Severity::High,
-                            description: format!(
-                                "Read of local _{local} ({name}) after drop/move"
-                            ),
+                            description: format!("Read of local _{local} ({name}) after drop/move"),
                             suggested_vc_kind: VcKind::Unreachable,
                         });
                     }
@@ -279,11 +267,8 @@ pub fn detect_uninitialized_read(body: &VerifiableBody) -> Vec<PatternMatch> {
                 // Check reads first (before recording the assignment).
                 for local in rvalue_read_locals(rvalue) {
                     if !assigned_locals.contains(&local) {
-                        let name = body
-                            .locals
-                            .get(local)
-                            .and_then(|l| l.name.as_deref())
-                            .unwrap_or("_");
+                        let name =
+                            body.locals.get(local).and_then(|l| l.name.as_deref()).unwrap_or("_");
                         results.push(PatternMatch {
                             pattern_name: "uninitialized_read".to_string(),
                             block_id: block.id,
@@ -311,7 +296,11 @@ pub fn detect_uninitialized_read(body: &VerifiableBody) -> Vec<PatternMatch> {
 
 /// Check whether either operand is reading from a local produced by
 /// CheckedBinaryOp (i.e., extracting the `.0` field of a checked result).
-fn is_operand_from_checked(checked_locals: &FxHashSet<usize>, lhs: &Operand, rhs: &Operand) -> bool {
+fn is_operand_from_checked(
+    checked_locals: &FxHashSet<usize>,
+    lhs: &Operand,
+    rhs: &Operand,
+) -> bool {
     operand_is_checked_field(checked_locals, lhs) || operand_is_checked_field(checked_locals, rhs)
 }
 
@@ -325,9 +314,7 @@ fn operand_is_checked_field(checked_locals: &FxHashSet<usize>, op: &Operand) -> 
 /// Check whether an rvalue contains an Index projection.
 fn rvalue_has_index_projection(rvalue: &Rvalue) -> bool {
     match rvalue {
-        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Cast(op, _) => {
-            operand_has_index(op)
-        }
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Cast(op, _) => operand_has_index(op),
         Rvalue::BinaryOp(_, lhs, rhs) | Rvalue::CheckedBinaryOp(_, lhs, rhs) => {
             operand_has_index(lhs) || operand_has_index(rhs)
         }
@@ -394,22 +381,30 @@ fn extend_operand_locals(locals: &mut Vec<usize>, op: &Operand) {
 /// Best-effort type hint for an operand by looking up locals.
 fn operand_ty_hint(body: &VerifiableBody, op: &Operand) -> crate::model::Ty {
     match op {
-        Operand::Copy(place) | Operand::Move(place) => body
-            .locals
-            .get(place.local)
-            .map(|l| l.ty.clone())
-            .unwrap_or(crate::model::Ty::Unit),
+        Operand::Copy(place) | Operand::Move(place) => {
+            body.locals.get(place.local).map(|l| l.ty.clone()).unwrap_or(crate::model::Ty::Unit)
+        }
         Operand::Constant(crate::model::ConstValue::Int(_)) => crate::model::Ty::i64(),
-        Operand::Constant(crate::model::ConstValue::Uint(_, w)) => crate::model::Ty::Int { width: *w, signed: false },
+        Operand::Constant(crate::model::ConstValue::Uint(_, w)) => {
+            crate::model::Ty::Int { width: *w, signed: false }
+        }
         Operand::Constant(crate::model::ConstValue::Float(_)) => crate::model::Ty::f64_ty(),
         Operand::Constant(crate::model::ConstValue::Bool(_)) => crate::model::Ty::Bool,
         Operand::Constant(crate::model::ConstValue::Unit) => crate::model::Ty::Unit,
         // tRust: #564 — Symbolic formulas from lifted code; infer type from Sort if possible.
         Operand::Symbolic(formula) => match formula {
-            crate::Formula::BitVec { width, .. } => crate::model::Ty::Int { width: *width, signed: false },
-            crate::Formula::Bool(_) | crate::Formula::Not(_) | crate::Formula::And(_)
-            | crate::Formula::Or(_) | crate::Formula::Eq(..) | crate::Formula::Lt(..)
-            | crate::Formula::Le(..) | crate::Formula::Gt(..) | crate::Formula::Ge(..) => crate::model::Ty::Bool,
+            crate::Formula::BitVec { width, .. } => {
+                crate::model::Ty::Int { width: *width, signed: false }
+            }
+            crate::Formula::Bool(_)
+            | crate::Formula::Not(_)
+            | crate::Formula::And(_)
+            | crate::Formula::Or(_)
+            | crate::Formula::Eq(..)
+            | crate::Formula::Lt(..)
+            | crate::Formula::Le(..)
+            | crate::Formula::Gt(..)
+            | crate::Formula::Ge(..) => crate::model::Ty::Bool,
             crate::Formula::Var(_, sort) | crate::Formula::SymVar(_, sort) => match sort {
                 crate::Sort::Bool => crate::model::Ty::Bool,
                 crate::Sort::BitVec(w) => crate::model::Ty::Int { width: *w, signed: false },
@@ -429,7 +424,11 @@ mod tests {
     // Helper: build a minimal VerifiableBody for tests
     // -----------------------------------------------------------------------
 
-    fn make_body(locals: Vec<LocalDecl>, blocks: Vec<BasicBlock>, arg_count: usize) -> VerifiableBody {
+    fn make_body(
+        locals: Vec<LocalDecl>,
+        blocks: Vec<BasicBlock>,
+        arg_count: usize,
+    ) -> VerifiableBody {
         VerifiableBody { locals, blocks, arg_count, return_ty: Ty::Unit }
     }
 
@@ -557,11 +556,7 @@ mod tests {
     fn test_unchecked_arithmetic_ignores_non_overflow_ops() {
         // _2 = Eq(_0, _1) -- comparison cannot overflow
         let body = make_body(
-            vec![
-                local(0, Ty::i32(), None),
-                local(1, Ty::i32(), None),
-                local(2, Ty::Bool, None),
-            ],
+            vec![local(0, Ty::i32(), None), local(1, Ty::i32(), None), local(2, Ty::Bool, None)],
             vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![Statement::Assign {
@@ -815,10 +810,7 @@ mod tests {
         // (the VC generator can optimize away the proof obligation, but
         // the pattern scanner is conservative)
         let body = make_body(
-            vec![
-                local(0, Ty::i32(), Some("a")),
-                local(1, Ty::i32(), None),
-            ],
+            vec![local(0, Ty::i32(), Some("a")), local(1, Ty::i32(), None)],
             vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![Statement::Assign {
@@ -892,24 +884,22 @@ mod tests {
                 local(1, Ty::i32(), Some("x")),
                 local(2, Ty::i32(), None),
             ],
-            vec![BasicBlock {
-                id: BlockId(0),
-                stmts: vec![Statement::Assign {
-                    place: Place::local(2),
-                    rvalue: Rvalue::Use(Operand::Copy(Place::local(1))),
-                    span: span(),
-                }],
-                terminator: Terminator::Drop {
-                    place: Place::local(1),
-                    target: BlockId(1),
-                    span: span(),
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![Statement::Assign {
+                        place: Place::local(2),
+                        rvalue: Rvalue::Use(Operand::Copy(Place::local(1))),
+                        span: span(),
+                    }],
+                    terminator: Terminator::Drop {
+                        place: Place::local(1),
+                        target: BlockId(1),
+                        span: span(),
+                    },
                 },
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            }],
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            ],
             1,
         );
 
@@ -926,8 +916,8 @@ mod tests {
         // _3 = Use(_2) where _2 is never assigned and not an argument
         let body = make_body(
             vec![
-                local(0, Ty::Unit, None),     // return
-                local(1, Ty::i32(), Some("a")), // arg
+                local(0, Ty::Unit, None),         // return
+                local(1, Ty::i32(), Some("a")),   // arg
                 local(2, Ty::i32(), Some("tmp")), // uninitialized
                 local(3, Ty::i32(), None),
             ],
@@ -1123,9 +1113,9 @@ mod tests {
         // but the checked add is not.
         let body = make_body(
             vec![
-                local(0, Ty::usize(), None),       // return
-                local(1, Ty::usize(), Some("a")),   // arg
-                local(2, Ty::usize(), Some("b")),   // arg
+                local(0, Ty::usize(), None),      // return
+                local(1, Ty::usize(), Some("a")), // arg
+                local(2, Ty::usize(), Some("b")), // arg
                 local(3, Ty::Tuple(vec![Ty::usize(), Ty::Bool]), None),
                 local(4, Ty::usize(), None),
             ],
@@ -1168,6 +1158,9 @@ mod tests {
         // No unchecked division (no Div op in this cleaned-up version)
         // No use-after-move
         // No uninitialized read
-        assert!(matches.is_empty(), "Fully checked function should have no findings, got: {matches:?}");
+        assert!(
+            matches.is_empty(),
+            "Fully checked function should have no findings, got: {matches:?}"
+        );
     }
 }

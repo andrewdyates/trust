@@ -27,11 +27,7 @@ fn midpoint_function() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::usize(), name: None },
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::usize(), name: None },
                 LocalDecl { index: 5, ty: Ty::usize(), name: None },
             ],
@@ -186,9 +182,7 @@ fn trivially_safe_function() -> VerifiableFunction {
         def_path: "test::safe_const".to_string(),
         span: SourceSpan::default(),
         body: VerifiableBody {
-            locals: vec![
-                LocalDecl { index: 0, ty: Ty::u32(), name: None },
-            ],
+            locals: vec![LocalDecl { index: 0, ty: Ty::u32(), name: None }],
             blocks: vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![Statement::Assign {
@@ -212,7 +206,7 @@ fn trivially_safe_function() -> VerifiableFunction {
 fn make_vc(kind: VcKind, function: &str, formula: Formula) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -229,10 +223,7 @@ fn test_vcgen_to_router_midpoint_overflow_is_unknown() {
     let func = midpoint_function();
     let vcs = generate_vcs(&func);
     assert_eq!(vcs.len(), 1, "midpoint produces exactly 1 VC");
-    assert!(matches!(
-        vcs[0].kind,
-        VcKind::ArithmeticOverflow { op: BinOp::Add, .. }
-    ));
+    assert!(matches!(vcs[0].kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }));
 
     // Route through MockBackend
     let router = Router::new(); // default = MockBackend
@@ -253,10 +244,8 @@ fn test_vcgen_to_router_division_by_zero_is_unknown() {
     let func = division_function();
     let vcs = generate_vcs(&func);
 
-    let div_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let div_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
     assert_eq!(div_vcs.len(), 1, "division produces exactly 1 div-by-zero VC");
 
     let router = Router::new();
@@ -272,11 +261,7 @@ fn test_vcgen_to_router_division_by_zero_is_unknown() {
 #[test]
 fn test_vcgen_to_router_trivially_false_formula_is_proved() {
     // A VC with formula Bool(false) => UNSAT => Proved
-    let vc = make_vc(
-        VcKind::DivisionByZero,
-        "safe_div",
-        Formula::Bool(false),
-    );
+    let vc = make_vc(VcKind::DivisionByZero, "safe_div", Formula::Bool(false));
 
     let router = Router::new();
     let result = router.verify_one(&vc);
@@ -288,10 +273,7 @@ fn test_vcgen_to_router_trivially_false_formula_is_proved() {
 fn test_vcgen_to_router_trivially_true_formula_is_failed() {
     // A VC with formula Bool(true) => SAT => Failed (counterexample exists)
     let vc = make_vc(
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::u32(), Ty::u32()),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
         "overflow_fn",
         Formula::Bool(true),
     );
@@ -336,10 +318,7 @@ fn test_full_pipeline_report_text_output_contains_key_info() {
     let text = format_json_summary(&report);
 
     assert!(text.contains("get_midpoint"), "report should name the function");
-    assert!(
-        text.contains("1 obligations"),
-        "report should show obligation count: {text}"
-    );
+    assert!(text.contains("1 obligations"), "report should show obligation count: {text}");
     assert!(text.contains("Verdict:"), "report should have a verdict line");
 }
 
@@ -381,36 +360,22 @@ fn test_multiple_vc_kinds_through_pipeline() {
     let vcs = vec![
         make_vc(VcKind::DivisionByZero, "fn_a", Formula::Bool(false)),
         make_vc(
-            VcKind::ArithmeticOverflow {
-                op: BinOp::Add,
-                operand_tys: (Ty::u32(), Ty::u32()),
-            },
+            VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
             "fn_a",
             Formula::Bool(false),
         ),
         make_vc(VcKind::IndexOutOfBounds, "fn_b", Formula::Bool(false)),
         make_vc(
-            VcKind::CastOverflow {
-                from_ty: Ty::i32(),
-                to_ty: Ty::u32(),
-            },
+            VcKind::CastOverflow { from_ty: Ty::i32(), to_ty: Ty::u32() },
             "fn_b",
             Formula::Bool(false),
         ),
         make_vc(
-            VcKind::ShiftOverflow {
-                op: BinOp::Shl,
-                operand_ty: Ty::u32(),
-                shift_ty: Ty::u32(),
-            },
+            VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: Ty::u32(), shift_ty: Ty::u32() },
             "fn_c",
             Formula::Bool(false),
         ),
-        make_vc(
-            VcKind::NegationOverflow { ty: Ty::i32() },
-            "fn_c",
-            Formula::Bool(false),
-        ),
+        make_vc(VcKind::NegationOverflow { ty: Ty::i32() }, "fn_c", Formula::Bool(false)),
     ];
 
     let router = Router::new();
@@ -443,14 +408,8 @@ fn test_l0_safety_kinds_all_provable() {
         VcKind::SliceBoundsCheck,
         VcKind::Unreachable,
         VcKind::Assertion { message: "test assert".to_string() },
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Mul,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        },
-        VcKind::CastOverflow {
-            from_ty: Ty::i32(),
-            to_ty: Ty::Int { width: 8, signed: false },
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Mul, operand_tys: (Ty::i32(), Ty::i32()) },
+        VcKind::CastOverflow { from_ty: Ty::i32(), to_ty: Ty::Int { width: 8, signed: false } },
         VcKind::NegationOverflow { ty: Ty::i32() },
         VcKind::ShiftOverflow {
             op: BinOp::Shr,
@@ -483,12 +442,8 @@ fn test_l0_safety_kinds_all_provable() {
 
 #[test]
 fn test_batch_verification_multiple_functions() {
-    let functions = vec![
-        midpoint_function(),
-        division_function(),
-        shift_function(),
-        trivially_safe_function(),
-    ];
+    let functions =
+        vec![midpoint_function(), division_function(), shift_function(), trivially_safe_function()];
 
     let mut all_vcs: Vec<VerificationCondition> = Vec::new();
     for func in &functions {
@@ -497,11 +452,7 @@ fn test_batch_verification_multiple_functions() {
 
     // midpoint: 1 VC (overflow), division: 1+ VC (divzero), shift: 1 VC (shift),
     // safe: 0 VCs
-    assert!(
-        all_vcs.len() >= 3,
-        "expected at least 3 VCs from batch, got {}",
-        all_vcs.len()
-    );
+    assert!(all_vcs.len() >= 3, "expected at least 3 VCs from batch, got {}", all_vcs.len());
 
     let router = Router::new();
     let results = router.verify_all(&all_vcs);
@@ -525,13 +476,7 @@ fn test_batch_verification_multiple_functions() {
 fn test_batch_verification_parallel() {
     // Use parallel verification with multiple functions
     let vcs: Vec<_> = (0..10)
-        .map(|i| {
-            make_vc(
-                VcKind::DivisionByZero,
-                &format!("fn_{i}"),
-                Formula::Bool(false),
-            )
-        })
+        .map(|i| make_vc(VcKind::DivisionByZero, &format!("fn_{i}"), Formula::Bool(false)))
         .collect();
 
     let router = Router::new();
@@ -556,10 +501,7 @@ fn test_batch_verification_parallel() {
 fn test_failed_vc_produces_correct_report() {
     let vcs = vec![
         make_vc(
-            VcKind::ArithmeticOverflow {
-                op: BinOp::Add,
-                operand_tys: (Ty::u32(), Ty::u32()),
-            },
+            VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
             "overflow_fn",
             Formula::Bool(true), // SAT -> Failed
         ),
@@ -598,7 +540,7 @@ fn test_unknown_vc_report_outcome() {
     let vc = make_vc(
         VcKind::Postcondition,
         "complex_fn",
-        Formula::Var("x".to_string(), Sort::Int), // Unknown from mock
+        Formula::Var("x".into(), Sort::Int), // Unknown from mock
     );
 
     let router = Router::new();
@@ -611,10 +553,7 @@ fn test_unknown_vc_report_outcome() {
     // Postcondition has no runtime fallback, so Unknown stays Unknown
     assert_eq!(report.summary.total_unknown, 1);
     assert_eq!(report.summary.verdict, CrateVerdict::Inconclusive);
-    assert_eq!(
-        report.functions[0].summary.verdict,
-        FunctionVerdict::Inconclusive
-    );
+    assert_eq!(report.functions[0].summary.verdict, FunctionVerdict::Inconclusive);
 }
 
 #[test]
@@ -623,21 +562,14 @@ fn test_mixed_results_across_functions() {
         // Function A: all proved
         make_vc(VcKind::DivisionByZero, "fn_safe", Formula::Bool(false)),
         make_vc(
-            VcKind::ArithmeticOverflow {
-                op: BinOp::Add,
-                operand_tys: (Ty::u32(), Ty::u32()),
-            },
+            VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
             "fn_safe",
             Formula::Bool(false),
         ),
         // Function B: has a failure
         make_vc(VcKind::IndexOutOfBounds, "fn_buggy", Formula::Bool(true)),
         // Function C: unknown result
-        make_vc(
-            VcKind::Postcondition,
-            "fn_complex",
-            Formula::Var("result".to_string(), Sort::Int),
-        ),
+        make_vc(VcKind::Postcondition, "fn_complex", Formula::Var("result".into(), Sort::Int)),
     ];
 
     let router = Router::new();
@@ -657,11 +589,7 @@ fn test_mixed_results_across_functions() {
     let buggy_fn = report.functions.iter().find(|f| f.function == "fn_buggy").unwrap();
     assert_eq!(buggy_fn.summary.verdict, FunctionVerdict::HasViolations);
 
-    let complex_fn = report
-        .functions
-        .iter()
-        .find(|f| f.function == "fn_complex")
-        .unwrap();
+    let complex_fn = report.functions.iter().find(|f| f.function == "fn_complex").unwrap();
     assert_eq!(complex_fn.summary.verdict, FunctionVerdict::Inconclusive);
 }
 
@@ -675,11 +603,7 @@ fn test_level_filter_l0_removes_functional_and_domain_vcs() {
         make_vc(VcKind::DivisionByZero, "f", Formula::Bool(false)),
         make_vc(VcKind::Postcondition, "f", Formula::Bool(false)),
         make_vc(VcKind::Deadlock, "f", Formula::Bool(false)),
-        make_vc(
-            VcKind::Precondition { callee: "g".to_string() },
-            "f",
-            Formula::Bool(false),
-        ),
+        make_vc(VcKind::Precondition { callee: "g".to_string() }, "f", Formula::Bool(false)),
     ];
 
     let filtered = filter_vcs_by_level(vcs, ProofLevel::L0Safety);
@@ -703,11 +627,7 @@ fn test_level_filter_l1_keeps_safety_and_functional() {
         make_vc(VcKind::DivisionByZero, "f", Formula::Bool(false)),
         make_vc(VcKind::Postcondition, "f", Formula::Bool(false)),
         make_vc(VcKind::Deadlock, "f", Formula::Bool(false)),
-        make_vc(
-            VcKind::Temporal { property: "liveness".to_string() },
-            "f",
-            Formula::Bool(false),
-        ),
+        make_vc(VcKind::Temporal { property: "liveness".to_string() }, "f", Formula::Bool(false)),
     ];
 
     let filtered = filter_vcs_by_level(vcs, ProofLevel::L1Functional);
@@ -738,18 +658,11 @@ fn test_level_filtering_then_route_then_report() {
 
     // Add a synthetic L1 VC
     let mut vcs = all_vcs;
-    vcs.push(make_vc(
-        VcKind::Postcondition,
-        "get_midpoint",
-        Formula::Bool(false),
-    ));
+    vcs.push(make_vc(VcKind::Postcondition, "get_midpoint", Formula::Bool(false)));
 
     // Filter to L0 only
     let filtered = filter_vcs_by_level(vcs.clone(), ProofLevel::L0Safety);
-    assert!(
-        filtered.len() < vcs.len(),
-        "filtering should remove L1 postcondition"
-    );
+    assert!(filtered.len() < vcs.len(), "filtering should remove L1 postcondition");
 
     // Route and report L0-only
     let router = Router::new();
@@ -778,18 +691,11 @@ fn test_pipeline_report_json_roundtrip() {
     let report = build_json_report("roundtrip_test", &results);
 
     let json = serde_json::to_string_pretty(&report).expect("serialize report");
-    let deserialized: JsonProofReport =
-        serde_json::from_str(&json).expect("deserialize report");
+    let deserialized: JsonProofReport = serde_json::from_str(&json).expect("deserialize report");
 
     assert_eq!(deserialized.crate_name, "roundtrip_test");
-    assert_eq!(
-        deserialized.summary.total_obligations,
-        report.summary.total_obligations
-    );
-    assert_eq!(
-        deserialized.summary.functions_analyzed,
-        report.summary.functions_analyzed
-    );
+    assert_eq!(deserialized.summary.total_obligations, report.summary.total_obligations);
+    assert_eq!(deserialized.summary.functions_analyzed, report.summary.functions_analyzed);
     assert_eq!(deserialized.summary.verdict, report.summary.verdict);
 }
 
@@ -811,7 +717,7 @@ impl VerificationBackend for FailingBackend {
 
     fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
         VerificationResult::Failed {
-            solver: "failing_backend".to_string(),
+            solver: "failing_backend".into(),
             time_ms: 1,
             counterexample: Some(Counterexample::new(vec![
                 ("x".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -823,11 +729,7 @@ impl VerificationBackend for FailingBackend {
 
 #[test]
 fn test_custom_backend_counterexample_in_report() {
-    let vc = make_vc(
-        VcKind::DivisionByZero,
-        "test_fn",
-        Formula::Var("y".to_string(), Sort::Int),
-    );
+    let vc = make_vc(VcKind::DivisionByZero, "test_fn", Formula::Var("y".into(), Sort::Int));
 
     let router = Router::with_backends(vec![Box::new(FailingBackend)]);
     let results = router.verify_all(&[vc]);
@@ -880,9 +782,7 @@ fn test_end_to_end_pipeline_multiple_functions_mixed_verdicts() {
 
     // Filter to L0+L1 (excludes L2 Deadlock)
     let filtered = filter_vcs_by_level(all_vcs.clone(), ProofLevel::L1Functional);
-    let deadlock_removed = !filtered
-        .iter()
-        .any(|vc| matches!(vc.kind, VcKind::Deadlock));
+    let deadlock_removed = !filtered.iter().any(|vc| matches!(vc.kind, VcKind::Deadlock));
     assert!(deadlock_removed, "L1 filter should remove L2 Deadlock VC");
 
     // Route
@@ -900,10 +800,7 @@ fn test_end_to_end_pipeline_multiple_functions_mixed_verdicts() {
     let json = serde_json::to_string(&report).expect("serialize");
     let roundtrip: JsonProofReport = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(roundtrip.crate_name, "e2e_mixed");
-    assert_eq!(
-        roundtrip.summary.total_obligations,
-        report.summary.total_obligations
-    );
+    assert_eq!(roundtrip.summary.total_obligations, report.summary.total_obligations);
 
     // Text summary should mention key elements
     let text = format_json_summary(&report);

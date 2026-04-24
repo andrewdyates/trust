@@ -1719,7 +1719,7 @@ mod Offload_fallback {
 // FFI bindings for `DIBuilder` functions in the LLVM-C API.
 // Try to keep these in the same order as in `llvm/include/llvm-c/DebugInfo.h`.
 //
-// tRust: known issue (#134001) — Audit all `Option` parameters, especially in lists, to check
+// FIXME(#134001): Audit all `Option` parameters, especially in lists, to check
 // that they really are nullable on the C/C++ side. LLVM doesn't appear to
 // actually document which ones are nullable.
 unsafe extern "C" {

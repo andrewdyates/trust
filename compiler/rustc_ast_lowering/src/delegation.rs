@@ -120,7 +120,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         delegation: &Delegation,
         item_id: NodeId,
     ) -> DelegationResults<'hir> {
-        let span = self.lower_span(delegation.path.segments.last().expect("invariant: delegation path has at least one segment").ident.span); // tRust:;
+        let span = self.lower_span(delegation.path.segments.last().unwrap().ident.span);
 
         // Delegation can be unresolved in illegal places such as function bodies in extern blocks (see #151356)
         let sig_id = if let Some(delegation_info) =
@@ -352,7 +352,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
     ) -> (hir::Param<'hir>, NodeId) {
         let pat_node_id = self.next_node_id();
         let pat_id = self.lower_node_id(pat_node_id);
-        // tRust: known issue — (cjgillot) AssocItem currently relies on self parameter being exactly named `self`.
+        // FIXME(cjgillot) AssocItem currently relies on self parameter being exactly named `self`.
         let name = if is_method && idx == 0 {
             kw::SelfLower
         } else {
@@ -376,7 +376,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         param_id: HirId,
         span: Span,
     ) -> hir::Expr<'hir> {
-        // tRust: known issue — (cjgillot) AssocItem currently relies on self parameter being exactly named `self`.
+        // FIXME(cjgillot) AssocItem currently relies on self parameter being exactly named `self`.
         let name = if is_method && idx == 0 {
             kw::SelfLower
         } else {
@@ -449,7 +449,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         })
     }
 
-    // tRust: known issue — (fn_delegation) Alternatives for target expression lowering:
+    // FIXME(fn_delegation): Alternatives for target expression lowering:
     // https://github.com/rust-lang/rfcs/pull/3530#issuecomment-2197170600.
     fn lower_target_expr(&mut self, block: &Block) -> hir::Expr<'hir> {
         if let [stmt] = block.stmts.as_slice()
@@ -497,7 +497,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             && !has_generic_args
             && !args.is_empty()
         {
-            let ast_segment = delegation.path.segments.last().expect("invariant: delegation path has at least one segment"); // tRust:;
+            let ast_segment = delegation.path.segments.last().unwrap();
             let segment = self.lower_path_segment(
                 delegation.path.span,
                 ast_segment,
@@ -507,7 +507,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                 None,
             );
 
-            // tRust: known issue — (fn_delegation) proper support for parent generics propagation
+            // FIXME(fn_delegation): proper support for parent generics propagation
             // in method call scenario.
             let segment = self.process_segment(span, &segment, &mut generics.child, false);
             let segment = self.arena.alloc(segment);

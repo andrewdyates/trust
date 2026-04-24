@@ -121,9 +121,7 @@ impl ProofBuilder {
 
     /// Finalize the proof. Returns the current proof term or an error if nothing was built.
     pub fn build(&self) -> Result<ProofTerm, ProofError> {
-        self.current
-            .clone()
-            .ok_or_else(|| ProofError::UnprovedGoal(self.context.goal.clone()))
+        self.current.clone().ok_or_else(|| ProofError::UnprovedGoal(self.context.goal.clone()))
     }
 }
 
@@ -135,9 +133,7 @@ impl ProofBuilder {
 pub fn validate_proof_term(term: &ProofTerm, context: &ProofContext) -> bool {
     match term {
         ProofTerm::Axiom(_) => true,
-        ProofTerm::Hypothesis(name) => {
-            context.hypotheses.iter().any(|(n, _)| n == name)
-        }
+        ProofTerm::Hypothesis(name) => context.hypotheses.iter().any(|(n, _)| n == name),
         ProofTerm::ModusPonens(imp, ant) => {
             validate_proof_term(imp, context) && validate_proof_term(ant, context)
         }
@@ -160,9 +156,7 @@ pub fn proof_size(term: &ProofTerm) -> usize {
     match term {
         ProofTerm::Axiom(_) | ProofTerm::Hypothesis(_) => 1,
         ProofTerm::ModusPonens(imp, ant) => 1 + proof_size(imp) + proof_size(ant),
-        ProofTerm::Conjunction(proofs) => {
-            1 + proofs.iter().map(proof_size).sum::<usize>()
-        }
+        ProofTerm::Conjunction(proofs) => 1 + proofs.iter().map(proof_size).sum::<usize>(),
         ProofTerm::Disjunction(proof, _) => 1 + proof_size(proof),
         ProofTerm::ForallIntro(_, body) => 1 + proof_size(body),
         ProofTerm::ExistsIntro(_, body) => 1 + proof_size(body),
@@ -176,19 +170,13 @@ pub fn proof_size(term: &ProofTerm) -> usize {
 pub fn proof_depth(term: &ProofTerm) -> usize {
     match term {
         ProofTerm::Axiom(_) | ProofTerm::Hypothesis(_) => 1,
-        ProofTerm::ModusPonens(imp, ant) => {
-            1 + proof_depth(imp).max(proof_depth(ant))
-        }
-        ProofTerm::Conjunction(proofs) => {
-            1 + proofs.iter().map(proof_depth).max().unwrap_or(0)
-        }
+        ProofTerm::ModusPonens(imp, ant) => 1 + proof_depth(imp).max(proof_depth(ant)),
+        ProofTerm::Conjunction(proofs) => 1 + proofs.iter().map(proof_depth).max().unwrap_or(0),
         ProofTerm::Disjunction(proof, _) => 1 + proof_depth(proof),
         ProofTerm::ForallIntro(_, body) => 1 + proof_depth(body),
         ProofTerm::ExistsIntro(_, body) => 1 + proof_depth(body),
         ProofTerm::Rewrite(proof, _, _) => 1 + proof_depth(proof),
-        ProofTerm::Cut(left, right, _) => {
-            1 + proof_depth(left).max(proof_depth(right))
-        }
+        ProofTerm::Cut(left, right, _) => 1 + proof_depth(left).max(proof_depth(right)),
     }
 }
 
@@ -202,10 +190,9 @@ pub fn proof_depth(term: &ProofTerm) -> usize {
 pub fn simplify_proof(term: &ProofTerm) -> ProofTerm {
     match term {
         ProofTerm::Axiom(_) | ProofTerm::Hypothesis(_) => term.clone(),
-        ProofTerm::ModusPonens(imp, ant) => ProofTerm::ModusPonens(
-            Box::new(simplify_proof(imp)),
-            Box::new(simplify_proof(ant)),
-        ),
+        ProofTerm::ModusPonens(imp, ant) => {
+            ProofTerm::ModusPonens(Box::new(simplify_proof(imp)), Box::new(simplify_proof(ant)))
+        }
         ProofTerm::Conjunction(proofs) => {
             // Recursively simplify, then flatten nested conjunctions.
             let simplified: Vec<ProofTerm> = proofs
@@ -220,7 +207,9 @@ pub fn simplify_proof(term: &ProofTerm) -> ProofTerm {
                 .collect();
             if simplified.len() == 1 {
                 // SAFETY: len == 1 guarantees .next() returns Some.
-                simplified.into_iter().next()
+                simplified
+                    .into_iter()
+                    .next()
                     .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
             } else {
                 ProofTerm::Conjunction(simplified)
@@ -272,11 +261,7 @@ pub fn proof_to_string(term: &ProofTerm) -> String {
             format!("rewrite({}, {from} -> {to})", proof_to_string(proof))
         }
         ProofTerm::Cut(left, right, lemma) => {
-            format!(
-                "cut({}, {}, {lemma})",
-                proof_to_string(left),
-                proof_to_string(right)
-            )
+            format!("cut({}, {}, {lemma})", proof_to_string(left), proof_to_string(right))
         }
     }
 }
@@ -468,10 +453,8 @@ mod tests {
 
     #[test]
     fn test_proof_to_string_forall() {
-        let term = ProofTerm::ForallIntro(
-            "x".to_string(),
-            Box::new(ProofTerm::Axiom("p_x".to_string())),
-        );
+        let term =
+            ProofTerm::ForallIntro("x".to_string(), Box::new(ProofTerm::Axiom("p_x".to_string())));
         assert_eq!(proof_to_string(&term), "forall(x, axiom(p_x))");
     }
 
@@ -486,10 +469,7 @@ mod tests {
 
     #[test]
     fn test_proof_to_string_disjunction() {
-        let term = ProofTerm::Disjunction(
-            Box::new(ProofTerm::Hypothesis("h1".to_string())),
-            0,
-        );
+        let term = ProofTerm::Disjunction(Box::new(ProofTerm::Hypothesis("h1".to_string())), 0);
         assert_eq!(proof_to_string(&term), "disj(hyp(h1), 0)");
     }
 
@@ -510,19 +490,14 @@ mod tests {
             Box::new(ProofTerm::Hypothesis("h1".to_string())),
             "my_lemma".to_string(),
         );
-        assert_eq!(
-            proof_to_string(&term),
-            "cut(axiom(lemma_proof), hyp(h1), my_lemma)"
-        );
+        assert_eq!(proof_to_string(&term), "cut(axiom(lemma_proof), hyp(h1), my_lemma)");
     }
 
     #[test]
     fn test_validate_forall_intro() {
         let ctx = sample_context();
-        let term = ProofTerm::ForallIntro(
-            "x".to_string(),
-            Box::new(ProofTerm::Axiom("p".to_string())),
-        );
+        let term =
+            ProofTerm::ForallIntro("x".to_string(), Box::new(ProofTerm::Axiom("p".to_string())));
         assert!(validate_proof_term(&term, &ctx));
     }
 
@@ -563,10 +538,7 @@ mod tests {
         let e = ProofError::InvalidStep("bad step".to_string());
         assert_eq!(e.to_string(), "invalid proof step: bad step");
 
-        let e = ProofError::TypeMismatch {
-            expected: "bool".to_string(),
-            found: "int".to_string(),
-        };
+        let e = ProofError::TypeMismatch { expected: "bool".to_string(), found: "int".to_string() };
         assert_eq!(e.to_string(), "type mismatch: expected `bool`, found `int`");
     }
 

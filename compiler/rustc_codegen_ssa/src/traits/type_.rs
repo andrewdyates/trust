@@ -48,7 +48,6 @@ pub trait DerivedTypeCodegenMethods<'tcx>:
             16 => self.type_i16(),
             32 => self.type_i32(),
             64 => self.type_i64(),
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             width => bug!("Unsupported c_int_width: {}", width),
         }
     }

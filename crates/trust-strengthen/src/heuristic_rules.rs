@@ -7,9 +7,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use trust_types::fx::FxHashSet;
+
 use crate::heuristic::FunctionSignature;
 use crate::proposer::{Proposal, ProposalKind};
-use trust_types::fx::FxHashSet;
 
 /// A heuristic rule that matches a function pattern and proposes specs.
 ///
@@ -86,9 +87,8 @@ impl HeuristicRule for BoundsCheck {
     }
 
     fn matches(&self, sig: &FunctionSignature) -> bool {
-        let has_index_param = sig.params.iter().any(|(name, ty)| {
-            is_index_name(name) && ty.trim() == "usize"
-        });
+        let has_index_param =
+            sig.params.iter().any(|(name, ty)| is_index_name(name) && ty.trim() == "usize");
         let has_slice_param = sig.params.iter().any(|(_, ty)| {
             let t = ty.trim();
             t.starts_with("&[") || t.starts_with("&mut [") || t.starts_with("Vec<")
@@ -155,9 +155,8 @@ impl HeuristicRule for DivisionGuard {
                 || lower.contains("average")
                 || lower.contains("mean")
         };
-        let has_divisor_param = sig.params.iter().any(|(name, ty)| {
-            is_divisor_name(name) && is_numeric_type(ty.trim())
-        });
+        let has_divisor_param =
+            sig.params.iter().any(|(name, ty)| is_divisor_name(name) && is_numeric_type(ty.trim()));
         name_suggests_div || has_divisor_param
     }
 
@@ -177,9 +176,7 @@ impl HeuristicRule for DivisionGuard {
                 proposals.push(Proposal {
                     function_path: sig.path.clone(),
                     function_name: sig.name.clone(),
-                    kind: ProposalKind::AddPrecondition {
-                        spec_body: format!("{d} != 0"),
-                    },
+                    kind: ProposalKind::AddPrecondition { spec_body: format!("{d} != 0") },
                     confidence: 0.9,
                     rationale: format!(
                         "DivisionGuard: parameter `{d}` is likely used as a divisor"
@@ -252,9 +249,8 @@ impl HeuristicRule for OverflowGuard {
             || lower.contains("midpoint")
             || lower.contains("average");
 
-        let has_numeric_params = sig.params.iter().filter(|(_, ty)| {
-            is_integer_type(ty.trim())
-        }).count() >= 2;
+        let has_numeric_params =
+            sig.params.iter().filter(|(_, ty)| is_integer_type(ty.trim())).count() >= 2;
 
         name_suggests_arith && has_numeric_params
     }
@@ -275,9 +271,12 @@ impl HeuristicRule for OverflowGuard {
             let type_max = type_max_const(ty_a.trim());
 
             let lower = sig.name.to_lowercase();
-            if lower.contains("add") || lower.contains("sum")
-                || lower.contains("total") || lower.contains("accumulate")
-                || lower.contains("midpoint") || lower.contains("average")
+            if lower.contains("add")
+                || lower.contains("sum")
+                || lower.contains("total")
+                || lower.contains("accumulate")
+                || lower.contains("midpoint")
+                || lower.contains("average")
             {
                 proposals.push(Proposal {
                     function_path: sig.path.clone(),
@@ -294,21 +293,18 @@ impl HeuristicRule for OverflowGuard {
                 });
             }
 
-            if lower.contains("sub")
-                && is_unsigned_type(ty_a.trim()) {
-                    proposals.push(Proposal {
-                        function_path: sig.path.clone(),
-                        function_name: sig.name.clone(),
-                        kind: ProposalKind::AddPrecondition {
-                            spec_body: format!("{a} >= {b}"),
-                        },
-                        confidence: 0.85,
-                        rationale: format!(
-                            "OverflowGuard: unsigned subtraction in `{}` may underflow",
-                            sig.name
-                        ),
-                    });
-                }
+            if lower.contains("sub") && is_unsigned_type(ty_a.trim()) {
+                proposals.push(Proposal {
+                    function_path: sig.path.clone(),
+                    function_name: sig.name.clone(),
+                    kind: ProposalKind::AddPrecondition { spec_body: format!("{a} >= {b}") },
+                    confidence: 0.85,
+                    rationale: format!(
+                        "OverflowGuard: unsigned subtraction in `{}` may underflow",
+                        sig.name
+                    ),
+                });
+            }
 
             if lower.contains("mul") || lower.contains("product") {
                 proposals.push(Proposal {
@@ -327,21 +323,22 @@ impl HeuristicRule for OverflowGuard {
 
             // Generic overflow postcondition for all arithmetic
             if let Some(ref ret) = sig.return_type
-                && is_integer_type(ret.trim()) {
-                    proposals.push(Proposal {
-                        function_path: sig.path.clone(),
-                        function_name: sig.name.clone(),
-                        kind: ProposalKind::AddPostcondition {
-                            spec_body: format!("result fits in {}", ret.trim()),
-                        },
-                        confidence: 0.65,
-                        rationale: format!(
-                            "OverflowGuard: result of `{}` must fit in `{}`",
-                            sig.name,
-                            ret.trim()
-                        ),
-                    });
-                }
+                && is_integer_type(ret.trim())
+            {
+                proposals.push(Proposal {
+                    function_path: sig.path.clone(),
+                    function_name: sig.name.clone(),
+                    kind: ProposalKind::AddPostcondition {
+                        spec_body: format!("result fits in {}", ret.trim()),
+                    },
+                    confidence: 0.65,
+                    rationale: format!(
+                        "OverflowGuard: result of `{}` must fit in `{}`",
+                        sig.name,
+                        ret.trim()
+                    ),
+                });
+            }
         }
 
         proposals
@@ -357,9 +354,7 @@ impl HeuristicRule for ResultOk {
     }
 
     fn matches(&self, sig: &FunctionSignature) -> bool {
-        sig.return_type
-            .as_ref()
-            .is_some_and(|r| r.trim().starts_with("Result<"))
+        sig.return_type.as_ref().is_some_and(|r| r.trim().starts_with("Result<"))
     }
 
     fn propose(&self, sig: &FunctionSignature) -> Vec<Proposal> {
@@ -478,9 +473,7 @@ impl RuleEngine {
         // Filter and sort
         proposals.retain(|p| p.confidence >= self.min_confidence);
         proposals.sort_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
         proposals.truncate(self.max_proposals);
 
@@ -505,11 +498,7 @@ impl Default for RuleEngine {
 fn dedup_by_spec(proposals: &mut Vec<Proposal>) {
     let mut seen = FxHashSet::default();
     proposals.retain(|p| {
-        let key = format!(
-            "{:?}:{}",
-            std::mem::discriminant(&p.kind),
-            extract_spec_body(&p.kind)
-        );
+        let key = format!("{:?}:{}", std::mem::discriminant(&p.kind), extract_spec_body(&p.kind));
         seen.insert(key)
     });
 }
@@ -623,10 +612,7 @@ mod tests {
         FunctionSignature {
             path: format!("test::{name}"),
             name: name.into(),
-            params: params
-                .into_iter()
-                .map(|(n, t)| (n.into(), t.into()))
-                .collect(),
+            params: params.into_iter().map(|(n, t)| (n.into(), t.into())).collect(),
             return_type: return_type.map(Into::into),
         }
     }
@@ -734,11 +720,8 @@ mod tests {
     #[test]
     fn test_bounds_check_multiple_indices() {
         let rule = BoundsCheck;
-        let sig = make_sig(
-            "swap",
-            vec![("arr", "&mut [i32]"), ("i", "usize"), ("j", "usize")],
-            None,
-        );
+        let sig =
+            make_sig("swap", vec![("arr", "&mut [i32]"), ("i", "usize"), ("j", "usize")], None);
         let proposals = rule.propose(&sig);
         assert_eq!(proposals.len(), 2);
     }
@@ -992,8 +975,12 @@ mod tests {
     fn test_rule_engine_custom_rule() {
         struct AlwaysMatch;
         impl HeuristicRule for AlwaysMatch {
-            fn name(&self) -> &str { "AlwaysMatch" }
-            fn matches(&self, _: &FunctionSignature) -> bool { true }
+            fn name(&self) -> &str {
+                "AlwaysMatch"
+            }
+            fn matches(&self, _: &FunctionSignature) -> bool {
+                true
+            }
             fn propose(&self, sig: &FunctionSignature) -> Vec<Proposal> {
                 vec![Proposal {
                     function_path: sig.path.clone(),
@@ -1038,15 +1025,13 @@ mod tests {
 
         let spec_bodies: Vec<String> = proposals
             .iter()
-            .map(|p| format!("{:?}:{}", std::mem::discriminant(&p.kind), extract_spec_body(&p.kind)))
+            .map(|p| {
+                format!("{:?}:{}", std::mem::discriminant(&p.kind), extract_spec_body(&p.kind))
+            })
             .collect();
 
         let unique: FxHashSet<&String> = spec_bodies.iter().collect();
-        assert_eq!(
-            spec_bodies.len(),
-            unique.len(),
-            "should have no duplicate proposals"
-        );
+        assert_eq!(spec_bodies.len(), unique.len(), "should have no duplicate proposals");
     }
 
     // --- Utility function tests ---
@@ -1076,7 +1061,9 @@ mod tests {
 
     #[test]
     fn test_is_integer_type_includes_all() {
-        for ty in &["u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize"] {
+        for ty in &[
+            "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize",
+        ] {
             assert!(is_integer_type(ty), "{ty} should be integer");
         }
         assert!(!is_integer_type("f32"));

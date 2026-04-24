@@ -1,0 +1,36 @@
+error[E0308]: mismatched types
+  --> $DIR/varargs-generic-soundness.rs:17:41
+   |
+LL |     let _: unsafe extern "C" fn(i32) = c_variadic_fn;
+   |            --------------------------   ^^^^^^^^^^^^^^ expected non-variadic fn, found variadic function
+   |            |
+   |            expected due to this
+   |
+   = note: expected fn pointer `unsafe extern "C" fn(_)`
+                 found fn item `unsafe extern "C" fn(_, ...) {c_variadic_fn}`
+
+error[E0308]: mismatched types
+  --> $DIR/varargs-generic-soundness.rs:23:39
+   |
+LL |     let _: extern "C" fn(i32, ...) = non_variadic_fn;
+   |            ------------------------   ^^^^^^^^^^^^^^^ expected variadic fn, found non-variadic function
+   |            |
+   |            expected due to this
+   |
+   = note: expected fn pointer `extern "C" fn(_, ...)`
+                 found fn item `extern "C" fn(_) {non_variadic_fn}`
+
+error[E0308]: mismatched types
+  --> $DIR/varargs-generic-soundness.rs:29:41
+   |
+LL |     let _: unsafe extern "C" fn(i32) = variadic_ptr;
+   |            --------------------------   ^^^^^^^^^^^^ expected non-variadic fn, found variadic function
+   |            |
+   |            expected due to this
+   |
+   = note: expected fn pointer `unsafe extern "C" fn(_)`
+                 found fn pointer `unsafe extern "C" fn(_, ...)`
+
+error: aborting due to 3 previous errors
+
+For more information about this error, try `rustc --explain E0308`.

@@ -1,22 +1,22 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-disasm: Multi-architecture instruction decoder
 //!
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
+pub mod aarch64;
 pub mod arch;
 pub(crate) mod error;
-pub mod operand;
-pub mod opcode;
 pub mod instruction;
-pub mod aarch64;
+pub mod opcode;
+pub mod operand;
 pub mod x86_64;
 
 pub use arch::{Arch, Decoder};
 pub use error::DisasmError;
 pub use instruction::{ControlFlow, Instruction};
-pub use operand::{Condition, Operand, Register, ShiftType};
 pub use opcode::Opcode;
+pub use operand::{Condition, Operand, Register, ShiftType};
 
 /// Convenience: decode a single AArch64 instruction from bytes at a given address.
 pub fn decode_aarch64(bytes: &[u8], address: u64) -> Result<Instruction, DisasmError> {

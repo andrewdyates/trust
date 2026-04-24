@@ -39,7 +39,7 @@ impl<'tcx> QueryJob<'tcx> {
         if self.latch.is_none() {
             self.latch = Some(QueryLatch::new());
         }
-        self.latch.as_ref().expect("invariant: value is Some").clone()
+        self.latch.as_ref().unwrap().clone()
     }
 
     /// Signals to waiters that the query is complete.
@@ -109,7 +109,7 @@ impl<'tcx> QueryLatch<'tcx> {
         drop(waiters_guard);
         tcx.jobserver_proxy.acquire_thread();
 
-        // tRust: known issue — Get rid of this lock. We have ownership of the QueryWaiter
+        // FIXME: Get rid of this lock. We have ownership of the QueryWaiter
         // although another thread may still have a Arc reference so we cannot
         // use Arc::get_mut
         let mut cycle = waiter.cycle.lock();
@@ -122,7 +122,7 @@ impl<'tcx> QueryLatch<'tcx> {
     /// Sets the latch and resumes all waiters on it
     fn set(&self) {
         let mut waiters_guard = self.waiters.lock();
-        let waiters = waiters_guard.take().expect("invariant: take returned a valid value"); // mark the latch as complete
+        let waiters = waiters_guard.take().unwrap(); // mark the latch as complete
         let registry = rustc_thread_pool::Registry::current();
         for waiter in waiters {
             rustc_thread_pool::mark_unblocked(&registry);

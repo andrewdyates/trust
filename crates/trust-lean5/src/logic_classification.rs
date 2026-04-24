@@ -167,11 +167,7 @@ impl CertificationScope {
                 "fully certified via Alethe-to-lean5 pipeline".to_string()
             }
             CertificationScope::PartiallyCertified { logic, reason } => {
-                format!(
-                    "partially certified (logic: {}): {}",
-                    logic.name(),
-                    reason
-                )
+                format!("partially certified (logic: {}): {}", logic.name(), reason)
             }
             CertificationScope::Uncertified { reason } => {
                 format!("uncertified: {reason}")
@@ -361,39 +357,34 @@ pub fn degradation_strategy(logic: &SmtLogic) -> CertificationStrategy {
         }
 
         SmtLogic::QfLira => CertificationStrategy::PartialCertification {
-            uncertified_reason:
-                "QF_LIRA contains real arithmetic steps that the lean5 Alethe \
+            uncertified_reason: "QF_LIRA contains real arithmetic steps that the lean5 Alethe \
                  replay engine cannot yet certify; integer-only steps are certified"
-                    .to_string(),
+                .to_string(),
         },
 
         SmtLogic::QfBv => CertificationStrategy::PartialCertification {
-            uncertified_reason:
-                "QF_BV bitvector reasoning is not yet supported by the lean5 \
+            uncertified_reason: "QF_BV bitvector reasoning is not yet supported by the lean5 \
                  Alethe proof replay; bit-blast steps remain uncertified"
-                    .to_string(),
+                .to_string(),
         },
 
         SmtLogic::QfAuflia => CertificationStrategy::PartialCertification {
-            uncertified_reason:
-                "QF_AUFLIA array axiom steps (select/store) are not yet \
+            uncertified_reason: "QF_AUFLIA array axiom steps (select/store) are not yet \
                  reconstructed in the lean5 Alethe replay engine"
-                    .to_string(),
+                .to_string(),
         },
 
         SmtLogic::Full => CertificationStrategy::NoCertification {
-            reason:
-                "full first-order logic with quantifiers cannot be certified \
+            reason: "full first-order logic with quantifiers cannot be certified \
                  by the lean5 Alethe replay engine; quantifier instantiation \
                  steps are not yet supported"
-                    .to_string(),
+                .to_string(),
         },
 
         SmtLogic::Unknown => CertificationStrategy::NoCertification {
-            reason:
-                "formula uses features outside any recognized SMT logic \
+            reason: "formula uses features outside any recognized SMT logic \
                  fragment; cannot determine a certification strategy"
-                    .to_string(),
+                .to_string(),
         },
     }
 }
@@ -551,10 +542,9 @@ fn collect_features(formula: &Formula, features: &mut FormulaFeatures) {
 fn has_variable(formula: &Formula) -> bool {
     let mut found = false;
     formula.visit(&mut |f| {
-        if !found
-            && let Formula::Var(..) = f {
-                found = true;
-            }
+        if !found && let Formula::Var(..) = f {
+            found = true;
+        }
     });
     found
 }
@@ -687,11 +677,7 @@ mod tests {
 
     #[test]
     fn test_classify_bv_extract_is_qf_bv() {
-        let f = Formula::BvExtract {
-            inner: Box::new(bv_var("x", 32)),
-            high: 15,
-            low: 0,
-        };
+        let f = Formula::BvExtract { inner: Box::new(bv_var("x", 32)), high: 15, low: 0 };
         assert_eq!(classify_formula(&f), SmtLogic::QfBv);
     }
 
@@ -736,10 +722,7 @@ mod tests {
 
     #[test]
     fn test_classify_exists_is_full() {
-        let f = Formula::Exists(
-            vec![("y".into(), Sort::Bool)],
-            Box::new(bool_var("y")),
-        );
+        let f = Formula::Exists(vec![("y".into(), Sort::Bool)], Box::new(bool_var("y")));
         assert_eq!(classify_formula(&f), SmtLogic::Full);
     }
 
@@ -949,11 +932,7 @@ mod tests {
     fn test_e2e_overflow_vc_with_bv_is_not_certifiable() {
         // Overflow check using bitvectors
         let f = Formula::BvULt(
-            Box::new(Formula::BvAdd(
-                Box::new(bv_var("a", 64)),
-                Box::new(bv_var("b", 64)),
-                64,
-            )),
+            Box::new(Formula::BvAdd(Box::new(bv_var("a", 64)), Box::new(bv_var("b", 64)), 64)),
             Box::new(bv_var("a", 64)),
             64,
         );
@@ -971,10 +950,7 @@ mod tests {
             Box::new(Formula::Implies(
                 Box::new(Formula::Ge(Box::new(int_var("i")), Box::new(Formula::Int(0)))),
                 Box::new(Formula::Lt(
-                    Box::new(Formula::Select(
-                        Box::new(arr_var("arr")),
-                        Box::new(int_var("i")),
-                    )),
+                    Box::new(Formula::Select(Box::new(arr_var("arr")), Box::new(int_var("i")))),
                     Box::new(Formula::Int(100)),
                 )),
             )),
@@ -1008,16 +984,10 @@ mod tests {
         // a + b <= MAX AND p = q
         let f = Formula::And(vec![
             Formula::Le(
-                Box::new(Formula::Add(
-                    Box::new(int_var("a")),
-                    Box::new(int_var("b")),
-                )),
+                Box::new(Formula::Add(Box::new(int_var("a")), Box::new(int_var("b")))),
                 Box::new(Formula::Int(100)),
             ),
-            Formula::Eq(
-                Box::new(bool_var("p")),
-                Box::new(bool_var("q")),
-            ),
+            Formula::Eq(Box::new(bool_var("p")), Box::new(bool_var("q"))),
         ]);
         assert_eq!(classify_formula(&f), SmtLogic::QfLiaUf);
     }
@@ -1027,10 +997,7 @@ mod tests {
         // p => x > 0
         let f = Formula::Implies(
             Box::new(bool_var("p")),
-            Box::new(Formula::Gt(
-                Box::new(int_var("x")),
-                Box::new(Formula::Int(0)),
-            )),
+            Box::new(Formula::Gt(Box::new(int_var("x")), Box::new(Formula::Int(0)))),
         );
         assert_eq!(classify_formula(&f), SmtLogic::QfLiaUf);
     }
@@ -1095,9 +1062,7 @@ mod tests {
 
     #[test]
     fn test_scope_uncertified_predicates() {
-        let scope = CertificationScope::Uncertified {
-            reason: "quantifiers present".to_string(),
-        };
+        let scope = CertificationScope::Uncertified { reason: "quantifiers present".to_string() };
         assert!(!scope.is_fully_certified());
         assert!(!scope.is_partially_certified());
         assert!(scope.is_uncertified());
@@ -1127,9 +1092,8 @@ mod tests {
 
     #[test]
     fn test_scope_summary_uncertified() {
-        let scope = CertificationScope::Uncertified {
-            reason: "quantifiers not supported".to_string(),
-        };
+        let scope =
+            CertificationScope::Uncertified { reason: "quantifiers not supported".to_string() };
         let summary = scope.summary();
         assert!(summary.contains("uncertified"));
         assert!(summary.contains("quantifiers not supported"));
@@ -1231,20 +1195,14 @@ mod tests {
     #[test]
     fn test_theory_classifier_classify_logic_qf_lia() {
         let classifier = TheoryClassifier::new();
-        let f = Formula::Add(
-            Box::new(int_var("x")),
-            Box::new(Formula::Int(1)),
-        );
+        let f = Formula::Add(Box::new(int_var("x")), Box::new(Formula::Int(1)));
         assert_eq!(classifier.classify_logic(&f), SmtLogic::QfLia);
     }
 
     #[test]
     fn test_theory_classifier_classify_logic_qf_uf() {
         let classifier = TheoryClassifier::new();
-        let f = Formula::Eq(
-            Box::new(bool_var("a")),
-            Box::new(bool_var("b")),
-        );
+        let f = Formula::Eq(Box::new(bool_var("a")), Box::new(bool_var("b")));
         assert_eq!(classifier.classify_logic(&f), SmtLogic::QfUf);
     }
 
@@ -1263,25 +1221,15 @@ mod tests {
         let classifier = TheoryClassifier::new();
 
         // QF_LIA -> FullyCertified
-        let f_lia = Formula::Le(
-            Box::new(int_var("x")),
-            Box::new(Formula::Int(100)),
-        );
+        let f_lia = Formula::Le(Box::new(int_var("x")), Box::new(Formula::Int(100)));
         assert!(classifier.classify(&f_lia).is_fully_certified());
 
         // QF_BV -> PartiallyCertified
-        let f_bv = Formula::BvAdd(
-            Box::new(bv_var("a", 32)),
-            Box::new(bv_var("b", 32)),
-            32,
-        );
+        let f_bv = Formula::BvAdd(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32);
         assert!(classifier.classify(&f_bv).is_partially_certified());
 
         // Full -> Uncertified
-        let f_full = Formula::Forall(
-            vec![("x".into(), Sort::Int)],
-            Box::new(int_var("x")),
-        );
+        let f_full = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(int_var("x")));
         assert!(classifier.classify(&f_full).is_uncertified());
     }
 
@@ -1320,10 +1268,7 @@ mod tests {
         // if flag then x + 1 else y — combines Bool and Int
         let f = Formula::Ite(
             Box::new(bool_var("flag")),
-            Box::new(Formula::Add(
-                Box::new(int_var("x")),
-                Box::new(Formula::Int(1)),
-            )),
+            Box::new(Formula::Add(Box::new(int_var("x")), Box::new(Formula::Int(1)))),
             Box::new(int_var("y")),
         );
         let logic = classify_formula(&f);

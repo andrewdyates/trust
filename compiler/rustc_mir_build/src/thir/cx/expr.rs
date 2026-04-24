@@ -228,13 +228,11 @@ impl<'tcx> ThirBuildCx<'tcx> {
                 // We'll need these types later on
                 let pin_ty_args = match expr.ty.kind() {
                     ty::Adt(_, args) => args,
-                    // tRust: invariant — `Adjust::ReborrowPin` is only applied to expressions whose type has already been checked as `Pin<...>`.
                     _ => bug!("ReborrowPin with non-Pin type"),
                 };
-                let pin_ty = pin_ty_args.iter().next().expect("invariant: Pin type has a type argument").expect_ty(); // tRust: unwrap -> expect
+                let pin_ty = pin_ty_args.iter().next().unwrap().expect_ty();
                 let ptr_target_ty = match pin_ty.kind() {
                     ty::Ref(_, ty, _) => *ty,
-                    // tRust: invariant — pin reborrowing only applies to `Pin<&T>` or `Pin<&mut T>`, so the inner pointee type must be a reference.
                     _ => bug!("ReborrowPin with non-Ref type"),
                 };
 
@@ -551,7 +549,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                         base: AdtExprBase::None,
                     }))
                 }
-                // tRust: invariant — type checking assigns `&pin` expressions the `Pin` lang-item ADT type before THIR lowering reaches this branch.
                 _ => span_bug!(expr.span, "unexpected type for pinned borrow: {:?}", expr_ty),
             },
 
@@ -716,7 +713,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                                             )
                                         }
                                         hir::StructTailExpr::Base(base) => {
-                                            // tRust: invariant — functional record update with a base expression is valid for structs, not enum variants.
                                             span_bug!(base.span, "unexpected res: {:?}", res);
                                         }
                                         hir::StructTailExpr::None
@@ -727,14 +723,12 @@ impl<'tcx> ThirBuildCx<'tcx> {
                                 }))
                             }
                             _ => {
-                                // tRust: invariant — when a struct literal has enum type, its path must resolve to a concrete enum variant.
                                 span_bug!(expr.span, "unexpected res: {:?}", res);
                             }
                         }
                     }
                 },
                 _ => {
-                    // tRust: invariant — `hir::ExprKind::Struct` is only lowered after type checking has assigned it an ADT type.
                     span_bug!(expr.span, "unexpected type for struct literal: {:?}", expr_ty);
                 }
             },
@@ -750,7 +744,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                         (def_id, UpvarArgs::CoroutineClosure(args), None)
                     }
                     _ => {
-                        // tRust: invariant — closure expressions are type-checked as `Closure`, `Coroutine`, or `CoroutineClosure` before THIR lowering.
                         span_bug!(expr.span, "closure expr w/o closure type: {:?}", closure_ty);
                     }
                 };
@@ -854,11 +847,11 @@ impl<'tcx> ThirBuildCx<'tcx> {
             hir::ExprKind::OffsetOf(_, _) => {
                 let offset_of_intrinsic = tcx.require_lang_item(LangItem::OffsetOf, expr.span);
                 let mk_u32_kind = |val: u32| ExprKind::NonHirLiteral {
-                    lit: ScalarInt::try_from_uint(val, Size::from_bits(32)).expect("invariant: value fits in scalar int"), // tRust: unwrap -> expect
+                    lit: ScalarInt::try_from_uint(val, Size::from_bits(32)).unwrap(),
                     user_ty: None,
                 };
                 let mk_usize_kind = |val: u64| ExprKind::NonHirLiteral {
-                    lit: ScalarInt::try_from_target_usize(val, tcx).expect("invariant: value fits in target usize"), // tRust: unwrap -> expect
+                    lit: ScalarInt::try_from_target_usize(val, tcx).unwrap(),
                     user_ty: None,
                 };
                 let mk_call =
@@ -882,7 +875,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
                         }
                     };
 
-                let indices = self.typeck_results.offset_of_data().get(expr.hir_id).expect("invariant: offset_of data exists for this expression"); // tRust: unwrap -> expect
+                let indices = self.typeck_results.offset_of_data().get(expr.hir_id).unwrap();
                 let mut expr = None::<ExprKind<'_>>;
 
                 for &(container, variant, field) in indices.iter() {
@@ -916,7 +909,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
             hir::ExprKind::Repeat(v, _) => {
                 let ty = self.typeck_results.expr_ty(expr);
                 let ty::Array(_, count) = ty.kind() else {
-                    // tRust: invariant — array repeat syntax always has an array type after type checking, including the repeat count.
                     span_bug!(expr.span, "unexpected repeat expr ty: {:?}", ty);
                 };
 
@@ -941,7 +933,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                                 value: self.mirror_expr(value),
                             }
                         }
-                        // tRust: invariant — name resolution and type checking must resolve every `break` target before THIR lowering builds `ExprKind::ConstContinue`.
                         Err(err) => bug!("invalid loop id for break: {}", err),
                     }
                 } else {
@@ -953,7 +944,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                             },
                             value: value.map(|value| self.mirror_expr(value)),
                         },
-                        // tRust: invariant — name resolution and type checking must resolve every `break` target before THIR lowering builds `ExprKind::Break`.
                         Err(err) => bug!("invalid loop id for break: {}", err),
                     }
                 }
@@ -965,7 +955,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                         data: region::ScopeData::Node,
                     },
                 },
-                // tRust: invariant — name resolution and type checking must resolve every `continue` target before THIR lowering builds `ExprKind::Continue`.
                 Err(err) => bug!("invalid loop id for continue: {}", err),
             },
             hir::ExprKind::Let(let_expr) => ExprKind::Let {
@@ -1143,7 +1132,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
             }
 
             hir::ExprKind::UnsafeBinderCast(UnsafeBinderCastKind::Unwrap, source, _ty) => {
-                // tRust: known issue — Take into account the ascribed type, too. (upstream FIXME by unsafe_binders)
+                // FIXME(unsafe_binders): Take into account the ascribed type, too.
                 let mirrored = self.mirror_expr(source);
                 if source.is_syntactic_place_expr() {
                     ExprKind::PlaceUnwrapUnsafeBinder { source: mirrored }
@@ -1152,7 +1141,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
                 }
             }
             hir::ExprKind::UnsafeBinderCast(UnsafeBinderCastKind::Wrap, source, _ty) => {
-                // tRust: known issue — Take into account the ascribed type, too. (upstream FIXME by unsafe_binders)
+                // FIXME(unsafe_binders): Take into account the ascribed type, too.
                 let mirrored = self.mirror_expr(source);
                 ExprKind::WrapUnsafeBinder { source: mirrored }
             }
@@ -1197,7 +1186,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
             // `Self` is used in expression as a tuple struct constructor or a unit struct constructor
             Res::SelfCtor(_) => self.user_args_applied_to_ty_of_hir_id(hir_id).map(Box::new),
 
-            // tRust: invariant — `user_args_applied_to_res` is only queried for callable or const-like `Res` variants handled in this match.
             _ => bug!("user_args_applied_to_res: unexpected res {:?} at {:?}", res, hir_id),
         };
         debug!("user_args_applied_to_res: user_provided_type={:?}", user_provided_type);
@@ -1215,7 +1203,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
             None => {
                 let (kind, def_id) =
                     self.typeck_results.type_dependent_def(expr.hir_id).unwrap_or_else(|| {
-                        // tRust: invariant — method call lowering only reaches `method_callee` for expressions with a recorded type-dependent def.
                         span_bug!(expr.span, "no type-dependent def for method callee")
                     });
                 let user_ty = self.user_args_applied_to_res(expr.hir_id, Res::Def(kind, def_id));
@@ -1262,7 +1249,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                 let hir_id = self.tcx.local_def_id_to_hir_id(def_id.expect_local());
                 let generics = self.tcx.generics_of(hir_id.owner);
                 let Some(&index) = generics.param_def_id_to_index.get(&def_id) else {
-                    // tRust: invariant — a const-param path that survives to THIR lowering must map to an indexed early-bound generic parameter.
                     span_bug!(
                         expr.span,
                         "Should have already errored about late bound consts: {def_id:?}"
@@ -1296,7 +1282,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                         fields: Box::new([]),
                         base: AdtExprBase::None,
                     })),
-                    // tRust: invariant — a unit struct or unit variant constructor used as a value always has an ADT node type.
                     _ => bug!("unexpected ty: {:?}", ty),
                 }
             }
@@ -1325,7 +1310,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
 
             Res::Local(var_hir_id) => self.convert_var(var_hir_id),
 
-            // tRust: invariant — expression paths reaching this helper should already resolve to one of the supported fn/ctor/const/static/local cases above.
             _ => span_bug!(expr.span, "res `{:?}` not yet implemented", res),
         }
     }
@@ -1382,7 +1366,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
         // same region and mutability as the receiver. This holds for
         // `Deref(Mut)::deref(_mut)` and `Index(Mut)::index(_mut)`.
         let ty::Ref(region, _, mutbl) = *self.thir[args[0]].ty.kind() else {
-            // tRust: invariant — overloaded place operators autoref their receiver, so `args[0]` must have reference type here.
             span_bug!(span, "overloaded_place: receiver is not a reference");
         };
         let ref_ty = Ty::new_ref(self.tcx, region, place_ty, mutbl);
@@ -1418,7 +1401,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
         // to the closure's parent.
         let var_hir_id = match place.base {
             HirPlaceBase::Upvar(upvar_id) => upvar_id.var_path.hir_id,
-            // tRust: invariant — closure capture analysis reports captured places relative to an upvar root, not a non-upvar base.
             base => bug!("Expected an upvar, found {:?}", base),
         };
 
@@ -1569,7 +1551,6 @@ fn bin_op(op: hir::BinOpKind) -> BinOp {
         hir::BinOpKind::Ne => BinOp::Ne,
         hir::BinOpKind::Ge => BinOp::Ge,
         hir::BinOpKind::Gt => BinOp::Gt,
-        // tRust: invariant — lazy boolean operators are lowered elsewhere, so this helper only sees `BinOpKind`s with a direct MIR `BinOp`.
         _ => bug!("no equivalent for ast binop {:?}", op),
     }
 }

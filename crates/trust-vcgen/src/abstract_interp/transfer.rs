@@ -9,10 +9,7 @@ use trust_types::fx::{FxHashMap, FxHashSet};
 
 use trust_types::*;
 
-use super::{
-    AbstractDomain, Interval, IntervalDomain, ThresholdSet,
-    arithmetic::*,
-};
+use super::{AbstractDomain, Interval, IntervalDomain, ThresholdSet, arithmetic::*};
 
 // ── Transfer Functions ─────────────────────────────────────────────────────
 
@@ -65,17 +62,13 @@ pub fn transfer_function(
             result.set(target_name, interval);
         }
         Statement::Nop => {}
-        _ => {},
+        _ => {}
     }
     result
 }
 
 /// Evaluate an rvalue to an interval.
-fn eval_rvalue(
-    rvalue: &Rvalue,
-    func: &VerifiableFunction,
-    state: &IntervalDomain,
-) -> Interval {
+fn eval_rvalue(rvalue: &Rvalue, func: &VerifiableFunction, state: &IntervalDomain) -> Interval {
     match rvalue {
         Rvalue::Use(op) => operand_to_interval(op, func, state),
         Rvalue::BinaryOp(op, lhs, rhs) | Rvalue::CheckedBinaryOp(op, lhs, rhs) => {
@@ -92,8 +85,13 @@ fn eval_rvalue(
                 BinOp::BitAnd => interval_bitand(&a, &b),
                 BinOp::BitOr => interval_bitor(&a, &b),
                 // Comparisons produce boolean [0, 1].
-                BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le
-                | BinOp::Gt | BinOp::Ge | BinOp::Cmp => Interval::new(0, 1),
+                BinOp::Eq
+                | BinOp::Ne
+                | BinOp::Lt
+                | BinOp::Le
+                | BinOp::Gt
+                | BinOp::Ge
+                | BinOp::Cmp => Interval::new(0, 1),
                 _ => Interval::TOP,
             }
         }
@@ -135,9 +133,11 @@ pub fn detect_widen_points(func: &VerifiableFunction) -> Vec<WidenPoint> {
     for block in &func.body.blocks {
         for target in block.terminator.exit_targets() {
             if let ClauseTarget::Block(target_id) = target
-                && target_id.0 <= block.id.0 && target_id != block.id {
-                    headers.insert(target_id);
-                }
+                && target_id.0 <= block.id.0
+                && target_id != block.id
+            {
+                headers.insert(target_id);
+            }
         }
     }
     headers.into_iter().map(|block| WidenPoint { block }).collect()
@@ -192,8 +192,7 @@ pub fn fixpoint(func: &VerifiableFunction, initial: IntervalDomain) -> FixpointR
     }
 
     let max_iterations = func.body.blocks.len() * 20 + 100;
-    let mut worklist: VecDeque<BlockId> =
-        func.body.blocks.iter().map(|b| b.id).collect();
+    let mut worklist: VecDeque<BlockId> = func.body.blocks.iter().map(|b| b.id).collect();
     let mut iteration = 0;
 
     while let Some(block_id) = worklist.pop_front() {
@@ -254,10 +253,7 @@ pub fn type_aware_initial_state(func: &VerifiableFunction) -> IntervalDomain {
         if i == 0 || i > func.body.arg_count {
             continue;
         }
-        let name = local
-            .name
-            .clone()
-            .unwrap_or_else(|| format!("_{i}"));
+        let name = local.name.clone().unwrap_or_else(|| format!("_{i}"));
         if let Some(interval) = type_to_interval(&local.ty) {
             state.set(name, interval);
         }
@@ -297,7 +293,6 @@ pub fn type_to_interval(ty: &Ty) -> Option<Interval> {
         _ => None,
     }
 }
-
 
 /// Extract threshold constants from a function's CFG.
 ///
@@ -355,10 +350,7 @@ pub fn extract_thresholds(func: &VerifiableFunction) -> ThresholdSet {
 }
 
 /// Extract constants from comparison rvalues.
-fn extract_comparison_constants(
-    rvalue: &Rvalue,
-    values: &mut Vec<i128>,
-) {
+fn extract_comparison_constants(rvalue: &Rvalue, values: &mut Vec<i128>) {
     match rvalue {
         Rvalue::BinaryOp(op, lhs, rhs) | Rvalue::CheckedBinaryOp(op, lhs, rhs)
             if matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::Eq) =>
@@ -410,11 +402,7 @@ pub struct FixpointConfig {
 
 impl Default for FixpointConfig {
     fn default() -> Self {
-        Self {
-            widen_delay: 3,
-            narrowing_passes: 3,
-            thresholds: None,
-        }
+        Self { widen_delay: 3, narrowing_passes: 3, thresholds: None }
     }
 }
 
@@ -422,10 +410,7 @@ impl FixpointConfig {
     /// Create config with auto-extracted thresholds from the function.
     #[must_use]
     pub fn for_function(func: &VerifiableFunction) -> Self {
-        Self {
-            thresholds: Some(extract_thresholds(func)),
-            ..Self::default()
-        }
+        Self { thresholds: Some(extract_thresholds(func)), ..Self::default() }
     }
 }
 
@@ -452,9 +437,7 @@ pub(crate) fn compute_successor_states(
             }
 
             // Otherwise arm: discr != any target value.
-            let otherwise_state = narrow_from_otherwise(
-                state, func, discr, targets,
-            );
+            let otherwise_state = narrow_from_otherwise(state, func, discr, targets);
             successors.push((*otherwise, otherwise_state));
 
             successors
@@ -465,10 +448,7 @@ pub(crate) fn compute_successor_states(
         }
         _ => {
             // All other terminators: propagate unchanged.
-            terminator_successors(terminator)
-                .into_iter()
-                .map(|id| (id, state.clone()))
-                .collect()
+            terminator_successors(terminator).into_iter().map(|id| (id, state.clone())).collect()
         }
     }
 }
@@ -496,9 +476,8 @@ pub(crate) fn narrow_from_otherwise(
         }
 
         // Collect excluded values.
-        let mut excluded: Vec<i128> = targets.iter()
-            .filter_map(|(v, _)| i128::try_from(*v).ok())
-            .collect();
+        let mut excluded: Vec<i128> =
+            targets.iter().filter_map(|(v, _)| i128::try_from(*v).ok()).collect();
         excluded.sort_unstable();
 
         if excluded.is_empty() {
@@ -542,9 +521,8 @@ fn apply_narrowing_pass(
     for _ in 0..max_passes {
         let mut changed = false;
         for block in &func.body.blocks {
-            let entry_state = result.block_states.get(&block.id)
-                .cloned()
-                .unwrap_or_else(IntervalDomain::bottom);
+            let entry_state =
+                result.block_states.get(&block.id).cloned().unwrap_or_else(IntervalDomain::bottom);
             if entry_state.is_unreachable {
                 continue;
             }
@@ -554,7 +532,9 @@ fn apply_narrowing_pass(
             }
             let successors = terminator_successors(&block.terminator);
             for succ_id in successors {
-                let old = result.block_states.get(&succ_id)
+                let old = result
+                    .block_states
+                    .get(&succ_id)
                     .cloned()
                     .unwrap_or_else(IntervalDomain::bottom);
                 let narrowed = if widen_points.contains(&succ_id) {
@@ -600,8 +580,7 @@ pub fn fixpoint_configured(
     let mut block_iterations: FxHashMap<BlockId, usize> = FxHashMap::default();
 
     let max_iterations = func.body.blocks.len() * 20 + 100;
-    let mut worklist: VecDeque<BlockId> =
-        func.body.blocks.iter().map(|b| b.id).collect();
+    let mut worklist: VecDeque<BlockId> = func.body.blocks.iter().map(|b| b.id).collect();
     let mut iteration = 0;
 
     // Phase 1: Ascending iteration with (threshold + delayed) widening.
@@ -615,8 +594,7 @@ pub fn fixpoint_configured(
             continue;
         };
 
-        let entry_state = states.get(&block_id).cloned()
-            .unwrap_or_else(IntervalDomain::bottom);
+        let entry_state = states.get(&block_id).cloned().unwrap_or_else(IntervalDomain::bottom);
         if entry_state.is_unreachable {
             continue;
         }
@@ -628,12 +606,9 @@ pub fn fixpoint_configured(
         }
 
         // Propagate to successors with condition narrowing.
-        let successor_states = compute_successor_states(
-            &block.terminator, func, &current,
-        );
+        let successor_states = compute_successor_states(&block.terminator, func, &current);
         for (succ_id, succ_state) in successor_states {
-            let old = states.get(&succ_id).cloned()
-                .unwrap_or_else(IntervalDomain::bottom);
+            let old = states.get(&succ_id).cloned().unwrap_or_else(IntervalDomain::bottom);
 
             let count = block_iterations.entry(succ_id).or_insert(0);
             *count += 1;
@@ -725,10 +700,8 @@ pub fn extract_invariants(result: &FixpointResult, func: &VerifiableFunction) ->
 
             // Upper bound: var <= hi
             if interval.hi != i128::MAX {
-                invariants.push(Formula::Le(
-                    Box::new(var_formula),
-                    Box::new(Formula::Int(interval.hi)),
-                ));
+                invariants
+                    .push(Formula::Le(Box::new(var_formula), Box::new(Formula::Int(interval.hi))));
             }
         }
     }
@@ -757,4 +730,3 @@ pub fn narrow_from_condition(
     }
     result
 }
-

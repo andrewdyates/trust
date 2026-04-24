@@ -186,7 +186,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 return;
             }
             _ => {
-                // tRust: invariant — type checking an HIR closure expression must produce a closure, coroutine-closure, coroutine, or error type.
                 span_bug!(
                     span,
                     "type of closure expr {:?} is not a closure {:?}",
@@ -258,7 +257,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         //
         // We force all of these arguments to be captured by move before we do expr use analysis.
         //
-        // NOTE(async_closures): This could be cleaned up. It's a bit janky that we're just
+        // FIXME(async_closures): This could be cleaned up. It's a bit janky that we're just
         // moving all of the `LocalSource::AsyncFn` locals here.
         if let Some(hir::CoroutineKind::Desugared(
             _,
@@ -266,7 +265,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         )) = self.tcx.coroutine_kind(closure_def_id)
         {
             let hir::ExprKind::Block(block, _) = body.value.kind else {
-                // tRust: invariant — desugared async fn and async closure bodies are lowered as an outer block containing the synthesized argument-capture lets.
                 bug!();
             };
             for stmt in block.stmts {
@@ -277,7 +275,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     ..
                 }) = stmt.kind
                 else {
-                    // tRust: invariant — each synthesized statement in that outer async block is an AsyncFn let-binding with an initializer.
                     bug!();
                 };
                 let hir::PatKind::Binding(hir::BindingMode(hir::ByRef::No, _), _, _, _) = pat.kind
@@ -286,11 +283,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     continue;
                 };
                 let hir::ExprKind::Path(hir::QPath::Resolved(_, path)) = init.kind else {
-                    // tRust: invariant — each synthesized AsyncFn binding is initialized from a simple resolved path to the original argument local.
                     bug!();
                 };
                 let hir::def::Res::Local(local_id) = path.res else {
-                    // tRust: invariant — the initializer path for a synthesized AsyncFn binding must resolve to a local argument binding.
                     bug!();
                 };
                 let place = closure_fcx.place_for_root_variable(closure_def_id, local_id);
@@ -470,7 +465,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let ty::Coroutine(_, coroutine_args) =
                     *self.typeck_results.borrow().expr_ty(body.value).kind()
                 else {
-                    // tRust: invariant — a coroutine-closure body expression is typed as the inner coroutine before we constrain that coroutine's kind.
                     bug!();
                 };
                 self.demand_eqtype(
@@ -558,14 +552,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // coroutine body actually consumes its upvars.
         let hir::ExprKind::Block(&hir::Block { expr: Some(body), .. }, None) = body.value.kind
         else {
-            // tRust: invariant — the body of a desugared child coroutine is wrapped in an outer block whose tail expression is the real coroutine body.
             bug!();
         };
         // Specifically, we only care about the *real* body of the coroutine.
         // We skip out into the drop-temps within the block of the body in order
         // to skip over the args of the desugaring.
         let hir::ExprKind::DropTemps(body) = body.kind else {
-            // tRust: invariant — after skipping the desugared argument-capture block, the real coroutine body is wrapped in DropTemps.
             bug!();
         };
 
@@ -789,7 +781,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         for (mut place, capture_info) in capture_information.into_iter() {
             let var_hir_id = match place.base {
                 PlaceBase::Upvar(upvar_id) => upvar_id.var_path.hir_id,
-                // tRust: invariant — capture information is populated only from upvar places before min-capture computation, so every base must be PlaceBase::Upvar.
                 base => bug!("Expected upvar, found={:?}", base),
             };
             let var_ident = self.tcx.hir_ident(var_hir_id);
@@ -917,7 +908,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         | ProjectionKind::OpaqueCast
                         | ProjectionKind::UnwrapUnsafeBinder => false,
                         p @ (ProjectionKind::Subslice | ProjectionKind::Index) => {
-                            // tRust: invariant — restrict_capture_precision truncates captures before Index/Subslice projections, so those projections cannot survive into min-capture sorting.
                             bug!("ProjectionKind {:?} was unexpected", p)
                         }
                     }
@@ -943,7 +933,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             }
                         }
                         // Given the filter above, this arm should never be hit
-                        // tRust: invariant — both iterators were filtered by is_field, so each zipped projection pair must consist of field projections.
                         (l, r) => bug!("ProjectionKinds {:?} or {:?} were unexpected", l, r),
                     }
                 }
@@ -1065,7 +1054,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 }
 
                                 // Cannot happen: if we don't capture a variable, we impl strictly more traits
-                                // tRust: invariant — dropping a capture can only preserve or increase auto-trait implementations, so CapturingNothing cannot explain a missing trait.
                                 UpvarMigrationInfo::CapturingNothing { use_span } => span_bug!(
                                     *use_span,
                                     "missing trait from not capturing something"
@@ -1209,7 +1197,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         typeck_results.coroutine_stalled_predicates.extend(
                             goals
                                 .into_iter()
-                                // NOTE: throwing away the param-env :(
+                                // FIXME: throwing away the param-env :(
                                 .map(|goal| (goal.predicate, self.misc(span))),
                         );
                     }
@@ -1274,7 +1262,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             hir::CaptureBy::Ref | hir::CaptureBy::Use { .. } => {
                 // For non move closure the capture kind is the max capture kind of all captures
                 // according to the ordering ImmBorrow < UniqueImmBorrow < MutBorrow < ByValue
-                let mut max_capture_info = root_var_min_capture_list.first().expect("invariant: non-empty collection").info;
+                let mut max_capture_info = root_var_min_capture_list.first().unwrap().info;
                 for capture in root_var_min_capture_list.iter() {
                     max_capture_info = determine_capture_info(max_capture_info, capture.info);
                 }
@@ -1367,7 +1355,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) -> Option<FxIndexSet<UpvarMigrationInfo>> {
         let ty = self.resolve_vars_if_possible(self.node_ty(var_hir_id));
 
-        // NOTE(#132279): Using `non_body_analysis` here feels wrong.
+        // FIXME(#132279): Using `non_body_analysis` here feels wrong.
         if !ty.has_significant_drop(
             self.tcx,
             ty::TypingEnv::non_body_analysis(self.tcx, closure_def_id),
@@ -1654,7 +1642,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         base_path_ty: Ty<'tcx>,
         captured_by_move_projs: Vec<&[Projection<'tcx>]>,
     ) -> bool {
-        // NOTE(#132279): Using `non_body_analysis` here feels wrong.
+        // FIXME(#132279): Using `non_body_analysis` here feels wrong.
         let needs_drop = |ty: Ty<'tcx>| {
             ty.has_significant_drop(
                 self.tcx,
@@ -1723,17 +1711,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // Only Field projections can be applied to a non-box Adt.
                 assert!(
                     captured_by_move_projs.iter().all(|projs| matches!(
-                        projs.first().expect("invariant: non-empty collection").kind,
+                        projs.first().unwrap().kind,
                         ProjectionKind::Field(..)
                     ))
                 );
-                def.variants().get(FIRST_VARIANT).expect("invariant: index/key is valid").fields.iter_enumerated().any(
+                def.variants().get(FIRST_VARIANT).unwrap().fields.iter_enumerated().any(
                     |(i, field)| {
                         let paths_using_field = captured_by_move_projs
                             .iter()
                             .filter_map(|projs| {
                                 if let ProjectionKind::Field(field_idx, _) =
-                                    projs.first().expect("invariant: non-empty collection").kind
+                                    projs.first().unwrap().kind
                                 {
                                     if field_idx == i { Some(&projs[1..]) } else { None }
                                 } else {
@@ -1757,7 +1745,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // Only Field projections can be applied to a tuple.
                 assert!(
                     captured_by_move_projs.iter().all(|projs| matches!(
-                        projs.first().expect("invariant: non-empty collection").kind,
+                        projs.first().unwrap().kind,
                         ProjectionKind::Field(..)
                     ))
                 );
@@ -1766,7 +1754,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     let paths_using_field = captured_by_move_projs
                         .iter()
                         .filter_map(|projs| {
-                            if let ProjectionKind::Field(field_idx, _) = projs.first().expect("invariant: non-empty collection").kind
+                            if let ProjectionKind::Field(field_idx, _) = projs.first().unwrap().kind
                             {
                                 if field_idx.index() == i { Some(&projs[1..]) } else { None }
                             } else {
@@ -1955,7 +1943,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // Dereferencing a box doesn't change mutability
                 ty::Adt(def, ..) if def.is_box() => {}
 
-                // tRust: invariant — normalized captured-place dereferences can only come from refs or Box after raw-pointer cases are excluded.
                 unexpected_ty => span_bug!(
                     self.tcx.hir_span(var_hir_id),
                     "deref of unexpected pointer type {:?}",
@@ -2083,14 +2070,13 @@ fn apply_capture_kind_on_capture_ty<'tcx>(
 
 /// Returns the Span of where the value with the provided HirId would be dropped
 fn drop_location_span(tcx: TyCtxt<'_>, hir_id: HirId) -> Span {
-    let owner_id = tcx.hir_get_enclosing_scope(hir_id).expect("invariant: value is present");
+    let owner_id = tcx.hir_get_enclosing_scope(hir_id).unwrap();
 
     let owner_node = tcx.hir_node(owner_id);
     let owner_span = match owner_node {
         hir::Node::Item(item) => match item.kind {
             hir::ItemKind::Fn { body: owner_id, .. } => tcx.hir_span(owner_id.hir_id),
             _ => {
-                // tRust: invariant — when a closure's enclosing scope is an Item owner, that owner must be a function item with a body.
                 bug!("Drop location span error: need to handle more ItemKind '{:?}'", item.kind);
             }
         },
@@ -2098,7 +2084,6 @@ fn drop_location_span(tcx: TyCtxt<'_>, hir_id: HirId) -> Span {
         hir::Node::TraitItem(item) => tcx.hir_span(item.hir_id()),
         hir::Node::ImplItem(item) => tcx.hir_span(item.hir_id()),
         _ => {
-            // tRust: invariant — closure expressions are enclosed only by block or function-like HIR owners, so no other owner node kind should appear here.
             bug!("Drop location span error: need to handle more Node '{:?}'", owner_node);
         }
     };
@@ -2388,7 +2373,6 @@ fn adjust_for_non_move_closure(
 fn construct_place_string<'tcx>(tcx: TyCtxt<'_>, place: &Place<'tcx>) -> String {
     let variable_name = match place.base {
         PlaceBase::Upvar(upvar_id) => var_name(tcx, upvar_id.var_path.hir_id).to_string(),
-        // tRust: invariant — capture-analysis formatting is only called on recorded captures, and those recorded places are always rooted at upvars.
         _ => bug!("Capture_information should only contain upvars"),
     };
 
@@ -2555,7 +2539,6 @@ fn determine_capture_info(
         match (capture_info_a.capture_kind, capture_info_b.capture_kind) {
             (ty::UpvarCapture::ByUse, ty::UpvarCapture::ByValue)
             | (ty::UpvarCapture::ByValue, ty::UpvarCapture::ByUse) => {
-                // tRust: invariant — a single captured path cannot simultaneously be inferred as both clone-like ByUse and move-like ByValue.
                 bug!("Same capture can't be ByUse and ByValue at the same time")
             }
             (ty::UpvarCapture::ByValue, ty::UpvarCapture::ByValue)
@@ -2579,7 +2562,6 @@ fn determine_capture_info(
                     (BorrowKind::Immutable, BorrowKind::Immutable)
                     | (BorrowKind::UniqueImmutable, BorrowKind::UniqueImmutable)
                     | (BorrowKind::Mutable, BorrowKind::Mutable) => {
-                        // tRust: invariant — equal ByRef borrow kinds were already handled by the eq_capture_kind fast path, so only unequal borrow kinds reach this branch.
                         bug!("Expected unequal capture kinds");
                     }
                 }

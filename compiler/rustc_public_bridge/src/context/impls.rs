@@ -94,7 +94,7 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
         } else {
             false
         };
-        // tRust: known issue — A good reason to make is_mir_available or mir_keys change behavior
+        // FIXME: A good reason to make is_mir_available or mir_keys change behavior
         !must_override && self.tcx.is_mir_available(def_id) && !self.tcx.is_trivial_const(def_id)
     }
 
@@ -115,7 +115,7 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
     }
 
     pub fn target_pointer_size(&self) -> usize {
-        self.tcx.data_layout.pointer_size().bits().try_into().expect("invariant: pointer size in bits fits in usize") // tRust: unwrap -> expect
+        self.tcx.data_layout.pointer_size().bits().try_into().unwrap()
     }
 
     pub fn entry_fn(&self) -> Option<DefId> {
@@ -153,14 +153,14 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
     }
 
     pub fn foreign_module(&self, mod_def: DefId) -> &ForeignModule {
-        self.tcx.foreign_modules(mod_def.krate).get(&mod_def).expect("invariant: mod_def must be a valid foreign module in its own crate") // tRust: unwrap -> expect
+        self.tcx.foreign_modules(mod_def.krate).get(&mod_def).unwrap()
     }
 
     pub fn foreign_items(&self, mod_def: DefId) -> Vec<DefId> {
         self.tcx
             .foreign_modules(mod_def.krate)
             .get(&mod_def)
-            .expect("invariant: mod_def must be a valid foreign module in its own crate") // tRust: unwrap -> expect
+            .unwrap()
             .foreign_items
             .iter()
             .map(|item_def| *item_def)
@@ -278,7 +278,7 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
 
     /// Return registered tool attributes with the given attribute name.
     ///
-    /// tRust: known issue (jdonszelmann) — may panic on non-tool attributes. After more attribute work, non-tool
+    /// FIXME(jdonszelmann): may panic on non-tool attributes. After more attribute work, non-tool
     /// attributes will simply return an empty list.
     ///
     /// Single segmented name like `#[clippy]` is specified as `&["clippy".to_string()]`.
@@ -391,7 +391,7 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
 
     /// Retrieve the plain function name of an intrinsic.
     pub fn intrinsic_name(&self, def_id: DefId) -> String {
-        self.tcx.intrinsic(def_id).expect("invariant: def_id must refer to an intrinsic").name.to_string() // tRust: unwrap -> expect
+        self.tcx.intrinsic(def_id).unwrap().name.to_string()
     }
 
     /// Retrieve the closure signature for the given generic arguments.
@@ -488,7 +488,7 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
         let size = self
             .tcx
             .layout_of(self.fully_monomorphized().as_query_input(ty_internal))
-            .expect("invariant: monomorphized type must have a computable layout") // tRust: unwrap -> expect
+            .unwrap()
             .size;
         let scalar = ScalarInt::try_from_uint(value, size).ok_or_else(|| {
             B::Error::new(format!("Value overflow: cannot convert `{value}` to `{ty_internal}`."))
@@ -504,7 +504,7 @@ impl<'tcx, B: Bridge> CompilerCtxt<'tcx, B> {
         let size = self
             .tcx
             .layout_of(self.fully_monomorphized().as_query_input(ty_internal))
-            .expect("invariant: monomorphized type must have a computable layout") // tRust: unwrap -> expect
+            .unwrap()
             .size;
         let scalar = ScalarInt::try_from_uint(value, size).ok_or_else(|| {
             B::Error::new(format!("Value overflow: cannot convert `{value}` to `{ty_internal}`."))

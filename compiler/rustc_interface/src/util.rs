@@ -114,7 +114,7 @@ fn init_stack_size(early_dcx: &EarlyDiagCtxt) -> usize {
             .filter(|s| !s.trim().is_empty())
             // rustc is a batch program, so error early on inputs which are unlikely to be intended
             // so no one thinks we parsed them setting `RUST_MIN_STACK="64 megabytes"`
-            // tRust: known issue — we could accept `RUST_MIN_STACK=64MB`, perhaps?
+            // FIXME: we could accept `RUST_MIN_STACK=64MB`, perhaps?
             .map(|s| {
                 let s = s.trim();
                 s.parse::<usize>().unwrap_or_else(|_| {
@@ -159,7 +159,7 @@ fn run_in_thread_with_globals<F: FnOnce(CurrentGcx, Arc<Proxy>) -> R + Send, R: 
                     || f(CurrentGcx::new(), Proxy::new()),
                 )
             })
-            .expect("invariant: scoped thread join succeeds") // tRust: unwrap -> expect
+            .unwrap()
             .join();
 
         match r {
@@ -188,7 +188,7 @@ pub(crate) fn run_in_thread_pool_with_globals<
 
     let thread_stack_size = init_stack_size(thread_builder_diag);
 
-    let registry = sync::Registry::new(std::num::NonZero::new(threads).expect("invariant: thread count is non-zero")); // tRust: unwrap -> expect
+    let registry = sync::Registry::new(std::num::NonZero::new(threads).unwrap());
 
     let Some(proof) = sync::check_dyn_thread_safe() else {
         return run_in_thread_with_globals(
@@ -249,8 +249,6 @@ internal compiler error: query cycle handler thread panicked, aborting process";
                                 // Accessing session globals is sound as they outlive `GlobalCtxt`.
                                 // They are needed to hash query keys containing spans or symbols.
                                 let job_map = rustc_span::set_session_globals_then(
-                                    // SAFETY: The pointer is non-null and properly aligned, derived
-                                    // from a valid reference or allocation that outlives this use.
                                     unsafe { &*(session_globals as *const SessionGlobals) },
                                     || {
                                         // Ensure there were no errors collecting all active jobs.
@@ -269,7 +267,7 @@ internal compiler error: query cycle handler thread panicked, aborting process";
 
                     on_panic.disable();
                 })
-                .expect("invariant: scoped thread join succeeds"); // tRust: unwrap -> expect
+                .unwrap();
         })
         .stack_size(thread_stack_size);
 
@@ -310,10 +308,6 @@ internal compiler error: query cycle handler thread panicked, aborting process";
 }
 
 fn load_backend_from_dylib(early_dcx: &EarlyDiagCtxt, path: &Path) -> MakeBackendFn {
-    // SAFETY: `path` points to a codegen backend dylib that exports the
-    // `__rustc_codegen_backend` symbol with type `MakeBackendFn`. The dylib is
-    // loaded and the symbol is resolved; the library is intentionally leaked so
-    // the function pointer remains valid for the lifetime of the process.
     match unsafe { load_symbol_from_dylib::<MakeBackendFn>(path, "__rustc_codegen_backend") } {
         Ok(backend_sym) => backend_sym,
         Err(DylibError::DlOpen(path, err)) => {
@@ -353,6 +347,9 @@ pub fn get_codegen_backend(
             "dummy" => || Box::new(DummyCodegenBackend { target_config_override: None }),
             #[cfg(feature = "llvm")]
             "llvm" => rustc_codegen_llvm::LlvmCodegenBackend::new,
+            // tRust: wire the builtin LLVM2 backend into rustc_interface dispatch (#829).
+            #[cfg(feature = "llvm2")]
+            "llvm2" => rustc_codegen_llvm2::Llvm2CodegenBackend::new,
             backend_name => get_codegen_sysroot(early_dcx, sysroot, backend_name),
         }
     });
@@ -422,7 +419,7 @@ impl CodegenBackend for DummyCodegenBackend {
         _sess: &Session,
         _outputs: &OutputFilenames,
     ) -> (CompiledModules, FxIndexMap<WorkProductId, WorkProduct>) {
-        (*ongoing_codegen.downcast().expect("invariant: downcast to known codegen backend type"), FxIndexMap::default()) // tRust: unwrap -> expect
+        (*ongoing_codegen.downcast().unwrap(), FxIndexMap::default())
     }
 
     fn link(
@@ -660,7 +657,7 @@ pub fn build_output_filenames(attrs: &[ast::Attribute], sess: &Session) -> Outpu
             }
 
             let out_filestem =
-                out_file.filestem().unwrap_or_default().to_str().expect("invariant: output filestem is valid UTF-8").to_string(); // tRust: unwrap -> expect
+                out_file.filestem().unwrap_or_default().to_str().unwrap().to_string();
             OutputFilenames::new(
                 out_file.parent().unwrap_or_else(|| Path::new("")).to_path_buf(),
                 crate_name.unwrap_or_else(|| out_filestem.replace('-', "_")),

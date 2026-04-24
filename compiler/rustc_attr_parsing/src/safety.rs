@@ -23,7 +23,7 @@ impl<'sess, S: Stage> AttributeParser<'sess, S> {
 
         let name = (attr_path.segments.len() == 1).then_some(attr_path.segments[0]);
 
-        // tRust: known issue — We should retrieve this information from the attribute parsers instead of from `BUILTIN_ATTRIBUTE_MAP`
+        // FIXME: We should retrieve this information from the attribute parsers instead of from `BUILTIN_ATTRIBUTE_MAP`
         let builtin_attr_info = name.and_then(|name| BUILTIN_ATTRIBUTE_MAP.get(&name));
         let builtin_attr_safety = builtin_attr_info.map(|x| x.safety);
 

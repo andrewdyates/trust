@@ -13,8 +13,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::{Formula, Sort};
 use std::fmt::Write;
+use trust_types::{Formula, Sort};
 
 use crate::error::CegarError;
 use crate::interpolation::UnsatCore;
@@ -71,7 +71,8 @@ impl UnsatCoreRequest {
         vars.dedup_by(|a, b| a.0 == b.0);
 
         for (name, sort) in &vars {
-            let _ = writeln!(script, 
+            let _ = writeln!(
+                script,
                 "(declare-const {} {})",
                 sanitize_smtlib_symbol(name),
                 sort_to_smtlib(sort)
@@ -81,7 +82,8 @@ impl UnsatCoreRequest {
         // Named assertions.
         for (label, formula) in &self.formulas {
             let smt_formula = formula_to_smtlib(formula);
-            let _ = writeln!(script, 
+            let _ = writeln!(
+                script,
                 "(assert (! {} :named {}))",
                 smt_formula,
                 sanitize_smtlib_symbol(label)
@@ -112,9 +114,7 @@ pub fn parse_unsat_core_response(output: &str) -> Result<UnsatCore, CegarError> 
     let lines: Vec<&str> = trimmed.lines().map(str::trim).collect();
 
     if lines.is_empty() {
-        return Err(CegarError::SolverError {
-            detail: "empty solver response".to_string(),
-        });
+        return Err(CegarError::SolverError { detail: "empty solver response".to_string() });
     }
 
     // Find the check-sat result line.
@@ -149,10 +149,7 @@ pub fn parse_unsat_core_response(output: &str) -> Result<UnsatCore, CegarError> 
             if inner.trim().is_empty() {
                 return Ok(UnsatCore::new(vec![]));
             }
-            let labels: Vec<String> = inner
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect();
+            let labels: Vec<String> = inner.split_whitespace().map(|s| s.to_string()).collect();
             Ok(UnsatCore::new(labels))
         }
         None => {
@@ -226,7 +223,7 @@ fn collect_formula_vars(formula: &Formula, out: &mut Vec<(String, Sort)>) {
             collect_formula_vars(e, out);
         }
         Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
-            out.extend(bindings.iter().cloned());
+            out.extend(bindings.iter().map(|(name, sort)| (name.to_string(), sort.clone())));
             collect_formula_vars(body, out);
         }
         // Bitvector ops
@@ -261,7 +258,7 @@ fn collect_formula_vars(formula: &Formula, out: &mut Vec<(String, Sort)>) {
         Formula::BvExtract { inner, .. } => collect_formula_vars(inner, out),
         // Literals: no variables.
         Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {}
-        _ => {},
+        _ => {}
     }
 }
 
@@ -364,19 +361,14 @@ mod tests {
 
     #[test]
     fn test_formula_to_smtlib_comparison() {
-        let f = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let f =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         assert_eq!(formula_to_smtlib(&f), "(< x 10)");
     }
 
     #[test]
     fn test_formula_to_smtlib_and() {
-        let f = Formula::And(vec![
-            Formula::Bool(true),
-            Formula::Bool(false),
-        ]);
+        let f = Formula::And(vec![Formula::Bool(true), Formula::Bool(false)]);
         assert_eq!(formula_to_smtlib(&f), "(and true false)");
     }
 

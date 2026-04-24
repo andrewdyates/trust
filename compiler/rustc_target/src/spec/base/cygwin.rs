@@ -26,7 +26,7 @@ pub(crate) fn opts() -> TargetOptions {
     TargetOptions {
         os: Os::Cygwin,
         vendor: "pc".into(),
-        // tRust: known issue (#13846) — this should be enabled for cygwin
+        // FIXME(#13846) this should be enabled for cygwin
         function_sections: false,
         linker: Some("gcc".into()),
         dynamic_linking: true,

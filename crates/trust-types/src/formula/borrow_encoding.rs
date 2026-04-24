@@ -172,14 +172,11 @@ impl BorrowEncoding {
     /// Full encoding constraint: creation AND aliasing AND expiry.
     #[must_use]
     pub fn full_constraint(&self) -> Formula {
-        let parts: Vec<Formula> = [
-            self.creation_formula(),
-            self.aliasing_formula(),
-            self.expiry_formula(),
-        ]
-        .into_iter()
-        .filter(|f| *f != Formula::Bool(true))
-        .collect();
+        let parts: Vec<Formula> =
+            [self.creation_formula(), self.aliasing_formula(), self.expiry_formula()]
+                .into_iter()
+                .filter(|f| *f != Formula::Bool(true))
+                .collect();
 
         match parts.len() {
             0 => Formula::Bool(true),
@@ -188,4 +185,3 @@ impl BorrowEncoding {
         }
     }
 }
-

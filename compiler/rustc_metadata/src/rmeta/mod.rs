@@ -114,7 +114,7 @@ struct LazyArray<T> {
 
 impl<T> Default for LazyArray<T> {
     fn default() -> LazyArray<T> {
-        LazyArray::from_position_and_num_elems(NonZero::new(1).expect("invariant: 1 is non-zero"), 0) // tRust: unwrap→expect
+        LazyArray::from_position_and_num_elems(NonZero::new(1).unwrap(), 0)
     }
 }
 
@@ -441,7 +441,7 @@ define_tables! {
     thir_abstract_const: Table<DefIndex, LazyValue<ty::EarlyBinder<'static, ty::Const<'static>>>>,
     impl_parent: Table<DefIndex, RawDefId>,
     const_conditions: Table<DefIndex, LazyValue<ty::ConstConditions<'static>>>,
-    // tRust: known issue — perhaps compute this on the fly if cheap enough? (upstream FIXME by eddyb)
+    // FIXME(eddyb) perhaps compute this on the fly if cheap enough?
     coerce_unsized_info: Table<DefIndex, LazyValue<ty::adjustment::CoerceUnsizedInfo>>,
     mir_const_qualif: Table<DefIndex, LazyValue<mir::ConstQualifs>>,
     rendered_const: Table<DefIndex, LazyValue<String>>,

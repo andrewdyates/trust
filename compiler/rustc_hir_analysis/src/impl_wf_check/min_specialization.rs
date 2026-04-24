@@ -380,7 +380,7 @@ fn check_predicates<'tcx>(
         let infcx = &tcx.infer_ctxt().build(TypingMode::non_body_analysis());
         let obligations =
             wf::obligations(infcx, tcx.param_env(impl1_def_id), impl1_def_id, 0, term, span)
-                .expect("invariant: value is present");
+                .unwrap();
 
         assert!(!obligations.has_infer());
         impl2_predicates
@@ -436,7 +436,7 @@ fn check_specialization_on<'tcx>(
             )
             .emit()),
         ty::ClauseKind::ConstArgHasType(..) => {
-            // tRust: known issue — (min_specialization), tRust: known issue — (const_generics):
+            // FIXME(min_specialization), FIXME(const_generics):
             // It probably isn't right to allow _every_ `ConstArgHasType` but I am somewhat unsure
             // about the actual rules that would be sound. Can't just always error here because otherwise
             // std/core doesn't even compile as they have `const N: usize` in some specializing impls.

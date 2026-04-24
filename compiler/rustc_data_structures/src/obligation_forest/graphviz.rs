@@ -32,9 +32,9 @@ impl<O: ForestObligation> ObligationForest<O> {
 
         let file_path = dir.as_ref().join(format!("{counter:010}_{description}.gv"));
 
-        let mut gv_file = File::create_buffered(file_path).expect("invariant: graphviz output file must be creatable"); // tRust: unwrap -> expect
+        let mut gv_file = File::create_buffered(file_path).unwrap();
 
-        dot::render(&self, &mut gv_file).expect("invariant: graphviz render must succeed"); // tRust: unwrap -> expect
+        dot::render(&self, &mut gv_file).unwrap();
     }
 }
 
@@ -43,11 +43,11 @@ impl<'a, O: ForestObligation + 'a> dot::Labeller<'a> for &'a ObligationForest<O>
     type Edge = (usize, usize);
 
     fn graph_id(&self) -> dot::Id<'_> {
-        dot::Id::new("trait_obligation_forest").expect("invariant: static dot ID must be valid") // tRust: unwrap -> expect
+        dot::Id::new("trait_obligation_forest").unwrap()
     }
 
     fn node_id(&self, index: &Self::Node) -> dot::Id<'_> {
-        dot::Id::new(format!("obligation_{index}")).expect("invariant: obligation dot ID must be valid") // tRust: unwrap -> expect
+        dot::Id::new(format!("obligation_{index}")).unwrap()
     }
 
     fn node_label(&self, index: &Self::Node) -> dot::LabelText<'_> {

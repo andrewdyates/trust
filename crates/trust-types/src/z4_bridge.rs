@@ -124,9 +124,7 @@ pub fn formula_to_expr(formula: &Formula) -> Expr {
         // Bitvector conversions
         Formula::BvToInt(a, _w, _signed) => formula_to_expr(a).bv2int_signed(),
         Formula::IntToBv(a, w) => formula_to_expr(a).int2bv(*w),
-        Formula::BvExtract { inner, high, low } => {
-            formula_to_expr(inner).extract(*high, *low)
-        }
+        Formula::BvExtract { inner, high, low } => formula_to_expr(inner).extract(*high, *low),
         Formula::BvConcat(a, b) => formula_to_expr(a).concat(formula_to_expr(b)),
         Formula::BvZeroExt(a, bits) => formula_to_expr(a).zero_extend(*bits),
         Formula::BvSignExt(a, bits) => formula_to_expr(a).sign_extend(*bits),
@@ -137,17 +135,18 @@ pub fn formula_to_expr(formula: &Formula) -> Expr {
         }
 
         // Quantifiers
+        // tRust #883: Symbol bindings — resolve to String for z4 API.
         Formula::Forall(bindings, body) => {
             let z4_bindings_list: Vec<(String, Z4Sort)> = bindings
                 .iter()
-                .map(|(name, sort)| (name.clone(), sort_to_z4(sort)))
+                .map(|(sym, sort)| (sym.as_str().to_string(), sort_to_z4(sort)))
                 .collect();
             Expr::forall(z4_bindings_list, formula_to_expr(body))
         }
         Formula::Exists(bindings, body) => {
             let z4_bindings_list: Vec<(String, Z4Sort)> = bindings
                 .iter()
-                .map(|(name, sort)| (name.clone(), sort_to_z4(sort)))
+                .map(|(sym, sort)| (sym.as_str().to_string(), sort_to_z4(sort)))
                 .collect();
             Expr::exists(z4_bindings_list, formula_to_expr(body))
         }
@@ -251,10 +250,7 @@ mod tests {
 
     #[test]
     fn test_formula_implies() {
-        let f = Formula::Implies(
-            Box::new(Formula::Bool(true)),
-            Box::new(Formula::Bool(false)),
-        );
+        let f = Formula::Implies(Box::new(Formula::Bool(true)), Box::new(Formula::Bool(false)));
         let expr = formula_to_expr(&f);
         let smt = format!("{expr}");
         assert_eq!(smt, "(=> true false)");
@@ -278,11 +274,7 @@ mod tests {
 
     #[test]
     fn test_formula_bv_add() {
-        let f = Formula::BvAdd(
-            Box::new(bv_var("a", 32)),
-            Box::new(bv_var("b", 32)),
-            32,
-        );
+        let f = Formula::BvAdd(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32);
         let expr = formula_to_expr(&f);
         let smt = format!("{expr}");
         assert_eq!(smt, "(bvadd a b)");
@@ -290,11 +282,7 @@ mod tests {
 
     #[test]
     fn test_formula_bv_comparisons() {
-        let f = Formula::BvULt(
-            Box::new(bv_var("a", 32)),
-            Box::new(bv_var("b", 32)),
-            32,
-        );
+        let f = Formula::BvULt(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32);
         let expr = formula_to_expr(&f);
         let smt = format!("{expr}");
         assert_eq!(smt, "(bvult a b)");
@@ -326,18 +314,14 @@ mod tests {
 
     #[test]
     fn test_formula_select_store() {
-        let arr = Formula::Var("mem".into(), Sort::Array(
-            Box::new(Sort::BitVec(64)),
-            Box::new(Sort::BitVec(8)),
-        ));
+        let arr = Formula::Var(
+            "mem".into(),
+            Sort::Array(Box::new(Sort::BitVec(64)), Box::new(Sort::BitVec(8))),
+        );
         let idx = Formula::BitVec { value: 100, width: 64 };
         let val = Formula::BitVec { value: 42, width: 8 };
 
-        let store = Formula::Store(
-            Box::new(arr.clone()),
-            Box::new(idx.clone()),
-            Box::new(val),
-        );
+        let store = Formula::Store(Box::new(arr.clone()), Box::new(idx.clone()), Box::new(val));
         let expr = formula_to_expr(&store);
         let smt = format!("{expr}");
         assert!(smt.contains("store"));
@@ -350,11 +334,7 @@ mod tests {
 
     #[test]
     fn test_formula_bv_extract() {
-        let f = Formula::BvExtract {
-            inner: Box::new(bv_var("x", 32)),
-            high: 15,
-            low: 0,
-        };
+        let f = Formula::BvExtract { inner: Box::new(bv_var("x", 32)), high: 15, low: 0 };
         let expr = formula_to_expr(&f);
         let smt = format!("{expr}");
         assert!(smt.contains("extract"));
@@ -362,10 +342,7 @@ mod tests {
 
     #[test]
     fn test_formula_bv_concat() {
-        let f = Formula::BvConcat(
-            Box::new(bv_var("hi", 16)),
-            Box::new(bv_var("lo", 16)),
-        );
+        let f = Formula::BvConcat(Box::new(bv_var("hi", 16)), Box::new(bv_var("lo", 16)));
         let expr = formula_to_expr(&f);
         let smt = format!("{expr}");
         assert!(smt.contains("concat"));

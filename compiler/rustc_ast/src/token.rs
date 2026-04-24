@@ -9,7 +9,7 @@ use rustc_macros::{Decodable, Encodable, HashStable_Generic};
 use rustc_span::edition::Edition;
 use rustc_span::symbol::IdentPrintMode;
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span, kw, sym};
-#[allow(clippy::useless_attribute)] // tRust: known issue — following use of `hidden_glob_reexports` incorrectly triggers `useless_attribute` lint.
+#[allow(clippy::useless_attribute)] // FIXME: following use of `hidden_glob_reexports` incorrectly triggers `useless_attribute` lint.
 #[allow(hidden_glob_reexports)]
 use rustc_span::{Ident, Symbol};
 

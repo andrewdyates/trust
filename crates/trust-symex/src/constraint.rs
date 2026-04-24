@@ -139,11 +139,7 @@ pub fn simplify_constraints(constraints: &[Formula]) -> Vec<Formula> {
         }
     }
 
-    if result.is_empty() {
-        vec![Formula::Bool(true)]
-    } else {
-        result
-    }
+    if result.is_empty() { vec![Formula::Bool(true)] } else { result }
 }
 
 /// Flatten top-level `And` nodes into a flat list.
@@ -222,8 +218,7 @@ pub fn independence_splitting(constraints: &ConstraintSet) -> Vec<ConstraintSet>
     let n = formulas.len();
 
     // Collect free variables for each constraint.
-    let vars_per_constraint: Vec<FxHashSet<String>> =
-        formulas.iter().map(collect_vars).collect();
+    let vars_per_constraint: Vec<FxHashSet<String>> = formulas.iter().map(collect_vars).collect();
 
     // Union-find: group constraints that share variables.
     let mut parent: Vec<usize> = (0..n).collect();
@@ -252,7 +247,8 @@ pub fn independence_splitting(constraints: &ConstraintSet) -> Vec<ConstraintSet>
         .map(|root| {
             let mut cs = ConstraintSet::new();
             // SAFETY: root came from groups.keys(), so it must exist in the map.
-            for f in groups.remove(&root).unwrap_or_else(|| unreachable!("root key not in groups")) {
+            for f in groups.remove(&root).unwrap_or_else(|| unreachable!("root key not in groups"))
+            {
                 cs.add(f);
             }
             cs
@@ -338,13 +334,13 @@ fn collect_vars_inner(f: &Formula, out: &mut FxHashSet<String>) {
             collect_vars_inner(body, &mut inner_vars);
             // Remove bound variables.
             for (name, _) in bindings {
-                inner_vars.remove(name);
+                inner_vars.remove(name.as_str());
             }
             out.extend(inner_vars);
         }
         // Leaves with no variables.
         Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {}
-        _ => {},
+        _ => {}
     }
 }
 
@@ -434,11 +430,8 @@ mod tests {
 
     #[test]
     fn test_simplify_removes_tautologies() {
-        let constraints = vec![
-            Formula::Bool(true),
-            Formula::Var("x".into(), Sort::Int),
-            Formula::Bool(true),
-        ];
+        let constraints =
+            vec![Formula::Bool(true), Formula::Var("x".into(), Sort::Int), Formula::Bool(true)];
         let result = simplify_constraints(&constraints);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], Formula::Var("x".into(), Sort::Int));
@@ -446,10 +439,7 @@ mod tests {
 
     #[test]
     fn test_simplify_detects_contradiction() {
-        let constraints = vec![
-            Formula::Var("x".into(), Sort::Int),
-            Formula::Bool(false),
-        ];
+        let constraints = vec![Formula::Var("x".into(), Sort::Int), Formula::Bool(false)];
         let result = simplify_constraints(&constraints);
         assert_eq!(result, vec![Formula::Bool(false)]);
     }

@@ -61,7 +61,7 @@ pub fn compute_implied_outlives_bounds_inner<'tcx>(
         "compute_implied_outlives_bounds assumes region obligations are empty before starting"
     );
 
-    // tRust: known issue — This doesn't seem right. All call sites already normalize `ty`:
+    // FIXME: This doesn't seem right. All call sites already normalize `ty`:
     // - `Ty`s from the `DefiningTy` in Borrowck: we have to normalize in the caller
     //      in order to get implied bounds involving any unconstrained region vars
     //      created as part of normalizing the sig. See #136547
@@ -108,7 +108,7 @@ pub fn compute_implied_outlives_bounds_inner<'tcx>(
                 continue;
             };
             match pred {
-                // tRust: known issue (generic_const_parameter_types) — Make sure that `<'a, 'b, const N: &'a &'b u32>`
+                // FIXME(generic_const_parameter_types): Make sure that `<'a, 'b, const N: &'a &'b u32>`
                 // is sound if we ever support that
                 ty::PredicateKind::Clause(ty::ClauseKind::Trait(..))
                 | ty::PredicateKind::Clause(ty::ClauseKind::HostEffect(..))
@@ -206,7 +206,7 @@ fn implied_bounds_from_components<'tcx>(
                 Component::Param(p) => Some(OutlivesBound::RegionSubParam(sub_region, p)),
                 Component::Alias(p) => Some(OutlivesBound::RegionSubAlias(sub_region, p)),
                 Component::Placeholder(_p) => {
-                    // tRust: known issue (non_lifetime_binders) — Placeholders don't currently
+                    // FIXME(non_lifetime_binders): Placeholders don't currently
                     // imply anything for outlives, though they could easily.
                     None
                 }

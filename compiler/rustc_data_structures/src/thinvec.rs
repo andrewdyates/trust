@@ -1,6 +1,6 @@
 //! This is a copy-paste of `Vec::extract_if` for `ThinVec`.
 //!
-//! tRust: known issue — <https://github.com/Gankra/thin-vec/pull/66> is merged, this can be removed.
+//! FIXME: <https://github.com/Gankra/thin-vec/pull/66> is merged, this can be removed.
 
 use std::{ptr, slice};
 
@@ -28,8 +28,6 @@ where
         let old_len = vec.len();
 
         // Guard against us getting leaked (leak amplification)
-        // SAFETY: The new length is within the allocated capacity, and
-        // all elements up to the new length are properly initialized.
         unsafe {
             vec.set_len(0);
         }
@@ -44,9 +42,6 @@ where
 {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
-        // SAFETY: The source and destination pointers are valid for the
-        // specified size, properly aligned, and the regions do not overlap
-        // (or overlap is handled by using ptr::copy).
         unsafe {
             while self.idx < self.old_len {
                 let i = self.idx;
@@ -77,8 +72,6 @@ where
 
 impl<A, F> Drop for ExtractIf<'_, A, F> {
     fn drop(&mut self) {
-        // SAFETY: The new length is within the allocated capacity, and
-        // all elements up to the new length are properly initialized.
         unsafe {
             if self.idx < self.old_len && self.del > 0 {
                 // This is a pretty messed up state, and there isn't really an

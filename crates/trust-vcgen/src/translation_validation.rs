@@ -14,7 +14,6 @@
 
 // tRust #458: Re-export shared types from trust-types.
 pub use trust_types::translation_validation::{
-    CheckKind, RefinementVc, SimulationRelation, TranslationCheck,
-    TranslationValidationError,
+    CheckKind, RefinementVc, SimulationRelation, TranslationCheck, TranslationValidationError,
     infer_identity_relation,
 };

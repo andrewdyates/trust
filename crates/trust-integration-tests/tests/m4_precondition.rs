@@ -16,8 +16,7 @@
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
 use trust_types::{
-    Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition,
-    VerificationResult,
+    Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -77,10 +76,7 @@ fn test_m4_binary_search_without_precondition_fails() {
 
     // Step 3: Use spec_inference to propose a fix.
     let proposals = trust_strengthen::infer_specs(&vc);
-    assert!(
-        !proposals.is_empty(),
-        "strengthen should propose preconditions for IndexOutOfBounds"
-    );
+    assert!(!proposals.is_empty(), "strengthen should propose preconditions for IndexOutOfBounds");
 
     // The top proposal should be a requires(index < slice.len()) precondition.
     let top = &proposals[0];
@@ -122,10 +118,8 @@ fn test_m4_houdini_infers_sorted_precondition() {
     // remove candidates that are falsified by counterexamples.
 
     let sorted = Formula::Var("is_sorted".into(), Sort::Bool);
-    let lo_ge_0 = Formula::Ge(
-        Box::new(Formula::Var("lo".into(), Sort::Int)),
-        Box::new(Formula::Int(0)),
-    );
+    let lo_ge_0 =
+        Formula::Ge(Box::new(Formula::Var("lo".into(), Sort::Int)), Box::new(Formula::Int(0)));
     let hi_lt_len = Formula::Lt(
         Box::new(Formula::Var("hi".into(), Sort::Int)),
         Box::new(Formula::Var("len".into(), Sort::Int)),
@@ -138,23 +132,14 @@ fn test_m4_houdini_infers_sorted_precondition() {
         )),
     );
     let mid_in_bounds = Formula::And(vec![
-        Formula::Ge(
-            Box::new(Formula::Var("mid".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Ge(Box::new(Formula::Var("mid".into(), Sort::Int)), Box::new(Formula::Int(0))),
         Formula::Lt(
             Box::new(Formula::Var("mid".into(), Sort::Int)),
             Box::new(Formula::Var("len".into(), Sort::Int)),
         ),
     ]);
 
-    let candidates = vec![
-        sorted.clone(),
-        lo_ge_0,
-        hi_lt_len,
-        lo_le_hi_plus_1,
-        mid_in_bounds,
-    ];
+    let candidates = vec![sorted.clone(), lo_ge_0, hi_lt_len, lo_le_hi_plus_1, mid_in_bounds];
 
     // Mock verifier that simulates the refinement process:
     // - First check: unsorted array counterexample (falsifies is_sorted? No, because
@@ -185,11 +170,7 @@ fn test_m4_houdini_infers_sorted_precondition() {
             _candidates: &[Formula],
         ) -> Result<Option<HoudiniCounterexample>, trust_strengthen::HoudiniError> {
             let mut responses = self.responses.lock().unwrap();
-            if responses.is_empty() {
-                Ok(None)
-            } else {
-                Ok(responses.remove(0))
-            }
+            if responses.is_empty() { Ok(None) } else { Ok(responses.remove(0)) }
         }
     }
 
@@ -225,19 +206,12 @@ fn test_m4_houdini_infers_sorted_precondition() {
 
     // Key assertion: Houdini converged and is_sorted survived.
     assert!(result.converged, "Houdini should converge");
-    assert!(
-        !result.surviving.is_empty(),
-        "should have surviving invariants"
-    );
+    assert!(!result.surviving.is_empty(), "should have surviving invariants");
 
     // Verify is_sorted is among the survivors.
-    let has_sorted = result.surviving.iter().any(|f| {
-        matches!(f, Formula::Var(name, _) if name == "is_sorted")
-    });
-    assert!(
-        has_sorted,
-        "is_sorted should survive Houdini refinement as a necessary precondition"
-    );
+    let has_sorted =
+        result.surviving.iter().any(|f| matches!(f, Formula::Var(name, _) if name == "is_sorted"));
+    assert!(has_sorted, "is_sorted should survive Houdini refinement as a necessary precondition");
 
     // Verify lo <= hi + 1 was removed (index 3).
     assert!(
@@ -280,14 +254,10 @@ fn test_m4_ice_learns_sorted_from_examples() {
         ("sorted_score".into(), 10),
         ("lo_valid".into(), 1),
     ]));
-    learner.add_positive(ConcreteState::new(vec![
-        ("sorted_score".into(), 5),
-        ("lo_valid".into(), 1),
-    ]));
-    learner.add_positive(ConcreteState::new(vec![
-        ("sorted_score".into(), 1),
-        ("lo_valid".into(), 1),
-    ]));
+    learner
+        .add_positive(ConcreteState::new(vec![("sorted_score".into(), 5), ("lo_valid".into(), 1)]));
+    learner
+        .add_positive(ConcreteState::new(vec![("sorted_score".into(), 1), ("lo_valid".into(), 1)]));
 
     // Negative examples: states where binary search fails (unsorted or invalid bounds).
     learner.add_negative(ConcreteState::new(vec![
@@ -311,20 +281,14 @@ fn test_m4_ice_learns_sorted_from_examples() {
     });
 
     let result = learner.synthesize_invariant();
-    assert!(
-        result.is_ok(),
-        "ICE should synthesize an invariant from sorted/unsorted examples"
-    );
+    assert!(result.is_ok(), "ICE should synthesize an invariant from sorted/unsorted examples");
 
     let invariant = result.unwrap();
 
     // The invariant should be a non-trivial formula (not just Bool(true/false)).
     // The decision tree should have found a split on sorted_score that separates
     // positive from negative examples.
-    assert!(
-        !matches!(invariant, Formula::Bool(false)),
-        "invariant should not be trivially false"
-    );
+    assert!(!matches!(invariant, Formula::Bool(false)), "invariant should not be trivially false");
 
     // Verify the invariant is meaningful: it must involve sorted_score
     // since that's the variable that separates positive from negative.
@@ -357,7 +321,8 @@ fn test_m4_binary_search_with_sorted_precondition_succeeds() {
         solver: "z4".into(),
         time_ms: 8,
         strength: ProofStrength::smt_unsat(),
-        proof_certificate: None, solver_warnings: None,
+        proof_certificate: None,
+        solver_warnings: None,
     };
 
     assert!(proved_result.is_proved(), "with is_sorted, OOB VC should be proved");
@@ -370,10 +335,7 @@ fn test_m4_binary_search_with_sorted_precondition_succeeds() {
         report.summary.total_proved, 1,
         "all obligations should be proved with is_sorted precondition"
     );
-    assert_eq!(
-        report.summary.total_failed, 0,
-        "no failures with is_sorted precondition"
-    );
+    assert_eq!(report.summary.total_failed, 0, "no failures with is_sorted precondition");
     assert!(
         matches!(report.summary.verdict, trust_types::CrateVerdict::Verified),
         "verdict should be Verified, got: {:?}",
@@ -424,10 +386,7 @@ fn test_m4_strengthen_pipeline_proposes_sorted_precondition() {
     let output = trust_strengthen::run(&crate_result, &config, &trust_strengthen::NoOpLlm);
 
     assert!(output.has_proposals, "strengthen should produce proposals");
-    assert_eq!(
-        output.failures_analyzed, 1,
-        "should analyze 1 failure (the OOB VC)"
-    );
+    assert_eq!(output.failures_analyzed, 1, "should analyze 1 failure (the OOB VC)");
 
     // The top proposal should be an AddPrecondition for the OOB pattern.
     let precondition_proposals: Vec<_> = output
@@ -436,10 +395,7 @@ fn test_m4_strengthen_pipeline_proposes_sorted_precondition() {
         .filter(|p| matches!(p.kind, trust_strengthen::ProposalKind::AddPrecondition { .. }))
         .collect();
 
-    assert!(
-        !precondition_proposals.is_empty(),
-        "should propose at least one AddPrecondition"
-    );
+    assert!(!precondition_proposals.is_empty(), "should propose at least one AddPrecondition");
 
     // The precondition captures the essence of "index must be in bounds",
     // which in a full pipeline would be refined to "input must be sorted"
@@ -457,19 +413,13 @@ fn test_m4_strengthen_pipeline_proposes_sorted_precondition() {
         ("len".into(), trust_types::CounterexampleValue::Uint(5)),
     ]);
     let cex_proposals = trust_strengthen::infer_specs_with_cex(&vc, &cex);
-    assert!(
-        !cex_proposals.is_empty(),
-        "cex-guided inference should produce proposals"
-    );
+    assert!(!cex_proposals.is_empty(), "cex-guided inference should produce proposals");
 
     eprintln!("=== M4 Strengthen Pipeline: is_sorted Precondition ===");
     eprintln!("  Failures analyzed: {}", output.failures_analyzed);
     eprintln!("  Total proposals: {}", output.proposals.len());
     eprintln!("  Precondition proposals: {}", precondition_proposals.len());
-    eprintln!(
-        "  Top precondition: {:?} (confidence: {:.2})",
-        top.kind, top.confidence
-    );
+    eprintln!("  Top precondition: {:?} (confidence: {:.2})", top.kind, top.confidence);
     eprintln!("  CEX-guided proposals: {}", cex_proposals.len());
     eprintln!("======================================================");
 }
@@ -484,11 +434,8 @@ fn test_m4_full_precondition_inference_loop() {
 
     // --- Phase 1: Initial verification fails ---
     let vc = binary_search_oob_vc();
-    let initial_result = VerificationResult::Failed {
-        solver: "z4".into(),
-        time_ms: 15,
-        counterexample: None,
-    };
+    let initial_result =
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 15, counterexample: None };
 
     let initial_crate = CrateVerificationResult {
         crate_name: "demo".into(),
@@ -520,7 +467,8 @@ fn test_m4_full_precondition_inference_loop() {
         solver: "z4".into(),
         time_ms: 5,
         strength: ProofStrength::smt_unsat(),
-        proof_certificate: None, solver_warnings: None,
+        proof_certificate: None,
+        solver_warnings: None,
     };
 
     let strengthened_crate = CrateVerificationResult {
@@ -536,14 +484,9 @@ fn test_m4_full_precondition_inference_loop() {
         total_with_assumptions: 0,
     };
 
-    let report2 = trust_report::build_json_report(
-        "phase3",
-        &strengthened_crate.functions[0].results,
-    );
-    assert_eq!(
-        report2.summary.total_proved, 1,
-        "Phase 3: should be proved after strengthening"
-    );
+    let report2 =
+        trust_report::build_json_report("phase3", &strengthened_crate.functions[0].results);
+    assert_eq!(report2.summary.total_proved, 1, "Phase 3: should be proved after strengthening");
     assert_eq!(report2.summary.total_failed, 0, "Phase 3: no failures");
     assert!(
         matches!(report2.summary.verdict, trust_types::CrateVerdict::Verified),

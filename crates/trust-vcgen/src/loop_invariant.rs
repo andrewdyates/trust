@@ -114,12 +114,7 @@ impl LoopInvariant {
 /// Returns `Formula::And([lo_bound, hi_bound])` where bounds are
 /// `var >= lo` and `var <= hi`.
 #[must_use]
-pub fn infer_invariant_interval(
-    loop_var: &str,
-    init: i128,
-    step: i128,
-    bound: i128,
-) -> Formula {
+pub fn infer_invariant_interval(loop_var: &str, init: i128, step: i128, bound: i128) -> Formula {
     // tRust #480: Build the variable reference.
     let var = Formula::Var(loop_var.to_string(), Sort::Int);
 
@@ -200,15 +195,19 @@ pub fn classify_loop_pattern(header: &BasicBlock, body: &[Statement]) -> LoopPat
                 }
 
                 // Checked add/sub patterns (from overflow-checked arithmetic)
-                Rvalue::CheckedBinaryOp(BinOp::Add, lhs, Operand::Constant(ConstValue::Int(step)))
-                    if is_same_place_operand(place, lhs) =>
-                {
+                Rvalue::CheckedBinaryOp(
+                    BinOp::Add,
+                    lhs,
+                    Operand::Constant(ConstValue::Int(step)),
+                ) if is_same_place_operand(place, lhs) => {
                     let var_name = place_var_name(place);
                     counter_candidates.push((var_name, *step));
                 }
-                Rvalue::CheckedBinaryOp(BinOp::Sub, lhs, Operand::Constant(ConstValue::Int(step)))
-                    if is_same_place_operand(place, lhs) =>
-                {
+                Rvalue::CheckedBinaryOp(
+                    BinOp::Sub,
+                    lhs,
+                    Operand::Constant(ConstValue::Int(step)),
+                ) if is_same_place_operand(place, lhs) => {
                     let var_name = place_var_name(place);
                     counter_candidates.push((var_name, -step));
                 }
@@ -253,11 +252,7 @@ pub fn classify_loop_pattern(header: &BasicBlock, body: &[Statement]) -> LoopPat
     }
 
     if let Some((var, monotone_increasing)) = accumulator_candidates.into_iter().next() {
-        return LoopPattern::Accumulator {
-            var,
-            init: 0,
-            monotone_increasing,
-        };
+        return LoopPattern::Accumulator { var, init: 0, monotone_increasing };
     }
 
     // tRust #480: If the header has a condition variable, check if we
@@ -298,11 +293,7 @@ pub struct InvariantInferer {
 
 impl Default for InvariantInferer {
     fn default() -> Self {
-        Self {
-            max_widen_iterations: 100,
-            narrowing_passes: 3,
-            min_confidence: 0.5,
-        }
+        Self { max_widen_iterations: 100, narrowing_passes: 3, min_confidence: 0.5 }
     }
 }
 
@@ -346,11 +337,7 @@ impl InvariantInferer {
 
         // Compute fixpoint with narrowing for precision recovery.
         let initial = abstract_interp::type_aware_initial_state(func);
-        let fp = abstract_interp::fixpoint_with_narrowing(
-            func,
-            initial,
-            self.narrowing_passes,
-        );
+        let fp = abstract_interp::fixpoint_with_narrowing(func, initial, self.narrowing_passes);
 
         let mut invariants = Vec::new();
 
@@ -369,18 +356,11 @@ impl InvariantInferer {
             let pattern = classify_loop_pattern(header, &body_stmts);
 
             // Generate invariants based on pattern and fixpoint data.
-            let pattern_invs = self.invariants_from_pattern(
-                &pattern,
-                header_id,
-                &fp,
-            );
+            let pattern_invs = self.invariants_from_pattern(&pattern, header_id, &fp);
             invariants.extend(pattern_invs);
 
             // Also extract interval-based invariants from fixpoint state.
-            let interval_invs = self.invariants_from_intervals(
-                header_id,
-                &fp,
-            );
+            let interval_invs = self.invariants_from_intervals(header_id, &fp);
             invariants.extend(interval_invs);
         }
 
@@ -389,9 +369,7 @@ impl InvariantInferer {
 
         // Sort by confidence descending.
         invariants.sort_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         invariants
@@ -408,52 +386,28 @@ impl InvariantInferer {
             LoopPattern::Counter { var, init, step, bound } => {
                 // tRust #480: Counter bounds invariant.
                 let formula = infer_invariant_interval(var, *init, *step, *bound);
-                vec![LoopInvariant::new(
-                    formula,
-                    header,
-                    pattern.clone(),
-                    0.9,
-                )]
+                vec![LoopInvariant::new(formula, header, pattern.clone(), 0.9)]
             }
             LoopPattern::Accumulator { var, init, monotone_increasing } => {
                 // tRust #480: Monotonicity invariant for accumulators.
                 let var_formula = Formula::Var(var.clone(), Sort::Int);
                 let formula = if *monotone_increasing {
                     // acc >= init (monotonically non-decreasing)
-                    Formula::Ge(
-                        Box::new(var_formula),
-                        Box::new(Formula::Int(*init)),
-                    )
+                    Formula::Ge(Box::new(var_formula), Box::new(Formula::Int(*init)))
                 } else {
                     // acc <= init (monotonically non-increasing)
-                    Formula::Le(
-                        Box::new(var_formula),
-                        Box::new(Formula::Int(*init)),
-                    )
+                    Formula::Le(Box::new(var_formula), Box::new(Formula::Int(*init)))
                 };
-                vec![LoopInvariant::new(
-                    formula,
-                    header,
-                    pattern.clone(),
-                    0.7,
-                )]
+                vec![LoopInvariant::new(formula, header, pattern.clone(), 0.7)]
             }
             LoopPattern::Iterator { index_var, length_var } => {
                 // tRust #480: Index-in-bounds invariant: 0 <= i && i <= len.
                 let idx = Formula::Var(index_var.clone(), Sort::Int);
                 let len = Formula::Var(length_var.clone(), Sort::Int);
-                let lo_bound = Formula::Ge(
-                    Box::new(idx.clone()),
-                    Box::new(Formula::Int(0)),
-                );
+                let lo_bound = Formula::Ge(Box::new(idx.clone()), Box::new(Formula::Int(0)));
                 let hi_bound = Formula::Le(Box::new(idx), Box::new(len));
                 let formula = Formula::And(vec![lo_bound, hi_bound]);
-                vec![LoopInvariant::new(
-                    formula,
-                    header,
-                    pattern.clone(),
-                    0.85,
-                )]
+                vec![LoopInvariant::new(formula, header, pattern.clone(), 0.85)]
             }
             LoopPattern::Unknown => Vec::new(),
         }
@@ -492,10 +446,8 @@ impl InvariantInferer {
 
             // tRust #480: Upper bound from interval.
             if interval.hi != i128::MAX {
-                bounds.push(Formula::Le(
-                    Box::new(var_formula),
-                    Box::new(Formula::Int(interval.hi)),
-                ));
+                bounds
+                    .push(Formula::Le(Box::new(var_formula), Box::new(Formula::Int(interval.hi))));
             }
 
             if !bounds.is_empty() {
@@ -551,9 +503,10 @@ fn is_same_place_operand(place: &Place, op: &Operand) -> bool {
 /// is typically `val` (the comparison target in a `while i < bound` loop).
 fn extract_switch_bound(header: &BasicBlock) -> Option<i128> {
     if let Terminator::SwitchInt { targets, .. } = &header.terminator
-        && let Some((val, _)) = targets.first() {
-            return i128::try_from(*val).ok();
-        }
+        && let Some((val, _)) = targets.first()
+    {
+        return i128::try_from(*val).ok();
+    }
     None
 }
 
@@ -568,10 +521,7 @@ fn collect_loop_body_stmts(func: &VerifiableFunction, header: BlockId) -> Vec<St
         .body
         .blocks
         .iter()
-        .filter(|b| {
-            b.id.0 > header.0
-                && terminator_targets_block(&b.terminator, header)
-        })
+        .filter(|b| b.id.0 > header.0 && terminator_targets_block(&b.terminator, header))
         .map(|b| b.id.0)
         .max();
 
@@ -608,9 +558,8 @@ fn terminator_targets_block(term: &Terminator, target: BlockId) -> bool {
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BinOp, BlockId, ConstValue, LocalDecl, Operand, Place,
-        Rvalue, SourceSpan, Statement, Terminator, Ty, VerifiableBody,
-        VerifiableFunction,
+        BasicBlock, BinOp, BlockId, ConstValue, LocalDecl, Operand, Place, Rvalue, SourceSpan,
+        Statement, Terminator, Ty, VerifiableBody, VerifiableFunction,
     };
 
     // ── Helper: build a simple counter loop function ───────────────────
@@ -677,11 +626,7 @@ mod tests {
                         terminator: Terminator::Goto(BlockId(1)),
                     },
                     // bb3 (exit): return
-                    BasicBlock {
-                        id: BlockId(3),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 0,
                 return_ty: Ty::Unit,
@@ -945,11 +890,7 @@ mod tests {
 
     #[test]
     fn test_classify_loop_pattern_unknown_empty_body() {
-        let header = BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        };
+        let header = BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return };
         let pattern = classify_loop_pattern(&header, &[]);
         assert_eq!(pattern, LoopPattern::Unknown);
     }
@@ -998,10 +939,7 @@ mod tests {
         let func = counter_loop_function();
         let inferer = InvariantInferer::new();
         let invariants = inferer.infer(&func);
-        assert!(
-            !invariants.is_empty(),
-            "counter loop should produce at least one invariant"
-        );
+        assert!(!invariants.is_empty(), "counter loop should produce at least one invariant");
         // At least one invariant should be pattern-based.
         assert!(
             invariants.iter().any(LoopInvariant::is_pattern_based),
@@ -1048,12 +986,8 @@ mod tests {
         );
         assert!(inv_counter.is_pattern_based());
 
-        let inv_unknown = LoopInvariant::new(
-            Formula::Bool(true),
-            BlockId(0),
-            LoopPattern::Unknown,
-            0.5,
-        );
+        let inv_unknown =
+            LoopInvariant::new(Formula::Bool(true), BlockId(0), LoopPattern::Unknown, 0.5);
         assert!(!inv_unknown.is_pattern_based());
     }
 
@@ -1109,11 +1043,8 @@ mod tests {
         };
         assert_eq!(extract_switch_bound(&header), Some(42));
 
-        let no_switch = BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        };
+        let no_switch =
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return };
         assert_eq!(extract_switch_bound(&no_switch), None);
     }
 
@@ -1123,10 +1054,7 @@ mod tests {
         let inferer = InvariantInferer::new();
         let invariants = inferer.infer(&func);
         // Should produce invariants (at least interval-based).
-        assert!(
-            !invariants.is_empty(),
-            "accumulator loop should produce invariants"
-        );
+        assert!(!invariants.is_empty(), "accumulator loop should produce invariants");
     }
 
     #[test]

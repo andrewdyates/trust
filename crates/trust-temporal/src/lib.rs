@@ -10,33 +10,20 @@
 
 // tRust: Allow std HashMap/HashSet — FxHash lint only applies to compiler internals
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
-pub(crate) mod bmc;
-pub(crate) mod checker;
+pub mod bmc;
 pub mod ctl;
-pub(crate) mod deadlock;
-// tRust #683: Automatic state machine discovery from MIR (zero annotations).
-pub(crate) mod discovery;
-pub(crate) mod extract;
-pub(crate) mod extract_enum;
 pub mod fairness;
 pub mod liveness;
 pub mod ltl;
-pub(crate) mod ltl_model_check;
-pub(crate) mod property_check;
-pub(crate) mod refinement;
 pub mod tla2_bridge;
 pub mod tla_spec_gen;
 
 pub use bmc::{BmcEngine, BmcResult, SafetyProperty};
 pub use ctl::{CtlFormula, CtlModelChecker, CtlResult};
-pub use liveness::{LivenessProperty, LivenessResult, ResponseProperty};
+pub use liveness::{LivenessProperty, LivenessResult};
 pub use ltl::LtlFormula;
-pub use ltl_model_check::{
-    check_trace, counterexample_prefix, ltl_to_automaton, monitor,
-    LtlFormula as McLtlFormula, ModelCheckResult, MonitorVerdict, TraceState,
-};
 
 use std::collections::VecDeque;
 use trust_types::fx::FxHashSet;

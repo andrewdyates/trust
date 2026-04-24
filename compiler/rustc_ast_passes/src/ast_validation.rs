@@ -211,7 +211,7 @@ impl<'a> AstValidator<'a> {
             TyKind::ImplTrait(_, bounds) => {
                 self.with_impl_trait(Some(t.span), |this| visit::walk_ty(this, t));
 
-                // tRust: known issue (precise_capturing) — If we were to allow `use` in other positions
+                // FIXME(precise_capturing): If we were to allow `use` in other positions
                 // (e.g. GATs), then we must validate those as well. However, we don't have
                 // a good way of doing this with the current `Visitor` structure.
                 let mut use_bounds = bounds
@@ -450,7 +450,7 @@ impl<'a> AstValidator<'a> {
 
                         if let InterruptKind::X86 = interrupt_kind {
                             // "x86-interrupt" is special because it does have arguments.
-                            // tRust: known issue (workingjubilee) — properly lint on acceptable input types.
+                            // FIXME(workingjubilee): properly lint on acceptable input types.
                             let inputs = &sig.decl.inputs;
                             let param_count = inputs.len();
                             if !matches!(param_count, 1 | 2) {
@@ -684,7 +684,7 @@ impl<'a> AstValidator<'a> {
     }
 
     fn current_extern_span(&self) -> Span {
-        self.sess.source_map().guess_head_span(self.extern_mod_span.expect("invariant: extern_mod_span set when inside extern block")) // tRust: unwrap -> expect
+        self.sess.source_map().guess_head_span(self.extern_mod_span.unwrap())
     }
 
     /// An `fn` in `extern { ... }` cannot have qualifiers, e.g. `async fn`.
@@ -901,7 +901,7 @@ impl<'a> AstValidator<'a> {
 
     fn deny_where_clause(&self, where_clause: &WhereClause, ident: Span) {
         if !where_clause.predicates.is_empty() {
-            // tRust: known issue — The current diagnostic is misleading since it only talks about
+            // FIXME: The current diagnostic is misleading since it only talks about
             // super trait and lifetime bounds while we should just say “bounds”.
             self.dcx().emit_err(errors::AutoTraitBounds {
                 span: vec![where_clause.span],
@@ -913,8 +913,8 @@ impl<'a> AstValidator<'a> {
 
     fn deny_items(&self, trait_items: &[Box<AssocItem>], ident_span: Span) {
         if !trait_items.is_empty() {
-            let spans: Vec<_> = trait_items.iter().map(|i| i.kind.ident().expect("invariant: trait items have idents").span).collect(); // tRust: unwrap -> expect
-            let total = trait_items.first().expect("invariant: trait_items is non-empty").span.to(trait_items.last().expect("invariant: trait_items is non-empty").span); // tRust: unwrap -> expect
+            let spans: Vec<_> = trait_items.iter().map(|i| i.kind.ident().unwrap().span).collect();
+            let total = trait_items.first().unwrap().span.to(trait_items.last().unwrap().span);
             self.dcx().emit_err(errors::AutoTraitItems { spans, total, ident: ident_span });
         }
     }
@@ -964,7 +964,7 @@ impl<'a> AstValidator<'a> {
         self.dcx().emit_err(errors::ArgsBeforeConstraint {
             arg_spans: arg_spans.clone(),
             constraints: constraint_spans[0],
-            args: *arg_spans.iter().last().expect("invariant: arg_spans is non-empty"), // tRust: unwrap -> expect
+            args: *arg_spans.iter().last().unwrap(),
             data: data.span,
             constraint_spans: errors::EmptyLabelManySpans(constraint_spans),
             arg_spans2: errors::EmptyLabelManySpans(arg_spans),
@@ -1017,7 +1017,7 @@ impl<'a> AstValidator<'a> {
     }
 
     fn handle_missing_abi(&mut self, span: Span, id: NodeId) {
-        // tRust: known issue (davidtwco) — This is a hack to detect macros which produce spans of the
+        // FIXME(davidtwco): This is a hack to detect macros which produce spans of the
         // call site which do not have a macro backtrace. See #61963.
         if span.edition().at_least_edition_future() && self.features.explicit_extern_abis() {
             self.dcx().emit_err(errors::MissingAbi { span });

@@ -1,7 +1,10 @@
 # build-manifest
 
-This tool generates the manifests uploaded to static.rust-lang.org and used by rustup.
-You can see a full list of all manifests at <https://static.rust-lang.org/manifests.txt>.
+This tool generates rustup channel manifests from local `x dist` outputs. In
+tRust, the supported ownership path is local-first: generate artifacts under
+`build/dist`, convert them to a `trust` channel with
+src/tools/trust-stage0-dist/prepare.py, and rehearse the resulting local
+`file://` dist root before changing `src/stage0`.
 
 We auto-generate the host targets (those with full compiler toolchains) and
 target targets (a superset of hosts, some of which only support std) through
@@ -10,7 +13,10 @@ and uses the `TargetMetadata` to determine whether host tools are expected and
 whether artifacts are expected. This list is not currently verified against the
 actually produced artifacts by CI, though that may change in the future.
 
-This gets called by `promote-release` <https://github.com/rust-lang/promote-release>. `promote-release` downloads a pre-built binary of `build-manifest` which is generated in the dist-x86_64-linux builder and uploaded to s3.
+The inherited upstream Rust release machinery used `promote-release` and a
+remote static dist host. That is historical context only for this fork; do not
+publish tRust artifacts to remote hosts unless release ownership explicitly
+requires it.
 
 ## Adding a new component
 
@@ -21,19 +27,13 @@ This gets called by `promote-release` <https://github.com/rust-lang/promote-rele
 ## Testing changes locally with rustup
 
 In order to test the changes locally you need to have a valid dist directory
-available locally. If you don't want to build all the compiler, you can easily
-create one from the nightly artifacts with:
-
-```sh
-for component in rust rustc rust-std rust-docs cargo; do
-    wget -P build/dist https://static.rust-lang.org/dist/${component}-nightly-x86_64-unknown-linux-gnu.tar.xz
-done
-```
+available locally. Build it from this checkout; do not mix in upstream nightly
+artifacts for a tRust ownership proof.
 
 Then, you can generate the manifest and add it to `build/dist`:
 
 ```sh
-cargo +nightly run --release -p build-manifest build/dist build/dist 1970-01-01 http://localhost:8000 nightly
+cargo +trust run --release -p build-manifest build/dist build/dist 1970-01-01 file://$PWD/build/trust-stage0 nightly
 ```
 
 After that, generate a SHA256 stamp for the manifest file:
@@ -41,17 +41,22 @@ After that, generate a SHA256 stamp for the manifest file:
 sha256sum build/dist/channel-rust-nightly.toml > build/dist/channel-rust-nightly.toml.sha256
 ```
 
-And start a HTTP server from the `build` directory:
+For an owned-bootstrap rehearsal, convert the local manifest to `trust` and
+validate the candidate stage0 file:
 ```sh
-cd build
-python3 -m http.server 8000
+python3 src/tools/trust-stage0-dist/prepare.py \
+  --input-dist build/dist \
+  --output-root build/trust-stage0 \
+  --stage0-output build/trust-stage0/src-stage0
+bash tests/e2e_trust_stage0_lineage.sh --rehearsal build/trust-stage0/src-stage0
 ```
 
-After you do all that, you can then install the locally generated components with rustup:
+For the current rustup install rehearsal, use the checked gate. It installs
+from the local dist output into a temporary `RUSTUP_HOME`, then links the
+resulting sysroot as `trust`:
 ```
-rustup uninstall nightly
-RUSTUP_DIST_SERVER=http://localhost:8000 rustup toolchain install nightly --profile minimal
-RUSTUP_DIST_SERVER=http://localhost:8000 rustup +nightly component add <my-new-component>
+bash tests/e2e_trust_local_rustup_install.sh
 ```
 
-Note that generally it will not work to combine components built locally and those built from CI (nightly). Ideally, if you want to ship new rustup components, first dist them in nightly, and then test everything from nightly here after it's available on CI.
+Do not combine components built locally with upstream Rust CI artifacts for a
+tRust ownership proof.

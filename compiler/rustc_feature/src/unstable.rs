@@ -312,7 +312,7 @@ declare_features! (
     /// Introduces a hierarchy of `Sized` traits (RFC 3729).
     (unstable, sized_hierarchy, "1.89.0", Some(144404)),
     /// Allows using `#[structural_match]` which indicates that a type is structurally matchable.
-    /// tRust: known issue — Subsumed by trait `StructuralPartialEq`, cannot move to removed until a library
+    /// FIXME: Subsumed by trait `StructuralPartialEq`, cannot move to removed until a library
     /// feature with the same name exists.
     (unstable, structural_match, "1.8.0", Some(31434)),
     /// Allows using the `rust-call` ABI.

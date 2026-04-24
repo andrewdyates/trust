@@ -120,9 +120,10 @@ pub fn proof_strength_label(strength: &ProofStrength) -> String {
         _ => "UNKNOWN".to_string(),
     };
     if strength.is_bounded()
-        && let Some(depth) = strength.bounded_depth() {
-            return format!("{reasoning} [bounded depth {depth}]");
-        }
+        && let Some(depth) = strength.bounded_depth()
+    {
+        return format!("{reasoning} [bounded depth {depth}]");
+    }
     reasoning
 }
 

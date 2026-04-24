@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::SourceSpan;
+use crate::Symbol;
 use crate::formula::{ProofLevel, VcKind, VerificationCondition};
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,8 @@ pub enum SmtTheory {
 #[non_exhaustive]
 pub enum VerificationResult {
     Proved {
-        solver: String,
+        // tRust #907: Interned solver name — small set repeated across all results.
+        solver: Symbol,
         time_ms: u64,
         strength: ProofStrength,
         /// tRust #490: Raw proof certificate data from the solver (e.g., LRAT bytes from z4).
@@ -82,9 +85,20 @@ pub enum VerificationResult {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         solver_warnings: Option<Vec<String>>,
     },
-    Failed { solver: String, time_ms: u64, counterexample: Option<Counterexample> },
-    Unknown { solver: String, time_ms: u64, reason: String },
-    Timeout { solver: String, timeout_ms: u64 },
+    Failed {
+        solver: Symbol,
+        time_ms: u64,
+        counterexample: Option<Counterexample>,
+    },
+    Unknown {
+        solver: Symbol,
+        time_ms: u64,
+        reason: String,
+    },
+    Timeout {
+        solver: Symbol,
+        timeout_ms: u64,
+    },
 }
 
 impl VerificationResult {
@@ -101,7 +115,18 @@ impl VerificationResult {
             VerificationResult::Proved { solver, .. }
             | VerificationResult::Failed { solver, .. }
             | VerificationResult::Unknown { solver, .. }
-            | VerificationResult::Timeout { solver, .. } => solver,
+            | VerificationResult::Timeout { solver, .. } => solver.as_str(),
+        }
+    }
+
+    /// tRust #907: Get the solver Symbol (Copy, O(1) equality).
+    #[must_use]
+    pub fn solver_symbol(&self) -> Symbol {
+        match self {
+            VerificationResult::Proved { solver, .. }
+            | VerificationResult::Failed { solver, .. }
+            | VerificationResult::Unknown { solver, .. }
+            | VerificationResult::Timeout { solver, .. } => *solver,
         }
     }
 
@@ -159,7 +184,6 @@ pub enum ReasoningKind {
     AbstractInterpretation,
 
     // --- tRust #435: New variants for SMT proof technique granularity ---
-
     /// CDCL resolution proof from SAT/SMT Boolean skeleton.
     CdclResolution,
     /// Theory-specific lemma (LIA, BV, UF, arrays, etc.).
@@ -168,7 +192,6 @@ pub enum ReasoningKind {
     BitBlasting,
 
     // --- tRust #435: Solver-specific techniques ---
-
     /// Symbolic execution (future concolic/SE backends).
     SymbolicExecution,
     /// Ownership and borrow-checker reasoning (certus).
@@ -194,9 +217,7 @@ impl ReasoningKind {
     pub fn is_complete(&self) -> bool {
         !matches!(
             self,
-            Self::BoundedModelCheck { .. }
-                | Self::SymbolicExecution
-                | Self::NeuralBounding
+            Self::BoundedModelCheck { .. } | Self::SymbolicExecution | Self::NeuralBounding
         )
     }
 }
@@ -319,10 +340,7 @@ impl ProofStrength {
     /// Abstract interpretation — sound proof via over-approximation.
     #[must_use]
     pub fn abstract_interpretation() -> Self {
-        Self {
-            reasoning: ReasoningKind::AbstractInterpretation,
-            assurance: AssuranceLevel::Sound,
-        }
+        Self { reasoning: ReasoningKind::AbstractInterpretation, assurance: AssuranceLevel::Sound }
     }
 
     /// Whether the proof provides full (sound) assurance.
@@ -488,7 +506,7 @@ pub fn classify_runtime_disposition(
 }
 
 /// A counterexample: concrete variable assignments that violate the property.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Counterexample {
     pub assignments: Vec<(String, CounterexampleValue)>,
     /// tRust: Optional step-by-step execution trace from BMC counterexample.
@@ -520,7 +538,7 @@ impl std::fmt::Display for Counterexample {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CounterexampleValue {
     Bool(bool),
@@ -549,7 +567,7 @@ impl std::fmt::Display for CounterexampleValue {
 /// Each step corresponds to one unrolling depth in the BMC encoding. The trace
 /// maps variable assignments at each step back to MIR basic block indices,
 /// enabling source-level debugging of counterexamples.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CounterexampleTrace {
     /// Ordered sequence of trace steps, one per BMC unrolling depth.
     pub steps: Vec<TraceStep>,
@@ -593,7 +611,7 @@ impl std::fmt::Display for CounterexampleTrace {
 ///
 /// Captures the variable assignments at one unrolling depth, plus an optional
 /// mapping back to the MIR basic block that this step corresponds to.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TraceStep {
     /// The BMC unrolling step index (0-based).
     pub step: u32,
@@ -663,7 +681,7 @@ pub struct ObligationReport {
     pub proof_level: ProofLevel,
     /// Source location where the obligation originates.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub location: Option<crate::SourceSpan>,
+    pub location: Option<SourceSpan>,
     /// Verification outcome.
     pub outcome: ObligationOutcome,
     /// Which solver produced this result.
@@ -982,7 +1000,7 @@ pub enum TransportMessage {
 
 /// Structured verification results for a single function, emitted by the
 /// compiler MIR pass for consumption by cargo-trust and trust-driver.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionTransportResult {
     /// Fully qualified function path (e.g., "crate::module::function").
     pub function: String,
@@ -1000,12 +1018,15 @@ pub struct FunctionTransportResult {
 ///
 /// Carries the essential fields from `VerificationResult` in a flat,
 /// JSON-friendly structure without requiring the full `VerificationCondition`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransportObligationResult {
     /// Short tag for the VC kind (e.g., "overflow:add", "divzero", "bounds").
     pub kind: String,
     /// Human-readable description of the obligation.
     pub description: String,
+    /// Source location for the obligation, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<SourceSpan>,
     /// Verification outcome: "proved", "failed", "unknown", "timeout", "runtime_checked".
     pub outcome: String,
     /// Which solver produced this result.
@@ -1015,13 +1036,16 @@ pub struct TransportObligationResult {
     /// Optional counterexample for failed obligations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub counterexample: Option<String>,
+    /// Structured counterexample model for repair tooling and reports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counterexample_model: Option<Counterexample>,
     /// Optional reason for unknown/timeout results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
 
 /// Crate-level summary emitted after all functions are processed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateTransportSummary {
     /// Crate name.
     pub crate_name: String,
@@ -1303,7 +1327,7 @@ mod tests {
             results: vec![(
                 crate::VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "safe_div".to_string(),
+                    function: "safe_div".into(),
                     location: crate::SourceSpan::default(),
                     formula: crate::Formula::Bool(false),
                     contract_metadata: None,
@@ -1321,7 +1345,7 @@ mod tests {
                 (
                     crate::VerificationCondition {
                         kind: arithmetic_overflow_vc(),
-                        function: "checked_add".to_string(),
+                        function: "checked_add".into(),
                         location: crate::SourceSpan::default(),
                         formula: crate::Formula::Bool(true),
                         contract_metadata: None,
@@ -1331,7 +1355,7 @@ mod tests {
                 (
                     crate::VerificationCondition {
                         kind: VcKind::DivisionByZero,
-                        function: "checked_add".to_string(),
+                        function: "checked_add".into(),
                         location: crate::SourceSpan::default(),
                         formula: crate::Formula::Bool(false),
                         contract_metadata: None,
@@ -1367,7 +1391,7 @@ mod tests {
             results: vec![(
                 crate::VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "f".to_string(),
+                    function: "f".into(),
                     location: crate::SourceSpan::default(),
                     formula: crate::Formula::Bool(false),
                     contract_metadata: None,
@@ -1444,9 +1468,15 @@ mod tests {
     #[test]
     fn test_assurance_level_strength_monotonic() {
         // Certified > SmtBacked/Sound > Trusted/BoundedSound > Unchecked/Heuristic
-        assert!(AssuranceLevel::Certified.strength_order() > AssuranceLevel::SmtBacked.strength_order());
-        assert!(AssuranceLevel::SmtBacked.strength_order() > AssuranceLevel::Trusted.strength_order());
-        assert!(AssuranceLevel::Trusted.strength_order() > AssuranceLevel::Unchecked.strength_order());
+        assert!(
+            AssuranceLevel::Certified.strength_order() > AssuranceLevel::SmtBacked.strength_order()
+        );
+        assert!(
+            AssuranceLevel::SmtBacked.strength_order() > AssuranceLevel::Trusted.strength_order()
+        );
+        assert!(
+            AssuranceLevel::Trusted.strength_order() > AssuranceLevel::Unchecked.strength_order()
+        );
     }
 
     #[test]
@@ -1512,9 +1542,11 @@ mod tests {
 
     #[test]
     fn test_proof_evidence_serde_roundtrip() {
-        let ev = ProofEvidence::new(ReasoningKind::ExhaustiveFinite(256), AssuranceLevel::Certified);
+        let ev =
+            ProofEvidence::new(ReasoningKind::ExhaustiveFinite(256), AssuranceLevel::Certified);
         let json = serde_json::to_string(&ev).expect("serialize ProofEvidence");
-        let deserialized: ProofEvidence = serde_json::from_str(&json).expect("deserialize ProofEvidence");
+        let deserialized: ProofEvidence =
+            serde_json::from_str(&json).expect("deserialize ProofEvidence");
         assert_eq!(ev, deserialized);
     }
 
@@ -1533,7 +1565,10 @@ mod tests {
     fn test_bounded_model_check_never_certified_invariant() {
         // This is the core soundness property from #190: bounded reasoning
         // must never silently become certified.
-        let ev = ProofEvidence::new(ReasoningKind::BoundedModelCheck { depth: 100 }, AssuranceLevel::Certified);
+        let ev = ProofEvidence::new(
+            ReasoningKind::BoundedModelCheck { depth: 100 },
+            AssuranceLevel::Certified,
+        );
         // The type system allows construction (for flexibility), but
         // `is_bounded()` remains true, enabling callers to enforce the rule.
         assert!(ev.is_bounded());
@@ -1553,10 +1588,12 @@ mod tests {
             results: vec![TransportObligationResult {
                 kind: "divzero".to_string(),
                 description: "division by zero".to_string(),
+                location: None,
                 outcome: "proved".to_string(),
-                solver: "z4-smtlib".to_string(),
+                solver: "z4-smtlib".into(),
                 time_ms: 5,
                 counterexample: None,
+                counterexample_model: None,
                 reason: None,
             }],
             proved: 1,

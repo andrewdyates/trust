@@ -3,14 +3,14 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-mod types;
 mod analysis;
-mod helpers;
 mod external_patterns;
+mod helpers;
+mod types;
 
 #[cfg(test)]
 mod tests;
 
-pub use types::*;
 pub use analysis::ResilienceAnalysis;
-pub use external_patterns::{extract_failure_model, match_external_call, EXTERNAL_CALL_PATTERNS};
+pub use external_patterns::{EXTERNAL_CALL_PATTERNS, extract_failure_model, match_external_call};
+pub use types::*;

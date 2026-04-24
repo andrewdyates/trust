@@ -45,11 +45,7 @@ impl BorrowStack {
     pub fn new(region_tag: ProvenanceTag, initial_tag: ProvenanceTag, kind: BorrowKind) -> Self {
         Self {
             region_tag,
-            stack: vec![BorrowEntry {
-                tag: initial_tag,
-                kind,
-                span: SourceSpan::default(),
-            }],
+            stack: vec![BorrowEntry { tag: initial_tag, kind, span: SourceSpan::default() }],
             next_tag: initial_tag.0 + 1,
             violations: Vec::new(),
         }
@@ -319,11 +315,12 @@ pub fn check_provenance(func: &VerifiableFunction) -> Vec<VerificationCondition>
     // Initialize: ref-typed arguments get fresh allocations.
     for local in &func.body.locals {
         if local.index <= func.body.arg_count
-            && let Ty::Ref { mutable, .. } = &local.ty {
-                let kind = if *mutable { BorrowKind::MutableRef } else { BorrowKind::SharedRef };
-                let region_tag = tracker.new_allocation(kind);
-                tracker.bind_local(local.index, region_tag, region_tag);
-            }
+            && let Ty::Ref { mutable, .. } = &local.ty
+        {
+            let kind = if *mutable { BorrowKind::MutableRef } else { BorrowKind::SharedRef };
+            let region_tag = tracker.new_allocation(kind);
+            tracker.bind_local(local.index, region_tag, region_tag);
+        }
     }
 
     // Forward walk through blocks.
@@ -336,9 +333,10 @@ pub fn check_provenance(func: &VerifiableFunction) -> Vec<VerificationCondition>
 
         // Handle Drop terminators (deallocation).
         if let Terminator::Drop { place, span, .. } = &block.terminator
-            && let Some(&(region_tag, _)) = tracker.local_provenance.get(&place.local).as_ref() {
-                tracker.free_region(*region_tag, span.clone());
-            }
+            && let Some(&(region_tag, _)) = tracker.local_provenance.get(&place.local).as_ref()
+        {
+            tracker.free_region(*region_tag, span.clone());
+        }
     }
 
     vcs
@@ -409,7 +407,7 @@ fn emit_provenance_vcs(
             kind: VcKind::Assertion {
                 message: format!("[provenance] {kind_label}: {}", violation.message),
             },
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             location: violation.span.clone(),
             formula: Formula::Bool(true), // definite violation
             contract_metadata: None,
@@ -470,10 +468,7 @@ mod tests {
 
         stack.access_write(shared_tag, &SourceSpan::default());
         assert_eq!(stack.violations().len(), 1);
-        assert_eq!(
-            stack.violations()[0].kind,
-            ProvenanceViolationKind::WriteThroughSharedRef
-        );
+        assert_eq!(stack.violations()[0].kind, ProvenanceViolationKind::WriteThroughSharedRef);
     }
 
     #[test]
@@ -666,10 +661,7 @@ mod tests {
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![Statement::Assign {
-                        place: Place {
-                            local: 1,
-                            projections: vec![Projection::Deref],
-                        },
+                        place: Place { local: 1, projections: vec![Projection::Deref] },
                         rvalue: Rvalue::Use(Operand::Constant(ConstValue::Uint(5, 64))),
                         span: SourceSpan::default(),
                     }],
@@ -715,10 +707,7 @@ mod tests {
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![Statement::Assign {
-                        place: Place {
-                            local: 1,
-                            projections: vec![Projection::Deref],
-                        },
+                        place: Place { local: 1, projections: vec![Projection::Deref] },
                         rvalue: Rvalue::Use(Operand::Constant(ConstValue::Uint(5, 64))),
                         span: SourceSpan::default(),
                     }],
@@ -756,10 +745,7 @@ mod tests {
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![Statement::Assign {
-                        place: Place {
-                            local: 1,
-                            projections: vec![Projection::Deref],
-                        },
+                        place: Place { local: 1, projections: vec![Projection::Deref] },
                         rvalue: Rvalue::Use(Operand::Constant(ConstValue::Uint(5, 64))),
                         span: SourceSpan::default(),
                     }],

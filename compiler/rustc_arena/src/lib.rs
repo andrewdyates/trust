@@ -45,9 +45,6 @@ struct ArenaChunk<T = u8> {
 
 unsafe impl<#[may_dangle] T> Drop for ArenaChunk<T> {
     fn drop(&mut self) {
-        // SAFETY: `self.storage` was originally allocated via `Box::new_uninit_slice`
-        // and then leaked with `Box::leak`, so reconstructing the Box is valid.
-        // `as_mut()` is safe because we have `&mut self` (exclusive access).
         unsafe { drop(Box::from_raw(self.storage.as_mut())) }
     }
 }
@@ -89,9 +86,6 @@ impl<T> ArenaChunk<T> {
     // Returns a pointer to the end of the allocated space.
     #[inline]
     fn end(&mut self) -> *mut T {
-        // SAFETY: For ZSTs, any non-null pointer is valid. For non-ZSTs,
-        // `start().add(len)` produces a one-past-the-end pointer within
-        // the same allocation, which is valid per `ptr::add` contract.
         unsafe {
             if size_of::<T>() == 0 {
                 // A pointer as large as possible for zero-sized elements.
@@ -150,8 +144,6 @@ impl<T> TypedArena<T> {
             self.grow(1)
         }
 
-        // SAFETY: The pointer is valid, properly aligned, and points to
-        // an initialized value of the correct type.
         unsafe {
             if size_of::<T>() == 0 {
                 self.ptr.set(self.ptr.get().wrapping_byte_add(1));
@@ -172,10 +164,10 @@ impl<T> TypedArena<T> {
 
     #[inline]
     fn can_allocate(&self, additional: usize) -> bool {
-        // tRust: known issue — this should *likely* use `offset_from`, but more
+        // FIXME: this should *likely* use `offset_from`, but more
         // investigation is needed (including running tests in miri).
         let available_bytes = self.end.get().addr() - self.ptr.get().addr();
-        let additional_bytes = additional.checked_mul(size_of::<T>()).expect("invariant: arena allocation size must not overflow"); // tRust: unwrap -> expect
+        let additional_bytes = additional.checked_mul(size_of::<T>()).unwrap();
         available_bytes >= additional_bytes
     }
 
@@ -191,7 +183,7 @@ impl<T> TypedArena<T> {
     /// raw-copy `len` already-initialized values into the slice without any
     /// possibility of panicking.
     ///
-    /// tRust: known issue (Zalathar) — This is *very* fragile; perhaps we need a different
+    /// FIXME(Zalathar): This is *very* fragile; perhaps we need a different
     /// approach to arena-allocating slices of droppable values.
     #[inline]
     unsafe fn alloc_raw_slice(&self, len: usize) -> *mut T {
@@ -268,8 +260,6 @@ impl<T> TypedArena<T> {
     #[inline(never)]
     #[cold]
     fn grow(&self, additional: usize) {
-        // SAFETY: The offset keeps the resulting pointer within the
-        // bounds of the same allocated object.
         unsafe {
             // We need the element size to convert chunk sizes (ranging from
             // PAGE to HUGE_PAGE bytes) to element counts.
@@ -280,7 +270,7 @@ impl<T> TypedArena<T> {
                 // If a type is `!needs_drop`, we don't need to keep track of how many elements
                 // the chunk stores - the field will be ignored anyway.
                 if mem::needs_drop::<T>() {
-                    // tRust: known issue — this should *likely* use `offset_from`, but more
+                    // FIXME: this should *likely* use `offset_from`, but more
                     // investigation is needed (including running tests in miri).
                     let used_bytes = self.ptr.get().addr() - last_chunk.start().addr();
                     last_chunk.entries = used_bytes / size_of::<T>();
@@ -319,13 +309,11 @@ impl<T> TypedArena<T> {
             // Recall that `end` was incremented for each allocated value.
             end - start
         } else {
-            // tRust: known issue — this should *likely* use `offset_from`, but more
+            // FIXME: this should *likely* use `offset_from`, but more
             // investigation is needed (including running tests in miri).
             (end - start) / size_of::<T>()
         };
         // Pass that to the `destroy` method.
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `diff` is computed from `last_chunk.start()` and `self.ptr`, so it is exactly the initialized prefix that may be dropped.
         unsafe {
             last_chunk.destroy(diff);
         }
@@ -336,8 +324,6 @@ impl<T> TypedArena<T> {
 
 unsafe impl<#[may_dangle] T> Drop for TypedArena<T> {
     fn drop(&mut self) {
-        // SAFETY: The layout matches the original allocation, and the
-        // pointer was allocated by the same allocator.
         unsafe {
             // Determine how much was filled.
             let mut chunks_borrow = self.chunks.borrow_mut();
@@ -415,8 +401,6 @@ impl DroplessArena {
         // still fitting in a `layout` allocation.
         let additional = layout.size() + cmp::max(DROPLESS_ALIGNMENT, layout.align()) - 1;
 
-        // SAFETY: The layout matches the original allocation, and the
-        // pointer was allocated by the same allocator.
         unsafe {
             let mut chunks = self.chunks.borrow_mut();
             let mut new_cap;
@@ -467,8 +451,6 @@ impl DroplessArena {
             let bytes = align_up(layout.size(), DROPLESS_ALIGNMENT);
 
             // Tell LLVM that `end` is aligned to DROPLESS_ALIGNMENT.
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because `self.end` is set with `align_down(..., DROPLESS_ALIGNMENT)` in `grow` and only updated with values preserving that alignment.
             unsafe { hint::assert_unchecked(end == align_down(end, DROPLESS_ALIGNMENT)) };
 
             if let Some(sub) = end.checked_sub(bytes) {
@@ -496,8 +478,6 @@ impl DroplessArena {
 
         let mem = self.alloc_raw(Layout::new::<T>()) as *mut T;
 
-        // SAFETY: The pointer is valid, properly aligned, and points to
-        // an initialized value of the correct type.
         unsafe {
             // Write into uninitialized memory.
             ptr::write(mem, object);
@@ -523,9 +503,6 @@ impl DroplessArena {
 
         let mem = self.alloc_raw(Layout::for_value::<[T]>(slice)) as *mut T;
 
-        // SAFETY: The pointer and length are valid: the data pointer is
-        // non-null, properly aligned, and the length does not exceed the
-        // allocation size.
         unsafe {
             mem.copy_from_nonoverlapping(slice.as_ptr(), slice.len());
             slice::from_raw_parts_mut(mem, slice.len())
@@ -597,13 +574,11 @@ impl DroplessArena {
                     return &mut [];
                 }
 
-                let mem = self.alloc_raw(Layout::array::<T>(len).expect("invariant: array layout for arena allocation must be valid")) as *mut T; // tRust: unwrap -> expect
+                let mem = self.alloc_raw(Layout::array::<T>(len).unwrap()) as *mut T;
                 // SAFETY: `write_from_iter` doesn't touch `self`. It only touches the slice we just
                 // reserved. If the iterator panics or doesn't output `len` elements, this will
                 // leave some unallocated slots in the arena, which is fine because we do not call
                 // `drop`.
-                // SAFETY: `mem` points to the freshly reserved `len` slots, and
-                // `write_from_iter` writes only within that range.
                 unsafe { self.write_from_iter(iter, len, mem) }
             }
             (_, _) => outline(move || self.try_alloc_from_iter(iter.map(Ok::<T, !>)).into_ok()),
@@ -627,9 +602,6 @@ impl DroplessArena {
         }
         // Move the content to the arena by copying and then forgetting it.
         let len = vec.len();
-        // SAFETY: The pointer and length are valid: the data pointer is
-        // non-null, properly aligned, and the length does not exceed the
-        // allocation size.
         Ok(unsafe {
             let start_ptr = self.alloc_raw(Layout::for_value::<[T]>(vec.as_slice())) as *mut T;
             vec.as_ptr().copy_to_nonoverlapping(start_ptr, len);

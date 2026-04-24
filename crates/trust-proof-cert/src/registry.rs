@@ -6,7 +6,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -65,11 +65,7 @@ pub struct GcPolicy {
 
 impl Default for GcPolicy {
     fn default() -> Self {
-        GcPolicy {
-            max_age_secs: 0,
-            remove_superseded: true,
-            remove_revoked: true,
-        }
+        GcPolicy { max_age_secs: 0, remove_superseded: true, remove_revoked: true }
     }
 }
 
@@ -95,12 +91,13 @@ pub struct RegistryStats {
 /// A serializable snapshot of the entire registry for export/import.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegistrySnapshot {
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// All certificates indexed by registry ID.
-    pub certificates: FxHashMap<String, ProofCertificate>,
+    pub certificates: BTreeMap<String, ProofCertificate>,
     /// All chains indexed by registry ID.
-    pub chains: FxHashMap<String, CertificateChain>,
+    pub chains: BTreeMap<String, CertificateChain>,
     /// All revocations indexed by registry ID.
-    pub revocations: FxHashMap<String, Revocation>,
+    pub revocations: BTreeMap<String, Revocation>,
     /// Snapshot version.
     pub version: u32,
 }
@@ -117,29 +114,29 @@ const REGISTRY_SNAPSHOT_VERSION: u32 = 1;
 /// - Export/import via serializable snapshots
 pub struct CertificateRegistry {
     /// Primary storage: registry ID -> certificate.
-    certificates: FxHashMap<String, ProofCertificate>,
+    certificates: BTreeMap<String, ProofCertificate>,
     /// Certificate chains: registry ID -> chain.
-    chains: FxHashMap<String, CertificateChain>,
+    chains: BTreeMap<String, CertificateChain>,
     /// Revocation records: registry ID -> revocation info.
-    revocations: FxHashMap<String, Revocation>,
+    revocations: BTreeMap<String, Revocation>,
     /// Index: function name -> set of registry IDs.
-    fn_index: FxHashMap<String, FxHashSet<String>>,
+    fn_index: BTreeMap<String, BTreeSet<String>>,
     /// Index: VC kind string -> set of registry IDs.
-    vc_kind_index: FxHashMap<String, FxHashSet<String>>,
+    vc_kind_index: BTreeMap<String, BTreeSet<String>>,
     /// Map from original CertificateId -> RegistryId for cross-referencing.
-    cert_id_map: FxHashMap<String, String>,
+    cert_id_map: BTreeMap<String, String>,
 }
 
 impl CertificateRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
         CertificateRegistry {
-            certificates: FxHashMap::default(),
-            chains: FxHashMap::default(),
-            revocations: FxHashMap::default(),
-            fn_index: FxHashMap::default(),
-            vc_kind_index: FxHashMap::default(),
-            cert_id_map: FxHashMap::default(),
+            certificates: BTreeMap::new(),
+            chains: BTreeMap::new(),
+            revocations: BTreeMap::new(),
+            fn_index: BTreeMap::new(),
+            vc_kind_index: BTreeMap::new(),
+            cert_id_map: BTreeMap::new(),
         }
     }
 
@@ -161,18 +158,11 @@ impl CertificateRegistry {
         }
 
         // Build indexes
-        self.fn_index
-            .entry(cert.function.clone())
-            .or_default()
-            .insert(id_str.clone());
+        self.fn_index.entry(cert.function.clone()).or_default().insert(id_str.clone());
 
-        self.vc_kind_index
-            .entry(cert.vc_snapshot.kind.clone())
-            .or_default()
-            .insert(id_str.clone());
+        self.vc_kind_index.entry(cert.vc_snapshot.kind.clone()).or_default().insert(id_str.clone());
 
-        self.cert_id_map
-            .insert(cert.id.0.clone(), id_str.clone());
+        self.cert_id_map.insert(cert.id.0.clone(), id_str.clone());
 
         self.certificates.insert(id_str.clone(), cert);
         self.chains.insert(id_str, chain);
@@ -187,20 +177,14 @@ impl CertificateRegistry {
 
     /// Look up a certificate by its original CertificateId.
     pub fn lookup_by_cert_id(&self, cert_id: &CertificateId) -> Option<&ProofCertificate> {
-        self.cert_id_map
-            .get(&cert_id.0)
-            .and_then(|reg_id| self.certificates.get(reg_id))
+        self.cert_id_map.get(&cert_id.0).and_then(|reg_id| self.certificates.get(reg_id))
     }
 
     /// Look up all certificates for a given function name.
     pub fn lookup_by_function(&self, fn_name: &str) -> Vec<&ProofCertificate> {
         self.fn_index
             .get(fn_name)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.certificates.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.certificates.get(id)).collect())
             .unwrap_or_default()
     }
 
@@ -208,11 +192,7 @@ impl CertificateRegistry {
     pub fn lookup_by_vc_kind(&self, kind: &str) -> Vec<&ProofCertificate> {
         self.vc_kind_index
             .get(kind)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.certificates.get(id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.certificates.get(id)).collect())
             .unwrap_or_default()
     }
 
@@ -234,10 +214,7 @@ impl CertificateRegistry {
             });
         }
 
-        self.revocations.insert(
-            id.0.clone(),
-            Revocation { timestamp, reason },
-        );
+        self.revocations.insert(id.0.clone(), Revocation { timestamp, reason });
 
         Ok(())
     }
@@ -266,7 +243,7 @@ impl CertificateRegistry {
     ///
     /// Returns the list of registry IDs that were removed.
     pub fn gc(&mut self, policy: &GcPolicy) -> Vec<RegistryId> {
-        let mut to_remove: FxHashSet<String> = FxHashSet::default();
+        let mut to_remove: BTreeSet<String> = BTreeSet::new();
 
         // Collect revoked
         if policy.remove_revoked {
@@ -287,7 +264,7 @@ impl CertificateRegistry {
 
         // Collect superseded (keep only the newest per function)
         if policy.remove_superseded {
-            let mut by_function: FxHashMap<&str, Vec<(&str, &str)>> = FxHashMap::default();
+            let mut by_function: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
             for (id, cert) in &self.certificates {
                 by_function
                     .entry(&cert.function)
@@ -341,18 +318,11 @@ impl CertificateRegistry {
             }
 
             // Rebuild indexes
-            self.fn_index
-                .entry(cert.function.clone())
-                .or_default()
-                .insert(id.clone());
+            self.fn_index.entry(cert.function.clone()).or_default().insert(id.clone());
 
-            self.vc_kind_index
-                .entry(cert.vc_snapshot.kind.clone())
-                .or_default()
-                .insert(id.clone());
+            self.vc_kind_index.entry(cert.vc_snapshot.kind.clone()).or_default().insert(id.clone());
 
-            self.cert_id_map
-                .insert(cert.id.0.clone(), id.clone());
+            self.cert_id_map.insert(cert.id.0.clone(), id.clone());
 
             self.certificates.insert(id.clone(), cert);
 
@@ -379,19 +349,12 @@ impl CertificateRegistry {
         let unique_functions = self.fn_index.len();
 
         // Approximate storage size
-        let storage_bytes = self
-            .certificates
-            .values()
-            .filter_map(|c| c.to_json().ok())
-            .map(|j| j.len())
-            .sum();
+        let storage_bytes =
+            self.certificates.values().filter_map(|c| c.to_json().ok()).map(|j| j.len()).sum();
 
         // Find oldest and newest timestamps
-        let mut timestamps: Vec<&str> = self
-            .certificates
-            .values()
-            .map(|c| c.timestamp.as_str())
-            .collect();
+        let mut timestamps: Vec<&str> =
+            self.certificates.values().map(|c| c.timestamp.as_str()).collect();
         timestamps.sort();
 
         let oldest_timestamp = timestamps.first().map(|s| (*s).to_string());
@@ -475,9 +438,7 @@ mod tests {
     use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
     use super::*;
-    use crate::{
-        CertificateChain, ChainStep, ChainStepType, FunctionHash, SolverInfo, VcSnapshot,
-    };
+    use crate::{CertificateChain, ChainStep, ChainStepType, FunctionHash, SolverInfo, VcSnapshot};
 
     fn sample_solver_info() -> SolverInfo {
         SolverInfo {
@@ -491,10 +452,8 @@ mod tests {
 
     fn sample_vc(function: &str) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "must hold".to_string(),
-            },
-            function: function.to_string(),
+            kind: VcKind::Assertion { message: "must hold".to_string() },
+            function: function.into(),
             location: SourceSpan {
                 file: "src/lib.rs".to_string(),
                 line_start: 10,
@@ -617,11 +576,7 @@ mod tests {
         assert!(registry.is_valid(&id));
 
         registry
-            .revoke(
-                &id,
-                RevocationReason::FunctionModified,
-                "2026-03-28T00:00:00Z".to_string(),
-            )
+            .revoke(&id, RevocationReason::FunctionModified, "2026-03-28T00:00:00Z".to_string())
             .unwrap();
 
         assert!(registry.is_revoked(&id));
@@ -635,9 +590,7 @@ mod tests {
 
         let result = registry.revoke(
             &fake_id,
-            RevocationReason::Manual {
-                reason: "test".to_string(),
-            },
+            RevocationReason::Manual { reason: "test".to_string() },
             "2026-03-28T00:00:00Z".to_string(),
         );
 
@@ -651,17 +604,10 @@ mod tests {
         let id = registry.register(cert, sample_chain()).unwrap();
 
         registry
-            .revoke(
-                &id,
-                RevocationReason::UnsoundProof,
-                "2026-03-28T00:00:00Z".to_string(),
-            )
+            .revoke(&id, RevocationReason::UnsoundProof, "2026-03-28T00:00:00Z".to_string())
             .unwrap();
 
-        let policy = GcPolicy {
-            remove_revoked: true,
-            ..GcPolicy::default()
-        };
+        let policy = GcPolicy { remove_revoked: true, ..GcPolicy::default() };
 
         let removed = registry.gc(&policy);
         assert_eq!(removed.len(), 1);
@@ -680,11 +626,7 @@ mod tests {
 
         assert_eq!(registry.len(), 2);
 
-        let policy = GcPolicy {
-            remove_superseded: true,
-            remove_revoked: false,
-            max_age_secs: 0,
-        };
+        let policy = GcPolicy { remove_superseded: true, remove_revoked: false, max_age_secs: 0 };
 
         let removed = registry.gc(&policy);
         assert_eq!(removed.len(), 1);
@@ -731,9 +673,7 @@ mod tests {
         registry
             .revoke(
                 &id1,
-                RevocationReason::Manual {
-                    reason: "test".to_string(),
-                },
+                RevocationReason::Manual { reason: "test".to_string() },
                 "2026-03-28T00:00:00Z".to_string(),
             )
             .unwrap();
@@ -775,11 +715,7 @@ mod tests {
         registry.register(cert2, sample_chain()).unwrap();
 
         registry
-            .revoke(
-                &id1,
-                RevocationReason::FunctionModified,
-                "2026-03-28T00:00:00Z".to_string(),
-            )
+            .revoke(&id1, RevocationReason::FunctionModified, "2026-03-28T00:00:00Z".to_string())
             .unwrap();
 
         let stats = registry.stats();
@@ -788,30 +724,18 @@ mod tests {
         assert_eq!(stats.revoked_certificates, 1);
         assert_eq!(stats.unique_functions, 2);
         assert!(stats.storage_bytes > 0);
-        assert_eq!(
-            stats.oldest_timestamp,
-            Some("2026-03-27T12:00:00Z".to_string())
-        );
-        assert_eq!(
-            stats.newest_timestamp,
-            Some("2026-03-27T12:05:00Z".to_string())
-        );
+        assert_eq!(stats.oldest_timestamp, Some("2026-03-27T12:00:00Z".to_string()));
+        assert_eq!(stats.newest_timestamp, Some("2026-03-27T12:05:00Z".to_string()));
     }
 
     #[test]
     fn test_registry_function_names() {
         let mut registry = CertificateRegistry::new();
         registry
-            .register(
-                sample_certificate("crate::bar", "2026-03-27T12:00:00Z"),
-                sample_chain(),
-            )
+            .register(sample_certificate("crate::bar", "2026-03-27T12:00:00Z"), sample_chain())
             .unwrap();
         registry
-            .register(
-                sample_certificate("crate::foo", "2026-03-27T12:01:00Z"),
-                sample_chain(),
-            )
+            .register(sample_certificate("crate::foo", "2026-03-27T12:01:00Z"), sample_chain())
             .unwrap();
 
         let names = registry.function_names();

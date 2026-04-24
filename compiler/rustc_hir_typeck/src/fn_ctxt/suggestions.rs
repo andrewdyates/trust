@@ -311,7 +311,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 subs.iter()
                                     .enumerate()
                                     .find(|(_, sub_expr)| sub_expr.hir_id == expr_id)
-                                    .expect("invariant: value is present")
+                                    .unwrap()
                                     .0,
                             );
                             expr_id = parent_id;
@@ -453,7 +453,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
             };
 
-            // NOTE: this could/should be extended to suggest `as_mut` and `as_deref_mut`,
+            // FIXME: This could/should be extended to suggest `as_mut` and `as_deref_mut`,
             // but those checks need to be a bit more delicate and the benefit is diminishing.
             if self.can_eq(self.param_env, found_ty_inner, peeled) && error_tys_equate_as_ref {
                 let sugg = prefix_wrap(".as_ref()");
@@ -923,7 +923,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else if let Some(sugg) = suggest_impl_trait(self, self.param_env, found) {
                     err.subdiagnostic(errors::AddReturnTypeSuggestion::Add { span, found: sugg });
                 } else {
-                    // NOTE: if `found` could be `impl Iterator` we should suggest that.
+                    // FIXME: if `found` could be `impl Iterator` we should suggest that.
                     err.subdiagnostic(errors::AddReturnTypeSuggestion::MissingHere { span });
                 }
 
@@ -931,7 +931,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             hir::FnRetTy::Return(hir_ty) => {
                 if let hir::TyKind::OpaqueDef(op_ty, ..) = hir_ty.kind
-                    // NOTE: account for RPITIT.
+                    // FIXME: account for RPITIT.
                     && let [hir::GenericBound::Trait(trait_ref)] = op_ty.bounds
                     && let Some(hir::PathSegment { args: Some(generic_args), .. }) =
                         trait_ref.trait_ref.path.segments.last()
@@ -1095,7 +1095,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     bounded_ty,
                     ..
                 }) => {
-                    // NOTE: these calls to `lower_ty` may be removable (and the ones below)
+                    // FIXME: Maybe these calls to `lower_ty` can be removed (and the ones below)
                     let ty = self.lowerer().lower_ty(bounded_ty);
                     Some((ty, bounds))
                 }
@@ -1223,7 +1223,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let ty = match self.tcx.asyncness(fn_id) {
                     ty::Asyncness::Yes => {
                         self.err_ctxt().get_impl_future_output_ty(ty).unwrap_or_else(|| {
-                            // tRust: invariant — every async fn return type lowers to an `impl Future`, so extracting its `Output` must succeed
                             span_bug!(
                                 fn_decl.output.span(),
                                 "failed to get output type of async function"
@@ -1685,7 +1684,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     && let Some(qpath @ (LangItem::RangeFrom | LangItem::RangeTo)) =
                         self.tcx.qpath_lang_item(qpath) =>
             {
-                let range_span = expr.span.parent_callsite().expect("invariant: value is present");
+                let range_span = expr.span.parent_callsite().unwrap();
                 match qpath {
                     LangItem::RangeFrom => {
                         err.span_suggestion_verbose(
@@ -1841,7 +1840,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return false;
         }
         let item_ty = self.tcx.type_of(item.def_id).instantiate_identity();
-        // NOTE(compiler-errors): This check is *so* rudimentary
+        // FIXME(compiler-errors): This check is *so* rudimentary
         if item_ty.has_param() {
             return false;
         }
@@ -2015,7 +2014,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 diag.help(format!(
                                     "{msg}: {}",
                                     listify(&errors, |e| format!("`{}`", e.obligation.predicate))
-                                        .expect("invariant: value is present"),
+                                        .unwrap(),
                                 ));
                             }
                         }
@@ -2137,7 +2136,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // If the field is from an external crate it must not be `doc(hidden)`.
             && (field.did.is_local() || !self.tcx.is_doc_hidden(field.did))
             // If the field is hygienic it must come from the same syntax context.
-            && self.tcx.def_ident_span(field.did).expect("invariant: def has ident span").normalize_to_macros_2_0().eq_ctxt(span)
+            && self.tcx.def_ident_span(field.did).unwrap().normalize_to_macros_2_0().eq_ctxt(span)
     }
 
     pub(crate) fn suggest_missing_unwrap_expect(
@@ -2249,7 +2248,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             && self
                 .infcx
                 .type_implements_trait(
-                    self.tcx.get_diagnostic_item(sym::Into).expect("invariant: diagnostic item is defined"),
+                    self.tcx.get_diagnostic_item(sym::Into).unwrap(),
                     [f_err, e_err],
                     self.param_env,
                 )
@@ -2556,7 +2555,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     if self.may_coerce(expr_ty, sole_field_ty) {
                         let variant_path =
                             with_no_trimmed_paths!(self.tcx.def_path_str(variant.def_id));
-                        // NOTE(#56861): DRYer prelude filtering
+                        // FIXME #56861: DRYer prelude filtering
                         if let Some(path) = variant_path.strip_prefix("std::prelude::")
                             && let Some((_, path)) = path.split_once("::")
                         {
@@ -3096,7 +3095,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // For this suggestion to make sense, the type would need to be `Copy`,
                     // or we have to be moving out of a `Box<T>`
                     if self.type_is_copy_modulo_regions(self.param_env, expected)
-                        // NOTE(compiler-errors): We can actually do this if the checked_ty is
+                        // FIXME(compiler-errors): We can actually do this if the checked_ty is
                         // `steps` layers of boxes, not just one, but this is easier and most likely.
                         || (checked_ty.is_box() && steps == 1)
                         // We can always deref a binop that takes its arguments by ref.
@@ -3108,7 +3107,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     {
                         let deref_kind = if checked_ty.is_box() {
                             // detect Box::new(..)
-                            // NOTE: use `box_new` diagnostic item instead?
+                            // FIXME: use `box_new` diagnostic item instead?
                             if let ExprKind::Call(box_new, [_]) = expr.kind
                                 && let ExprKind::Path(qpath) = &box_new.kind
                                 && let Res::Def(DefKind::AssocFn, fn_id) =
@@ -3315,7 +3314,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ) {
                 // Remove fractional part from literal, for example `42.0f32` into `42`
                 let src = src.trim_end_matches(&checked_ty.to_string());
-                let len = src.split('.').next().expect("invariant: iterator is non-empty").len();
+                let len = src.split('.').next().unwrap().len();
                 span.with_lo(span.lo() + BytePos(len as u32))
             } else {
                 let len = src.trim_end_matches(&checked_ty.to_string()).len();
@@ -3692,7 +3691,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return;
         };
         if self.can_eq(self.param_env, expected_ty, ty)
-            // NOTE: this happens with macro calls. Need to figure out why the stmt
+            // FIXME: this happens with macro calls. Need to figure out why the stmt
             // `println!();` doesn't include the `;` in its `Span`. (#133845)
             // We filter these out to avoid ICEs with debug assertions on caused by
             // empty suggestions.

@@ -136,7 +136,7 @@ impl RegionTracker {
 
     /// Determine if we can name all the placeholders in `other`.
     pub(crate) fn can_name_all_placeholders(&self, other: Self) -> bool {
-        // tRust: known issue — We first check whether we can name the highest existential universe
+        // HACK: We first check whether we can name the highest existential universe
         // of `other`. This only exists to avoid errors in case that scc already
         // depends on a placeholder it cannot name itself.
         self.max_nameable_universe().can_name(other.max_nameable_universe())
@@ -170,7 +170,7 @@ impl scc::Annotation for RegionTracker {
 
 /// Determines if the region variable definitions contain
 /// placeholders, and compute them for later use.
-// // NOTE: This is also used by opaque type handling. Move it to a separate file.. Move it to a separate file.
+// FIXME: This is also used by opaque type handling. Move it to a separate file.
 pub(super) fn region_definitions<'tcx>(
     infcx: &BorrowckInferCtxt<'tcx>,
     universal_regions: &UniversalRegions<'tcx>,
@@ -195,7 +195,7 @@ pub(super) fn region_definitions<'tcx>(
     }
 
     // Add external names from universal regions in fun function definitions.
-    // // NOTE: this two-step method is annoying, but avoids borrow issues., but I don't know how to avoid it.
+    // FIXME: this two-step method is annoying, but I don't know how to avoid it.
     for (external_name, variable) in universal_regions.named_universal_regions_iter() {
         debug!("region {:?} has external name {:?}", variable, external_name);
         definitions[variable].external_name = Some(external_name);
@@ -368,7 +368,7 @@ pub(crate) fn rewrite_placeholder_outlives<'tcx>(
             max_u_rvid
         };
 
-        // // NOTE: if we can extract a useful blame span here, future error here, future error
+        // FIXME: if we can extract a useful blame span here, future error
         // reporting and constraint search can be simplified.
 
         added_constraints = true;

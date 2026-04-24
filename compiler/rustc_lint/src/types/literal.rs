@@ -66,7 +66,6 @@ fn lint_overflowing_range_endpoint<'tcx>(
         LitKind::Int(_, LitIntType::Signed(s)) => s.name_str(),
         LitKind::Int(_, LitIntType::Unsigned(s)) => s.name_str(),
         LitKind::Int(_, LitIntType::Unsuffixed) => "",
-        // tRust: invariant — integer literal suffix extraction expects Int literal kind
         _ => bug!(),
     };
 
@@ -295,7 +294,7 @@ fn lint_int_literal<'tcx>(
             return;
         }
 
-        let span = if negative { type_limits.negated_expr_span.expect("invariant: negated_expr_span is set when negative=true") } else { span }; // tRust: unwrap -> expect
+        let span = if negative { type_limits.negated_expr_span.unwrap() } else { span };
         let lit = cx
             .sess()
             .source_map()
@@ -325,7 +324,6 @@ fn lint_uint_literal<'tcx>(
         // _v is u8, within range by definition
         ast::LitKind::Byte(_v) => return,
         ast::LitKind::Int(v, _) => v.get(),
-        // tRust: invariant — unsigned integer range check expects Int or Byte literal kind
         _ => bug!(),
     };
 
@@ -414,7 +412,6 @@ pub(crate) fn lint_literal<'tcx>(
                 ast::LitKind::Int(v, ast::LitIntType::Signed(_) | ast::LitIntType::Unsuffixed) => {
                     lint_int_literal(cx, type_limits, hir_id, span, lit, t, v.get())
                 }
-                // tRust: invariant — signed integer lint expects Int literal with signed or unsuffixed type
                 _ => bug!(),
             };
         }
@@ -424,7 +421,6 @@ pub(crate) fn lint_literal<'tcx>(
         }
         ty::Float(t) => {
             let ast::LitKind::Float(v, _) = lit.node else {
-                // tRust: invariant — float literal lint expects Float literal kind
                 bug!();
             };
 

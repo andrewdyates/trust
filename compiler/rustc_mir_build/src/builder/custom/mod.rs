@@ -121,7 +121,6 @@ fn parse_attribute(dialect: Option<attrs::MirDialect>, phase: Option<attrs::MirP
 
             Some(attrs::MirPhase::Optimized) => {
                 // Caught during attribute checking.
-                // tRust: invariant — attribute checking rejects `dialect = "analysis"` combined with `phase = "optimized"` before MIR construction.
                 bug!("`optimized` dialect is not compatible with the `analysis` dialect")
             }
         },

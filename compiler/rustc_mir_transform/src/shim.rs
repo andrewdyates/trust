@@ -1,6 +1,3 @@
-//! tRust: Generates MIR shims for drop glue, adapters, closure call methods,
-//! tRust: and other compiler-generated functions.
-
 use std::{assert_matches, fmt, iter};
 
 use rustc_abi::{ExternAbi, FIRST_VARIANT, FieldIdx, VariantIdx};
@@ -71,7 +68,6 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceKind<'tcx>) -> Body<
     debug!("make_shim({:?})", instance);
 
     let mut result = match instance {
-        // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
         ty::InstanceKind::Item(..) => bug!("item {:?} passed to make_shim", instance),
         ty::InstanceKind::VTableShim(def_id) => {
             let adjustment = Adjustment::Deref { source: DerefSource::MutPtr };
@@ -87,7 +83,6 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceKind<'tcx>) -> Body<
                 Some(ty::ClosureKind::FnOnce) => Adjustment::Identity,
                 Some(ty::ClosureKind::Fn) => Adjustment::Deref { source: DerefSource::ImmRef },
                 Some(ty::ClosureKind::FnMut) => Adjustment::Deref { source: DerefSource::MutRef },
-                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                 None => bug!("fn pointer {:?} is not an fn", ty),
             };
 
@@ -107,7 +102,7 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceKind<'tcx>) -> Body<
                 .associated_items(fn_mut)
                 .in_definition_order()
                 .find(|it| it.is_fn())
-                .expect("invariant: FnMut trait must have an associated function") // tRust: unwrap elimination
+                .unwrap()
                 .def_id;
 
             build_call_shim(tcx, instance, Some(Adjustment::RefMut), CallKind::Direct(call_mut))
@@ -119,14 +114,13 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceKind<'tcx>) -> Body<
         } => build_construct_coroutine_by_move_shim(tcx, coroutine_closure_def_id, receiver_by_ref),
 
         ty::InstanceKind::DropGlue(def_id, ty) => {
-            // NOTE(#91576): Coroutine drop shims bypass final MIR passes.
-            // This is intentional - they use the optimized coroutine body directly.
+            // FIXME(#91576): Drop shims for coroutines aren't subject to the MIR passes at the end
+            // of this function. Is this intentional?
             if let Some(&ty::Coroutine(coroutine_def_id, args)) = ty.map(Ty::kind) {
                 let coroutine_body = tcx.optimized_mir(coroutine_def_id);
 
                 let ty::Coroutine(_, id_args) = *tcx.type_of(coroutine_def_id).skip_binder().kind()
                 else {
-                    // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                     bug!()
                 };
 
@@ -136,15 +130,15 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceKind<'tcx>) -> Body<
                 // the future returned by `<[coroutine-closure] as AsyncFnOnce>::call_once` will
                 // drop the coroutine-closure's upvars.
                 let body = if id_args.as_coroutine().kind_ty() == args.as_coroutine().kind_ty() {
-                    coroutine_body.coroutine_drop().expect("invariant: coroutine body must have a drop shim") // tRust: unwrap elimination
+                    coroutine_body.coroutine_drop().unwrap()
                 } else {
                     assert_eq!(
-                        args.as_coroutine().kind_ty().to_opt_closure_kind().expect("invariant: coroutine must have a closure kind"), // tRust: unwrap elimination
+                        args.as_coroutine().kind_ty().to_opt_closure_kind().unwrap(),
                         ty::ClosureKind::FnOnce
                     );
                     tcx.optimized_mir(tcx.coroutine_by_move_body_def_id(coroutine_def_id))
                         .coroutine_drop()
-                        .expect("invariant: by-move coroutine body must have a drop shim") // tRust: unwrap elimination
+                        .unwrap()
                 };
 
                 let mut body = EarlyBinder::bind(body.clone()).instantiate(tcx, args);
@@ -219,11 +213,9 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceKind<'tcx>) -> Body<
             return body;
         }
         ty::InstanceKind::Virtual(..) => {
-            // tRust: invariant: structural invariant — virtual call dispatch requires a trait object operand
             bug!("InstanceKind::Virtual ({:?}) is for direct calls only", instance)
         }
         ty::InstanceKind::Intrinsic(_) => {
-            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
             bug!("creating shims from intrinsics ({:?}) is unsupported", instance)
         }
     };
@@ -425,7 +417,7 @@ fn new_body<'tcx>(
         vec![],
         span,
         None,
-        // NOTE: Return block set to None; correctness unclear but matches upstream behavior.
+        // FIXME(compiler-errors): is this correct?
         None,
     );
     // Shims do not directly mention any consts.
@@ -558,7 +550,6 @@ fn build_clone_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'tcx>) -
             assert_eq!(tcx.coroutine_movability(*coroutine_def_id), hir::Movability::Movable);
             builder.coroutine_shim(dest, src, *coroutine_def_id, args.as_coroutine())
         }
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         _ => bug!("clone shim for `{:?}` which is not `Copy` and is not an aggregate", self_ty),
     };
 
@@ -853,20 +844,20 @@ fn build_call_shim<'tcx>(
         // `Self` is always the original fn type `ty`. The MIR call terminator is only defined for
         // `FnDef` and `FnPtr` callees, not the `Self` type param.
         let self_arg = &mut inputs_and_output[0];
-        *self_arg = match rcvr_adjustment.expect("invariant: call shim must have receiver adjustment") { // tRust: unwrap elimination
+        *self_arg = match rcvr_adjustment.unwrap() {
             Adjustment::Identity => fnty,
             Adjustment::Deref { source } => match source {
                 DerefSource::ImmRef => Ty::new_imm_ref(tcx, tcx.lifetimes.re_erased, fnty),
                 DerefSource::MutRef => Ty::new_mut_ref(tcx, tcx.lifetimes.re_erased, fnty),
                 DerefSource::MutPtr => Ty::new_mut_ptr(tcx, fnty),
             },
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             Adjustment::RefMut => bug!("`RefMut` is never used with indirect calls: {instance:?}"),
         };
         sig.inputs_and_output = tcx.mk_type_list(&inputs_and_output);
     }
 
-    // NOTE: Signature adjustment duplicated with fn_sig_for_fn_abi; consolidation desired.
+    // FIXME: Avoid having to adjust the signature both here and in
+    // `fn_sig_for_fn_abi`.
     if let ty::InstanceKind::VTableShim(..) = instance {
         // Modify fn(self, ...) to fn(self: *mut Self, ...)
         let mut inputs_and_output = sig.inputs_and_output.to_vec();
@@ -917,7 +908,7 @@ fn build_call_shim<'tcx>(
 
     let (callee, mut args) = match call_kind {
         // `FnPtr` call has no receiver. Args are untupled below.
-        CallKind::Indirect(_) => (rcvr.expect("invariant: indirect call must have a receiver"), vec![]), // tRust: unwrap elimination
+        CallKind::Indirect(_) => (rcvr.unwrap(), vec![]),
 
         // `FnDef` call with optional receiver.
         CallKind::Direct(def_id) => {
@@ -1050,7 +1041,6 @@ pub(super) fn build_adt_ctor(tcx: TyCtxt<'_>, ctor_id: DefId) -> Body<'_> {
     let sig = tcx.normalize_erasing_regions(typing_env, sig);
 
     let ty::Adt(adt_def, args) = sig.output().kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!("unexpected type for ADT ctor {:?}", sig.output());
     };
 
@@ -1122,14 +1112,13 @@ fn build_fn_ptr_addr_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'t
     assert_matches!(self_ty.kind(), ty::FnPtr(..), "expected fn ptr, found {self_ty}");
     let span = tcx.def_span(def_id);
     let Some(sig) = tcx.fn_sig(def_id).instantiate(tcx, &[self_ty.into()]).no_bound_vars() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         span_bug!(span, "FnPtr::addr with bound vars for `{self_ty}`");
     };
     let locals = local_decls_for_sig(&sig, span);
 
     let source_info = SourceInfo::outermost(span);
-    // NOTE: Using FnPtrToPtr cast instead of expose_provenance; function pointer
-    // provenance semantics are still under discussion.
+    // FIXME: use `expose_provenance` once we figure out whether function pointers have meaningful
+    // provenance.
     let rvalue = Rvalue::Cast(
         CastKind::FnPtrToPtr,
         Operand::Move(Place::from(Local::new(1))),
@@ -1157,7 +1146,6 @@ fn build_construct_coroutine_by_move_shim<'tcx>(
     let mut self_ty = tcx.type_of(coroutine_closure_def_id).instantiate_identity();
     let mut self_local: Place<'tcx> = Local::from_usize(1).into();
     let ty::CoroutineClosure(_, args) = *self_ty.kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!();
     };
 
@@ -1190,7 +1178,6 @@ fn build_construct_coroutine_by_move_shim<'tcx>(
     });
     let sig = tcx.liberate_late_bound_regions(coroutine_closure_def_id, poly_sig);
     let ty::Coroutine(coroutine_def_id, coroutine_args) = *sig.output().kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!();
     };
 

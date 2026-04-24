@@ -290,7 +290,6 @@ impl<'infcx, 'tcx> crate::MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         let type_name = match (ty.kind(), is_index) {
             (&ty::Array(_, _), Some(true)) | (&ty::Array(_, _), None) => "array",
             (&ty::Slice(_), _) => "slice",
-            // tRust: invariant: type system guarantee — only Array/Slice types should reach this illegal move path
             _ => span_bug!(move_from_span, "this path should not cause illegal move"),
         };
         struct_span_code_err!(
@@ -386,7 +385,7 @@ impl<'infcx, 'tcx> crate::MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         span: Span,
         yield_span: Span,
     ) -> Diag<'infcx> {
-        let coroutine_kind = self.body.coroutine.as_ref().expect("invariant: body must be a coroutine").coroutine_kind;
+        let coroutine_kind = self.body.coroutine.as_ref().unwrap().coroutine_kind;
         let mut diag = struct_span_code_err!(
             self.dcx(),
             span,

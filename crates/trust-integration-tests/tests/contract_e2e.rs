@@ -1,4 +1,3 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/contract_e2e.rs: Contract & Sunder VC error detection tests (#639)
 //
 // Tests that tRust's verification pipeline correctly generates and verifies
@@ -21,7 +20,7 @@
 
 use std::process::Command;
 
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_types::*;
 
@@ -29,13 +28,13 @@ use trust_types::*;
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn require_z4() -> SmtLibBackend {
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH — install z4 to run these tests"),
     }
@@ -73,7 +72,7 @@ fn make_contract_function(
 fn make_vc(kind: VcKind, function: &str, formula: Formula) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -116,10 +115,8 @@ fn test_pipeline_precondition_vc() {
 
     let vcs = trust_vcgen::generate_vcs(&func);
 
-    let precond_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(&vc.kind, VcKind::Precondition { .. }))
-        .collect();
+    let precond_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(&vc.kind, VcKind::Precondition { .. })).collect();
 
     assert!(
         !precond_vcs.is_empty(),
@@ -145,10 +142,8 @@ fn test_pipeline_postcondition_vc() {
 
     let vcs = trust_vcgen::generate_vcs(&func);
 
-    let postcond_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::Postcondition))
-        .collect();
+    let postcond_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Postcondition)).collect();
 
     assert!(
         !postcond_vcs.is_empty(),
@@ -336,10 +331,8 @@ fn test_postcondition_buggy() {
     // Postcondition: result >= 0. Negated check: NOT(result >= 0) with unconstrained result.
     // SAT — z4 finds result = -1.
     let result_var = Formula::Var("result".into(), Sort::Int);
-    let formula = Formula::Not(Box::new(Formula::Ge(
-        Box::new(result_var),
-        Box::new(Formula::Int(0)),
-    )));
+    let formula =
+        Formula::Not(Box::new(Formula::Ge(Box::new(result_var), Box::new(Formula::Int(0)))));
 
     let vc = make_vc(VcKind::Postcondition, "buggy_postcond", formula);
 
@@ -361,10 +354,7 @@ fn test_postcondition_safe() {
             Box::new(result_var.clone()),
             Box::new(Formula::Add(Box::new(x), Box::new(Formula::Int(1)))),
         ),
-        Formula::Not(Box::new(Formula::Ge(
-            Box::new(result_var),
-            Box::new(Formula::Int(0)),
-        ))),
+        Formula::Not(Box::new(Formula::Ge(Box::new(result_var), Box::new(Formula::Int(0))))),
     ]);
 
     let vc = make_vc(VcKind::Postcondition, "safe_postcond", formula);
@@ -385,10 +375,7 @@ fn test_loop_invariant_initiation_buggy() {
     let formula = Formula::Not(Box::new(Formula::Ge(Box::new(sum), Box::new(Formula::Int(0)))));
 
     let vc = make_vc(
-        VcKind::LoopInvariantInitiation {
-            invariant: "sum >= 0".to_string(),
-            header_block: 0,
-        },
+        VcKind::LoopInvariantInitiation { invariant: "sum >= 0".to_string(), header_block: 0 },
         "loop_init_buggy",
         formula,
     );
@@ -413,20 +400,14 @@ fn test_loop_invariant_initiation_safe() {
     ]);
 
     let vc = make_vc(
-        VcKind::LoopInvariantInitiation {
-            invariant: "sum >= 0".to_string(),
-            header_block: 0,
-        },
+        VcKind::LoopInvariantInitiation { invariant: "sum >= 0".to_string(), header_block: 0 },
         "loop_init_safe",
         formula,
     );
 
     let result = z4.verify(&vc);
     eprintln!("loop invariant initiation safe: {:?}", result);
-    assert!(
-        result.is_proved(),
-        "z4 must prove loop invariant holds at entry. Got: {result:?}"
-    );
+    assert!(result.is_proved(), "z4 must prove loop invariant holds at entry. Got: {result:?}");
 }
 
 // --- B4: LoopInvariantConsecution ---
@@ -444,10 +425,7 @@ fn test_loop_invariant_consecution_buggy() {
     ]);
 
     let vc = make_vc(
-        VcKind::LoopInvariantConsecution {
-            invariant: "i < 10".to_string(),
-            header_block: 0,
-        },
+        VcKind::LoopInvariantConsecution { invariant: "i < 10".to_string(), header_block: 0 },
         "loop_consec_buggy",
         formula,
     );
@@ -475,10 +453,7 @@ fn test_loop_invariant_consecution_safe() {
     ]);
 
     let vc = make_vc(
-        VcKind::LoopInvariantConsecution {
-            invariant: "i <= 10".to_string(),
-            header_block: 0,
-        },
+        VcKind::LoopInvariantConsecution { invariant: "i <= 10".to_string(), header_block: 0 },
         "loop_consec_safe",
         formula,
     );
@@ -506,10 +481,7 @@ fn test_loop_invariant_sufficiency_buggy() {
     ]);
 
     let vc = make_vc(
-        VcKind::LoopInvariantSufficiency {
-            invariant: "sum >= 0".to_string(),
-            header_block: 0,
-        },
+        VcKind::LoopInvariantSufficiency { invariant: "sum >= 0".to_string(), header_block: 0 },
         "loop_suff_buggy",
         formula,
     );
@@ -534,10 +506,7 @@ fn test_loop_invariant_sufficiency_safe() {
     ]);
 
     let vc = make_vc(
-        VcKind::LoopInvariantSufficiency {
-            invariant: "sum > 0".to_string(),
-            header_block: 0,
-        },
+        VcKind::LoopInvariantSufficiency { invariant: "sum > 0".to_string(), header_block: 0 },
         "loop_suff_safe",
         formula,
     );
@@ -570,10 +539,7 @@ fn test_type_refinement_buggy() {
 
     let result = z4.verify(&vc);
     eprintln!("type refinement buggy: {:?}", result);
-    assert!(
-        result.is_failed(),
-        "z4 must find type refinement violation. Got: {result:?}"
-    );
+    assert!(result.is_failed(), "z4 must find type refinement violation. Got: {result:?}");
 }
 
 #[test]
@@ -614,7 +580,7 @@ fn test_frame_condition_buggy() {
     let vc = make_vc(
         VcKind::FrameConditionViolation {
             variable: "x".to_string(),
-            function: "frame_buggy".to_string(),
+            function: "frame_buggy".into(),
         },
         "frame_buggy",
         formula,
@@ -622,10 +588,7 @@ fn test_frame_condition_buggy() {
 
     let result = z4.verify(&vc);
     eprintln!("frame condition buggy: {:?}", result);
-    assert!(
-        result.is_failed(),
-        "z4 must find frame condition violation. Got: {result:?}"
-    );
+    assert!(result.is_failed(), "z4 must find frame condition violation. Got: {result:?}");
 }
 
 #[test]
@@ -642,7 +605,7 @@ fn test_frame_condition_safe() {
     let vc = make_vc(
         VcKind::FrameConditionViolation {
             variable: "x".to_string(),
-            function: "frame_safe".to_string(),
+            function: "frame_safe".into(),
         },
         "frame_safe",
         formula,
@@ -678,10 +641,7 @@ fn test_functional_correctness_buggy() {
 
     let result = z4.verify(&vc);
     eprintln!("functional correctness buggy: {:?}", result);
-    assert!(
-        result.is_failed(),
-        "z4 must find functional correctness violation. Got: {result:?}"
-    );
+    assert!(result.is_failed(), "z4 must find functional correctness violation. Got: {result:?}");
 }
 
 #[test]
@@ -711,8 +671,5 @@ fn test_functional_correctness_safe() {
 
     let result = z4.verify(&vc);
     eprintln!("functional correctness safe: {:?}", result);
-    assert!(
-        result.is_proved(),
-        "z4 must prove functional correctness. Got: {result:?}"
-    );
+    assert!(result.is_proved(), "z4 must prove functional correctness. Got: {result:?}");
 }

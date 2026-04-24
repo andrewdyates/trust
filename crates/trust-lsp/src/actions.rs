@@ -16,7 +16,7 @@ use crate::protocol::{
     CodeAction, CodeActionParams, Diagnostic, DiagnosticSeverity, TextEdit, WorkspaceEdit,
 };
 
-/// Build code actions for the given diagnostics at the requested range.
+/// Build code actions for the given diagnostics in the requested document.
 ///
 /// Produces one quickfix `CodeAction` per diagnostic that:
 /// 1. Has severity Error or Warning (failed/unknown verification)
@@ -31,10 +31,7 @@ pub(crate) fn code_actions_for_diagnostics(params: &CodeActionParams) -> Vec<Cod
 
     for diag in &params.context.diagnostics {
         // Only offer actions for Error/Warning diagnostics from tRust.
-        let dominated_by_trust = diag
-            .source
-            .as_deref()
-            .is_some_and(|s| s == "tRust");
+        let dominated_by_trust = diag.source.as_deref().is_some_and(|s| s == "tRust");
         if !dominated_by_trust {
             continue;
         }
@@ -48,20 +45,11 @@ pub(crate) fn code_actions_for_diagnostics(params: &CodeActionParams) -> Vec<Cod
         }
 
         // Extract obligation kind from the diagnostic's structured data.
-        let kind = diag
-            .data
-            .as_ref()
-            .and_then(|d| d.get("kind"))
-            .and_then(|k| k.as_str());
+        let kind = diag.data.as_ref().and_then(|d| d.get("kind")).and_then(|k| k.as_str());
 
         if let Some(kind) = kind {
             let fix = suggested_fix(kind);
-            let action = build_quickfix(
-                &params.text_document.uri,
-                diag,
-                kind,
-                fix,
-            );
+            let action = build_quickfix(&params.text_document.uri, diag, kind, fix);
             actions.push(action);
         }
     }
@@ -70,25 +58,14 @@ pub(crate) fn code_actions_for_diagnostics(params: &CodeActionParams) -> Vec<Cod
 }
 
 /// Build a single quickfix CodeAction from a diagnostic and its suggested fix.
-fn build_quickfix(
-    uri: &str,
-    diagnostic: &Diagnostic,
-    kind: &str,
-    fix_text: &str,
-) -> CodeAction {
+fn build_quickfix(uri: &str, diagnostic: &Diagnostic, kind: &str, fix_text: &str) -> CodeAction {
     let title = format_action_title(kind, fix_text);
 
     // Insert a `// tRust: <fix>` comment on the line above the diagnostic.
     let comment_edit = TextEdit {
         range: crate::protocol::Range {
-            start: crate::protocol::Position {
-                line: diagnostic.range.start.line,
-                character: 0,
-            },
-            end: crate::protocol::Position {
-                line: diagnostic.range.start.line,
-                character: 0,
-            },
+            start: crate::protocol::Position { line: diagnostic.range.start.line, character: 0 },
+            end: crate::protocol::Position { line: diagnostic.range.start.line, character: 0 },
         },
         new_text: format!("// tRust: {fix_text}\n"),
     };
@@ -100,9 +77,7 @@ fn build_quickfix(
         title,
         kind: Some("quickfix".to_string()),
         diagnostics: vec![diagnostic.clone()],
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-        }),
+        edit: Some(WorkspaceEdit { changes: Some(changes) }),
         is_preferred: Some(true),
     }
 }
@@ -110,11 +85,8 @@ fn build_quickfix(
 /// Format a human-readable action title from the obligation kind.
 fn format_action_title(kind: &str, fix_text: &str) -> String {
     // Truncate fix text for the title if it's very long.
-    let short = if fix_text.len() > 60 {
-        format!("{}...", &fix_text[..57])
-    } else {
-        fix_text.to_string()
-    };
+    let short =
+        if fix_text.len() > 60 { format!("{}...", &fix_text[..57]) } else { fix_text.to_string() };
 
     match kind {
         k if k.starts_with("arithmetic_overflow") => {
@@ -164,13 +136,7 @@ mod tests {
 
     fn make_params(diagnostics: Vec<Diagnostic>) -> CodeActionParams {
         CodeActionParams {
-            text_document: TextDocumentIdentifier {
-                uri: "file:///src/lib.rs".to_string(),
-            },
-            range: Range {
-                start: Position { line: 4, character: 0 },
-                end: Position { line: 4, character: 10 },
-            },
+            text_document: TextDocumentIdentifier { uri: "file:///src/lib.rs".to_string() },
             context: CodeActionContext { diagnostics },
         }
     }

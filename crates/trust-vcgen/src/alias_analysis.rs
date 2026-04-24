@@ -15,13 +15,13 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::BTreeSet;
-use trust_types::fx::FxHashMap;
 use std::fmt::Write;
+use trust_types::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
 use trust_types::{
-    Formula, Operand, Place, Projection, Rvalue, Sort, Statement,
-    VerifiableFunction, VerificationCondition,
+    Formula, Operand, Place, Projection, Rvalue, Sort, Statement, VerifiableFunction,
+    VerificationCondition,
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -192,9 +192,7 @@ impl AliasAnalyzer {
             // `_x = &y` or `_x = &mut y` -- _x points to y
             Rvalue::Ref { place, .. } => {
                 let target = MemoryLocation::from_place(place);
-                pts.entry(dst.local)
-                    .or_default()
-                    .insert(target);
+                pts.entry(dst.local).or_default().insert(target);
             }
             // `_x = Copy(_y)` or `_x = Move(_y)` -- copy points-to set
             Rvalue::Use(Operand::Copy(src) | Operand::Move(src)) => {
@@ -370,7 +368,9 @@ pub fn refine_vc_with_alias(
     // Conjoin the no-alias constraints as assumptions to each VC.
     let assumption = if no_alias_constraints.len() == 1 {
         // SAFETY: len == 1 guarantees .next() returns Some.
-        no_alias_constraints.into_iter().next()
+        no_alias_constraints
+            .into_iter()
+            .next()
             .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
     } else {
         Formula::And(no_alias_constraints)
@@ -378,10 +378,7 @@ pub fn refine_vc_with_alias(
 
     vcs.into_iter()
         .map(|mut vc| {
-            vc.formula = Formula::Implies(
-                Box::new(assumption.clone()),
-                Box::new(vc.formula),
-            );
+            vc.formula = Formula::Implies(Box::new(assumption.clone()), Box::new(vc.formula));
             vc
         })
         .collect()
@@ -397,19 +394,11 @@ fn build_no_alias_constraints(sets: &[AliasSet]) -> Vec<Formula> {
             if let (Some(rep_a), Some(rep_b)) =
                 (sets[i].locations.iter().next(), sets[j].locations.iter().next())
             {
-                let var_a = Formula::Var(
-                    format!("alias_loc_{}", loc_name(rep_a)),
-                    Sort::Int,
-                );
-                let var_b = Formula::Var(
-                    format!("alias_loc_{}", loc_name(rep_b)),
-                    Sort::Int,
-                );
+                let var_a = Formula::Var(format!("alias_loc_{}", loc_name(rep_a)), Sort::Int);
+                let var_b = Formula::Var(format!("alias_loc_{}", loc_name(rep_b)), Sort::Int);
                 // Assert the two representatives are not equal.
-                constraints.push(Formula::Not(Box::new(Formula::Eq(
-                    Box::new(var_a),
-                    Box::new(var_b),
-                ))));
+                constraints
+                    .push(Formula::Not(Box::new(Formula::Eq(Box::new(var_a), Box::new(var_b)))));
             }
         }
     }
@@ -422,7 +411,9 @@ fn loc_name(loc: &MemoryLocation) -> String {
     let mut name = format!("_{}", loc.local);
     for proj in &loc.projections {
         match proj {
-            ProjectionKind::Field(idx) => { let _ = write!(name, ".{idx}"); }
+            ProjectionKind::Field(idx) => {
+                let _ = write!(name, ".{idx}");
+            }
             ProjectionKind::Deref => name.push('*'),
             ProjectionKind::Index => name.push_str("[?]"),
         }
@@ -437,9 +428,7 @@ fn loc_name(loc: &MemoryLocation) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trust_types::{
-        BasicBlock, BlockId, LocalDecl, SourceSpan, Terminator, Ty,
-    };
+    use trust_types::{BasicBlock, BlockId, LocalDecl, SourceSpan, Terminator, Ty};
 
     /// Helper: build a simple function with the given locals and statements.
     fn make_func(locals: Vec<LocalDecl>, stmts: Vec<Statement>) -> VerifiableFunction {
@@ -449,11 +438,7 @@ mod tests {
             span: SourceSpan::default(),
             body: trust_types::VerifiableBody {
                 locals,
-                blocks: vec![BasicBlock {
-                    id: BlockId(0),
-                    stmts,
-                    terminator: Terminator::Return,
-                }],
+                blocks: vec![BasicBlock { id: BlockId(0), stmts, terminator: Terminator::Return }],
                 arg_count: 0,
                 return_ty: Ty::Unit,
             },
@@ -473,10 +458,7 @@ mod tests {
 
     #[test]
     fn test_memory_location_from_place_with_projections() {
-        let place = Place {
-            local: 1,
-            projections: vec![Projection::Field(2), Projection::Deref],
-        };
+        let place = Place { local: 1, projections: vec![Projection::Field(2), Projection::Deref] };
         let loc = MemoryLocation::from_place(&place);
         assert_eq!(loc.local, 1);
         assert_eq!(loc.projections.len(), 2);
@@ -487,10 +469,7 @@ mod tests {
     #[test]
     fn test_is_prefix_of() {
         let parent = MemoryLocation::from_local(1);
-        let child = MemoryLocation {
-            local: 1,
-            projections: vec![ProjectionKind::Field(0)],
-        };
+        let child = MemoryLocation { local: 1, projections: vec![ProjectionKind::Field(0)] };
         assert!(parent.is_prefix_of(&child));
         assert!(!child.is_prefix_of(&parent));
     }
@@ -500,7 +479,11 @@ mod tests {
         let func = make_func(
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("x".into()),
+                },
             ],
             vec![],
         );
@@ -514,16 +497,21 @@ mod tests {
         let func = make_func(
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".into()) },
-                LocalDecl { index: 2, ty: Ty::Int { width: 32, signed: true }, name: Some("y".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("x".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("y".into()),
+                },
             ],
             vec![],
         );
         let analyzer = AliasAnalyzer::analyze(&func);
-        assert_eq!(
-            analyzer.query_alias(&Place::local(1), &Place::local(2)),
-            AliasResult::NoAlias,
-        );
+        assert_eq!(analyzer.query_alias(&Place::local(1), &Place::local(2)), AliasResult::NoAlias,);
     }
 
     #[test]
@@ -532,9 +520,27 @@ mod tests {
         let func = make_func(
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".into()) },
-                LocalDecl { index: 2, ty: Ty::Ref { mutable: false, inner: Box::new(Ty::Int { width: 32, signed: true }) }, name: Some("r1".into()) },
-                LocalDecl { index: 3, ty: Ty::Ref { mutable: false, inner: Box::new(Ty::Int { width: 32, signed: true }) }, name: Some("r2".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("x".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Ref {
+                        mutable: false,
+                        inner: Box::new(Ty::Int { width: 32, signed: true }),
+                    },
+                    name: Some("r1".into()),
+                },
+                LocalDecl {
+                    index: 3,
+                    ty: Ty::Ref {
+                        mutable: false,
+                        inner: Box::new(Ty::Int { width: 32, signed: true }),
+                    },
+                    name: Some("r2".into()),
+                },
             ],
             vec![
                 Statement::Assign {
@@ -586,8 +592,16 @@ mod tests {
         let func = make_func(
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".into()) },
-                LocalDecl { index: 2, ty: Ty::Int { width: 32, signed: true }, name: Some("y".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("x".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("y".into()),
+                },
             ],
             vec![],
         );
@@ -604,9 +618,27 @@ mod tests {
         let func = make_func(
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("x".into()) },
-                LocalDecl { index: 2, ty: Ty::Ref { mutable: false, inner: Box::new(Ty::Int { width: 32, signed: true }) }, name: Some("r1".into()) },
-                LocalDecl { index: 3, ty: Ty::Ref { mutable: false, inner: Box::new(Ty::Int { width: 32, signed: true }) }, name: Some("r2".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("x".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Ref {
+                        mutable: false,
+                        inner: Box::new(Ty::Int { width: 32, signed: true }),
+                    },
+                    name: Some("r1".into()),
+                },
+                LocalDecl {
+                    index: 3,
+                    ty: Ty::Ref {
+                        mutable: false,
+                        inner: Box::new(Ty::Int { width: 32, signed: true }),
+                    },
+                    name: Some("r2".into()),
+                },
             ],
             vec![
                 Statement::Assign {
@@ -631,10 +663,7 @@ mod tests {
 
     #[test]
     fn test_refine_vc_with_alias_empty_vcs() {
-        let func = make_func(
-            vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-            vec![],
-        );
+        let func = make_func(vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }], vec![]);
         let refined = refine_vc_with_alias(&func, vec![]);
         assert!(refined.is_empty());
     }
@@ -661,23 +690,29 @@ mod tests {
         let func = make_func(
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::Int { width: 32, signed: true }, name: Some("a".into()) },
-                LocalDecl { index: 2, ty: Ty::Int { width: 32, signed: true }, name: Some("b".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("a".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("b".into()),
+                },
             ],
             vec![],
         );
-        let vcs = vec![
-            VerificationCondition {
-                kind: trust_types::VcKind::DivisionByZero,
-                function: "test".to_string(),
-                location: SourceSpan::default(),
-                formula: Formula::Eq(
-                    Box::new(Formula::Var("b".to_string(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                ),
-                contract_metadata: None,
-            },
-        ];
+        let vcs = vec![VerificationCondition {
+            kind: trust_types::VcKind::DivisionByZero,
+            function: "test".into(),
+            location: SourceSpan::default(),
+            formula: Formula::Eq(
+                Box::new(Formula::Var("b".into(), Sort::Int)),
+                Box::new(Formula::Int(0)),
+            ),
+            contract_metadata: None,
+        }];
         let refined = refine_vc_with_alias(&func, vcs);
         assert_eq!(refined.len(), 1, "refinement must preserve VC count");
     }

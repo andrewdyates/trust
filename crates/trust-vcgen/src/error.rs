@@ -13,16 +13,13 @@ use trust_types::SourceSpan;
 
 // tRust #703: Imports for unified error type — all module-level errors funnel into VcgenError.
 use crate::binary_analysis::lifter::LiftError;
-use crate::binary_pipeline::BinaryPipelineError;
 use crate::certified_transval::CertificationError;
 use crate::chc::ChcError;
-use crate::cpa::CpaError;
 use crate::instantiation::InstantiationError;
 use crate::interpolant_gen::InterpolantError;
 use crate::persistent_specdb::SpecDbError;
 use crate::proof_term::ProofError;
 use crate::quantifier_tiers::QuantifierError;
-use crate::simplify_equivalence::EquivalenceError;
 use crate::typestate::TransitionError;
 use crate::witness_gen::WitnessError;
 
@@ -68,17 +65,12 @@ pub enum VcgenError {
     InvalidBlock { block: String, function: String },
 
     // tRust #474: New variants with MIR span context below.
-
     /// A MIR operation that the VC generator cannot translate to a formula.
     ///
     /// Carries the operation name, a human-readable context string, and an
     /// optional MIR source span for diagnostic precision.
     #[error("unsupported MIR operation `{op}` in {context}{}", format_span(.span))]
-    UnsupportedMirOp {
-        op: String,
-        context: String,
-        span: Option<SourceSpan>,
-    },
+    UnsupportedMirOp { op: String, context: String, span: Option<SourceSpan> },
 
     /// A type mismatch with MIR span context.
     ///
@@ -94,38 +86,23 @@ pub enum VcgenError {
 
     /// A type that the VC generator does not support.
     #[error("unsupported type `{ty}` in {context}{}", format_span(.span))]
-    UnsupportedType {
-        ty: String,
-        context: String,
-        span: Option<SourceSpan>,
-    },
+    UnsupportedType { ty: String, context: String, span: Option<SourceSpan> },
 
     /// A failure during formula construction (e.g., invalid sort, arity error).
     #[error("formula construction error: {detail}{}", format_span(.span))]
-    FormulaConstruction {
-        detail: String,
-        span: Option<SourceSpan>,
-    },
+    FormulaConstruction { detail: String, span: Option<SourceSpan> },
 
     /// An invalid or unrecognized `VcKind` was produced or requested.
     #[error("invalid VC kind `{kind}`: {reason}")]
-    InvalidVcKind {
-        kind: String,
-        reason: String,
-    },
+    InvalidVcKind { kind: String, reason: String },
 
     // tRust #703: Wrapping variants for module-level error types.
     // Each uses `#[from]` for automatic `Into`/`From` conversion,
     // enabling `?` propagation from module-specific functions into
     // functions returning `Result<T, VcgenError>`.
-
     /// Error from binary analysis lifter.
     #[error(transparent)]
     Lift(#[from] LiftError),
-
-    /// Error from binary analysis pipeline.
-    #[error(transparent)]
-    BinaryPipeline(#[from] BinaryPipelineError),
 
     /// Error from certified translation validation.
     #[error(transparent)]
@@ -136,11 +113,6 @@ pub enum VcgenError {
     Chc(#[from] ChcError),
 
     // tRust #792: HornClause(CHCError) removed — horn_clause.rs deleted.
-
-    /// Error from CPA framework.
-    #[error(transparent)]
-    Cpa(#[from] CpaError),
-
     /// Error from quantifier instantiation.
     #[error(transparent)]
     Instantiation(#[from] InstantiationError),
@@ -161,12 +133,7 @@ pub enum VcgenError {
     #[error(transparent)]
     Quantifier(#[from] QuantifierError),
 
-    /// Error from simplification equivalence checking.
-    #[error(transparent)]
-    Equivalence(#[from] EquivalenceError),
-
     // tRust #792: Spacer(SpacerError) removed — spacer_bridge.rs deleted.
-
     /// Error from typestate transition checking.
     #[error(transparent)]
     Transition(#[from] TransitionError),
@@ -188,11 +155,7 @@ impl VcgenError {
         context: impl Into<String>,
         span: Option<SourceSpan>,
     ) -> Self {
-        Self::UnsupportedMirOp {
-            op: op.into(),
-            context: context.into(),
-            span,
-        }
+        Self::UnsupportedMirOp { op: op.into(), context: context.into(), span }
     }
 
     /// Create a `TypeMismatchWithContext` error with a span.
@@ -218,35 +181,19 @@ impl VcgenError {
         context: impl Into<String>,
         span: Option<SourceSpan>,
     ) -> Self {
-        Self::UnsupportedType {
-            ty: ty.into(),
-            context: context.into(),
-            span,
-        }
+        Self::UnsupportedType { ty: ty.into(), context: context.into(), span }
     }
 
     /// Create a `FormulaConstruction` error with a span.
     #[must_use]
-    pub fn formula_construction(
-        detail: impl Into<String>,
-        span: Option<SourceSpan>,
-    ) -> Self {
-        Self::FormulaConstruction {
-            detail: detail.into(),
-            span,
-        }
+    pub fn formula_construction(detail: impl Into<String>, span: Option<SourceSpan>) -> Self {
+        Self::FormulaConstruction { detail: detail.into(), span }
     }
 
     /// Create an `InvalidVcKind` error.
     #[must_use]
-    pub fn invalid_vc_kind(
-        kind: impl Into<String>,
-        reason: impl Into<String>,
-    ) -> Self {
-        Self::InvalidVcKind {
-            kind: kind.into(),
-            reason: reason.into(),
-        }
+    pub fn invalid_vc_kind(kind: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::InvalidVcKind { kind: kind.into(), reason: reason.into() }
     }
 }
 
@@ -264,10 +211,8 @@ mod tests {
 
     #[test]
     fn test_vcgen_error_type_mismatch_display() {
-        let err = VcgenError::TypeMismatch {
-            expected: "u32".to_string(),
-            actual: "bool".to_string(),
-        };
+        let err =
+            VcgenError::TypeMismatch { expected: "u32".to_string(), actual: "bool".to_string() };
         assert_eq!(err.to_string(), "type mismatch: expected u32, got bool");
     }
 
@@ -280,22 +225,13 @@ mod tests {
     #[test]
     fn test_vcgen_error_invalid_local_display() {
         let err = VcgenError::InvalidLocal { index: 5, num_locals: 3 };
-        assert_eq!(
-            err.to_string(),
-            "invalid local index 5 (function has 3 locals)"
-        );
+        assert_eq!(err.to_string(), "invalid local index 5 (function has 3 locals)");
     }
 
     #[test]
     fn test_vcgen_error_invalid_block_display() {
-        let err = VcgenError::InvalidBlock {
-            block: "bb7".to_string(),
-            function: "my_func".to_string(),
-        };
-        assert_eq!(
-            err.to_string(),
-            "invalid block \"bb7\" in function `my_func`"
-        );
+        let err = VcgenError::InvalidBlock { block: "bb7".to_string(), function: "my_func".into() };
+        assert_eq!(err.to_string(), "invalid block \"bb7\" in function `my_func`");
     }
 
     // tRust #474: Tests for new variants with MIR span context.
@@ -319,10 +255,7 @@ mod tests {
     #[test]
     fn test_vcgen_error_unsupported_mir_op_no_span() {
         let err = VcgenError::unsupported_mir_op("InlineAsm", "asm block", None);
-        assert_eq!(
-            err.to_string(),
-            "unsupported MIR operation `InlineAsm` in asm block"
-        );
+        assert_eq!(err.to_string(), "unsupported MIR operation `InlineAsm` in asm block");
     }
 
     #[test]
@@ -344,10 +277,7 @@ mod tests {
     #[test]
     fn test_vcgen_error_type_mismatch_with_context_no_span() {
         let err = VcgenError::type_mismatch_ctx("bool", "u8", "assert condition", None);
-        assert_eq!(
-            err.to_string(),
-            "type mismatch: expected bool, got u8 in assert condition"
-        );
+        assert_eq!(err.to_string(), "type mismatch: expected bool, got u8 in assert condition");
     }
 
     #[test]
@@ -369,10 +299,7 @@ mod tests {
     #[test]
     fn test_vcgen_error_unsupported_type_no_span() {
         let err = VcgenError::unsupported_type("fn()", "function pointer cast", None);
-        assert_eq!(
-            err.to_string(),
-            "unsupported type `fn()` in function pointer cast"
-        );
+        assert_eq!(err.to_string(), "unsupported type `fn()` in function pointer cast");
     }
 
     #[test]
@@ -384,10 +311,7 @@ mod tests {
             line_end: 7,
             col_end: 18,
         };
-        let err = VcgenError::formula_construction(
-            "sort mismatch: Int vs Bool in Eq",
-            Some(span),
-        );
+        let err = VcgenError::formula_construction("sort mismatch: Int vs Bool in Eq", Some(span));
         assert_eq!(
             err.to_string(),
             "formula construction error: sort mismatch: Int vs Bool in Eq at arith.rs:7:3"
@@ -422,10 +346,7 @@ mod tests {
     #[test]
     fn test_vcgen_error_debug_format() {
         // Verify Debug is derived and includes variant name.
-        let err = VcgenError::InvalidVcKind {
-            kind: "X".to_string(),
-            reason: "Y".to_string(),
-        };
+        let err = VcgenError::InvalidVcKind { kind: "X".to_string(), reason: "Y".to_string() };
         let debug = format!("{err:?}");
         assert!(debug.contains("InvalidVcKind"), "Debug should contain variant name");
     }
@@ -441,10 +362,7 @@ mod tests {
             col_end: 1,
         };
         let err = VcgenError::unsupported_type("RawPtr", "deref", Some(span));
-        assert!(
-            err.to_string().contains("<unknown>:1:1"),
-            "empty file should render as <unknown>"
-        );
+        assert!(err.to_string().contains("<unknown>:1:1"), "empty file should render as <unknown>");
     }
 
     #[test]
@@ -461,27 +379,19 @@ mod tests {
 
     #[test]
     fn test_vcgen_error_from_chc_error() {
-        let chc_err = ChcError::NoLoops { function: "foo".to_string() };
+        let chc_err = ChcError::NoLoops { function: "foo".into() };
         let vcgen_err: VcgenError = chc_err.into();
         assert!(matches!(vcgen_err, VcgenError::Chc(_)));
         assert!(vcgen_err.to_string().contains("no loops found"));
     }
 
     #[test]
-    fn test_vcgen_error_from_cpa_error() {
-        let cpa_err = CpaError::EmptyBody;
-        let vcgen_err: VcgenError = cpa_err.into();
-        assert!(matches!(vcgen_err, VcgenError::Cpa(_)));
-        assert!(vcgen_err.to_string().contains("empty body"));
-    }
-
     // tRust #792: test_vcgen_error_from_spacer_error removed — SpacerError deleted.
-
     #[test]
     fn test_vcgen_error_question_mark_propagation() {
         // Verify ? operator works for converting module errors into VcgenError.
         fn inner() -> std::result::Result<(), ChcError> {
-            Err(ChcError::NoLoops { function: "bar".to_string() })
+            Err(ChcError::NoLoops { function: "bar".into() })
         }
         fn outer() -> super::Result<()> {
             inner()?;

@@ -415,7 +415,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
             MethodError::ErrorReported(guar) => guar,
 
-            // tRust: invariant — `BadReturnType` only arises when method probing is constrained by a return-type expectation, and this suggestion path has none
             MethodError::BadReturnType => bug!("no return type expectations but got BadReturnType"),
         }
     }
@@ -487,7 +486,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             item_kind,
             item_ident,
             ty_prefix: if trait_missing_method {
-                // NOTE(mu001999): E0599 maybe not suitable here because it is for types
+                // FIXME(mu001999) E0599 maybe not suitable here because it is for types
                 Cow::from("trait")
             } else {
                 rcvr_ty.prefix_string(self.tcx)
@@ -1528,7 +1527,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     (Some((hir::def::CtorKind::Fn, def_id)), hir::ExprKind::Call(rcvr, args)) => {
                         let fn_sig = tcx.fn_sig(def_id).instantiate_identity();
                         let inputs = fn_sig.inputs().skip_binder();
-                        // NOTE: reuse the logic for "change args" suggestion to account for types
+                        // FIXME: reuse the logic for "change args" suggestion to account for types
                         // involved and detect things like substitution.
                         match (inputs, args) {
                             (inputs, []) => {
@@ -2066,7 +2065,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             .on_unimplemented_note(trait_ref, &obligation, err.long_ty_path());
                         (message, label, notes)
                     })
-                    .expect("invariant: value is present")
+                    .unwrap()
             } else {
                 (None, None, Vec::new())
             };
@@ -2154,7 +2153,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     return;
                 };
 
-                // NOTE: `probe_for_name_many` searches for methods in inherent implementations,
+                // FIXME: `probe_for_name_many` searches for methods in inherent implementations,
                 // so it may return a candidate that doesn't belong to this `revr_ty`. We need to
                 // check whether the instantiated type matches the received one.
                 for _matched_method in candidates {
@@ -2929,7 +2928,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             "you must specify a type for this binding, like `{concrete_type}`",
                         );
 
-                        // NOTE: Maybe FileName::Anon should also be handled,
+                        // FIXME: Maybe FileName::Anon should also be handled,
                         // otherwise there would be no suggestion if the source is STDIN for example.
                         match (filename, parent_node) {
                             (
@@ -3020,7 +3019,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     ident_name: Symbol,
                 }
 
-                // NOTE: this really should be taking scoping, etc into account.
+                // FIXME: This really should be taking scoping, etc into account.
                 impl<'v> Visitor<'v> for LetVisitor {
                     type Result = ControlFlow<Option<&'v hir::Expr<'v>>>;
                     fn visit_stmt(&mut self, ex: &'v hir::Stmt<'v>) -> Self::Result {
@@ -3051,7 +3050,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         let sm = self.infcx.tcx.sess.source_map();
                         err.span_suggestion_verbose(
                             sm.span_extend_while(seg1.ident.span.shrink_to_hi(), |c| c == ':')
-                                .expect("invariant: value is present"),
+                                .unwrap(),
                             "you may have meant to call an instance method",
                             ".",
                             Applicability::MaybeIncorrect,
@@ -3242,7 +3241,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             );
                         }
                     }
-                    // NOTE(compiler-errors): Support suggestions for other matching enum variants
+                    // FIXME(compiler-errors): Support suggestions for other matching enum variants
                     _ => {}
                 }
             }
@@ -3303,16 +3302,16 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     err.span_suggestion_verbose(
                         expr.span.shrink_to_hi(),
                         format!(
-                            "use `.lock().expect("invariant: value is present")` to borrow the `{ty}`, \
+                            "use `.lock().unwrap()` to borrow the `{ty}`, \
                             blocking the current thread until it can be acquired"
                         ),
-                        ".lock().expect("invariant: value is present")",
+                        ".lock().unwrap()",
                         Applicability::MaybeIncorrect,
                     );
                 } else if tcx.is_diagnostic_item(sym::RwLock, inner_id) {
                     let (suggestion, borrow_kind) = match mutable {
-                        Some(Mutability::Not) => (".read().expect("invariant: value is present")", "borrow"),
-                        Some(Mutability::Mut) => (".write().expect("invariant: value is present")", "mutably borrow"),
+                        Some(Mutability::Not) => (".read().unwrap()", "borrow"),
+                        Some(Mutability::Mut) => (".write().unwrap()", "mutably borrow"),
                         None => return,
                     };
                     err.span_suggestion_verbose(
@@ -3900,7 +3899,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             });
 
             let glob_path_strings = globs.iter().map(|trait_did| {
-                let parent_did = parent_map.get(trait_did).expect("invariant: index/key is valid");
+                let parent_did = parent_map.get(trait_did).unwrap();
                 format!(
                     "{prefix}{}::*{postfix} // trait {}\n",
                     with_no_visible_paths_if_doc_hidden!(with_crate_prefix!(
@@ -4033,7 +4032,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 self.tcx.get_diagnostic_item(sym::AsRef),
             ];
             // Try alternative arbitrary self types that could fulfill this call.
-            // NOTE: probe for all types that *could* be arbitrary self-types, not
+            // FIXME: probe for all types that *could* be arbitrary self-types, not
             // just this list.
             for (rcvr_ty, post, pin_call) in &[
                 (rcvr_ty, "", None),
@@ -4432,7 +4431,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 Colon,
                                 Nothing,
                             }
-                            let hir_generics = tcx.hir_get_generics(id.owner.def_id).expect("invariant: item has generics");
+                            let hir_generics = tcx.hir_get_generics(id.owner.def_id).unwrap();
                             let trait_def_ids: DefIdSet = hir_generics
                                 .bounds_for_param(def_id)
                                 .flat_map(|bp| bp.bounds.iter())
@@ -4540,7 +4539,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             let (sp, sep, article) = if bounds.is_empty() {
                                 (ident.span.shrink_to_hi(), ":", "a")
                             } else {
-                                (bounds.last().expect("invariant: non-empty collection").span().shrink_to_hi(), " +", "another")
+                                (bounds.last().unwrap().span().shrink_to_hi(), " +", "another")
                             };
                             err.span_suggestions(
                                 sp,
@@ -4558,7 +4557,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
 
             let (potential_candidates, explicitly_negative) = if param_type.is_some() {
-                // NOTE: even though negative bounds are not implemented, we could maybe handle
+                // FIXME: Even though negative bounds are not implemented, we could maybe handle
                 // cases where a positive bound implies a negative impl.
                 (candidates, Vec::new())
             } else if let Some(simp_rcvr_ty) =
@@ -4618,7 +4617,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 "NONE".to_string()
                             } else {
                                 param_type.map_or_else(
-                                    || "implement".to_string(), // NOTE: it might only need to be imported into scope, not implemented.
+                                    || "implement".to_string(), // FIXME: it might only need to be imported into scope, not implemented.
                                     |p| p.to_string(),
                                 )
                             },
@@ -4627,7 +4626,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 trait_infos => {
                     let mut msg = message(param_type.map_or_else(
-                        || "implement".to_string(), // NOTE: it might only need to be imported into scope, not implemented.
+                        || "implement".to_string(), // FIXME: it might only need to be imported into scope, not implemented.
                         |param| format!("restrict type parameter `{param}` with"),
                     ));
                     for (i, trait_info) in trait_infos.iter().enumerate() {
@@ -4700,7 +4699,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     }
 
     /// issue #102320, for `unwrap_or` with closure as argument, suggest `unwrap_or_else`
-    /// NOTE: currently not working for suggesting `map_or_else`, see #102408
+    /// FIXME: currently not working for suggesting `map_or_else`, see #102408
     pub(crate) fn suggest_else_fn_with_closure(
         &self,
         err: &mut Diag<'_>,

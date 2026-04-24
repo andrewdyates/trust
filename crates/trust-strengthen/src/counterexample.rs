@@ -64,7 +64,10 @@ pub fn extract_hints(
 
 /// Build a spec body string from a set of hints for a given failure pattern.
 #[must_use]
-pub fn hints_to_spec_body(hints: &[CounterexampleHint], pattern: &FailurePattern) -> Option<String> {
+pub fn hints_to_spec_body(
+    hints: &[CounterexampleHint],
+    pattern: &FailurePattern,
+) -> Option<String> {
     if hints.is_empty() {
         return None;
     }
@@ -88,8 +91,12 @@ pub fn hints_to_spec_body(hints: &[CounterexampleHint], pattern: &FailurePattern
     // For overflow patterns, wrap in a more descriptive spec if we have two operands
     if matches!(pattern, FailurePattern::ArithmeticOverflow { .. }) && parts.len() == 1 {
         // SAFETY: We checked parts.is_empty() above and returned None.
-        return Some(parts.into_iter().next()
-            .unwrap_or_else(|| unreachable!("parts empty after non-empty check")));
+        return Some(
+            parts
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| unreachable!("parts empty after non-empty check")),
+        );
     }
 
     Some(parts.join(" && "))
@@ -125,9 +132,7 @@ fn extract_overflow_hints(
 
     // Identify the operand variables and their types from VcKind
     let (bit_width, is_signed) = match vc_kind {
-        VcKind::ArithmeticOverflow { operand_tys, .. } => {
-            extract_type_info(&operand_tys.0)
-        }
+        VcKind::ArithmeticOverflow { operand_tys, .. } => extract_type_info(&operand_tys.0),
         _ => (64, false),
     };
 
@@ -154,22 +159,18 @@ fn extract_overflow_hints(
                     hints.push(CounterexampleHint {
                         variable: name.clone(),
                         kind: HintKind::BoundExpr {
-                            spec_fragment: format!(
-                                "{name} <= {max_val} - <other_operand>"
-                            ),
+                            spec_fragment: format!("{name} <= {max_val} - <other_operand>"),
                         },
                         confidence_boost: 0.05,
                     });
                 }
             }
-            CounterexampleValue::Int(v) => {
-                if *v == max_val || (is_signed && *v == -(max_val + 1)) {
-                    hints.push(CounterexampleHint {
-                        variable: name.clone(),
-                        kind: HintKind::UpperBound { bound: max_val - 1 },
-                        confidence_boost: 0.1,
-                    });
-                }
+            CounterexampleValue::Int(v) if *v == max_val || (is_signed && *v == -(max_val + 1)) => {
+                hints.push(CounterexampleHint {
+                    variable: name.clone(),
+                    kind: HintKind::UpperBound { bound: max_val - 1 },
+                    confidence_boost: 0.1,
+                });
             }
             _ => {}
         }
@@ -201,7 +202,8 @@ fn extract_div_zero_hints(counterexample: &Counterexample) -> Vec<Counterexample
         .assignments
         .iter()
         .filter_map(|(name, value): &(String, CounterexampleValue)| {
-            let is_zero = matches!(value, CounterexampleValue::Int(0) | CounterexampleValue::Uint(0));
+            let is_zero =
+                matches!(value, CounterexampleValue::Int(0) | CounterexampleValue::Uint(0));
             if is_zero {
                 Some(CounterexampleHint {
                     variable: name.clone(),
@@ -220,12 +222,12 @@ fn extract_oob_hints(counterexample: &Counterexample) -> Vec<CounterexampleHint>
     let assignments = &counterexample.assignments;
 
     // Look for index/len variable pairs
-    let index_var = assignments.iter().find(|(name, _)| {
-        name.contains("index") || name.contains("idx") || name == "i"
-    });
-    let len_var = assignments.iter().find(|(name, _)| {
-        name.contains("len") || name.contains("length") || name.contains("size")
-    });
+    let index_var = assignments
+        .iter()
+        .find(|(name, _)| name.contains("index") || name.contains("idx") || name == "i");
+    let len_var = assignments
+        .iter()
+        .find(|(name, _)| name.contains("len") || name.contains("length") || name.contains("size"));
 
     if let (Some((idx_name, idx_val)), Some((len_name, _))) = (index_var, len_var) {
         // We found both -- suggest index < len
@@ -247,15 +249,14 @@ fn extract_oob_hints(counterexample: &Counterexample) -> Vec<CounterexampleHint>
         // No recognized variable names -- just flag any large index value
         for (name, value) in assignments {
             if let Some(v) = to_i128(value)
-                && v > 0 {
-                    hints.push(CounterexampleHint {
-                        variable: name.clone(),
-                        kind: HintKind::BoundExpr {
-                            spec_fragment: format!("{name} < arr.len()"),
-                        },
-                        confidence_boost: 0.05,
-                    });
-                }
+                && v > 0
+            {
+                hints.push(CounterexampleHint {
+                    variable: name.clone(),
+                    kind: HintKind::BoundExpr { spec_fragment: format!("{name} < arr.len()") },
+                    confidence_boost: 0.05,
+                });
+            }
         }
     }
 
@@ -266,23 +267,21 @@ fn extract_negation_hints(counterexample: &Counterexample) -> Vec<Counterexample
     counterexample
         .assignments
         .iter()
-        .filter_map(|(name, value): &(String, CounterexampleValue)| {
-            match value {
-                CounterexampleValue::Int(v)
-                    if *v == i128::MIN
-                        || *v == i64::MIN as i128
-                        || *v == i32::MIN as i128
-                        || *v == i16::MIN as i128
-                        || *v == i8::MIN as i128 =>
-                {
-                    Some(CounterexampleHint {
-                        variable: name.clone(),
-                        kind: HintKind::NotEqual { value: *v },
-                        confidence_boost: 0.1,
-                    })
-                }
-                _ => None,
+        .filter_map(|(name, value): &(String, CounterexampleValue)| match value {
+            CounterexampleValue::Int(v)
+                if *v == i128::MIN
+                    || *v == i64::MIN as i128
+                    || *v == i32::MIN as i128
+                    || *v == i16::MIN as i128
+                    || *v == i8::MIN as i128 =>
+            {
+                Some(CounterexampleHint {
+                    variable: name.clone(),
+                    kind: HintKind::NotEqual { value: *v },
+                    confidence_boost: 0.1,
+                })
             }
+            _ => None,
         })
         .collect()
 }
@@ -301,13 +300,14 @@ fn extract_shift_hints(
         .iter()
         .filter_map(|(name, value): &(String, CounterexampleValue)| {
             if let Some(v) = to_i128(value)
-                && v >= bit_width as i128 {
-                    return Some(CounterexampleHint {
-                        variable: name.clone(),
-                        kind: HintKind::UpperBound { bound: bit_width as i128 - 1 },
-                        confidence_boost: 0.1,
-                    });
-                }
+                && v >= bit_width as i128
+            {
+                return Some(CounterexampleHint {
+                    variable: name.clone(),
+                    kind: HintKind::UpperBound { bound: bit_width as i128 - 1 },
+                    confidence_boost: 0.1,
+                });
+            }
             None
         })
         .collect()
@@ -336,13 +336,14 @@ fn extract_cast_hints(
         .iter()
         .filter_map(|(name, value): &(String, CounterexampleValue)| {
             if let Some(v) = to_i128(value)
-                && v > target_max {
-                    return Some(CounterexampleHint {
-                        variable: name.clone(),
-                        kind: HintKind::UpperBound { bound: target_max },
-                        confidence_boost: 0.1,
-                    });
-                }
+                && v > target_max
+            {
+                return Some(CounterexampleHint {
+                    variable: name.clone(),
+                    kind: HintKind::UpperBound { bound: target_max },
+                    confidence_boost: 0.1,
+                });
+            }
             None
         })
         .collect()
@@ -367,17 +368,13 @@ fn to_i128(value: &CounterexampleValue) -> Option<i128> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{BinOp, Ty};
 
-    fn make_counterexample(
-        assignments: Vec<(&str, CounterexampleValue)>,
-    ) -> Counterexample {
+    use super::*;
+
+    fn make_counterexample(assignments: Vec<(&str, CounterexampleValue)>) -> Counterexample {
         Counterexample::new(
-            assignments
-                .into_iter()
-                .map(|(name, val)| (name.to_string(), val))
-                .collect(),
+            assignments.into_iter().map(|(name, val)| (name.to_string(), val)).collect(),
         )
     }
 
@@ -391,9 +388,13 @@ mod tests {
         ]);
         let kind = VcKind::ArithmeticOverflow {
             op: BinOp::Add,
-            operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+            operand_tys: (
+                Ty::Int { width: 64, signed: false },
+                Ty::Int { width: 64, signed: false },
+            ),
         };
-        let hints = extract_hints(&cx, &FailurePattern::ArithmeticOverflow { op: BinOp::Add }, &kind);
+        let hints =
+            extract_hints(&cx, &FailurePattern::ArithmeticOverflow { op: BinOp::Add }, &kind);
         assert!(!hints.is_empty(), "should produce hints for overflow at MAX");
 
         let combined = hints.iter().find(|h| {
@@ -412,7 +413,8 @@ mod tests {
             op: BinOp::Add,
             operand_tys: (Ty::Int { width: 64, signed: true }, Ty::Int { width: 64, signed: true }),
         };
-        let hints = extract_hints(&cx, &FailurePattern::ArithmeticOverflow { op: BinOp::Add }, &kind);
+        let hints =
+            extract_hints(&cx, &FailurePattern::ArithmeticOverflow { op: BinOp::Add }, &kind);
         assert!(!hints.is_empty(), "should produce hints for signed overflow");
     }
 
@@ -450,7 +452,8 @@ mod tests {
             ("index", CounterexampleValue::Uint(5)),
             ("len", CounterexampleValue::Uint(3)),
         ]);
-        let hints = extract_hints(&cx, &FailurePattern::IndexOutOfBounds, &VcKind::IndexOutOfBounds);
+        let hints =
+            extract_hints(&cx, &FailurePattern::IndexOutOfBounds, &VcKind::IndexOutOfBounds);
         assert!(!hints.is_empty());
 
         let lt_hint = hints.iter().find(|h| matches!(&h.kind, HintKind::LessThan { .. }));
@@ -463,10 +466,9 @@ mod tests {
 
     #[test]
     fn test_extract_oob_hints_unnamed_vars() {
-        let cx = make_counterexample(vec![
-            ("n", CounterexampleValue::Uint(10)),
-        ]);
-        let hints = extract_hints(&cx, &FailurePattern::IndexOutOfBounds, &VcKind::IndexOutOfBounds);
+        let cx = make_counterexample(vec![("n", CounterexampleValue::Uint(10))]);
+        let hints =
+            extract_hints(&cx, &FailurePattern::IndexOutOfBounds, &VcKind::IndexOutOfBounds);
         assert!(!hints.is_empty());
 
         let bound = hints.iter().find(|h| matches!(&h.kind, HintKind::BoundExpr { .. }));
@@ -477,9 +479,7 @@ mod tests {
 
     #[test]
     fn test_extract_negation_hints_i64_min() {
-        let cx = make_counterexample(vec![
-            ("x", CounterexampleValue::Int(i64::MIN as i128)),
-        ]);
+        let cx = make_counterexample(vec![("x", CounterexampleValue::Int(i64::MIN as i128))]);
         let hints = extract_hints(
             &cx,
             &FailurePattern::NegationOverflow,
@@ -515,9 +515,7 @@ mod tests {
 
     #[test]
     fn test_extract_cast_hints_u64_to_u32() {
-        let cx = make_counterexample(vec![
-            ("x", CounterexampleValue::Uint(u32::MAX as u128 + 1)),
-        ]);
+        let cx = make_counterexample(vec![("x", CounterexampleValue::Uint(u32::MAX as u128 + 1))]);
         let kind = VcKind::CastOverflow {
             from_ty: Ty::Int { width: 64, signed: false },
             to_ty: Ty::Int { width: 32, signed: false },
@@ -525,7 +523,9 @@ mod tests {
         let hints = extract_hints(&cx, &FailurePattern::CastOverflow, &kind);
         assert_eq!(hints.len(), 1);
         assert_eq!(hints[0].variable, "x");
-        assert!(matches!(hints[0].kind, HintKind::UpperBound { bound } if bound == u32::MAX as i128));
+        assert!(
+            matches!(hints[0].kind, HintKind::UpperBound { bound } if bound == u32::MAX as i128)
+        );
     }
 
     // --- hints_to_spec_body tests ---
@@ -654,9 +654,7 @@ mod tests {
     fn test_hints_to_preconditions_bound_expr() {
         let hints = vec![CounterexampleHint {
             variable: "a".into(),
-            kind: HintKind::BoundExpr {
-                spec_fragment: "a <= u64::MAX - b".into(),
-            },
+            kind: HintKind::BoundExpr { spec_fragment: "a <= u64::MAX - b".into() },
             confidence_boost: 0.1,
         }];
         let precs = hints_to_preconditions(&hints);
@@ -688,5 +686,4 @@ mod tests {
         assert_eq!(precs[1], "x <= 100");
         assert_eq!(precs[2], "y != 0");
     }
-
 }

@@ -76,7 +76,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             else {
                 break;
             };
-            let (candidate, rest) = candidates.split_first_mut().expect("invariant: slice is non-empty"); // tRust: unwrap -> expect
+            let (candidate, rest) = candidates.split_first_mut().unwrap();
             target_candidates.entry(branch).or_insert_with(Vec::new).push(candidate);
             candidates = rest;
         }
@@ -110,7 +110,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// This is used by the overall `match_candidates` algorithm to structure
     /// the match as a whole. See `match_candidates` for more details.
     ///
-    /// tRust: known issue — In some cases, we have some tricky choices to make (upstream #29623). for
+    /// FIXME(#29623). In some cases, we have some tricky choices to make. for
     /// example, if we are testing that `x == 22`, but the candidate is `x @
     /// 13..55`, what should we do? In the event that the test is true, we know
     /// that the candidate applies, but in the event of false, we don't know
@@ -156,7 +156,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             // If we are performing a switch over integers, then this informs integer
             // equality, but nothing else.
             //
-            // tRust: known issue — we could use PatKind::Range to rule (upstream #29623)
+            // FIXME(#29623) we could use PatKind::Range to rule
             // things out here, in some cases.
             (
                 TestKind::SwitchInt,
@@ -209,7 +209,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             (TestKind::If, TestableCase::Constant { value, kind: PatConstKind::Bool }) => {
                 fully_matched = true;
                 let value = value.try_to_bool().unwrap_or_else(|| {
-                    // tRust: invariant — `TestKind::If` is only paired with boolean constants, so the matched scalar must decode to `bool`.
                     span_bug!(test.span, "expected boolean value but got {value:?}")
                 });
                 Some(if value { TestBranch::Success } else { TestBranch::Failure })

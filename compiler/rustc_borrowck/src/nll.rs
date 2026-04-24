@@ -89,7 +89,7 @@ pub(crate) fn compute_closure_requirements_modulo_opaques<'tcx>(
     universal_region_relations: &Frozen<UniversalRegionRelations<'tcx>>,
     constraints: &MirTypeckRegionConstraints<'tcx>,
 ) -> Option<ClosureRegionRequirements<'tcx>> {
-    // // NOTE(#146079): we shouldn't have to clone all this stuff here..
+    // FIXME(#146079): we shouldn't have to clone all this stuff here.
     // Computing the region graph should take at least some of it by reference/`Rc`.
     let lowered_constraints = compute_sccs_applying_placeholder_outlives_constraints(
         constraints.clone(),
@@ -164,12 +164,12 @@ pub(crate) fn compute_regions<'tcx>(
             let def_path = infcx.tcx.def_path(def_id);
             let dir_path = PathBuf::from(&infcx.tcx.sess.opts.unstable_opts.nll_facts_dir)
                 .join(def_path.to_filename_friendly_no_crate());
-            polonius_facts.write_to_dir(dir_path, location_table).expect("invariant: writing Polonius facts must succeed");
+            polonius_facts.write_to_dir(dir_path, location_table).unwrap();
         }
 
         if polonius_output {
             let algorithm = infcx.tcx.env_var("POLONIUS_ALGORITHM").unwrap_or("Hybrid");
-            let algorithm = Algorithm::from_str(algorithm).expect("invariant: Polonius algorithm name must be valid");
+            let algorithm = Algorithm::from_str(algorithm).unwrap();
             debug!("compute_regions: using polonius algorithm {:?}", algorithm);
             let _prof_timer = infcx.tcx.prof.generic_activity("polonius_analysis");
             Some(Box::new(Output::compute(polonius_facts, algorithm, false)))
@@ -323,7 +323,7 @@ pub(super) fn dump_annotation<'tcx, 'infcx>(
             err.note(msg);
             Ok(())
         })
-        .expect("invariant: for_each_region_constraint callback must succeed");
+        .unwrap();
 
         err
     } else {
@@ -332,7 +332,7 @@ pub(super) fn dump_annotation<'tcx, 'infcx>(
         err
     };
 
-    // // NOTE(@lcnr): We currently don't dump the inferred hidden types here. here.
+    // FIXME(@lcnr): We currently don't dump the inferred hidden types here.
     err.emit();
 }
 

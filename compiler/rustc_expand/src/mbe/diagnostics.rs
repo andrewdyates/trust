@@ -230,7 +230,7 @@ pub(super) fn emit_frag_parse_err(
     bindings: &[MacroRule],
     matched_rule_bindings: &[MatcherLoc],
 ) -> ErrorGuaranteed {
-    // tRust: known issue —(davidtwco): avoid depending on the error message text
+    // FIXME(davidtwco): avoid depending on the error message text
     if parser.token == token::Eof
         && let DiagMessage::Str(message) = &e.messages[0].0
         && message.ends_with(", found `<eof>`")

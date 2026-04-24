@@ -17,7 +17,6 @@ declare_lint! {
     ///
     /// ```rust,compile_fail
     /// # #[allow(unused)]
-    /// // SAFETY: This is illustrative code in the lint documentation and is not executed.
     /// unsafe {
     ///     std::str::from_utf8_unchecked(b"Ru\x82st");
     /// }
@@ -78,7 +77,7 @@ impl<'tcx> LateLintPass<'tcx> for InvalidFromUtf8 {
             .contains(&diag_item)
         {
             let lint = |label, utf8_error: Utf8Error| {
-                let method = diag_item.as_str().strip_prefix("str_").expect("invariant: diag_item starts with str_ prefix"); // tRust: unwrap -> expect
+                let method = diag_item.as_str().strip_prefix("str_").unwrap();
                 let method = if let Some(method) = method.strip_prefix("inherent_") {
                     format!("str::{method}")
                 } else {

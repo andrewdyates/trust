@@ -136,10 +136,7 @@ impl AccessKind {
     /// `AtomicRmw` counts as a write because it modifies the memory location.
     #[must_use]
     pub fn is_write(&self) -> bool {
-        matches!(
-            self,
-            AccessKind::Write | AccessKind::AtomicWrite(_) | AccessKind::AtomicRmw(..)
-        )
+        matches!(self, AccessKind::Write | AccessKind::AtomicWrite(_) | AccessKind::AtomicRmw(..))
     }
 
     /// Returns true if this access is a read (atomic or not).
@@ -147,10 +144,7 @@ impl AccessKind {
     /// `AtomicRmw` counts as a read because it reads the memory location.
     #[must_use]
     pub fn is_read(&self) -> bool {
-        matches!(
-            self,
-            AccessKind::Read | AccessKind::AtomicRead(_) | AccessKind::AtomicRmw(..)
-        )
+        matches!(self, AccessKind::Read | AccessKind::AtomicRead(_) | AccessKind::AtomicRmw(..))
     }
 
     /// Returns true if this is a non-atomic access.
@@ -323,20 +317,13 @@ pub fn generate_race_vcs(
     races
         .iter()
         .map(|race| {
-            let span = accesses
-                .get(race.first)
-                .map(|a| a.span.clone())
-                .unwrap_or_default();
+            let span = accesses.get(race.first).map(|a| a.span.clone()).unwrap_or_default();
 
             // Symbolic variables representing reachability of each access point.
-            let reach_a = Formula::Var(
-                format!("reach_{}_{}", race.thread_a, race.first),
-                Sort::Bool,
-            );
-            let reach_b = Formula::Var(
-                format!("reach_{}_{}", race.thread_b, race.second),
-                Sort::Bool,
-            );
+            let reach_a =
+                Formula::Var(format!("reach_{}_{}", race.thread_a, race.first), Sort::Bool);
+            let reach_b =
+                Formula::Var(format!("reach_{}_{}", race.thread_b, race.second), Sort::Bool);
 
             // The "ordered" variable represents whether synchronization
             // establishes a happens-before edge. If we already determined
@@ -353,7 +340,7 @@ pub fn generate_race_vcs(
                     thread_a: race.thread_a.clone(),
                     thread_b: race.thread_b.clone(),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: span,
                 formula,
                 contract_metadata: None,
@@ -397,10 +384,7 @@ pub fn generate_ordering_vcs(
                 return None;
             }
 
-            let reach = Formula::Var(
-                format!("reach_{}_{}", access.thread_id, idx),
-                Sort::Bool,
-            );
+            let reach = Formula::Var(format!("reach_{}_{}", access.thread_id, idx), Sort::Bool);
 
             Some(VerificationCondition {
                 kind: VcKind::InsufficientOrdering {
@@ -408,7 +392,7 @@ pub fn generate_ordering_vcs(
                     actual: actual_ordering.name().to_string(),
                     required: required.name().to_string(),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: access.span.clone(),
                 formula: reach,
                 contract_metadata: None,
@@ -421,12 +405,7 @@ pub fn generate_ordering_vcs(
 mod tests {
     use super::*;
 
-    fn make_access(
-        variable: &str,
-        kind: AccessKind,
-        thread: &str,
-        hb: Vec<usize>,
-    ) -> SharedAccess {
+    fn make_access(variable: &str, kind: AccessKind, thread: &str, hb: Vec<usize>) -> SharedAccess {
         SharedAccess {
             variable: variable.to_string(),
             access_kind: kind,
@@ -591,8 +570,18 @@ mod tests {
     fn test_no_race_both_atomic_rmw() {
         // Two AtomicRmw accesses from different threads should not race.
         let accesses = vec![
-            make_access("counter", AccessKind::AtomicRmw(MemoryOrdering::AcqRel, AtomicRmwOp::Add), "t1", vec![]),
-            make_access("counter", AccessKind::AtomicRmw(MemoryOrdering::AcqRel, AtomicRmwOp::Add), "t2", vec![]),
+            make_access(
+                "counter",
+                AccessKind::AtomicRmw(MemoryOrdering::AcqRel, AtomicRmwOp::Add),
+                "t1",
+                vec![],
+            ),
+            make_access(
+                "counter",
+                AccessKind::AtomicRmw(MemoryOrdering::AcqRel, AtomicRmwOp::Add),
+                "t2",
+                vec![],
+            ),
         ];
         let races = detect_potential_races(&accesses);
         assert!(races.is_empty(), "two atomic RMW accesses should not race");
@@ -602,7 +591,12 @@ mod tests {
     fn test_race_rmw_vs_non_atomic() {
         // AtomicRmw + non-atomic read => race.
         let accesses = vec![
-            make_access("x", AccessKind::AtomicRmw(MemoryOrdering::Relaxed, AtomicRmwOp::Add), "t1", vec![]),
+            make_access(
+                "x",
+                AccessKind::AtomicRmw(MemoryOrdering::Relaxed, AtomicRmwOp::Add),
+                "t1",
+                vec![],
+            ),
             make_access("x", AccessKind::Read, "t2", vec![]),
         ];
         let races = detect_potential_races(&accesses);
@@ -758,9 +752,7 @@ mod tests {
 
     #[test]
     fn test_single_access() {
-        let accesses = vec![
-            make_access("x", AccessKind::Write, "t1", vec![]),
-        ];
+        let accesses = vec![make_access("x", AccessKind::Write, "t1", vec![])];
         let races = detect_potential_races(&accesses);
         assert!(races.is_empty());
     }
@@ -804,8 +796,12 @@ mod tests {
         match &vcs[0].formula {
             Formula::And(clauses) => {
                 assert_eq!(clauses.len(), 3);
-                assert!(matches!(&clauses[0], Formula::Var(name, Sort::Bool) if name == "reach_t1_0"));
-                assert!(matches!(&clauses[1], Formula::Var(name, Sort::Bool) if name == "reach_t2_1"));
+                assert!(
+                    matches!(&clauses[0], Formula::Var(name, Sort::Bool) if name == "reach_t1_0")
+                );
+                assert!(
+                    matches!(&clauses[1], Formula::Var(name, Sort::Bool) if name == "reach_t2_1")
+                );
                 assert!(matches!(&clauses[2], Formula::Bool(true)));
             }
             other => panic!("expected And formula, got: {other:?}"),
@@ -834,7 +830,8 @@ mod tests {
 
     #[test]
     fn test_check_ordering_insufficient_relaxed_for_acquire() {
-        let access = make_access("x", AccessKind::AtomicRead(MemoryOrdering::Relaxed), "t1", vec![]);
+        let access =
+            make_access("x", AccessKind::AtomicRead(MemoryOrdering::Relaxed), "t1", vec![]);
         assert!(!check_ordering_sufficient(&access, MemoryOrdering::Acquire));
     }
 
@@ -846,13 +843,15 @@ mod tests {
 
     #[test]
     fn test_check_ordering_acquire_satisfies_acquire() {
-        let access = make_access("x", AccessKind::AtomicRead(MemoryOrdering::Acquire), "t1", vec![]);
+        let access =
+            make_access("x", AccessKind::AtomicRead(MemoryOrdering::Acquire), "t1", vec![]);
         assert!(check_ordering_sufficient(&access, MemoryOrdering::Acquire));
     }
 
     #[test]
     fn test_check_ordering_release_does_not_satisfy_acquire() {
-        let access = make_access("x", AccessKind::AtomicWrite(MemoryOrdering::Release), "t1", vec![]);
+        let access =
+            make_access("x", AccessKind::AtomicWrite(MemoryOrdering::Release), "t1", vec![]);
         assert!(!check_ordering_sufficient(&access, MemoryOrdering::Acquire));
     }
 
@@ -862,9 +861,12 @@ mod tests {
 
     #[test]
     fn test_generate_ordering_vcs_insufficient() {
-        let accesses = vec![
-            make_access("flag", AccessKind::AtomicRead(MemoryOrdering::Relaxed), "t1", vec![]),
-        ];
+        let accesses = vec![make_access(
+            "flag",
+            AccessKind::AtomicRead(MemoryOrdering::Relaxed),
+            "t1",
+            vec![],
+        )];
         let requirements = vec![(0, MemoryOrdering::Acquire)];
 
         let vcs = generate_ordering_vcs(&accesses, &requirements, "spin_wait");
@@ -878,9 +880,8 @@ mod tests {
 
     #[test]
     fn test_generate_ordering_vcs_sufficient_no_vc() {
-        let accesses = vec![
-            make_access("flag", AccessKind::AtomicRead(MemoryOrdering::SeqCst), "t1", vec![]),
-        ];
+        let accesses =
+            vec![make_access("flag", AccessKind::AtomicRead(MemoryOrdering::SeqCst), "t1", vec![])];
         let requirements = vec![(0, MemoryOrdering::Acquire)];
 
         let vcs = generate_ordering_vcs(&accesses, &requirements, "spin_wait");
@@ -889,9 +890,7 @@ mod tests {
 
     #[test]
     fn test_generate_ordering_vcs_non_atomic_skipped() {
-        let accesses = vec![
-            make_access("x", AccessKind::Read, "t1", vec![]),
-        ];
+        let accesses = vec![make_access("x", AccessKind::Read, "t1", vec![])];
         // Non-atomic accesses have no ordering, so ordering() returns None
         // and we skip (filter_map returns None).
         let requirements = vec![(0, MemoryOrdering::Acquire)];
@@ -907,9 +906,9 @@ mod tests {
             make_access("c", AccessKind::AtomicRead(MemoryOrdering::Acquire), "t2", vec![]),
         ];
         let requirements = vec![
-            (0, MemoryOrdering::Acquire),  // Relaxed < Acquire => VC
-            (1, MemoryOrdering::Release),  // SeqCst >= Release => no VC
-            (2, MemoryOrdering::SeqCst),   // Acquire < SeqCst => VC
+            (0, MemoryOrdering::Acquire), // Relaxed < Acquire => VC
+            (1, MemoryOrdering::Release), // SeqCst >= Release => no VC
+            (2, MemoryOrdering::SeqCst),  // Acquire < SeqCst => VC
         ];
 
         let vcs = generate_ordering_vcs(&accesses, &requirements, "test_fn");
@@ -951,7 +950,12 @@ mod tests {
 
     #[test]
     fn test_shared_access_serialization_roundtrip() {
-        let access = make_access("counter", AccessKind::AtomicWrite(MemoryOrdering::Release), "t1", vec![0, 1]);
+        let access = make_access(
+            "counter",
+            AccessKind::AtomicWrite(MemoryOrdering::Release),
+            "t1",
+            vec![0, 1],
+        );
         let json = serde_json::to_string(&access).expect("serialize");
         let round: SharedAccess = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(round.variable, "counter");

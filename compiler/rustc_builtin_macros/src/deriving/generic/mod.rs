@@ -1232,14 +1232,12 @@ impl<'a> MethodDef<'a> {
         let unify_fieldless_variants =
             self.fieldless_variants_strategy == FieldlessVariantsStrategy::Unify;
 
-        // SAFETY: Documentation only; we mention the unsafe intrinsic below only to
-        // contrast it with the safe `match *self {}` we actually generate.
         // For zero-variant enum, this function body is unreachable. Generate
         // `match *self {}`. This produces machine code identical to `unsafe {
         // core::intrinsics::unreachable() }` while being safe and stable.
         if variants.is_empty() {
             selflike_args.truncate(1);
-            let match_arg = cx.expr_deref(span, selflike_args.pop().expect("invariant: selflike_args must have at least one element after truncate(1)")); // tRust: unwrap -> expect
+            let match_arg = cx.expr_deref(span, selflike_args.pop().unwrap());
             let match_arms = ThinVec::new();
             let expr = cx.expr_match(span, match_arg, match_arms);
             return BlockOrExpr(ThinVec::new(), Some(expr));
@@ -1366,7 +1364,7 @@ impl<'a> MethodDef<'a> {
 
                 // `(VariantK, VariantK, ...)` or just `VariantK`.
                 let single_pat = if subpats.len() == 1 {
-                    subpats.pop().expect("invariant: subpats verified to have len == 1") // tRust: unwrap -> expect
+                    subpats.pop().unwrap()
                 } else {
                     cx.pat_tuple(span, subpats)
                 };
@@ -1434,7 +1432,7 @@ impl<'a> MethodDef<'a> {
         //      }
         let get_match_expr = |mut selflike_args: ThinVec<Box<Expr>>| {
             let match_arg = if selflike_args.len() == 1 {
-                selflike_args.pop().expect("invariant: selflike_args verified to have len == 1") // tRust: unwrap -> expect
+                selflike_args.pop().unwrap()
             } else {
                 cx.expr(span, ast::ExprKind::Tup(selflike_args))
             };
@@ -1548,7 +1546,7 @@ impl<'a> TraitDef<'a> {
                                     );
                                 }
                                 ast::PatField {
-                                    ident: ident.expect("invariant: braced struct field must have ident (checked above)"), // tRust: unwrap -> expect
+                                    ident: ident.unwrap(),
                                     is_shorthand: false,
                                     attrs: ast::AttrVec::new(),
                                     id: ast::DUMMY_NODE_ID,
@@ -1690,9 +1688,9 @@ where
             }
 
             let (base_field, rest) = if use_foldl {
-                all_fields.split_first().expect("invariant: all_fields verified non-empty above") // tRust: unwrap -> expect
+                all_fields.split_first().unwrap()
             } else {
-                all_fields.split_last().expect("invariant: all_fields verified non-empty above") // tRust: unwrap -> expect
+                all_fields.split_last().unwrap()
             };
 
             let base_expr = f(cx, CsFold::Single(base_field));

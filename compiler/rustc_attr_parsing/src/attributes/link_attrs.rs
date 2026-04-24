@@ -59,7 +59,7 @@ impl<S: Stage> CombineAttributeParser<S> for LinkParser {
             r#"name = "...", import_name_type = "decorated|noprefix|undecorated""#,
             r#"name = "...", kind = "dylib|static|...", wasm_import_module = "...", import_name_type = "decorated|noprefix|undecorated""#,
         ], "https://doc.rust-lang.org/reference/items/external-blocks.html#the-link-attribute");
-    const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS); //tRust: known issue — Still checked fully in `check_attr.rs`
+    const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS); //FIXME Still checked fully in `check_attr.rs`
 
     fn extend(
         cx: &mut AcceptContext<'_, '_, S>,
@@ -502,7 +502,7 @@ pub(crate) struct ExportStableParser;
 impl<S: Stage> NoArgsAttributeParser<S> for ExportStableParser {
     const PATH: &[Symbol] = &[sym::export_stable];
     const ON_DUPLICATE: OnDuplicate<S> = OnDuplicate::Warn;
-    const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS); //tRust: known issue — Still checked fully in `check_attr.rs`
+    const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS); //FIXME Still checked fully in `check_attr.rs`
     const CREATE: fn(Span) -> AttributeKind = |_| AttributeKind::ExportStable;
 }
 
@@ -559,7 +559,7 @@ impl<S: Stage> SingleAttributeParser<S> for LinkOrdinalParser {
         // in llvm/include/llvm/Object/COFFImportFile.h), which we use to communicate import
         // information to LLVM for `#[link(kind = "raw-dylib"_])`, is also defined to be uint16_t.
         //
-        // tRust: known issue — should we allow an ordinal of 0?  The MSVC toolchain has inconsistent support for
+        // FIXME: should we allow an ordinal of 0?  The MSVC toolchain has inconsistent support for
         // this: both LINK.EXE and LIB.EXE signal errors and abort when given a .DEF file that
         // specifies a zero ordinal. However, llvm-dlltool is perfectly happy to generate an import
         // library for such a .DEF file, and MSVC's LINK.EXE is also perfectly happy to consume an

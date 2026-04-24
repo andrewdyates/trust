@@ -54,7 +54,12 @@ impl ScopeFilter {
     /// * `func_path`   — fully-qualified path (e.g., `"my_crate::search::binary_search"`)
     /// * `has_specs`    — whether the function has any spec annotations
     #[must_use]
-    pub fn matches(scope: &VerificationScope, func_name: &str, func_path: &str, has_specs: bool) -> bool {
+    pub fn matches(
+        scope: &VerificationScope,
+        func_name: &str,
+        func_path: &str,
+        has_specs: bool,
+    ) -> bool {
         match scope {
             VerificationScope::All => true,
             VerificationScope::Module(pattern) => glob_matches(pattern, func_path),
@@ -238,7 +243,12 @@ mod tests {
             "my_crate::search::binary_search",
             false,
         ));
-        assert!(!ScopeFilter::matches(&scope, "linear_search", "my_crate::search::linear_search", false));
+        assert!(!ScopeFilter::matches(
+            &scope,
+            "linear_search",
+            "my_crate::search::linear_search",
+            false
+        ));
     }
 
     #[test]
@@ -250,12 +260,7 @@ mod tests {
             "my_crate::search::binary_search",
             false,
         ));
-        assert!(!ScopeFilter::matches(
-            &scope,
-            "sort",
-            "my_crate::util::sort",
-            false,
-        ));
+        assert!(!ScopeFilter::matches(&scope, "sort", "my_crate::util::sort", false,));
     }
 
     #[test]
@@ -279,10 +284,7 @@ mod tests {
 
     #[test]
     fn test_filter_functions_all() {
-        let funcs = vec![
-            ("a", "m::a", false),
-            ("b", "m::b", true),
-        ];
+        let funcs = vec![("a", "m::a", false), ("b", "m::b", true)];
         let indices = filter_functions(&VerificationScope::All, funcs);
         assert_eq!(indices, vec![0, 1]);
     }
@@ -306,7 +308,8 @@ mod tests {
             ("main", "my_crate::main", false),
             ("sort", "my_crate::util::sort", true),
         ];
-        let indices = filter_functions(&VerificationScope::Module("my_crate::util::*".into()), funcs);
+        let indices =
+            filter_functions(&VerificationScope::Module("my_crate::util::*".into()), funcs);
         assert_eq!(indices, vec![0, 2]);
     }
 
@@ -319,10 +322,7 @@ mod tests {
 
     #[test]
     fn test_filter_functions_none_match() {
-        let funcs = vec![
-            ("a", "m::a", false),
-            ("b", "m::b", false),
-        ];
+        let funcs = vec![("a", "m::a", false), ("b", "m::b", false)];
         let indices = filter_functions(&VerificationScope::Annotated, funcs);
         assert!(indices.is_empty());
     }

@@ -10,12 +10,8 @@
 use trust_types::fx::FxHashMap;
 
 use crate::invalidation::DependencyTracker;
-use crate::invalidation_strategy::{
-    InvalidationResult, InvalidationStrategy, apply_strategy,
-};
-use crate::spec_change_detector::{
-    SpecChangeDetector, SpecChangeSummary, SpecFingerprint,
-};
+use crate::invalidation_strategy::{InvalidationResult, InvalidationStrategy, apply_strategy};
+use crate::spec_change_detector::{SpecChangeDetector, SpecChangeSummary, SpecFingerprint};
 use crate::{CacheEntry, CacheLookup, VerificationCache};
 
 /// Event emitted when invalidation occurs, for diagnostics and logging.
@@ -137,12 +133,7 @@ impl SpecAwareCacheManager {
             return (changes, None);
         }
 
-        let result = apply_strategy(
-            self.strategy,
-            &mut self.cache,
-            &changes,
-            &self.deps,
-        );
+        let result = apply_strategy(self.strategy, &mut self.cache, &changes, &self.deps);
 
         self.events.push(InvalidationEvent {
             changes: changes.clone(),
@@ -162,16 +153,15 @@ impl SpecAwareCacheManager {
     ///
     /// Returns the list of def_paths whose specs changed since they were cached.
     #[must_use]
-    pub fn detect_stale_entries(
-        &self,
-        current_fingerprints: &[SpecFingerprint],
-    ) -> Vec<String> {
+    pub fn detect_stale_entries(&self, current_fingerprints: &[SpecFingerprint]) -> Vec<String> {
         let mut stale = Vec::new();
         for fp in current_fingerprints {
             if let Some(stored_hash) = self.stored_spec_hashes.get(&fp.def_path)
-                && !stored_hash.is_empty() && stored_hash != &fp.hash {
-                    stale.push(fp.def_path.clone());
-                }
+                && !stored_hash.is_empty()
+                && stored_hash != &fp.hash
+            {
+                stale.push(fp.def_path.clone());
+            }
         }
         stale.sort();
         stale
@@ -194,17 +184,9 @@ impl SpecAwareCacheManager {
 
         // Build a change summary from the stale entries
         if !stale.is_empty() {
-            let changes = SpecChangeSummary {
-                modified: stale.clone(),
-                added: vec![],
-                removed: vec![],
-            };
-            let result = apply_strategy(
-                self.strategy,
-                &mut self.cache,
-                &changes,
-                &self.deps,
-            );
+            let changes =
+                SpecChangeSummary { modified: stale.clone(), added: vec![], removed: vec![] };
+            let result = apply_strategy(self.strategy, &mut self.cache, &changes, &self.deps);
             invalidated = result.invalidated;
 
             self.events.push(InvalidationEvent {
@@ -230,8 +212,7 @@ impl SpecAwareCacheManager {
         self.stored_spec_hashes.clear();
         for (def_path, entry) in entries {
             if !entry.spec_hash.is_empty() {
-                self.stored_spec_hashes
-                    .insert(def_path.clone(), entry.spec_hash.clone());
+                self.stored_spec_hashes.insert(def_path.clone(), entry.spec_hash.clone());
             }
         }
     }
@@ -274,10 +255,7 @@ impl SpecAwareCacheManager {
     /// Total number of entries invalidated across all events.
     #[must_use]
     pub fn total_invalidated(&self) -> usize {
-        self.events
-            .iter()
-            .map(|e| e.result.invalidated.len())
-            .sum()
+        self.events.iter().map(|e| e.result.invalidated.len()).sum()
     }
 
     /// Summary string for diagnostics.
@@ -321,6 +299,7 @@ mod tests {
             runtime_checked: 0,
             cached_at: 100,
             spec_hash: spec_hash.to_string(),
+            obligation_results: vec![],
         }
     }
 
@@ -467,9 +446,7 @@ mod tests {
         let old_fp = fp("f", &["x > 0"]);
 
         // Simulate loading cache entries from a previous session
-        mgr.load_spec_hashes(&[
-            ("f".to_string(), sample_entry("h1", &old_fp.hash)),
-        ]);
+        mgr.load_spec_hashes(&[("f".to_string(), sample_entry("h1", &old_fp.hash))]);
 
         let stale = mgr.detect_stale_entries(&[fp_current]);
         assert_eq!(stale, vec!["f"]);
@@ -480,9 +457,7 @@ mod tests {
         let mut mgr = SpecAwareCacheManager::new();
         let current_fp = fp("f", &["x > 0"]);
 
-        mgr.load_spec_hashes(&[
-            ("f".to_string(), sample_entry("h1", &current_fp.hash)),
-        ]);
+        mgr.load_spec_hashes(&[("f".to_string(), sample_entry("h1", &current_fp.hash))]);
 
         let stale = mgr.detect_stale_entries(&[current_fp]);
         assert!(stale.is_empty());
@@ -494,9 +469,7 @@ mod tests {
         let current_fp = fp("f", &["x > 0"]);
 
         // Entry with empty spec_hash (pre-spec-tracking)
-        mgr.load_spec_hashes(&[
-            ("f".to_string(), sample_entry("h1", "")),
-        ]);
+        mgr.load_spec_hashes(&[("f".to_string(), sample_entry("h1", ""))]);
 
         // Empty spec_hash should NOT trigger staleness (backward compat)
         let stale = mgr.detect_stale_entries(&[current_fp]);
@@ -514,9 +487,7 @@ mod tests {
         mgr.cache_mut().store("f", sample_entry("h1", &old_fp.hash));
         mgr.cache_mut().store("g", sample_entry("h2", "other"));
         mgr.add_dependency("g", "f");
-        mgr.load_spec_hashes(&[
-            ("f".to_string(), sample_entry("h1", &old_fp.hash)),
-        ]);
+        mgr.load_spec_hashes(&[("f".to_string(), sample_entry("h1", &old_fp.hash))]);
 
         let invalidated = mgr.invalidate_stale_entries(&[new_fp]);
         // With dependency strategy: f changed, g depends on f
@@ -644,15 +615,11 @@ mod tests {
             mgr.cache_mut().store(name, sample_entry(&format!("h_{name}"), ""));
         }
 
-        let fps_v1 = vec![
-            fp("a", &[]), fp("b", &[]), fp("c", &[]), fp("d", &["x > 0"]),
-        ];
+        let fps_v1 = vec![fp("a", &[]), fp("b", &[]), fp("c", &[]), fp("d", &["x > 0"])];
         let _ = mgr.process_specs(&fps_v1);
 
         // d's spec changes
-        let fps_v2 = vec![
-            fp("a", &[]), fp("b", &[]), fp("c", &[]), fp("d", &["x > 1"]),
-        ];
+        let fps_v2 = vec![fp("a", &[]), fp("b", &[]), fp("c", &[]), fp("d", &["x > 1"])];
         let (changes, result) = mgr.process_specs(&fps_v2);
         assert_eq!(changes.modified, vec!["d"]);
 
@@ -681,17 +648,12 @@ mod tests {
             mgr.cache_mut().store(name, sample_entry(&format!("h_{name}"), ""));
         }
 
-        let fps_v1 = vec![
-            fp("top", &[]), fp("mid", &[]),
-            fp("leaf1", &["a"]), fp("leaf2", &["b"]),
-        ];
+        let fps_v1 = vec![fp("top", &[]), fp("mid", &[]), fp("leaf1", &["a"]), fp("leaf2", &["b"])];
         let _ = mgr.process_specs(&fps_v1);
 
         // Both leaf specs change
-        let fps_v2 = vec![
-            fp("top", &[]), fp("mid", &[]),
-            fp("leaf1", &["a2"]), fp("leaf2", &["b2"]),
-        ];
+        let fps_v2 =
+            vec![fp("top", &[]), fp("mid", &[]), fp("leaf1", &["a2"]), fp("leaf2", &["b2"])];
         let (changes, result) = mgr.process_specs(&fps_v2);
         assert_eq!(changes.modified.len(), 2);
 

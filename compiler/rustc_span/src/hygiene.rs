@@ -284,7 +284,7 @@ impl ExpnId {
     #[inline]
     #[track_caller]
     pub fn expect_local(self) -> LocalExpnId {
-        self.as_local().expect("invariant: ExpnId is from the local crate") // tRust: unwrap -> expect
+        self.as_local().unwrap()
     }
 
     #[inline]
@@ -714,7 +714,7 @@ impl SyntaxContext {
 
     #[inline]
     fn from_usize(raw: usize) -> SyntaxContext {
-        SyntaxContext(u32::try_from(raw).expect("invariant: syntax context index fits in u32")) // tRust: unwrap -> expect
+        SyntaxContext(u32::try_from(raw).unwrap())
     }
 
     /// Extend a syntax context with a given expansion and transparency.
@@ -822,7 +822,7 @@ impl SyntaxContext {
             let mut glob_ctxt = data.normalize_to_macros_2_0(glob_span.ctxt());
             while !data.is_descendant_of(expn_id, data.outer_expn(glob_ctxt)) {
                 scope = Some(data.remove_mark(&mut glob_ctxt).0);
-                if data.remove_mark(self).0 != scope.expect("invariant: scope was set to Some on the previous line") { // tRust: unwrap -> expect
+                if data.remove_mark(self).0 != scope.unwrap() {
                     return None;
                 }
             }

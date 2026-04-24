@@ -104,7 +104,7 @@ fn split_block_comment_into_lines(text: &str, col: CharPos) -> Vec<String> {
 fn gather_comments(sm: &SourceMap, path: FileName, src: String) -> Vec<Comment> {
     let sm = SourceMap::new(sm.path_mapping().clone());
     let source_file = sm.new_source_file(path, src);
-    let text = Arc::clone(&(*source_file.src.as_ref().expect("invariant: source file has src after new_source_file"))); // tRust: unwrap -> expect
+    let text = Arc::clone(&(*source_file.src.as_ref().unwrap()));
 
     let text: &str = text.as_str();
     let start_bpos = source_file.start_pos;
@@ -218,7 +218,7 @@ impl<'a> Comments<'a> {
             let comment_line = self.sm.lookup_char_pos(cmnt.pos);
             let next = next_pos.unwrap_or_else(|| cmnt.pos + BytePos(1));
             if span.hi() < cmnt.pos && cmnt.pos < next && span_line.line == comment_line.line {
-                return Some(self.next().expect("invariant: peek confirmed comment exists")); // tRust: unwrap -> expect
+                return Some(self.next().unwrap());
             }
         }
 
@@ -511,7 +511,7 @@ pub trait PrintState<'a>: std::ops::Deref<Target = pp::Printer> + std::ops::Dere
                 break;
             }
             has_comment = true;
-            let cmnt = self.next_comment().expect("invariant: peek confirmed comment exists"); // tRust: unwrap -> expect
+            let cmnt = self.next_comment().unwrap();
             self.print_comment(cmnt);
         }
         has_comment
@@ -631,7 +631,7 @@ pub trait PrintState<'a>: std::ops::Deref<Target = pp::Printer> + std::ops::Dere
             if cmnt.style == CommentStyle::Isolated
                 && cmnt.lines.first().map_or(false, |l| l.starts_with("#!"))
             {
-                let cmnt = self.next_comment().expect("invariant: peek confirmed shebang comment exists"); // tRust: unwrap -> expect
+                let cmnt = self.next_comment().unwrap();
                 self.print_comment(cmnt);
             }
         }
@@ -881,7 +881,7 @@ pub trait PrintState<'a>: std::ops::Deref<Target = pp::Printer> + std::ops::Dere
                 // Because spacing on delimiters is lost when going through
                 // proc macros, and otherwise we can end up with ugly cases
                 // like `{ x}`. Symmetry is better.
-                self.bclose(span, !open_space, cb.expect("invariant: cb is Some for Brace delimiter")); // tRust: unwrap -> expect
+                self.bclose(span, !open_space, cb.unwrap());
             }
             delim => {
                 // `open_spacing` is ignored. We never print spaces after
@@ -907,8 +907,6 @@ pub trait PrintState<'a>: std::ops::Deref<Target = pp::Printer> + std::ops::Dere
         if let Some(eii_decl) = &macro_def.eii_declaration {
             self.word("#[eii_declaration(");
             self.print_path(&eii_decl.foreign_item, false, 0);
-            // SAFETY: The invariants required by this unsafe operation are
-            // upheld by the caller's contract and preceding checks.
             if eii_decl.impl_unsafe {
                 self.word(",");
                 self.space();

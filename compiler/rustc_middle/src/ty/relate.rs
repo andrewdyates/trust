@@ -124,9 +124,9 @@ impl<'tcx> Relate<TyCtxt<'tcx>> for ty::Expr<'tcx> {
         ae: ty::Expr<'tcx>,
         be: ty::Expr<'tcx>,
     ) -> RelateResult<'tcx, ty::Expr<'tcx>> {
-        // tRust: known issue (generic_const_exprs) — is it possible to relate two consts which are not identical
+        // FIXME(generic_const_exprs): is it possible to relate two consts which are not identical
         // exprs? Should we care about that?
-        // tRust: known issue (generic_const_exprs) — relating the `ty()`s is a little weird since it is supposed to
+        // FIXME(generic_const_exprs): relating the `ty()`s is a little weird since it is supposed to
         // ICE If they mismatch. Unfortunately `ConstKind::Expr` is a little special and can be thought
         // of as being generic over the argument types, however this is implicit so these types don't get
         // related when we relate the args of the item this const arg is for.
@@ -159,7 +159,6 @@ impl<'tcx> Relate<TyCtxt<'tcx>> for ty::GenericArg<'tcx> {
             (ty::GenericArgKind::Const(a_ct), ty::GenericArgKind::Const(b_ct)) => {
                 Ok(relation.relate(a_ct, b_ct)?.into())
             }
-            // tRust: invariant: impossible case reached: can't relate: <...> with <...>
             _ => bug!("impossible case reached: can't relate: {a:?} with {b:?}"),
         }
     }

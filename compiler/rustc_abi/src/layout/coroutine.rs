@@ -191,7 +191,7 @@ pub(super) fn layout<
 
             // Disentangle the "a" and "b" components of `in_memory_order`
             // by preserving the order but keeping only one disjoint "half" each.
-            // tRust: known issue (eddyb) — build a better abstraction for permutations, if possible.
+            // FIXME(eddyb) build a better abstraction for permutations, if possible.
             let mut in_memory_order_a = IndexVec::<u32, FieldIdx>::new();
             let mut in_memory_order_b = IndexVec::<u32, FieldIdx>::new();
             for i in in_memory_order {
@@ -257,11 +257,11 @@ pub(super) fn layout<
                     let (offset, memory_index) = match assignments[*local] {
                         Unassigned => unreachable!(),
                         Assigned(_) => {
-                            let (offset, memory_index) = offsets_and_memory_index.next().expect("invariant: Assigned fields have corresponding offset entries"); // tRust: unwrap -> expect
+                            let (offset, memory_index) = offsets_and_memory_index.next().unwrap();
                             (offset, promoted_memory_index.len() as u32 + memory_index)
                         }
                         Ineligible(field_idx) => {
-                            let field_idx = field_idx.expect("invariant: Ineligible variant always carries a field index"); // tRust: unwrap -> expect
+                            let field_idx = field_idx.unwrap();
                             (promoted_offsets[field_idx], promoted_memory_index[field_idx])
                         }
                     };
@@ -304,7 +304,7 @@ pub(super) fn layout<
         // `UnsafeCell` blocks niches for the same reason, but we don't yet have `UnsafePinned` that
         // would do the same for us here.
         // See <https://github.com/rust-lang/rust/issues/63818>, <https://github.com/rust-lang/miri/issues/3780>.
-        // tRust: known issue — Remove when <https://github.com/rust-lang/rust/issues/125735> is implemented and aliased coroutine fields are wrapped in `UnsafePinned`.
+        // FIXME: Remove when <https://github.com/rust-lang/rust/issues/125735> is implemented and aliased coroutine fields are wrapped in `UnsafePinned`.
         largest_niche: None,
         uninhabited,
         size,

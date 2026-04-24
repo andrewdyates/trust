@@ -82,6 +82,7 @@ pub fn parse_relocations(
 
 /// Human-readable name for an AArch64 relocation type.
 #[must_use]
+#[cfg(test)]
 pub fn arm64_reloc_name(reloc_type: u8) -> &'static str {
     match reloc_type {
         ARM64_RELOC_UNSIGNED => "ARM64_RELOC_UNSIGNED",
@@ -116,10 +117,16 @@ mod tests {
         assert_eq!(arm64_reloc_name(ARM64_RELOC_SUBTRACTOR), "ARM64_RELOC_SUBTRACTOR");
         assert_eq!(arm64_reloc_name(ARM64_RELOC_PAGEOFF12), "ARM64_RELOC_PAGEOFF12");
         assert_eq!(arm64_reloc_name(ARM64_RELOC_GOT_LOAD_PAGE21), "ARM64_RELOC_GOT_LOAD_PAGE21");
-        assert_eq!(arm64_reloc_name(ARM64_RELOC_GOT_LOAD_PAGEOFF12), "ARM64_RELOC_GOT_LOAD_PAGEOFF12");
+        assert_eq!(
+            arm64_reloc_name(ARM64_RELOC_GOT_LOAD_PAGEOFF12),
+            "ARM64_RELOC_GOT_LOAD_PAGEOFF12"
+        );
         assert_eq!(arm64_reloc_name(ARM64_RELOC_POINTER_TO_GOT), "ARM64_RELOC_POINTER_TO_GOT");
         assert_eq!(arm64_reloc_name(ARM64_RELOC_TLVP_LOAD_PAGE21), "ARM64_RELOC_TLVP_LOAD_PAGE21");
-        assert_eq!(arm64_reloc_name(ARM64_RELOC_TLVP_LOAD_PAGEOFF12), "ARM64_RELOC_TLVP_LOAD_PAGEOFF12");
+        assert_eq!(
+            arm64_reloc_name(ARM64_RELOC_TLVP_LOAD_PAGEOFF12),
+            "ARM64_RELOC_TLVP_LOAD_PAGEOFF12"
+        );
         assert_eq!(arm64_reloc_name(ARM64_RELOC_ADDEND), "ARM64_RELOC_ADDEND");
     }
 

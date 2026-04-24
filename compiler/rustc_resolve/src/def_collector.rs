@@ -140,8 +140,8 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
             ItemKind::MacroDef(ident, def) => {
                 let edition = i.span.edition();
 
-                // NOTE(jdonszelmann): make one of these in the resolver?
-                // NOTE(jdonszelmann): don't care about tools here maybe? Just parse what we can.
+                // FIXME(jdonszelmann) make one of these in the resolver?
+                // FIXME(jdonszelmann) don't care about tools here maybe? Just parse what we can.
                 // Does that prevents errors from happening? maybe
                 let mut parser = AttributeParser::<'_, Early>::new(
                     &self.resolver.tcx.sess,
@@ -156,7 +156,7 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
                     OmitDoc::Skip,
                     std::convert::identity,
                     |_lint_id, _span, _kind| {
-                        // NOTE(jdonszelmann): emit lints here properly
+                        // FIXME(jdonszelmann): emit lints here properly
                         // NOTE that before new attribute parsing, they didn't happen either
                         // but it would be nice if we could change that.
                     },
@@ -362,7 +362,6 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
                 return self.visit_macro_invoc(i.id);
             }
             AssocItemKind::DelegationMac(..) => {
-                // tRust: invariant — delegation macro invocations are expanded before definition collection
                 span_bug!(i.span, "degation mac invoc should have already been handled")
             }
         };
@@ -434,9 +433,9 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
             ExprKind::Struct(_) | ExprKind::Call(..) | ExprKind::Tup(..) | ExprKind::Array(..) => {
                 return visit::walk_expr(self, expr);
             }
-            // NOTE(mgca): we may want to handle block labels in some manner
+            // FIXME(mgca): we may want to handle block labels in some manner
             ExprKind::Block(block, _) if let [stmt] = block.stmts.as_slice() => match stmt.kind {
-                // NOTE(mgca): this probably means that mac calls that expand
+                // FIXME(mgca): this probably means that mac calls that expand
                 // to semi'd const blocks are handled differently to just writing
                 // out a semi'd const block.
                 StmtKind::Expr(..) | StmtKind::MacCall(..) => return visit::walk_expr(self, expr),
@@ -465,7 +464,6 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
                     .resolver
                     .impl_trait_names
                     .get(&ty.id)
-                    // tRust: invariant — impl Trait types are always assigned a name during parsing
                     .unwrap_or_else(|| span_bug!(ty.span, "expected this opaque to be named"));
                 let kind = match self.invocation_parent.impl_trait_context {
                     ImplTraitContext::Universal => DefKind::TyParam,
@@ -490,7 +488,7 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         match stmt.kind {
             StmtKind::MacCall(..) => self.visit_macro_invoc(stmt.id),
-            // NOTE(impl_trait_in_bindings): we don't really have a good way of
+            // FIXME(impl_trait_in_bindings): We don't really have a good way of
             // introducing the right `ImplTraitContext` here for all the cases we
             // care about, in case we want to introduce ITIB to other positions
             // such as turbofishes (e.g. `foo::<impl Fn()>(|| {})`).

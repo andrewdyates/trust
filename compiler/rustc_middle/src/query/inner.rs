@@ -42,7 +42,7 @@ where
 {
     match try_get_cached(tcx, &query.cache, key) {
         Some(value) => value,
-        None => (query.execute_query_fn)(tcx, span, key, QueryMode::Get).expect("invariant: query execution in Get mode returns a value"),
+        None => (query.execute_query_fn)(tcx, span, key, QueryMode::Get).unwrap(),
     }
 }
 
@@ -146,7 +146,6 @@ pub(crate) fn query_feed<'tcx, C>(
                 // The query is `no_hash`, so we have no way to perform a sanity check.
                 // If feeding the same value multiple times needs to be supported,
                 // the query should not be marked `no_hash`.
-                // tRust: invariant: unexpected state in query_feed
                 bug!(
                     "Trying to feed an already recorded value for query {query:?} key={key:?}:\n\
                     old value: {old}\nnew value: {value}",

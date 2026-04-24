@@ -35,7 +35,7 @@ fn verify_variables_used(msg_span: Span, message_str: &str, variant: Option<&Var
     // Parse the fluent message
     const GENERATED_MSG_ID: &str = "generated_msg";
     let resource =
-        FluentResource::try_new(format!("{GENERATED_MSG_ID} = {message_str}\n")).expect("invariant: generated Fluent resource is valid syntax"); // tRust: unwrap -> expect
+        FluentResource::try_new(format!("{GENERATED_MSG_ID} = {message_str}\n")).unwrap();
     assert_eq!(resource.entries().count(), 1);
     let Some(fluent_syntax::ast::Entry::Message(message)) = resource.get_entry(0) else {
         panic!("Did not parse into a message")
@@ -52,7 +52,7 @@ fn verify_variables_used(msg_span: Span, message_str: &str, variant: Option<&Var
         for variable in variable_references(&message) {
             if !fields.iter().any(|f| f == variable) {
                 span_err(
-                    msg_span.expect("invariant: msg_span is set before variable checking"), // tRust: unwrap -> expect
+                    msg_span.unwrap(),
                     format!("Variable `{variable}` not found in diagnostic "),
                 )
                 .help(format!("Available fields: {:?}", fields.join(", ")))
@@ -131,18 +131,18 @@ const ALLOWED_CAPITALIZED_WORDS: &[&str] = &[
 fn verify_message_style(msg_span: Span, message: &str) {
     // Verify that message starts with lowercase char
     let Some(first_word) = message.split_whitespace().next() else {
-        span_err(msg_span.expect("invariant: msg_span set by caller"), "message must not be empty").emit(); // tRust: unwrap -> expect
+        span_err(msg_span.unwrap(), "message must not be empty").emit();
         return;
     };
     let first_char = first_word.chars().next().expect("Word is not empty");
     if first_char.is_uppercase() && !ALLOWED_CAPITALIZED_WORDS.contains(&first_word) {
-        span_err(msg_span.expect("invariant: msg_span set by caller"), "message `{value}` starts with an uppercase letter. Fix it or add it to `ALLOWED_CAPITALIZED_WORDS`").emit(); // tRust: unwrap -> expect
+        span_err(msg_span.unwrap(), "message `{value}` starts with an uppercase letter. Fix it or add it to `ALLOWED_CAPITALIZED_WORDS`").emit();
         return;
     }
 
     // Verify that message does not end in `.`
     if message.ends_with(".") && !message.ends_with("...") {
-        span_err(msg_span.expect("invariant: msg_span set by caller"), "message `{value}` ends with a period").emit(); // tRust: unwrap -> expect
+        span_err(msg_span.unwrap(), "message `{value}` ends with a period").emit();
         return;
     }
 }
@@ -150,7 +150,7 @@ fn verify_message_style(msg_span: Span, message: &str) {
 /// Verifies that the message is properly indented into the code
 fn verify_message_formatting(attr_span: Span, msg_span: Span, message: &str) {
     // Find the indent at the start of the message (`column()` is one-indexed)
-    let start = attr_span.expect("invariant: attr_span from parsed attribute").column() - 1; // tRust: unwrap -> expect
+    let start = attr_span.unwrap().column() - 1;
 
     for line in message.lines().skip(1) {
         if line.is_empty() {
@@ -159,14 +159,14 @@ fn verify_message_formatting(attr_span: Span, msg_span: Span, message: &str) {
         let indent = line.chars().take_while(|c| *c == ' ').count();
         if indent < start {
             span_err(
-                msg_span.expect("invariant: msg_span set by caller"), // tRust: unwrap -> expect
+                msg_span.unwrap(),
                 format!("message is not properly indented. {indent} < {start}"),
             )
             .emit();
             return;
         }
         if indent % 4 != 0 {
-            span_err(msg_span.expect("invariant: msg_span set by caller"), "message is not indented with a multiple of 4 spaces") // tRust: unwrap -> expect
+            span_err(msg_span.unwrap(), "message is not indented with a multiple of 4 spaces")
                 .emit();
             return;
         }

@@ -117,8 +117,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 Some(&f) => self.pointer_kind(f, span)?,
             },
 
-            // tRust: UnsafeBinder wraps a single type; pointer kind depends on inner type
-            ty::UnsafeBinder(binder) => self.pointer_kind(binder.skip_binder(), span)?,
+            ty::UnsafeBinder(_) => todo!("FIXME(unsafe_binder)"),
 
             // Pointers to foreign types are thin, despite being unsized
             ty::Foreign(..) => Some(PointerKind::Thin),
@@ -351,7 +350,6 @@ impl<'a, 'tcx> CastCheck<'tcx> {
                         PointerKind::Thin,
                     )
                     | (PointerKind::Length, PointerKind::Length) => {
-                        // tRust: invariant — `CastError::DifferingKinds` should have been filtered out before diagnostics for these pointer-kind combinations
                         span_bug!(self.span, "unexpected cast error: {e:?}")
                     }
                 }
@@ -834,7 +832,7 @@ impl<'a, 'tcx> CastCheck<'tcx> {
                 self.check_ptr_addr_cast(fcx, m_expr)
             }
             (FnPtr, Int(_)) => {
-                // NOTE(#95489): there should eventually be a lint for these casts
+                // FIXME(#95489): there should eventually be a lint for these casts
                 Ok(CastKind::FnPtrAddrCast)
             }
             // addr-ptr-cast
@@ -1052,7 +1050,6 @@ impl<'a, 'tcx> CastCheck<'tcx> {
             let array_ptr_type = Ty::new_ptr(fcx.tcx, m_expr.ty, m_expr.mutbl);
             fcx.coerce(self.expr, self.expr_ty, array_ptr_type, AllowTwoPhase::No, None)
                 .unwrap_or_else(|_| {
-                    // tRust: invariant — coercing a reference to its matching raw pointer type must succeed for this array-to-pointer cast lowering
                     bug!(
                         "could not cast from reference to array to pointer to array ({:?} to {:?})",
                         self.expr_ty,

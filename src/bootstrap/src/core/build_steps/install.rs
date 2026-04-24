@@ -13,7 +13,7 @@ use crate::core::config::{Config, TargetSelection};
 use crate::utils::exec::command;
 use crate::utils::helpers::t;
 use crate::utils::tarball::GeneratedTarball;
-use crate::{Compiler, Kind};
+use crate::{CodegenBackendKind, Compiler, Kind};
 
 #[cfg(target_os = "illumos")]
 const SHELL: &str = "bash";
@@ -225,6 +225,12 @@ install!((self, builder, _config),
             .expect("missing cargo");
         install_sh(builder, "cargo", self.build_compiler, Some(self.target), &tarball);
     };
+    CargoTrust, path = "cargo-trust", Self::should_build(_config), IS_HOST: true, {
+        let tarball = builder
+            .ensure(dist::CargoTrust { build_compiler: self.build_compiler, target: self.target })
+            .expect("missing cargo-trust");
+        install_sh(builder, "cargo-trust", self.build_compiler, Some(self.target), &tarball);
+    };
     RustAnalyzer, alias = "rust-analyzer", Self::should_build(_config), IS_HOST: true, {
         if let Some(tarball) =
             builder.ensure(dist::RustAnalyzer { compilers: RustcPrivateCompilers::from_build_compiler(builder, self.build_compiler, self.target), target: self.target })
@@ -299,6 +305,19 @@ install!((self, builder, _config),
         } else {
             builder.info(
                 &format!("skipping Install CodegenBackend(\"cranelift\") stage{} ({})",
+                         self.build_compiler.stage + 1, self.target),
+            );
+        }
+    };
+    RustcCodegenLlvm2, alias = "rustc-codegen-llvm2", _config.enabled_codegen_backends(_config.host_target).contains(&CodegenBackendKind::Llvm2), IS_HOST: true, {
+        if let Some(tarball) = builder.ensure(dist::Llvm2CodegenBackend {
+            compilers: RustcPrivateCompilers::from_build_compiler(builder, self.build_compiler, self.target),
+            target: self.target
+        }) {
+            install_sh(builder, "rustc-codegen-llvm2", self.build_compiler, Some(self.target), &tarball);
+        } else {
+            builder.info(
+                &format!("skipping Install CodegenBackend(\"llvm2\") stage{} ({})",
                          self.build_compiler.stage + 1, self.target),
             );
         }

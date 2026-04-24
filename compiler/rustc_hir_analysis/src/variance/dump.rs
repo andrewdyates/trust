@@ -12,7 +12,7 @@ fn format_variances(tcx: TyCtxt<'_>, def_id: LocalDefId) -> String {
     let mut ret = String::with_capacity(2 + 7 * variances.len());
     ret.push('[');
     for (arg, variance) in generics.iter().zip(variances.iter()) {
-        write!(ret, "{arg}: {variance:?}, ").expect("invariant: write to string succeeds");
+        write!(ret, "{arg}: {variance:?}, ").unwrap();
     }
     // Remove trailing `, `.
     if !variances.is_empty() {

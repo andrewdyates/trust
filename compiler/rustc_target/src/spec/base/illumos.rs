@@ -11,7 +11,7 @@ pub(crate) fn opts() -> TargetOptions {
             // after libgcc_s in the NEEDED list for the resultant binary by
             // ignoring any attempts to add it as a dynamic dependency until the
             // very end.
-            // tRust: known issue — This should be replaced by a more complete and generic
+            // FIXME: This should be replaced by a more complete and generic
             // mechanism for controlling the order of library arguments passed
             // to the linker.
             "-lc",
@@ -44,7 +44,7 @@ pub(crate) fn opts() -> TargetOptions {
         // pthread_{get,set}specific.
         //has_thread_local: true,
 
-        // tRust: known issue — Currently, rust is invoking cc to link, which ends up
+        // FIXME: Currently, rust is invoking cc to link, which ends up
         // causing these to get included twice. We should eventually transition
         // to having rustc invoke ld directly, in which case these will need to
         // be uncommented.

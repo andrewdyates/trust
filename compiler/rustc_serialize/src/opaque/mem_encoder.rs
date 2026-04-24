@@ -48,8 +48,6 @@ impl MemEncoder {
         if written > N {
             Self::panic_invalid_write::<N>(written);
         }
-        // SAFETY: The new length is within the allocated capacity, and
-        // all elements up to the new length are properly initialized.
         unsafe { self.data.set_len(old_len + written) };
     }
 

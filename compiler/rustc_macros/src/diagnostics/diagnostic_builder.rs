@@ -23,7 +23,7 @@ where
     F: for<'v> Fn(DiagnosticDeriveVariantBuilder, &VariantInfo<'v>) -> TokenStream,
 {
     let ast = structure.ast();
-    let span = ast.span().expect("invariant: derive input has a valid proc_macro span"); // tRust: unwrap -> expect
+    let span = ast.span().unwrap();
     match ast.data {
         syn::Data::Struct(..) | syn::Data::Enum(..) => (),
         syn::Data::Union(..) => {
@@ -33,7 +33,7 @@ where
 
     if matches!(ast.data, syn::Data::Enum(..)) {
         for attr in &ast.attrs {
-            span_err(attr.span().expect("invariant: attribute has a valid proc_macro span"), "unsupported type attribute for diagnostic derive enum") // tRust: unwrap -> expect
+            span_err(attr.span().unwrap(), "unsupported type attribute for diagnostic derive enum")
                 .emit();
         }
     }
@@ -44,7 +44,7 @@ where
             syn::Data::Struct(..) => span,
             // There isn't a good way to get the span of the variant, so the variant's
             // name will need to do.
-            _ => variant.ast().ident.span().expect("invariant: variant ident has a valid proc_macro span"), // tRust: unwrap -> expect
+            _ => variant.ast().ident.span().unwrap(),
         };
         let builder = DiagnosticDeriveVariantBuilder {
             span,
@@ -167,7 +167,7 @@ impl DiagnosticDeriveVariantBuilder {
             return Ok(quote! {});
         }
 
-        let name = attr.path().segments.last().expect("invariant: attribute path has at least one segment").ident.to_string(); // tRust: unwrap -> expect
+        let name = attr.path().segments.last().unwrap().ident.to_string();
         let name = name.as_str();
 
         if name == "diag" {
@@ -178,7 +178,7 @@ impl DiagnosticDeriveVariantBuilder {
                     let message = input.parse::<LitStr>()?;
                     if !message.suffix().is_empty() {
                         span_err(
-                            message.span().expect("invariant: parsed LitStr has a valid span"), // tRust: unwrap -> expect
+                            message.span().unwrap(),
                             "Inline message is not allowed to have a suffix",
                         )
                         .emit();
@@ -200,7 +200,7 @@ impl DiagnosticDeriveVariantBuilder {
                     let arg_name: Path = input.parse::<Path>()?;
                     if input.peek(Token![,]) {
                         span_err(
-                            arg_name.span().expect("invariant: parsed Path has a valid span"), // tRust: unwrap -> expect
+                            arg_name.span().unwrap(),
                             "diagnostic message must be the first argument",
                         )
                         .emit();
@@ -211,13 +211,13 @@ impl DiagnosticDeriveVariantBuilder {
                     let arg_value = input.parse::<syn::Expr>()?;
                     match arg_name.to_string().as_str() {
                         "code" => {
-                            self.code.set_once((), arg_name.span().expect("invariant: parsed ident has a valid span")); // tRust: unwrap -> expect
+                            self.code.set_once((), arg_name.span().unwrap());
                             tokens.extend(quote! {
                                 diag.code(#arg_value);
                             });
                         }
                         _ => {
-                            span_err(arg_name.span().expect("invariant: parsed ident has a valid span"), "unknown argument") // tRust: unwrap -> expect
+                            span_err(arg_name.span().unwrap(), "unknown argument")
                                 .note("only the `code` parameter is valid after the message")
                                 .emit();
                         }
@@ -255,7 +255,7 @@ impl DiagnosticDeriveVariantBuilder {
         field_binding.set_span(field.ty.span());
 
         let Some(ident) = field.ident.as_ref() else {
-            span_err(field.span().expect("invariant: field has a valid proc_macro span"), "tuple structs are not supported").emit(); // tRust: unwrap -> expect
+            span_err(field.span().unwrap(), "tuple structs are not supported").emit();
             return TokenStream::new();
         };
         let ident = format_ident!("{}", ident); // strip `r#` prefix, if present
@@ -288,10 +288,10 @@ impl DiagnosticDeriveVariantBuilder {
                     return quote! {};
                 }
 
-                let name = attr.path().segments.last().expect("invariant: attribute path has at least one segment").ident.to_string(); // tRust: unwrap -> expect
+                let name = attr.path().segments.last().unwrap().ident.to_string();
 
                 if name == "primary_span" && seen_label {
-                    span_err(attr.span().expect("invariant: attribute has a valid proc_macro span"), format!("`#[primary_span]` must be placed before labels, since it overwrites the span of the diagnostic")).emit(); // tRust: unwrap -> expect
+                    span_err(attr.span().unwrap(), format!("`#[primary_span]` must be placed before labels, since it overwrites the span of the diagnostic")).emit();
                 }
                 if name == "label" {
                     seen_label = true;
@@ -331,7 +331,7 @@ impl DiagnosticDeriveVariantBuilder {
         binding: TokenStream,
         variant: &VariantInfo<'_>,
     ) -> Result<TokenStream, DiagnosticDeriveError> {
-        let ident = &attr.path().segments.last().expect("invariant: attribute path has at least one segment").ident; // tRust: unwrap -> expect
+        let ident = &attr.path().segments.last().unwrap().ident;
         let name = ident.to_string();
         match (&attr.meta, name.as_str()) {
             // Don't need to do anything - by virtue of the attribute existing, the
@@ -470,7 +470,7 @@ impl DiagnosticDeriveVariantBuilder {
                 let mut applicability_idx = None;
 
                 fn type_err(span: &Span) -> Result<!, DiagnosticDeriveError> {
-                    span_err(span.expect("invariant: tuple element has a valid proc_macro span"), "wrong types for suggestion") // tRust: unwrap -> expect
+                    span_err(span.unwrap(), "wrong types for suggestion")
                         .help(
                             "`#[suggestion(...)]` on a tuple field must be applied to fields \
                              of type `(Span, Applicability)`",
@@ -481,9 +481,9 @@ impl DiagnosticDeriveVariantBuilder {
 
                 for (idx, elem) in tup.elems.iter().enumerate() {
                     if type_matches_path(elem, &["rustc_span", "Span"]) {
-                        span_idx.set_once(syn::Index::from(idx), elem.span().expect("invariant: tuple element has a valid proc_macro span")); // tRust: unwrap -> expect
+                        span_idx.set_once(syn::Index::from(idx), elem.span().unwrap());
                     } else if type_matches_path(elem, &["rustc_errors", "Applicability"]) {
-                        applicability_idx.set_once(syn::Index::from(idx), elem.span().expect("invariant: tuple element has a valid proc_macro span")); // tRust: unwrap -> expect
+                        applicability_idx.set_once(syn::Index::from(idx), elem.span().unwrap());
                     } else {
                         type_err(&elem.span())?;
                     }
@@ -502,7 +502,7 @@ impl DiagnosticDeriveVariantBuilder {
                 Ok((span, Some((applicability, applicability_span))))
             }
             // If `ty` isn't a `Span` or `(Span, Applicability)` then emit an error.
-            _ => throw_span_err!(info.span.expect("invariant: field info has a valid proc_macro span"), "wrong field type for suggestion", |diag| { // tRust: unwrap -> expect
+            _ => throw_span_err!(info.span.unwrap(), "wrong field type for suggestion", |diag| {
                 diag.help(
                     "`#[suggestion(...)]` should be applied to fields of type `Span` or \
                      `(Span, Applicability)`",

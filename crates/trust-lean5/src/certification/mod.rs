@@ -31,8 +31,6 @@ pub use generation::{
     classify_vc_for_certification, classify_vc_scope, generate_proof_term, qf_lia_axiom,
     qf_uf_axiom,
 };
-#[allow(unused_imports)]
-pub(crate) use generation::serialize_lean_proof_term;
 pub use pipeline::CertificationPipeline;
 pub use result::CertificationResult;
 pub use types::{ProofGeneration, ProofTheory};

@@ -68,11 +68,10 @@ impl<'tcx> TyCtxt<'tcx> {
         // When trying to evaluate constants containing inference variables,
         // use `Infcx::const_eval_resolve` instead.
         if ct.args.has_non_region_infer() {
-            // tRust: invariant: did not expect inference variables here
             bug!("did not expect inference variables here");
         }
 
-        // tRust: known issue — maybe have a separate version for resolving mir::UnevaluatedConst?
+        // FIXME: maybe have a separate version for resolving mir::UnevaluatedConst?
         match ty::Instance::try_resolve(self, typing_env, ct.def, ct.args) {
             Ok(Some(instance)) => {
                 let cid = GlobalId { instance, promoted: ct.promoted };
@@ -101,7 +100,6 @@ impl<'tcx> TyCtxt<'tcx> {
         // When trying to evaluate constants containing inference variables,
         // use `Infcx::const_eval_resolve` instead.
         if ct.args.has_non_region_infer() {
-            // tRust: invariant: did not expect inference variables here
             bug!("did not expect inference variables here");
         }
 

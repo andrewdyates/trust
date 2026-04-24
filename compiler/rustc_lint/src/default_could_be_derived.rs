@@ -75,7 +75,7 @@ impl<'tcx> LateLintPass<'tcx> for DefaultCouldBeDerived {
         let type_def_id = def.did();
         let body = cx.tcx.hir_body(body_id);
 
-        // tRust: known issue — evaluate bodies with statements and evaluate bindings to see if they would be
+        // FIXME: evaluate bodies with statements and evaluate bindings to see if they would be
         // derivable.
         let hir::ExprKind::Block(hir::Block { stmts: _, expr: Some(expr), .. }, None) =
             body.value.kind
@@ -173,7 +173,7 @@ impl<'a, 'b, 'hir, 'tcx> Diagnostic<'a, ()> for WrongDefaultImpl<'b, 'hir, 'tcx>
         // For each field in the struct expression
         //   - if the field in the type has a default value, it should be removed
         //   - elif the field is an expression that could be a default value, it should be used as the
-        //     field's default value (tRust: known issue — not done).
+        //     field's default value (FIXME: not done).
         //   - else, we wouldn't touch this field, it would remain in the manual impl
         let mut removed_all_fields = true;
         for field in fields {

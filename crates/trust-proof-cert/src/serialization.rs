@@ -7,9 +7,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::chain_verifier::ProofChain;
+use std::collections::BTreeMap;
+
 use crate::CertError;
-use trust_types::fx::FxHashMap;
+use crate::chain_verifier::ProofChain;
 
 /// Magic bytes for binary proof chain files.
 const CHAIN_MAGIC: &[u8; 4] = b"tRCH";
@@ -26,8 +27,9 @@ pub(crate) struct ProofChainEnvelope {
     pub format_version: u32,
     /// The proof chain data.
     pub chain: ProofChain,
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Optional metadata (e.g., build hash, toolchain version).
-    pub metadata: FxHashMap<String, String>,
+    pub metadata: BTreeMap<String, String>,
 }
 
 impl ProofChainEnvelope {
@@ -37,13 +39,16 @@ impl ProofChainEnvelope {
             format: "trust-proof-chain".to_string(),
             format_version: 1,
             chain,
-            metadata: FxHashMap::default(),
+            metadata: BTreeMap::new(),
         }
     }
+}
 
+#[cfg(test)]
+impl ProofChainEnvelope {
     /// Add metadata key-value pair.
     #[must_use]
-    pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
+    fn with_metadata(mut self, key: &str, value: &str) -> Self {
         self.metadata.insert(key.to_string(), value.to_string());
         self
     }
@@ -78,6 +83,7 @@ pub fn from_json(json: &str) -> Result<ProofChain, CertError> {
 }
 
 /// Serialize a ProofChain to compact JSON (no whitespace).
+#[cfg(test)]
 pub(crate) fn to_json_compact(chain: &ProofChain) -> Result<String, CertError> {
     let envelope = ProofChainEnvelope::new(chain.clone());
     serde_json::to_string(&envelope)
@@ -146,19 +152,25 @@ pub fn from_binary(bytes: &[u8]) -> Result<ProofChain, CertError> {
 // ---------------------------------------------------------------------------
 
 /// Save a ProofChain to a JSON file.
-pub(crate) fn save_json(chain: &ProofChain, path: impl AsRef<std::path::Path>) -> Result<(), CertError> {
+#[cfg(test)]
+pub(crate) fn save_json(
+    chain: &ProofChain,
+    path: impl AsRef<std::path::Path>,
+) -> Result<(), CertError> {
     let json = to_json(chain)?;
     std::fs::write(path, json)?;
     Ok(())
 }
 
 /// Load a ProofChain from a JSON file.
+#[cfg(test)]
 pub(crate) fn load_json(path: impl AsRef<std::path::Path>) -> Result<ProofChain, CertError> {
     let json = std::fs::read_to_string(path)?;
     from_json(&json)
 }
 
 /// Save a ProofChain to a binary file.
+#[cfg(test)]
 pub(crate) fn save_binary(
     chain: &ProofChain,
     path: impl AsRef<std::path::Path>,
@@ -169,6 +181,7 @@ pub(crate) fn save_binary(
 }
 
 /// Load a ProofChain from a binary file.
+#[cfg(test)]
 pub(crate) fn load_binary(path: impl AsRef<std::path::Path>) -> Result<ProofChain, CertError> {
     let bytes = std::fs::read(path)?;
     from_binary(&bytes)
@@ -193,10 +206,8 @@ mod tests {
 
     fn sample_vc(function: &str) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "test".to_string(),
-            },
-            function: function.to_string(),
+            kind: VcKind::Assertion { message: "test".to_string() },
+            function: function.into(),
             location: SourceSpan {
                 file: "src/lib.rs".to_string(),
                 line_start: 1,
@@ -321,17 +332,14 @@ mod tests {
             .with_metadata("toolchain", "nightly-2026-03-29");
 
         assert_eq!(envelope.metadata.get("build_hash"), Some(&"abc123".to_string()));
-        assert_eq!(
-            envelope.metadata.get("toolchain"),
-            Some(&"nightly-2026-03-29".to_string())
-        );
+        assert_eq!(envelope.metadata.get("toolchain"), Some(&"nightly-2026-03-29".to_string()));
     }
 
     #[test]
     fn test_file_json_roundtrip() {
         let chain = sample_chain();
-        let path = std::env::temp_dir()
-            .join(format!("trust-chain-json-{}.json", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("trust-chain-json-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
 
         save_json(&chain, &path).expect("save should succeed");
@@ -346,8 +354,7 @@ mod tests {
     #[test]
     fn test_file_binary_roundtrip() {
         let chain = sample_chain();
-        let path = std::env::temp_dir()
-            .join(format!("trust-chain-bin-{}.bin", std::process::id()));
+        let path = std::env::temp_dir().join(format!("trust-chain-bin-{}.bin", std::process::id()));
         let _ = std::fs::remove_file(&path);
 
         save_binary(&chain, &path).expect("save should succeed");
@@ -391,9 +398,6 @@ mod tests {
         // Both should produce equivalent chains
         assert_eq!(from_json_chain.name, from_bin_chain.name);
         assert_eq!(from_json_chain.len(), from_bin_chain.len());
-        assert_eq!(
-            from_json_chain.proven_functions(),
-            from_bin_chain.proven_functions()
-        );
+        assert_eq!(from_json_chain.proven_functions(), from_bin_chain.proven_functions());
     }
 }

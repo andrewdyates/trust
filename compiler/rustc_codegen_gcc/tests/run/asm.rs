@@ -34,13 +34,11 @@ pub unsafe fn mem_cpy(dst: *mut u8, src: *const u8, len: usize) {
 
 #[cfg(target_arch = "x86_64")]
 fn asm() {
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("nop");
     }
 
     let x: u64;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("mov $5, {}",
             out(reg) x,
@@ -51,7 +49,6 @@ fn asm() {
 
     let x: u64;
     let input: u64 = 42;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("mov {input}, {output}",
              "add $1, {output}",
@@ -63,7 +60,6 @@ fn asm() {
     assert_eq!(x, 43);
 
     let x: u64;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("mov {}, 6",
             out(reg) x,
@@ -73,7 +69,6 @@ fn asm() {
 
     let x: u64;
     let input: u64 = 42;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("mov {output}, {input}",
              "add {output}, 1",
@@ -85,7 +80,6 @@ fn asm() {
 
     // check inout(reg_class) x
     let mut x: u64 = 42;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("add {0}, {0}",
             inout(reg) x
@@ -95,7 +89,6 @@ fn asm() {
 
     // check inout("reg") x
     let mut x: u64 = 42;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("add r11, r11",
             inout("r11") x
@@ -111,7 +104,6 @@ fn asm() {
     let y: u64 = 100;
     let res: u64;
     let mut rem: u64 = 0;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("div r11",
             in("r11") y,
@@ -124,7 +116,6 @@ fn asm() {
 
     // check const
     let mut x: u64 = 42;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("add {}, {}",
             inout(reg) x,
@@ -135,7 +126,6 @@ fn asm() {
 
     // check const (ATT syntax)
     let mut x: u64 = 42;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("add ${}, {}",
             const 1,
@@ -150,7 +140,6 @@ fn asm() {
         42
     }
     let x: u64;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("call {}", sym foo, lateout("rax") x);
     }
@@ -158,7 +147,6 @@ fn asm() {
 
     // check sym fn (ATT syntax)
     let x: u64;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("call {}", sym foo, lateout("rax") x, options(att_syntax));
     }
@@ -167,7 +155,6 @@ fn asm() {
     // check sym static
     static FOO: u64 = 42;
     let x: u64;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("mov {1}, qword ptr [rip + {0}]", sym FOO, lateout(reg) x);
     }
@@ -175,19 +162,15 @@ fn asm() {
 
     // check sym static (ATT syntax)
     let x: u64;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!("movq {0}(%rip), {1}", sym FOO, lateout(reg) x, options(att_syntax));
     }
     assert_eq!(x, 42);
 
-    // SAFETY: `add_asm` is a valid unsafe function that performs inline addition via asm.
     assert_eq!(unsafe { add_asm(40, 2) }, 42);
 
     let array1 = [1u8, 2, 3];
     let mut array2 = [0u8, 0, 0];
-    // SAFETY: `mem_cpy` copies `3` bytes from `array1` to `array2`; both pointers are
-    // valid, aligned, and the buffers are large enough and do not overlap.
     unsafe {
         mem_cpy(array2.as_mut_ptr(), array1.as_ptr(), 3);
     }
@@ -197,7 +180,6 @@ fn asm() {
     // output place (indicated by the `_`) is not added to the list of clobbered registers
     let x = 8;
     let y: i32;
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         asm!(
             "mov rax, rdi",
@@ -214,7 +196,6 @@ fn asm() {
     {
         let x = 16;
         let y: i32;
-        // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
         unsafe {
             asm!(
                 "mov rax, rdi",
@@ -228,7 +209,6 @@ fn asm() {
 
     // the `b` suffix for registers in the `reg_byte` register class is not supported in GCC
     // and needs to be stripped in order to use these registers.
-    // SAFETY: inline assembly block with well-defined inputs/outputs; no memory safety invariants are violated.
     unsafe {
         core::arch::asm!(
             "",

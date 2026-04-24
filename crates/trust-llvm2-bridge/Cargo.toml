@@ -11,7 +11,18 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+z4-proofs = []
+transval = []
+transval-full = []
+
 [dependencies]
 trust-types = { workspace = true }
 llvm2-lower = { workspace = true }
+llvm2-codegen = { git = "https://github.com/andrewdyates/LLVM2", default-features = false }
 thiserror = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -688,7 +688,7 @@ impl CStore {
                 }
                 LoadResult::Loaded(library) => library,
             };
-            Ok(Some((target_result.expect("invariant: target proc macro loaded successfully"), Some(host_result)))) // tRust: unwrap→expect
+            Ok(Some((target_result.unwrap(), Some(host_result))))
         } else {
             // Use a new crate locator and crate rejections so trying to load a proc macro doesn't
             // affect the error message we emit
@@ -912,8 +912,6 @@ impl CStore {
         let sym_name = sess.generate_proc_macro_decls_symbol(stable_crate_id);
         debug!("trying to dlsym proc_macros {} for symbol `{}`", path.display(), sym_name);
 
-        // SAFETY: The symbol name is a valid C string, and the loaded
-        // function pointer has the expected signature and ABI.
         unsafe {
             let result = load_symbol_from_dylib::<*const &[ProcMacro]>(path, &sym_name);
             match result {
@@ -1381,14 +1379,10 @@ fn attempt_load_dylib(path: &Path) -> Result<libloading::Library, libloading::Er
 
         // On AIX, we need RTLD_MEMBER to dlopen an archived shared
         let flags = libc::RTLD_LAZY | libc::RTLD_LOCAL | libc::RTLD_MEMBER;
-        // SAFETY: The symbol name is a valid C string, and the loaded
-        // function pointer has the expected signature and ABI.
         return unsafe { libloading::os::unix::Library::open(Some(&new_path), flags) }
             .map(|lib| lib.into());
     }
 
-    // SAFETY: The symbol name is a valid C string, and the loaded
-    // function pointer has the expected signature and ABI.
     unsafe { libloading::Library::new(&path) }
 }
 
@@ -1436,7 +1430,7 @@ fn load_dylib(path: &Path, max_attempts: usize) -> Result<libloading::Library, S
 
     debug!("Failed to load proc-macro `{}` even after {} attempts.", path.display(), max_attempts);
 
-    let last_error = last_error.expect("invariant: at least one error recorded during proc-macro loading"); // tRust: unwrap→expect
+    let last_error = last_error.unwrap();
     let message = if let Some(src) = last_error.source() {
         format!("{} ({src}) (retried {max_attempts} times)", format_dlopen_err(&last_error))
     } else {
@@ -1464,19 +1458,15 @@ pub unsafe fn load_symbol_from_dylib<T: Copy>(
     sym_name: &str,
 ) -> Result<T, DylibError> {
     // Make sure the path contains a / or the linker will search for it.
-    let path = try_canonicalize(path).expect("invariant: dylib path should be canonicalizable"); // tRust: unwrap→expect
+    let path = try_canonicalize(path).unwrap();
     let lib =
         load_dylib(&path, 5).map_err(|err| DylibError::DlOpen(path.display().to_string(), err))?;
 
-    // SAFETY: The invariants required by this unsafe operation are
-    // upheld by the caller's contract and preceding checks.
     let sym = unsafe { lib.get::<T>(sym_name.as_bytes()) }
         .map_err(|err| DylibError::DlSym(path.display().to_string(), format_dlopen_err(&err)))?;
 
     // Intentionally leak the dynamic library. We can't ever unload it
     // since the library can make things that will live arbitrarily long.
-    // SAFETY: The invariants required by this unsafe operation are
-    // upheld by the caller's contract and preceding checks.
     let sym = unsafe { sym.into_raw() };
     std::mem::forget(lib);
 

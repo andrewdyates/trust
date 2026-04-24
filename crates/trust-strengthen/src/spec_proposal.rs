@@ -8,8 +8,9 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::proposer::ProposalKind;
 use std::fmt;
+
+use crate::proposer::ProposalKind;
 
 /// The kind of specification being proposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,15 +90,9 @@ impl SpecProposal {
         iteration: usize,
     ) -> Option<Self> {
         let (spec_kind, spec_body) = match kind {
-            ProposalKind::AddPrecondition { spec_body } => {
-                (SpecKind::Requires, spec_body.clone())
-            }
-            ProposalKind::AddPostcondition { spec_body } => {
-                (SpecKind::Ensures, spec_body.clone())
-            }
-            ProposalKind::AddInvariant { spec_body } => {
-                (SpecKind::Invariant, spec_body.clone())
-            }
+            ProposalKind::AddPrecondition { spec_body } => (SpecKind::Requires, spec_body.clone()),
+            ProposalKind::AddPostcondition { spec_body } => (SpecKind::Ensures, spec_body.clone()),
+            ProposalKind::AddInvariant { spec_body } => (SpecKind::Invariant, spec_body.clone()),
             // SafeArithmetic, AddBoundsCheck, AddNonZeroCheck are code changes, not specs
             _ => return None,
         };
@@ -131,17 +126,12 @@ pub fn validate_spec(
 
     // Check that "result" is only used in ensures clauses
     if body.contains("result") && proposal.kind != SpecKind::Ensures {
-        errors.push(format!(
-            "\"result\" used in {} clause (only valid in ensures)",
-            proposal.kind
-        ));
+        errors.push(format!("\"result\" used in {} clause (only valid in ensures)", proposal.kind));
     }
 
     // Check that ensures clauses for void functions don't reference result
     if proposal.kind == SpecKind::Ensures && return_type.is_none() && body.contains("result") {
-        errors.push(
-            "\"result\" used in ensures clause but function returns ()".to_string(),
-        );
+        errors.push("\"result\" used in ensures clause but function returns ()".to_string());
     }
 
     // Check for obviously malformed expressions
@@ -173,20 +163,19 @@ pub fn validate_spec(
         let known: Vec<&str> = param_names.iter().map(|s| s.as_str()).collect();
         // Keywords and common names that are not parameters
         let builtins = [
-            "result", "self", "true", "false", "len", "MAX", "MIN", "usize",
-            "u8", "u16", "u32", "u64", "u128", "isize", "i8", "i16", "i32",
-            "i64", "i128", "f32", "f64", "bool", "old", "forall", "exists",
+            "result", "self", "true", "false", "len", "MAX", "MIN", "usize", "u8", "u16", "u32",
+            "u64", "u128", "isize", "i8", "i16", "i32", "i64", "i128", "f32", "f64", "bool", "old",
+            "forall", "exists",
         ];
         for token in &tokens {
             if !known.contains(&token.as_str())
                 && !builtins.contains(&token.as_str())
                 && !token.contains("::")
-                && token.len() > 1  // skip single-char tokens like operators
+                && token.len() > 1
+            // skip single-char tokens like operators
             {
                 // This is a soft warning, not a hard error
-                errors.push(format!(
-                    "identifier \"{token}\" not found in function parameters"
-                ));
+                errors.push(format!("identifier \"{token}\" not found in function parameters"));
             }
         }
     }
@@ -225,10 +214,7 @@ pub fn format_suggestions(proposals: &[SpecProposal]) -> String {
     }
 
     let mut lines = Vec::new();
-    let fn_name = proposals
-        .first()
-        .map(|p| p.function_name.as_str())
-        .unwrap_or("unknown");
+    let fn_name = proposals.first().map(|p| p.function_name.as_str()).unwrap_or("unknown");
 
     lines.push(format!("// === Suggested specs for `{fn_name}` ==="));
     for proposal in proposals {
@@ -291,10 +277,7 @@ mod tests {
     #[test]
     fn test_to_attribute_ensures() {
         let p = make_ensures("result >= a && result >= b", 0.8);
-        assert_eq!(
-            p.to_attribute(),
-            "#[ensures(\"result >= a && result >= b\")]"
-        );
+        assert_eq!(p.to_attribute(), "#[ensures(\"result >= a && result >= b\")]");
     }
 
     #[test]
@@ -329,17 +312,8 @@ mod tests {
 
     #[test]
     fn test_from_precondition_kind() {
-        let kind = ProposalKind::AddPrecondition {
-            spec_body: "x != 0".into(),
-        };
-        let p = SpecProposal::from_proposal_kind(
-            &kind,
-            "test::f",
-            "f",
-            0.9,
-            "div guard",
-            3,
-        );
+        let kind = ProposalKind::AddPrecondition { spec_body: "x != 0".into() };
+        let p = SpecProposal::from_proposal_kind(&kind, "test::f", "f", 0.9, "div guard", 3);
         assert!(p.is_some());
         let p = p.unwrap();
         assert_eq!(p.kind, SpecKind::Requires);
@@ -349,9 +323,7 @@ mod tests {
 
     #[test]
     fn test_from_postcondition_kind() {
-        let kind = ProposalKind::AddPostcondition {
-            spec_body: "result > 0".into(),
-        };
+        let kind = ProposalKind::AddPostcondition { spec_body: "result > 0".into() };
         let p = SpecProposal::from_proposal_kind(&kind, "test::f", "f", 0.8, "positive", 1);
         assert!(p.is_some());
         assert_eq!(p.unwrap().kind, SpecKind::Ensures);
@@ -359,9 +331,7 @@ mod tests {
 
     #[test]
     fn test_from_invariant_kind() {
-        let kind = ProposalKind::AddInvariant {
-            spec_body: "i < len".into(),
-        };
+        let kind = ProposalKind::AddInvariant { spec_body: "i < len".into() };
         let p = SpecProposal::from_proposal_kind(&kind, "test::f", "f", 0.7, "bound", 1);
         assert!(p.is_some());
         assert_eq!(p.unwrap().kind, SpecKind::Invariant);
@@ -390,10 +360,7 @@ mod tests {
     fn test_validate_result_in_requires_is_error() {
         let p = make_requires("result > 0", 0.9);
         let errors = validate_spec(&p, &["x".into()], Some("i32"));
-        assert!(
-            errors.iter().any(|e| e.contains("result")),
-            "should flag result in requires"
-        );
+        assert!(errors.iter().any(|e| e.contains("result")), "should flag result in requires");
     }
 
     #[test]
@@ -487,10 +454,7 @@ mod tests {
 
     #[test]
     fn test_format_suggestions_multiple() {
-        let proposals = vec![
-            make_requires("a > 0", 0.9),
-            make_ensures("result > 0", 0.8),
-        ];
+        let proposals = vec![make_requires("a > 0", 0.9), make_ensures("result > 0", 0.8)];
         let text = format_suggestions(&proposals);
         assert!(text.contains("Suggested specs for `func`"));
         assert!(text.contains("#[requires(\"a > 0\")]"));

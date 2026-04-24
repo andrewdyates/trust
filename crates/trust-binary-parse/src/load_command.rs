@@ -7,7 +7,7 @@
 
 use crate::constants::*;
 use crate::error::ParseError;
-use crate::read::{read_fixed_name, Cursor};
+use crate::read::{Cursor, read_fixed_name};
 
 /// A parsed Mach-O load command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,10 +44,7 @@ pub enum LoadCommand<'a> {
     /// LC_ENCRYPTION_INFO_64.
     EncryptionInfo64(EncryptionInfoCommand),
     /// Unknown or unhandled load command.
-    Unknown {
-        cmd: u32,
-        data: &'a [u8],
-    },
+    Unknown { cmd: u32, data: &'a [u8] },
 }
 
 /// LC_SEGMENT_64 command.
@@ -114,8 +111,7 @@ impl Section64<'_> {
     /// Whether this section contains executable instructions.
     #[must_use]
     pub fn is_executable(&self) -> bool {
-        (self.flags & S_ATTR_PURE_INSTRUCTIONS) != 0
-            || (self.flags & S_ATTR_SOME_INSTRUCTIONS) != 0
+        (self.flags & S_ATTR_PURE_INSTRUCTIONS) != 0 || (self.flags & S_ATTR_SOME_INSTRUCTIONS) != 0
     }
 }
 
@@ -278,8 +274,11 @@ fn parse_single_command<'a>(
         LC_UUID => parse_uuid(cmd_data),
         LC_MAIN => parse_entry_point(cmd_data, swap),
         LC_BUILD_VERSION => parse_build_version(cmd_data, swap),
-        LC_CODE_SIGNATURE | LC_FUNCTION_STARTS | LC_DATA_IN_CODE
-        | LC_SEGMENT_SPLIT_INFO | LC_LINKER_OPTIMIZATION_HINT
+        LC_CODE_SIGNATURE
+        | LC_FUNCTION_STARTS
+        | LC_DATA_IN_CODE
+        | LC_SEGMENT_SPLIT_INFO
+        | LC_LINKER_OPTIMIZATION_HINT
         | LC_DYLIB_CODE_SIGN_DRS => parse_linkedit_data(cmd, cmd_data, swap),
         LC_SOURCE_VERSION => parse_source_version(cmd_data, swap),
         LC_RPATH => parse_rpath(cmd_data, cmdsize, swap),
@@ -341,11 +340,7 @@ fn parse_segment_64<'a>(
                 &file_data[start..end]
             } else {
                 // Section data extends past file — take what we can.
-                if start < file_data.len() {
-                    &file_data[start..]
-                } else {
-                    &[] as &[u8]
-                }
+                if start < file_data.len() { &file_data[start..] } else { &[] as &[u8] }
             }
         };
 
@@ -431,10 +426,7 @@ fn parse_dylib(
         let end = name_bytes.iter().position(|&b| b == 0).unwrap_or(name_bytes.len());
         String::from_utf8_lossy(&name_bytes[..end]).into_owned()
     } else {
-        return Err(ParseError::StringOffsetOutOfBounds {
-            offset: name_offset,
-            cmd_size: cmdsize,
-        });
+        return Err(ParseError::StringOffsetOutOfBounds { offset: name_offset, cmd_size: cmdsize });
     };
 
     Ok(LoadCommand::Dylib(DylibCommand {
@@ -476,18 +468,10 @@ fn parse_build_version(cmd_data: &[u8], swap: bool) -> Result<LoadCommand<'_>, P
 
     let mut tools = Vec::with_capacity(ntools as usize);
     for _ in 0..ntools {
-        tools.push(BuildToolVersion {
-            tool: c.read_u32()?,
-            version: c.read_u32()?,
-        });
+        tools.push(BuildToolVersion { tool: c.read_u32()?, version: c.read_u32()? });
     }
 
-    Ok(LoadCommand::BuildVersion(BuildVersionCommand {
-        platform,
-        minos,
-        sdk,
-        tools,
-    }))
+    Ok(LoadCommand::BuildVersion(BuildVersionCommand { platform, minos, sdk, tools }))
 }
 
 fn parse_linkedit_data_inner(
@@ -496,11 +480,7 @@ fn parse_linkedit_data_inner(
     swap: bool,
 ) -> Result<LinkeditDataCommand, ParseError> {
     let mut c = Cursor::new(cmd_data, 8, swap);
-    Ok(LinkeditDataCommand {
-        cmd,
-        dataoff: c.read_u32()?,
-        datasize: c.read_u32()?,
-    })
+    Ok(LinkeditDataCommand { cmd, dataoff: c.read_u32()?, datasize: c.read_u32()? })
 }
 
 fn parse_linkedit_data(
@@ -508,9 +488,7 @@ fn parse_linkedit_data(
     cmd_data: &[u8],
     swap: bool,
 ) -> Result<LoadCommand<'_>, ParseError> {
-    Ok(LoadCommand::LinkeditData(parse_linkedit_data_inner(
-        cmd, cmd_data, swap,
-    )?))
+    Ok(LoadCommand::LinkeditData(parse_linkedit_data_inner(cmd, cmd_data, swap)?))
 }
 
 fn parse_source_version(cmd_data: &[u8], swap: bool) -> Result<LoadCommand<'_>, ParseError> {
@@ -522,16 +500,11 @@ fn parse_rpath(cmd_data: &[u8], cmdsize: u32, swap: bool) -> Result<LoadCommand<
     let mut c = Cursor::new(cmd_data, 8, swap);
     let path_offset = c.read_u32()?;
     if (path_offset as usize) >= cmd_data.len() {
-        return Err(ParseError::StringOffsetOutOfBounds {
-            offset: path_offset,
-            cmd_size: cmdsize,
-        });
+        return Err(ParseError::StringOffsetOutOfBounds { offset: path_offset, cmd_size: cmdsize });
     }
     let path_bytes = &cmd_data[path_offset as usize..];
     let end = path_bytes.iter().position(|&b| b == 0).unwrap_or(path_bytes.len());
-    Ok(LoadCommand::Rpath(
-        String::from_utf8_lossy(&path_bytes[..end]).into_owned(),
-    ))
+    Ok(LoadCommand::Rpath(String::from_utf8_lossy(&path_bytes[..end]).into_owned()))
 }
 
 fn parse_dyld_info(cmd_data: &[u8], swap: bool) -> Result<LoadCommand<'_>, ParseError> {
@@ -558,16 +531,11 @@ fn parse_dylinker(
     let mut c = Cursor::new(cmd_data, 8, swap);
     let name_offset = c.read_u32()?;
     if (name_offset as usize) >= cmd_data.len() {
-        return Err(ParseError::StringOffsetOutOfBounds {
-            offset: name_offset,
-            cmd_size: cmdsize,
-        });
+        return Err(ParseError::StringOffsetOutOfBounds { offset: name_offset, cmd_size: cmdsize });
     }
     let name_bytes = &cmd_data[name_offset as usize..];
     let end = name_bytes.iter().position(|&b| b == 0).unwrap_or(name_bytes.len());
-    Ok(LoadCommand::Dylinker(
-        String::from_utf8_lossy(&name_bytes[..end]).into_owned(),
-    ))
+    Ok(LoadCommand::Dylinker(String::from_utf8_lossy(&name_bytes[..end]).into_owned()))
 }
 
 fn parse_encryption_info(cmd_data: &[u8], swap: bool) -> Result<LoadCommand<'_>, ParseError> {
@@ -582,6 +550,7 @@ fn parse_encryption_info(cmd_data: &[u8], swap: bool) -> Result<LoadCommand<'_>,
 
 /// Human-readable name for a load command type.
 #[must_use]
+#[cfg(test)]
 pub fn load_command_name(cmd: u32) -> &'static str {
     match cmd {
         LC_SEGMENT_64 => "LC_SEGMENT_64",

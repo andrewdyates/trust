@@ -296,7 +296,7 @@ fn doc_comment_from_desc(list: &Punctuated<Expr, token::Comma>) -> Result<Attrib
         _ => return Err(Error::new(list.span(), "Expected a string literal")),
     };
     let mut fmt_fragments = format_str.split("{}");
-    let mut doc_string = fmt_fragments.next().expect("invariant: split always yields at least one fragment").to_string(); // tRust: unwrap -> expect
+    let mut doc_string = fmt_fragments.next().unwrap().to_string();
     iter.map(::quote::ToTokens::to_token_stream).zip(fmt_fragments).for_each(
         |(tts, next_fmt_fragment)| {
             use ::core::fmt::Write;
@@ -306,7 +306,7 @@ fn doc_comment_from_desc(list: &Punctuated<Expr, token::Comma>) -> Result<Attrib
                 tts.to_string().replace(" . ", "."),
                 next_fmt_fragment,
             )
-            .expect("invariant: write! to String never fails"); // tRust: unwrap -> expect
+            .unwrap();
         },
     );
     let doc_string = format!("[query description - consider adding a doc-comment!] {doc_string}");
@@ -525,7 +525,7 @@ pub(super) fn rustc_queries(input: TokenStream) -> TokenStream {
             #description_fns_stream
         }
 
-        // tRust: known issue (Zalathar) — Instead of declaring these functions directly, can
+        // FIXME(Zalathar): Instead of declaring these functions directly, can
         // we put them in a macro and then expand that macro downstream in
         // `rustc_query_impl`, where the functions are actually used?
         pub mod _cache_on_disk_if_fns {

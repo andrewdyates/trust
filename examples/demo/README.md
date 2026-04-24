@@ -1,8 +1,9 @@
-# tRust Demo: Catching Bugs and Proving Safety
+# tRust Demo: Catching Bugs and Tracking Proof Progress
 
 This demo walks through tRust's core verification capabilities in six steps.
 It shows how tRust catches real bugs with counterexamples, proves fixed code
-safe, verifies its own source code, and generates proof reports.
+safe, runs standalone self-analysis over one tRust crate, and generates proof
+reports.
 
 **Time:** ~5 minutes
 **Prerequisites:** Build tRust (`./x.py build compiler library`) or use `--standalone` mode.
@@ -84,7 +85,7 @@ fn binary_search(arr: &[i32], target: i32) -> Option<usize> {
 }
 ```
 
-## Step 4: tRust Proves It Safe
+## Step 4: tRust Re-checks the Fixed Program
 
 Run tRust on the fixed program:
 
@@ -92,32 +93,49 @@ Run tRust on the fixed program:
 cargo trust check examples/demo/safe_binary_search.rs
 ```
 
-Output:
+On the current checked toolchain, this example is still a frontier case rather
+than a clean PASS example. The fixed source removes the obvious bugs, but the
+prover still leaves open obligations in this binary-search workflow.
+
+That makes the file useful for:
+
+- exercising a realistic before/after case study
+- generating proof reports
+- tracking future improvements in the prover frontier
+
+If you want a small example that currently passes end to end, start with one of:
+
+- `../verify_div_zero_safe.rs`
+- `../verify_cast_overflow_safe.rs`
+- `../verify_postcondition_safe.rs`
+
+Representative output:
 
 ```
-note: tRust [overflow:sub]: arithmetic overflow (Sub) -- PROVED (z4-smtlib, 8ms)
-note: tRust [overflow:add]: arithmetic overflow (Add) -- PROVED (z4-smtlib, 5ms)
-note: tRust [bounds]: index out of bounds        -- PROVED (z4-smtlib, 12ms)
+note: tRust [overflow:add]: arithmetic overflow (Add) -- FAILED (z4-smtlib, 0ms)
+note: tRust [overflow:sub]: arithmetic overflow (Sub) -- FAILED (z4-smtlib, 0ms)
+note: tRust [slice]: slice bounds check -- RUNTIME-CHECKED (z4-incremental, 0ms)
 
 === tRust Verification Report ===
-Summary: 3 proved, 0 failed, 0 unknown (3 total)
-Result: PASS
+Summary: 0 proved, 7 failed, 2 runtime-checked, 0 inconclusive (9 total)
+Result: FAIL
 ```
 
-Every verification condition is discharged. z4 has mathematically proven that
-no input can trigger overflow, underflow, or out-of-bounds access.
+This is a good example of the distinction between “source fixed” and “currently
+proved by the checked toolchain”.
 
-## Step 5: Self-Verification
+## Step 5: Standalone Self-Analysis
 
-tRust verifies its own source code. Run standalone analysis on the trust-types
+tRust can analyze one of its own crates. Run standalone analysis on the trust-types
 crate (the core type definitions used throughout the verification pipeline):
 
 ```bash
 cargo trust check --standalone -p trust-types
 ```
 
-This demonstrates self-hosting: the verification tool analyzing its own
-implementation for correctness.
+This demonstrates that tRust can analyze one of its own crates with the public
+standalone workflow. It is useful as a self-hosting smoke test, but it is not a
+whole-crate semantic proof of tRust itself.
 
 ## Step 6: Proof Report
 
@@ -134,6 +152,9 @@ This writes three files to `examples/demo/report/`:
 - `report.ndjson` -- newline-delimited JSON for streaming/CI integration
 
 Open `report.html` in a browser to see the proof dashboard.
+
+`--report-dir` is part of the compiler-backed workflow. Standalone mode is
+source analysis and does not currently emit the same artifact set.
 
 ---
 

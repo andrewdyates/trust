@@ -31,7 +31,7 @@ impl Target {
             options: Default::default(),
         };
 
-        // tRust: known issue — This doesn't properly validate anything and just ignores the data if it's invalid.
+        // FIXME: This doesn't properly validate anything and just ignores the data if it's invalid.
         // That's okay for now, the only use of this is when generating docs, which we don't do for
         // custom targets.
         if let Some(metadata) = json.metadata {
@@ -226,10 +226,10 @@ impl Target {
         forward!(supports_xray);
 
         // we're going to run `update_from_cli`, but that won't change the target's AbiMap
-        // tRust: known issue — better factor the Target definition so we enforce this on a type level
+        // FIXME: better factor the Target definition so we enforce this on a type level
         let abi_map = AbiMap::from_target(&base);
         if let Some(entry_abi) = json.entry_abi {
-            base.options.entry_abi = abi_map.canonize_abi(entry_abi.0, false).expect("invariant: entry ABI from JSON is canonizable"); // tRust: unwrap -> expect
+            base.options.entry_abi = abi_map.canonize_abi(entry_abi.0, false).unwrap();
         }
 
         base.update_from_cli();

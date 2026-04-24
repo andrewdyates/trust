@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-lean5: Certificate pipeline for lean5 proof verification
 //!
 //! Bridges tRust verification conditions to lean5 proof certificates.
@@ -23,11 +23,11 @@ pub(crate) mod logic_classification;
 pub(crate) mod obligation;
 pub(crate) mod proof_transfer;
 // tRust #611: Bridge composition DAG to lean5 proof transfer (similarity search)
-pub(crate) mod transfer_bridge;
 pub(crate) mod reconstruction;
 pub(crate) mod replay;
 pub(crate) mod tactic_gen;
 pub(crate) mod tactics;
+pub(crate) mod transfer_bridge;
 pub(crate) mod v1_reuse;
 pub(crate) mod z4_proof_bridge;
 
@@ -57,17 +57,17 @@ pub use logic_classification::{
     degradation_strategy, is_certifiable, scope_from_logic,
 };
 // tRust: Integration bridge — connects lean5 pipeline to trust-proof-cert
-pub use integration::{CertificationBridge, PipelineOutput};
 pub use error::CertificateError;
 pub use fingerprint::{Fingerprint, compute_vc_fingerprint};
+pub use integration::{CertificationBridge, PipelineOutput};
 pub use lean5_bridge::{
     deserialize_proof_cert, serialize_proof_cert, translate_formula, translate_vc_to_lean5_theorem,
     verify_proof_cert,
 };
 // tRust: Proof reconstruction from solver certificates
 pub use reconstruction::{
-    LeanProofTerm, ProofReconstructor, ProofStep, ReconstructionError, SolverProof,
-    reconstruct, validate_reconstruction,
+    LeanProofTerm, ProofReconstructor, ProofStep, ReconstructionError, SolverProof, reconstruct,
+    validate_reconstruction,
 };
 // tRust: Automated tactic generation from VC structure (#279)
 pub use tactic_gen::{
@@ -87,8 +87,8 @@ pub use replay::{
 };
 // tRust: Proof transfer between lemmas (#309)
 pub use proof_transfer::{
-    Adaptation, LemmaSignature, TransferCandidate, TransferResult,
-    adapt_proof, find_transferable, similarity_score,
+    Adaptation, LemmaSignature, TransferCandidate, TransferResult, adapt_proof, find_transferable,
+    similarity_score,
 };
 // tRust: Lean5 proof transfer integration with composition DAG (#611)
 pub use composition_transfer::{
@@ -106,12 +106,10 @@ pub use obligation::{
 };
 // tRust: Lean5 kernel proof checking interface (#328)
 pub use kernel_check::{
-    ContextEntry, KernelContext, KernelQuery, KernelResult, ProofTerm,
-    check_proof, infer_type, is_definitionally_equal, substitute,
+    ContextEntry, KernelContext, KernelQuery, KernelResult, ProofTerm, check_proof, infer_type,
+    is_definitionally_equal, substitute,
 };
 // tRust: Z4 proof bridge — translates z4 proof certificates to SolverProof (#429)
 pub use z4_proof_bridge::translate_z4_proof;
 // tRust: v1 lean5 proof reuse — indexes and matches v1 theorems (#450)
-pub use v1_reuse::{
-    LoweringError, TheoremCategory, TheoremLibrary, V1Theorem, lower_proof_term,
-};
+pub use v1_reuse::{LoweringError, TheoremCategory, TheoremLibrary, V1Theorem, lower_proof_term};

@@ -1,35 +1,24 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-proof-cert: Machine-checkable proof certificates for tRust
 //!
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-pub(crate) mod audit;
-pub(crate) mod audit_log;
-pub(crate) mod bundle;
 pub(crate) mod cert;
 // tRust #689: Ed25519 cryptographic signing for proof certificates.
 pub(crate) mod signing;
 // tRust #435: Derive ProofEvidence from solver proof certificates.
-pub(crate) mod evidence;
 pub(crate) mod cert_chain_dag;
-pub(crate) mod cert_serialize;
 pub mod chain;
-pub(crate) mod chain_checker;
 pub(crate) mod chain_verifier;
-pub(crate) mod chain_verify;
 pub mod composition;
-pub(crate) mod content_store;
 pub(crate) mod dep_graph;
-pub(crate) mod formula_norm;
-pub(crate) mod smt_equivalence;
-pub(crate) mod dependency_tracker;
-pub(crate) mod dep_invalidation;
 pub(crate) mod error;
-pub(crate) mod format;
+pub(crate) mod evidence;
+pub(crate) mod formula_norm;
+// tRust #830: ProofBundle format with assumptions, environment capture, and assurance tiers.
 pub(crate) mod generate;
-pub(crate) mod integrity;
-pub(crate) mod proof_compression;
+pub mod proof_bundle;
 pub(crate) mod proof_replay;
 pub(crate) mod registry;
 pub mod serialization;
@@ -39,67 +28,94 @@ pub(crate) mod verifier;
 pub mod z4_certificate;
 
 pub use cert::*;
+pub use cert_chain_dag::{
+    ARCHIVE_FORMAT_VERSION, CertificateArchive, CertificateDependencyDag, CertificateStoreLookups,
+    DAG_FORMAT_VERSION, DagVerificationResult, verify_cert_chain,
+};
 pub use chain::*;
 pub use chain_verifier::{
-    is_chain_complete, verify_proof_chain, ChainGap, ChainVerificationResult, ProofChain,
-    PROOF_CHAIN_VERSION,
+    ChainGap, ChainVerificationResult, PROOF_CHAIN_VERSION, ProofChain, is_chain_complete,
+    verify_proof_chain,
 };
 pub use composition::{
-    check_composability, compose_proofs, generate_manifest, modular_composition,
-    modular_composition_with_deps, strengthening_check, transitive_closure, verify_composition,
-    weakening, ChangeKind, ComposabilityResult, ComposedProof, CompositionError,
-    CompositionManifest, CompositionNodeStatus, CompositionVerification, FunctionSpec,
-    FunctionStrength, IncrementalComposition, ManifestEntry, ManifestError, Property,
-    ProofComposition,
-    // tRust #793: Portfolio certificate composition types.
-    compose_certificates, make_component, CertificateComponent, ComposedCertificate,
+    CertificateComponent,
+    ChangeKind,
+    ComposabilityResult,
+    ComposedCertificate,
+    ComposedProof,
+    CompositionError,
+    CompositionManifest,
     CompositionMethod,
+    CompositionNodeStatus,
+    CompositionVerification,
+    FunctionSpec,
+    FunctionStrength,
+    IncrementalComposition,
+    ManifestEntry,
+    ManifestError,
+    ProofComposition,
+    Property,
+    check_composability,
+    // tRust #793: Portfolio certificate composition types.
+    compose_certificates,
+    compose_proofs,
+    generate_manifest,
+    make_component,
+    modular_composition,
+    modular_composition_with_deps,
+    strengthening_check,
+    transitive_closure,
+    verify_composition,
+    weakening,
 };
 pub use dep_graph::{DepGraph, DepGraphAnalysis, DepNode, StronglyConnectedComponent};
-pub use formula_norm::{
-    formula_subsumes, normalize, normalized_equal, PropertyKind, SemanticProperty,
-};
 pub use error::*;
+pub use evidence::evidence_from_certificate;
+pub use formula_norm::{
+    PropertyKind, SemanticProperty, formula_subsumes, normalize, normalized_equal,
+};
 pub use generate::{
-    generate_certificate, generate_certificate_with_env, verify_certificate_integrity,
-    Assumptions, Environment, GeneratedCertificate, VcProofEntry,
-};
-pub use registry::{
-    CertificateRegistry, GcPolicy, RegistryId, RegistrySnapshot, RegistryStats, Revocation,
-    RevocationReason,
-};
-pub use store::*;
-pub use verifier::{
-    verify_certificate, verify_certificate_detailed, verify_chain, CertificateVerifier,
-    VerificationReport,
-};
-pub use cert_chain_dag::{
-    verify_cert_chain, CertificateArchive, CertificateDependencyDag, CertificateStoreLookups,
-    DagVerificationResult, ARCHIVE_FORMAT_VERSION, DAG_FORMAT_VERSION,
+    Assumptions, Environment, GeneratedCertificate, VcProofEntry, generate_certificate,
+    generate_certificate_with_env, verify_certificate_integrity,
 };
 pub use proof_replay::{
     ProofStep as ReplayProofStep, ReplayAuditEntry, ReplayAuditLog, ReplayConfig, ReplayEngine,
     ReplayError, ReplayErrorKind, ReplayResult, StepKind, StepVerdict,
 };
-pub use evidence::evidence_from_certificate;
+pub use registry::{
+    CertificateRegistry, GcPolicy, RegistryId, RegistrySnapshot, RegistryStats, Revocation,
+    RevocationReason,
+};
 pub use signing::{
-    sign_certificate, verify_certificate_signature, CertSigningKey, CertVerifyingKey,
-    CertificateSignature, Keystore, TrustLevel,
+    CertSigningKey, CertVerifyingKey, CertificateSignature, Keystore, TrustLevel, sign_certificate,
+    verify_certificate_signature,
+};
+pub use store::*;
+pub use verifier::{
+    CertificateVerifier, VerificationReport, verify_certificate, verify_certificate_detailed,
+    verify_chain,
 };
 pub use z4_certificate::{
-    extract_unsat_core, parse_z4_proof, verify_proof_steps as verify_z4_proof_steps,
-    Z4CertificateStoreExt, Z4ProofCertificate, Z4ProofStep, Z4Rule,
+    Z4CertificateStoreExt, Z4ProofCertificate, Z4ProofStep, Z4Rule, extract_unsat_core,
+    parse_z4_proof, verify_proof_steps as verify_z4_proof_steps,
+};
+// tRust #830: ProofBundle format re-exports.
+pub use proof_bundle::{
+    AssumptionSet, AssuranceTier, CodegenCertificate, CodegenOption, CoverageReport, DependencyRef,
+    EnvironmentFingerprint, FunctionCertificate, PROOF_BUNDLE_VERSION, PanicStrategy, ProofBundle,
+    ProofBundleBuilder, ProvenArtifact, SelfCertLevel, SelfCertificate, SolverVersion,
+    TransvalCertificate, TrustAssumption, TrustAssumptionLevel, UnverifiedItem, UnverifiedReason,
 };
 #[cfg(test)]
 mod tests {
-    use trust_types::fx::FxHashMap;
+    use std::collections::BTreeMap;
 
     use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
     use crate::{
         CertError, CertificateChain, CertificateId, CertificateStore, CertificationStatus,
-        ChainFindingKind, ChainStep, ChainStepType, ChainSummary, ChainValidator,
-        FunctionHash, ProofCertificate, SolverInfo, VcSnapshot,
+        ChainFindingKind, ChainStep, ChainStepType, ChainSummary, ChainValidator, FunctionHash,
+        ProofCertificate, SolverInfo, VcSnapshot,
     };
 
     fn sample_solver_info() -> SolverInfo {
@@ -115,7 +131,7 @@ mod tests {
     fn sample_vc(function: &str) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Assertion { message: "must hold".to_string() },
-            function: function.to_string(),
+            function: function.into(),
             location: SourceSpan {
                 file: "src/lib.rs".to_string(),
                 line_start: 10,
@@ -383,8 +399,8 @@ mod tests {
     #[test]
     fn test_chain_validate_chain_returns_error_on_invalid() {
         let chain = CertificateChain::new();
-        let err = ChainValidator::validate_chain(&chain)
-            .expect_err("empty chain should return error");
+        let err =
+            ChainValidator::validate_chain(&chain).expect_err("empty chain should return error");
         match err {
             CertError::ChainValidationFailed { reason } => {
                 assert!(reason.contains("no steps"));
@@ -396,8 +412,7 @@ mod tests {
     #[test]
     fn test_chain_validate_chain_returns_ok_on_valid() {
         let chain = sample_chain(true);
-        let result = ChainValidator::validate_chain(&chain)
-            .expect("valid chain should return Ok");
+        let result = ChainValidator::validate_chain(&chain).expect("valid chain should return Ok");
         assert!(result.valid);
     }
 
@@ -517,18 +532,9 @@ mod tests {
     #[test]
     fn test_store_function_names() {
         let mut store = CertificateStore::new("sample-crate");
-        store.insert(
-            sample_certificate("crate::bar", "2026-03-27T12:00:00Z"),
-            sample_chain(false),
-        );
-        store.insert(
-            sample_certificate("crate::foo", "2026-03-27T12:01:00Z"),
-            sample_chain(true),
-        );
-        store.insert(
-            sample_certificate("crate::bar", "2026-03-27T12:02:00Z"),
-            sample_chain(false),
-        );
+        store.insert(sample_certificate("crate::bar", "2026-03-27T12:00:00Z"), sample_chain(false));
+        store.insert(sample_certificate("crate::foo", "2026-03-27T12:01:00Z"), sample_chain(true));
+        store.insert(sample_certificate("crate::bar", "2026-03-27T12:02:00Z"), sample_chain(false));
 
         let names = store.function_names();
         assert_eq!(names, vec!["crate::bar", "crate::foo"]);
@@ -543,7 +549,7 @@ mod tests {
         store.insert(cert1.clone(), sample_chain(true));
         store.insert(cert2.clone(), sample_chain(false));
 
-        let mut current_hashes = FxHashMap::default();
+        let mut current_hashes = BTreeMap::new();
         current_hashes.insert(cert1.function.clone(), cert1.function_hash.clone());
         current_hashes.insert(cert2.function.clone(), cert2.function_hash.clone());
 
@@ -562,7 +568,7 @@ mod tests {
         let cert = sample_certificate("crate::foo", "2026-03-27T12:00:00Z");
         store.insert(cert.clone(), sample_chain(true));
 
-        let mut current_hashes = FxHashMap::default();
+        let mut current_hashes = BTreeMap::new();
         current_hashes
             .insert(cert.function.clone(), FunctionHash::from_bytes(b"crate::foo-body-updated"));
 
@@ -621,7 +627,7 @@ mod tests {
         store.insert(cert2.clone(), sample_chain(false));
 
         // foo's hash changed, bar's stayed the same
-        let mut current_hashes = FxHashMap::default();
+        let mut current_hashes = BTreeMap::new();
         current_hashes.insert("crate::foo".to_string(), FunctionHash::from_bytes(b"new-body"));
         current_hashes.insert("crate::bar".to_string(), cert2.function_hash.clone());
 
@@ -648,8 +654,7 @@ mod tests {
         let path = store.save_to_dir(&dir).expect("save should succeed");
         assert!(path.exists());
 
-        let loaded =
-            CertificateStore::load_from_dir(&dir).expect("load should succeed").unwrap();
+        let loaded = CertificateStore::load_from_dir(&dir).expect("load should succeed").unwrap();
         assert_eq!(loaded, store);
         assert_eq!(loaded.get(&cert.id), Some(&cert));
 
@@ -677,10 +682,7 @@ mod tests {
 
         // Save some data
         let mut store = store;
-        store.insert(
-            sample_certificate("crate::foo", "2026-03-27T12:00:00Z"),
-            sample_chain(true),
-        );
+        store.insert(sample_certificate("crate::foo", "2026-03-27T12:00:00Z"), sample_chain(true));
         store.save_to_dir(&dir).expect("save should succeed");
 
         // Second call: loads existing
@@ -697,10 +699,7 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         let mut store = CertificateStore::new("file-test");
-        store.insert(
-            sample_certificate("crate::bar", "2026-03-27T12:00:00Z"),
-            sample_chain(false),
-        );
+        store.insert(sample_certificate("crate::bar", "2026-03-27T12:00:00Z"), sample_chain(false));
 
         store.save_to_file(&path).expect("save should succeed");
         let loaded = CertificateStore::load_from_file(&path).expect("load should succeed");
@@ -782,9 +781,7 @@ mod tests {
         use super::*;
         use proptest::prelude::*;
 
-        use trust_types::{
-            AssuranceLevel, ProofEvidence, ProofStrength, ReasoningKind, SmtTheory,
-        };
+        use trust_types::{AssuranceLevel, ProofEvidence, ProofStrength, ReasoningKind, SmtTheory};
 
         fn arb_smt_theory() -> impl Strategy<Value = SmtTheory> {
             prop_oneof![
@@ -810,8 +807,7 @@ mod tests {
                 Just(ReasoningKind::ChcSpacer),
                 Just(ReasoningKind::AbstractInterpretation),
                 Just(ReasoningKind::CdclResolution),
-                arb_smt_theory()
-                    .prop_map(|theory| ReasoningKind::TheoryLemma { theory }),
+                arb_smt_theory().prop_map(|theory| ReasoningKind::TheoryLemma { theory }),
                 Just(ReasoningKind::BitBlasting),
             ]
         }
@@ -874,20 +870,15 @@ mod tests {
 
         fn arb_source_location() -> impl Strategy<Value = Option<crate::SourceLocation>> {
             proptest::option::of(
-                (
-                    "[a-z_/]{1,30}\\.rs",
-                    1..10000u32,
-                    0..200u32,
-                    1..10000u32,
-                    0..200u32,
-                )
-                    .prop_map(|(file, ls, cs, le, ce)| crate::SourceLocation {
+                ("[a-z_/]{1,30}\\.rs", 1..10000u32, 0..200u32, 1..10000u32, 0..200u32).prop_map(
+                    |(file, ls, cs, le, ce)| crate::SourceLocation {
                         file,
                         line_start: ls,
                         col_start: cs,
                         line_end: le,
                         col_end: ce,
-                    }),
+                    },
+                ),
             )
         }
 
@@ -912,14 +903,9 @@ mod tests {
         }
 
         fn arb_proof_step() -> impl Strategy<Value = crate::cert::ProofStep> {
-            (0..100u32, "[a-z_]{3,15}", "[a-z ]{5,30}").prop_map(
-                |(index, rule, description)| crate::cert::ProofStep {
-                    index,
-                    rule,
-                    description,
-                    premises: Vec::new(),
-                },
-            )
+            (0..100u32, "[a-z_]{3,15}", "[a-z ]{5,30}").prop_map(|(index, rule, description)| {
+                crate::cert::ProofStep { index, rule, description, premises: Vec::new() }
+            })
         }
 
         fn arb_chain_step_type() -> impl Strategy<Value = ChainStepType> {
@@ -941,7 +927,15 @@ mod tests {
                 "2026-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z",
             )
                 .prop_map(
-                    |(step_type, tool, tool_version, input_hash, output_hash, time_ms, timestamp)| {
+                    |(
+                        step_type,
+                        tool,
+                        tool_version,
+                        input_hash,
+                        output_hash,
+                        time_ms,
+                        timestamp,
+                    )| {
                         ChainStep {
                             step_type,
                             tool,
@@ -966,10 +960,7 @@ mod tests {
         }
 
         fn arb_certification_status() -> impl Strategy<Value = CertificationStatus> {
-            prop_oneof![
-                Just(CertificationStatus::Trusted),
-                Just(CertificationStatus::Certified),
-            ]
+            prop_oneof![Just(CertificationStatus::Trusted), Just(CertificationStatus::Certified),]
         }
 
         fn arb_proof_certificate() -> impl Strategy<Value = ProofCertificate> {

@@ -36,7 +36,7 @@ use crate::BorrowckInferCtxt;
 use crate::renumber::RegionCtxt;
 
 #[derive(Debug)]
-#[derive(Clone)] // Accepted: Clone derive needed for universal regions (upstream #146079)
+#[derive(Clone)] // FIXME(#146079)
 pub(crate) struct UniversalRegions<'tcx> {
     indices: UniversalRegionIndices<'tcx>,
 
@@ -197,7 +197,7 @@ impl<'tcx> DefiningTy<'tcx> {
 }
 
 #[derive(Debug)]
-#[derive(Clone)] // Accepted: Clone derive needed for universal regions (upstream #146079)
+#[derive(Clone)] // FIXME(#146079)
 struct UniversalRegionIndices<'tcx> {
     /// For those regions that may appear in the parameter environment
     /// ('static and early-bound regions), we maintain a map from the
@@ -384,7 +384,7 @@ impl<'tcx> UniversalRegions<'tcx> {
                     v.join(",\n    "),
                 ));
 
-                // // NOTE: printing late-bound regions would improve debug output.
+                // FIXME: It'd be nice to print the late-bound regions
                 // here, but unfortunately these wind up stored into
                 // tests, and the resulting print-outs include def-ids
                 // and other things that are not stable across tests!
@@ -393,22 +393,8 @@ impl<'tcx> UniversalRegions<'tcx> {
                     err.note(format!("late-bound region is {:?}", self.to_region_vid(r)));
                 });
             }
-            DefiningTy::CoroutineClosure(def_id, args) => {
-                let v = with_no_trimmed_paths!(
-                    args[tcx.generics_of(def_id).parent_count..]
-                        .iter()
-                        .map(|arg| arg.to_string())
-                        .collect::<Vec<_>>()
-                );
-                err.note(format!(
-                    "defining type: {} with coroutine closure args [\n    {},\n]",
-                    tcx.def_path_str_with_args(def_id, args),
-                    v.join(",\n    "),
-                ));
-
-                for_each_late_bound_region_in_recursive_scope(tcx, def_id.expect_local(), |r| {
-                    err.note(format!("late-bound region is {:?}", self.to_region_vid(r)));
-                });
+            DefiningTy::CoroutineClosure(..) => {
+                todo!()
             }
             DefiningTy::Coroutine(def_id, args) => {
                 let v = with_no_trimmed_paths!(
@@ -423,7 +409,7 @@ impl<'tcx> UniversalRegions<'tcx> {
                     v.join(",\n    "),
                 ));
 
-                // // NOTE: as above, printing out the region would improve debug output.
+                // FIXME: As above, we'd like to print out the region
                 // `r` but doing so is not stable across architectures
                 // and so forth.
                 for_each_late_bound_region_in_recursive_scope(tcx, def_id.expect_local(), |r| {
@@ -553,7 +539,7 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
         );
 
         let (unnormalized_output_ty, unnormalized_input_tys) =
-            inputs_and_output.split_last().expect("invariant: inputs_and_output must have at least one element");
+            inputs_and_output.split_last().unwrap();
 
         let fr_fn_body = self
             .infcx
@@ -615,7 +601,6 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
                         DefiningTy::CoroutineClosure(def_id, args)
                     }
                     ty::FnDef(def_id, args) => DefiningTy::FnDef(def_id, args),
-                    // tRust: invariant: algorithm precondition — analysis pass maintains this structural invariant
                     _ => span_bug!(
                         tcx.def_span(self.mir_def),
                         "expected defining type for `{:?}`: `{:?}`",
@@ -634,7 +619,7 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
                     );
                     DefiningTy::Const(self.mir_def.to_def_id(), args)
                 } else {
-                    // // NOTE: this line creates a query dependency between borrowck and typeck..
+                    // FIXME: this line creates a query dependency between borrowck and typeck.
                     //
                     // This is required for `AscribeUserType` canonical query, which will call
                     // `type_of(inline_const_def_id)`. That `type_of` would inject erased lifetimes
@@ -723,10 +708,9 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
                 // signature appear as a tuple. The MIR side
                 // flattens this tuple.
                 let (&output, tuplized_inputs) =
-                    inputs_and_output.skip_binder().split_last().expect("invariant: inputs_and_output must have at least one element");
+                    inputs_and_output.skip_binder().split_last().unwrap();
                 assert_eq!(tuplized_inputs.len(), 1, "multiple closure inputs");
                 let &ty::Tuple(inputs) = tuplized_inputs[0].kind() else {
-                    // tRust: invariant: type system guarantee — type properties are ensured by prior type checking
                     bug!("closure inputs not a tuple: {:?}", tuplized_inputs[0]);
                 };
 
@@ -824,7 +808,7 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
 
                     // The signature needs to follow the order [input_tys, va_list_ty, output_ty]
                     return inputs_and_output.map_bound(|tys| {
-                        let (output_ty, input_tys) = tys.split_last().expect("invariant: inputs_and_output must have at least one element");
+                        let (output_ty, input_tys) = tys.split_last().unwrap();
                         tcx.mk_type_list_from_iter(
                             input_tys.iter().copied().chain([va_list_ty, *output_ty]),
                         )
@@ -855,7 +839,7 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
             }
         };
 
-        // // NOTE(#129952): a more principled approach is desirable here. here.
+        // FIXME(#129952): We probably want a more principled approach here.
         if let Err(e) = inputs_and_output.error_reported() {
             self.infcx.set_tainted_by_errors(e);
         }
@@ -940,7 +924,6 @@ impl<'tcx> UniversalRegionIndices<'tcx> {
             _ => *self
                 .indices
                 .get(&r)
-                // tRust: invariant: region inference invariant — region constraints must be satisfiable after type checking
                 .unwrap_or_else(|| bug!("cannot convert `{:?}` to a region vid", r)),
         }
     }

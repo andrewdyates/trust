@@ -52,7 +52,7 @@ impl<S: Stage> AttributeParser<S> for OnConstParser {
         },
     )];
 
-    //tRust: known issue — Still checked in `check_attr.rs`
+    //FIXME Still checked in `check_attr.rs`
     const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS);
 
     fn finalize(self, _cx: &FinalizeContext<'_, '_, S>) -> Option<AttributeKind> {

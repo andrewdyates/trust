@@ -41,8 +41,8 @@ impl<'tcx> crate::MirPass<'tcx> for AddMovesForPackedDrops {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         debug!("add_moves_for_packed_drops({:?} @ {:?})", body.source, body.span);
         let mut patch = MirPatch::new(body);
-        // NOTE(#132279): Manual typing mode specification required during
-        // analysis-to-runtime phase transition.
+        // FIXME(#132279): This is used during the phase transition from analysis
+        // to runtime, so we have to manually specify the correct typing mode.
         let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
 
         for (bb, data) in body.basic_blocks.iter_enumerated() {

@@ -5,12 +5,12 @@
 
 use trust_types::fx::FxHashSet;
 
+use super::comparison::{VcCategory, categorize_vc, compare_vc_sets};
 use super::*;
-use super::comparison::{categorize_vc, compare_vc_sets, VcCategory};
 use trust_types::{
-    BasicBlock, BinOp, BlockId, ConstValue, Formula, LocalDecl, Operand, Place,
-    ProofLevel, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, UnOp, VcKind,
-    VerifiableBody, VerifiableFunction, VerificationCondition,
+    BasicBlock, BinOp, BlockId, ConstValue, Formula, LocalDecl, Operand, Place, ProofLevel, Rvalue,
+    Sort, SourceSpan, Statement, Terminator, Ty, UnOp, VcKind, VerifiableBody, VerifiableFunction,
+    VerificationCondition,
 };
 
 fn make_func(name: &str, locals: Vec<LocalDecl>, blocks: Vec<BasicBlock>) -> VerifiableFunction {
@@ -18,12 +18,7 @@ fn make_func(name: &str, locals: Vec<LocalDecl>, blocks: Vec<BasicBlock>) -> Ver
         name: name.to_string(),
         def_path: format!("test::{name}"),
         span: SourceSpan::default(),
-        body: VerifiableBody {
-            locals,
-            blocks,
-            arg_count: 0,
-            return_ty: Ty::Unit,
-        },
+        body: VerifiableBody { locals, blocks, arg_count: 0, return_ty: Ty::Unit },
         contracts: vec![],
         preconditions: vec![],
         postconditions: vec![],
@@ -34,7 +29,7 @@ fn make_func(name: &str, locals: Vec<LocalDecl>, blocks: Vec<BasicBlock>) -> Ver
 fn make_vc(kind: VcKind, function: &str, formula: Formula) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -54,24 +49,14 @@ fn test_cross_check_known_variables_no_warnings() {
             LocalDecl { index: 1, ty: Ty::usize(), name: Some("a".into()) },
             LocalDecl { index: 2, ty: Ty::usize(), name: Some("b".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::usize(), Ty::usize()),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::usize(), Ty::usize()) },
         "add_fn",
         Formula::And(vec![
-            Formula::Le(
-                Box::new(Formula::Int(0)),
-                Box::new(Formula::Var("a".into(), Sort::Int)),
-            ),
+            Formula::Le(Box::new(Formula::Int(0)), Box::new(Formula::Var("a".into(), Sort::Int))),
             Formula::Le(
                 Box::new(Formula::Var("a".into(), Sort::Int)),
                 Box::new(Formula::Int(i64::MAX as i128)),
@@ -105,11 +90,7 @@ fn test_cross_check_unknown_variable_warns() {
             LocalDecl { index: 0, ty: Ty::usize(), name: None },
             LocalDecl { index: 1, ty: Ty::usize(), name: Some("a".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
@@ -140,20 +121,13 @@ fn test_cross_check_fallback_name_accepted() {
             LocalDecl { index: 0, ty: Ty::usize(), name: None },
             LocalDecl { index: 1, ty: Ty::usize(), name: None },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
         VcKind::DivisionByZero,
         "fn_b",
-        Formula::Eq(
-            Box::new(Formula::Var("_1".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Eq(Box::new(Formula::Var("_1".into(), Sort::Int)), Box::new(Formula::Int(0))),
     );
 
     let warnings = cross_check_vc(&vc, &func);
@@ -174,11 +148,7 @@ fn test_cross_check_projected_name_accepted() {
             LocalDecl { index: 2, ty: Ty::usize(), name: None },
             LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
@@ -203,11 +173,7 @@ fn test_cross_check_slice_len_var_accepted() {
             LocalDecl { index: 0, ty: Ty::usize(), name: None },
             LocalDecl { index: 1, ty: Ty::usize(), name: Some("i".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
@@ -240,25 +206,15 @@ fn test_cross_check_i32_overflow_correct_bounds() {
             LocalDecl { index: 1, ty: Ty::i32(), name: Some("a".into()) },
             LocalDecl { index: 2, ty: Ty::i32(), name: Some("b".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     // Build a VC with correct i32 bounds: [-2^31, 2^31-1]
     let min_val = -(1i128 << 31);
     let max_val = (1i128 << 31) - 1;
     let formula = Formula::And(vec![
-        Formula::Le(
-            Box::new(Formula::Int(min_val)),
-            Box::new(Formula::Var("a".into(), Sort::Int)),
-        ),
-        Formula::Le(
-            Box::new(Formula::Var("a".into(), Sort::Int)),
-            Box::new(Formula::Int(max_val)),
-        ),
+        Formula::Le(Box::new(Formula::Int(min_val)), Box::new(Formula::Var("a".into(), Sort::Int))),
+        Formula::Le(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(max_val))),
         Formula::Not(Box::new(Formula::Le(
             Box::new(Formula::Add(
                 Box::new(Formula::Var("a".into(), Sort::Int)),
@@ -269,10 +225,7 @@ fn test_cross_check_i32_overflow_correct_bounds() {
     ]);
 
     let vc = make_vc(
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::i32(), Ty::i32()) },
         "add_i32",
         formula,
     );
@@ -296,11 +249,7 @@ fn test_cross_check_i32_overflow_wrong_bounds_warns() {
             LocalDecl { index: 0, ty: Ty::i32(), name: None },
             LocalDecl { index: 1, ty: Ty::i32(), name: Some("a".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     // Build a VC with WRONG bounds (using i64 bounds for an i32 type).
@@ -318,10 +267,7 @@ fn test_cross_check_i32_overflow_wrong_bounds_warns() {
     ]);
 
     let vc = make_vc(
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::i32(), Ty::i32()) },
         "add_i32",
         formula,
     );
@@ -342,19 +288,12 @@ fn test_cross_check_u32_overflow_correct_bounds() {
             LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
             LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     // u32 bounds: [0, 2^32 - 1]
     let formula = Formula::And(vec![
-        Formula::Le(
-            Box::new(Formula::Int(0)),
-            Box::new(Formula::Var("a".into(), Sort::Int)),
-        ),
+        Formula::Le(Box::new(Formula::Int(0)), Box::new(Formula::Var("a".into(), Sort::Int))),
         Formula::Le(
             Box::new(Formula::Var("a".into(), Sort::Int)),
             Box::new(Formula::Int((1i128 << 32) - 1)),
@@ -369,10 +308,7 @@ fn test_cross_check_u32_overflow_correct_bounds() {
     ]);
 
     let vc = make_vc(
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::u32(), Ty::u32()),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
         "add_u32",
         formula,
     );
@@ -401,20 +337,13 @@ fn test_cross_check_divzero_correct_structure() {
             LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
             LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
         VcKind::DivisionByZero,
         "div_fn",
-        Formula::Eq(
-            Box::new(Formula::Var("b".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Eq(Box::new(Formula::Var("b".into(), Sort::Int)), Box::new(Formula::Int(0))),
     );
 
     let warnings = cross_check_vc(&vc, &func);
@@ -436,29 +365,19 @@ fn test_cross_check_divzero_missing_eq_zero_warns() {
             LocalDecl { index: 0, ty: Ty::u32(), name: None },
             LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     // Malformed divzero VC: no `divisor == 0` check.
     let vc = make_vc(
         VcKind::DivisionByZero,
         "div_fn",
-        Formula::Lt(
-            Box::new(Formula::Var("a".into(), Sort::Int)),
-            Box::new(Formula::Int(5)),
-        ),
+        Formula::Lt(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(5))),
     );
 
     let warnings = cross_check_vc(&vc, &func);
     assert!(
-        warnings.iter().any(|w| matches!(
-            w,
-            CrossCheckWarning::DivZeroMissingDivisorCheck { .. }
-        )),
+        warnings.iter().any(|w| matches!(w, CrossCheckWarning::DivZeroMissingDivisorCheck { .. })),
         "missing divisor check should warn, got: {warnings:?}"
     );
 }
@@ -471,20 +390,13 @@ fn test_cross_check_remainder_by_zero_same_check() {
             LocalDecl { index: 0, ty: Ty::u32(), name: None },
             LocalDecl { index: 1, ty: Ty::u32(), name: Some("b".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
         VcKind::RemainderByZero,
         "rem_fn",
-        Formula::Eq(
-            Box::new(Formula::Var("b".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Eq(Box::new(Formula::Var("b".into(), Sort::Int)), Box::new(Formula::Int(0))),
     );
 
     let warnings = cross_check_vc(&vc, &func);
@@ -504,11 +416,7 @@ fn test_cross_check_sort_mismatch_int_vs_bv() {
     let func = make_func(
         "sort_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     // Sort mismatch: Add(Int-var, BitVec-var).
@@ -537,11 +445,7 @@ fn test_cross_check_sort_consistent_int_ok() {
             LocalDecl { index: 1, ty: Ty::usize(), name: Some("x".into()) },
             LocalDecl { index: 2, ty: Ty::usize(), name: Some("y".into()) },
         ],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
@@ -554,10 +458,8 @@ fn test_cross_check_sort_consistent_int_ok() {
     );
 
     let warnings = cross_check_vc(&vc, &func);
-    let sort_warnings: Vec<_> = warnings
-        .iter()
-        .filter(|w| matches!(w, CrossCheckWarning::SortMismatch { .. }))
-        .collect();
+    let sort_warnings: Vec<_> =
+        warnings.iter().filter(|w| matches!(w, CrossCheckWarning::SortMismatch { .. })).collect();
     assert!(sort_warnings.is_empty(), "Int + Int should be OK, got: {sort_warnings:?}");
 }
 
@@ -566,11 +468,7 @@ fn test_cross_check_sort_bv_width_mismatch() {
     let func = make_func(
         "bv_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     // BvAdd with width 32 but one operand is BitVec(64).
@@ -600,11 +498,7 @@ fn test_cross_check_degenerate_and() {
     let func = make_func(
         "degen_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let vc = make_vc(
@@ -629,18 +523,10 @@ fn test_cross_check_degenerate_or_empty() {
     let func = make_func(
         "degen_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
-    let vc = make_vc(
-        VcKind::Assertion { message: "test".into() },
-        "degen_fn",
-        Formula::Or(vec![]),
-    );
+    let vc = make_vc(VcKind::Assertion { message: "test".into() }, "degen_fn", Formula::Or(vec![]));
 
     let warnings = cross_check_vc(&vc, &func);
     assert!(
@@ -662,18 +548,10 @@ fn test_cross_check_trivial_false_warns() {
     let func = make_func(
         "trivial_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
-    let vc = make_vc(
-        VcKind::IndexOutOfBounds,
-        "trivial_fn",
-        Formula::Bool(false),
-    );
+    let vc = make_vc(VcKind::IndexOutOfBounds, "trivial_fn", Formula::Bool(false));
 
     let warnings = cross_check_vc(&vc, &func);
     assert!(
@@ -690,18 +568,11 @@ fn test_cross_check_trivial_true_warns() {
     let func = make_func(
         "trivial_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
-    let vc = make_vc(
-        VcKind::Assertion { message: "test".into() },
-        "trivial_fn",
-        Formula::Bool(true),
-    );
+    let vc =
+        make_vc(VcKind::Assertion { message: "test".into() }, "trivial_fn", Formula::Bool(true));
 
     let warnings = cross_check_vc(&vc, &func);
     assert!(
@@ -743,11 +614,7 @@ fn test_cross_check_all_vcs_empty() {
     let func = make_func(
         "empty_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     );
 
     let warnings = cross_check_all_vcs(&[], &func);
@@ -756,10 +623,8 @@ fn test_cross_check_all_vcs_empty() {
 
 #[test]
 fn test_cross_check_warning_description() {
-    let w = CrossCheckWarning::UnknownVariable {
-        var_name: "ghost".into(),
-        function: "my_fn".into(),
-    };
+    let w =
+        CrossCheckWarning::UnknownVariable { var_name: "ghost".into(), function: "my_fn".into() };
     let desc = w.description();
     assert!(desc.contains("ghost"));
     assert!(desc.contains("my_fn"));
@@ -772,9 +637,7 @@ fn test_cross_check_warning_description() {
     assert!(w2.description().contains("-128"));
     assert!(w2.description().contains("127"));
 
-    let w3 = CrossCheckWarning::DivZeroMissingDivisorCheck {
-        function: "div_fn".into(),
-    };
+    let w3 = CrossCheckWarning::DivZeroMissingDivisorCheck { function: "div_fn".into() };
     assert!(w3.description().contains("divisor"));
 
     let w4 = CrossCheckWarning::SortMismatch {
@@ -784,16 +647,10 @@ fn test_cross_check_warning_description() {
     };
     assert!(w4.description().contains("sort mismatch"));
 
-    let w5 = CrossCheckWarning::DegenerateConnective {
-        connective: "And".into(),
-        child_count: 1,
-    };
+    let w5 = CrossCheckWarning::DegenerateConnective { connective: "And".into(), child_count: 1 };
     assert!(w5.description().contains("And"));
 
-    let w6 = CrossCheckWarning::TrivialFormula {
-        function: "f".into(),
-        value: false,
-    };
+    let w6 = CrossCheckWarning::TrivialFormula { function: "f".into(), value: false };
     assert!(w6.description().contains("trivially false"));
 }
 
@@ -910,11 +767,7 @@ fn empty_function() -> VerifiableFunction {
     make_func(
         "empty_fn",
         vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
-        vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }],
+        vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }],
     )
 }
 
@@ -974,10 +827,7 @@ fn float_div_function() -> VerifiableFunction {
 fn test_full_cross_check_midpoint_agrees() {
     let func = midpoint_function_for_cross_check();
     let result = full_cross_check(&func);
-    assert!(
-        result.is_sound(),
-        "midpoint cross-check should be sound (Agree or PrimaryOnly)"
-    );
+    assert!(result.is_sound(), "midpoint cross-check should be sound (Agree or PrimaryOnly)");
 }
 
 // tRust #792: DivisionByZero, ShiftOverflow, ArithmeticOverflow, FloatDivisionByZero
@@ -986,34 +836,37 @@ fn test_full_cross_check_midpoint_agrees() {
 
 #[test]
 fn test_full_cross_check_div_function_agrees() {
+    // tRust #953: Both primary and reference generators emit DivisionByZero
+    // VCs for `Div(_, var)` — cross-check must confirm agreement.
     let func = div_function();
     let result = full_cross_check(&func);
-    // tRust #792: DivisionByZero now in zani-lib — neither generator produces it
     assert!(
-        !result.primary_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
-        "primary should NOT have DivisionByZero (now in zani-lib)"
+        result.primary_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
+        "primary must emit DivisionByZero for Div(_, var)"
     );
     assert!(
-        !result.reference_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
-        "reference should NOT have DivisionByZero (now in zani-lib)"
+        result.reference_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
+        "reference must emit DivisionByZero for Div(_, var)"
     );
-    assert!(result.is_sound(), "both empty = sound agreement");
+    assert!(result.is_sound(), "both agree => sound");
 }
 
 #[test]
 fn test_full_cross_check_signed_div_overflow() {
+    // tRust #953: Both generators emit DivisionByZero for signed Div(_, var).
+    // Signed `i32::MIN / -1` overflow remains out-of-scope for bare
+    // `BinaryOp::Div` at this layer.
     let func = signed_div_function();
     let result = full_cross_check(&func);
-    // tRust #792: DivisionByZero and ArithmeticOverflow now in zani-lib
     assert!(
-        !result.primary_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
-        "primary should NOT have DivisionByZero (now in zani-lib)"
+        result.primary_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
+        "primary must emit DivisionByZero for signed Div(_, var)"
     );
     assert!(
-        !result.reference_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
-        "reference should NOT have DivisionByZero (now in zani-lib)"
+        result.reference_vc_kinds.iter().any(|k| matches!(k, VcKind::DivisionByZero)),
+        "reference must emit DivisionByZero for signed Div(_, var)"
     );
-    assert!(result.is_sound(), "both empty = sound agreement");
+    assert!(result.is_sound(), "both agree => sound");
 }
 
 #[test]
@@ -1032,7 +885,6 @@ fn test_full_cross_check_shift_overflow() {
     assert!(result.is_sound(), "both empty = sound agreement");
 }
 #[cfg(not(feature = "pipeline-v2"))]
-
 #[test]
 fn test_full_cross_check_neg_overflow() {
     let func = neg_function();
@@ -1144,10 +996,7 @@ fn test_compare_vc_sets_agree() {
 fn test_compare_vc_sets_primary_only() {
     let primary = vec![VcKind::DivisionByZero, VcKind::IndexOutOfBounds];
     let reference = vec![VcKind::DivisionByZero];
-    assert!(matches!(
-        compare_vc_sets(&primary, &reference),
-        CrossCheckVerdict::PrimaryOnly { .. }
-    ));
+    assert!(matches!(compare_vc_sets(&primary, &reference), CrossCheckVerdict::PrimaryOnly { .. }));
 }
 
 #[test]
@@ -1164,10 +1013,7 @@ fn test_compare_vc_sets_reference_only() {
 fn test_compare_vc_sets_divergent() {
     let primary = vec![VcKind::IndexOutOfBounds];
     let reference = vec![VcKind::DivisionByZero];
-    assert!(matches!(
-        compare_vc_sets(&primary, &reference),
-        CrossCheckVerdict::Divergent { .. }
-    ));
+    assert!(matches!(compare_vc_sets(&primary, &reference), CrossCheckVerdict::Divergent { .. }));
 }
 
 // -----------------------------------------------------------------------
@@ -1176,28 +1022,17 @@ fn test_compare_vc_sets_divergent() {
 
 #[test]
 fn test_weakening_does_not_lose_safety() {
-    let original = Formula::Le(
-        Box::new(Formula::Var("x".into(), Sort::Int)),
-        Box::new(Formula::Int(100)),
-    );
-    let weakened = Formula::Or(vec![
-        original.clone(),
-        Formula::Bool(true),
-    ]);
+    let original =
+        Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100)));
+    let weakened = Formula::Or(vec![original.clone(), Formula::Bool(true)]);
     assert!(weakening_preserves_safety(&original, &weakened));
 }
 
 #[test]
 fn test_strengthening_does_not_add_spurious_proofs() {
     let formula = Formula::And(vec![
-        Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        ),
-        Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
+        Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
     ]);
     let strengthened = strengthen_by_dropping_assumption(&formula);
     assert!(strengthened.is_some());
@@ -1298,10 +1133,7 @@ fn test_divzero_vc_contains_eq_zero() {
                     }
                 }
             });
-            assert!(
-                found_eq_zero,
-                "division-by-zero VC should contain Eq(..., 0)"
-            );
+            assert!(found_eq_zero, "division-by-zero VC should contain Eq(..., 0)");
         }
     }
 }
@@ -1341,10 +1173,7 @@ fn test_constant_divisor_eliminates_divzero_vc() {
 
     // Cross-check: both generators should agree (no divzero for constant 2)
     let result = full_cross_check(&func);
-    assert!(
-        result.is_sound(),
-        "constant divisor cross-check should be sound"
-    );
+    assert!(result.is_sound(), "constant divisor cross-check should be sound");
 }
 
 #[test]
@@ -1391,24 +1220,14 @@ fn test_categorize_vc_covers_all_safety_kinds() {
     let kinds = vec![
         VcKind::DivisionByZero,
         VcKind::RemainderByZero,
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        },
-        VcKind::ShiftOverflow {
-            op: BinOp::Shl,
-            operand_ty: Ty::u32(),
-            shift_ty: Ty::u32(),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::i32(), Ty::i32()) },
+        VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: Ty::u32(), shift_ty: Ty::u32() },
         VcKind::NegationOverflow { ty: Ty::i32() },
         VcKind::IndexOutOfBounds,
         VcKind::SliceBoundsCheck,
         VcKind::CastOverflow { from_ty: Ty::i64(), to_ty: Ty::i32() },
         VcKind::FloatDivisionByZero,
-        VcKind::FloatOverflowToInfinity {
-            op: BinOp::Add,
-            operand_ty: Ty::Float { width: 64 },
-        },
+        VcKind::FloatOverflowToInfinity { op: BinOp::Add, operand_ty: Ty::Float { width: 64 } },
     ];
 
     for kind in &kinds {

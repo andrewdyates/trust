@@ -1,258 +1,125 @@
 # tRust
 
-**Author:** Andrew Yates (andrewyates.name@gmail.com)
+> **Preview release (April 2026).** tRust is a practical local `trust` toolchain plus the canonical `cargo trust` verifier. As of 2026-04-24, the developer baseline is still the from-source linked `trust` rustup alias, while the replacement release bar is the installed/default-profile `trust` toolchain plus the no-flags `installed-default` proof gate. The public verifier surface is `cargo trust check` and `cargo trust check --format json`. Native verification currently requires a discoverable `trustc` compiler with `-Z trust-verify`; otherwise `cargo-trust` falls back to standalone source analysis for `check` and `report`. LLVM remains the default backend. LLVM2 is experimental and opt-in.
+
+**Author:** Andrew Yates <andrew@andrewdyates.com>
 **Version:** 0.1.0
 **License:** MIT OR Apache-2.0
+**Copyright:** The Rust Project Contributors and tRust contributors; see [COPYRIGHT](COPYRIGHT).
 
-**License Note:** `tRust` is a fork of `rust-lang/rust`. The upstream `rustc`
-compiler and standard library are dual-licensed under MIT and Apache-2.0
-unless otherwise specified, so this repository is distributed under
-`MIT OR Apache-2.0` at the top level. See `LICENSE-MIT`,
-`LICENSE-APACHE`, and per-crate `Cargo.toml` metadata for details.
+<!--
+cite:
+- Cargo.toml
+- Cargo.lock
+- COPYRIGHT
+- cargo-trust/Cargo.toml
+-->
 
-> **Preview Release (April 2026)** -- Active research prototype. The verification pipeline calls real z4 SMT solvers on real verification conditions and produces real proofs/counterexamples. Not yet suitable for production use.
+tRust inherits the upstream compiler codebase and adds native verification without giving up a usable local toolchain. The shipped public surface today is:
 
-**Rust You Can Trust.** A self-authoring, self-proving compiler.
+- a locally built `trust` toolchain that you link into `rustup` as `trust`
+- a canonical compiler binary: `trustc`
+- a human-facing verifier command: `cargo trust check`
+- a machine-facing verifier command: `cargo trust check --format json`
 
-tRust is a fork of the Rust compiler (`rustc`) that adds native verification. When your code compiles under tRust, it is proven correct -- automatically, with no annotations.
+Packaged releases and update flows are active productization work built on existing `x install` and `x dist`. A public "switch 100%" claim requires fresh green logs for the replacement gates.
 
-```
-$ cargo trust build
+Today’s daily-driver contract is narrower than a finished packaged release:
 
-   Compiling my_project v0.1.0
-   Proving... (iter 1: 71% | iter 2: 86% | iter 3: 93%)
+- link a local tRust sysroot into `rustup` as `trust`
+- use `cargo +trust ...` for ordinary `trust` toolchain work, or `rustup run trust cargo ...` if you want explicit rustup dispatch
+- install `cargo-trust` from this checkout if you want the plain `cargo trust ...` verifier command
 
-   tRust build complete after 3 iterations
-
-     functions:     142
-     fully proved:  127  (89%)
-     bounded check:  11  ( 8%)
-     unproved:        4  ( 3%)
-
-   Source modifications: 31 changes across 12 files
-   Proof report: target/trust/report.html
-```
-
-## Three Big Ideas
-
-**1. The compiler proves the code.** tRust compiles Rust and proves correctness properties -- no panics, no overflow, no out-of-bounds, no deadlocks, functional correctness -- using a suite of integrated verification solvers.
-
-**2. AI infers the strongest possible proof.** An AI agent reads the code and proposes the strongest types, invariants, and specifications the code can support. The AI is allowed to be wrong. The proofs are not.
-
-**3. Backpropagation to a better program.** When proof fails, the compiler modifies the source to make the proof succeed -- fixing bugs, strengthening types, or proposing a different algorithm. No existing compiler does this.
-
-The three ideas form a loop: **prove -> strengthen -> backpropagate -> re-prove**. The loop converges to the maximally proven version of the program.
-
-## Current Status
-
-| Milestone | Status | Description |
-|-----------|--------|-------------|
-| **M1** | **Done** | `./x.py build` produces a working `rustc` with verification pass |
-| **M2** | **~90%** | End-to-end: MIR -> vcgen -> z4 -> real proofs/counterexamples |
-| **M3** | **~60%** | Pipeline tested at 120+ function scale; CLI integration in progress |
-| **M4** | **~40%** | Heuristic spec inference works; LLM integration in design |
-| **M5** | **~30%** | All loop components exist; end-to-end demo with real solver pending |
-
-**By the numbers (April 2026):**
-- ~29 verification crates, ~557K lines of Rust
-- 11,800+ tests passing across all crates
-- ~580 issues closed
-- 8 solver backends: z4 (native + smtlib), zani, certus, tla2, lean5, cegar, mock
-- Real z4 verification: 5-8ms per obligation, real counterexamples
-
-## Example (Working Today)
-
-```rust
-// examples/midpoint.rs
-fn get_midpoint(a: usize, b: usize) -> usize {
-    (a + b) / 2
-}
-```
-
-### Native compiler path
-
-```
-$ TRUST_VERIFY=1 ./build/host/stage1/bin/rustc -Z trust-verify --edition 2021 examples/midpoint.rs
-
-=== tRust Verification Pass ===
-  Crate: midpoint
-  get_midpoint: overflow [PENDING]
-```
-
-### Standalone wrapper (z4 integration)
-
-```
-$ trustc --edition 2021 examples/midpoint.rs
-
-=== tRust Verification Report ===
-  get_midpoint
-    arithmetic overflow (Add) FAILED (z4) counterexample: a = 1, b = 18446744073709551615
-
-  1 functions, 0 proved, 1 failed, 0 unknown
-```
-
-tRust detects the overflow bug -- `(a + b)` wraps for large inputs -- and provides a concrete counterexample via z4. The textbook fix (`a/2 + b/2 + (a%2 + b%2)/2`) is proven safe with value-range analysis.
-
-## Installation
-
-### Prerequisites
-
-- Standard Rust build dependencies (see [rust-lang/rust INSTALL.md](https://github.com/rust-lang/rust/blob/master/INSTALL.md))
-- Python 3.10+
-- Nightly Rust toolchain with `rustc-dev`
-- **z4 SMT solver** on PATH (for real proofs)
-
-### Usage
+## Quick Start
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/andrewdyates/trust tRust
+git clone https://github.com/andrewdyates/tRust tRust
 cd tRust
 
-# 2. Install nightly toolchain with rustc internals
 rustup toolchain install nightly
 rustup component add rustc-dev --toolchain nightly
 
-# 3. Verify z4 is available (required for real proofs)
-z4 --version
-# Expected: "Z4 version 1.0.0" (or similar)
+./x.py build --stage 1
+rustup toolchain link trust ./build/host/stage1
 
-# 4. Run REAL z4 verification tests (the proof that tRust works)
-cargo test --manifest-path crates/trust-integration-tests/Cargo.toml \
-  --test real_z4_verification -- --nocapture
+cargo install --path cargo-trust --force
 
-# Expected output (6 tests, all passing):
-#   z4 detected: Z4 version 1.0.0
-#   Generated 1 VCs for buggy_midpoint
-#     VC: ArithmeticOverflow { op: Add, ... }
-#   z4 result: Failed { solver: "z4-smtlib", time_ms: 6,
-#     counterexample: { hi = 1, lo = 18446744073709551615 } }
-#   test test_real_z4_detects_midpoint_overflow ... ok
-#   ...
-#   test result: ok. 6 passed; 0 failed
-
-# 5. Run the full test suite (~11,800 tests)
-cargo test -p trust-types -p trust-vcgen -p trust-router -p trust-report \
-  -p trust-cache -p trust-convergence -p trust-proof-cert -p trust-temporal \
-  -p trust-strengthen -p trust-config
-
-# 6. Check which solvers are available
-cargo run --manifest-path cargo-trust/Cargo.toml -- trust solvers
-
-# 7. Build the full tRust compiler (optional, takes a while)
-./x.py build
-
-# 8. Verify a file using the native MIR pass
-TRUST_VERIFY=1 ./build/host/stage1/bin/rustc -Z trust-verify --edition 2021 examples/midpoint.rs
+tests/e2e_trust_toolchain.sh
+cargo +trust check --manifest-path cargo-trust/Cargo.toml
+cargo trust check examples/midpoint.rs
+cargo trust check --format json examples/midpoint.rs
 ```
 
-### What the Tests Prove
+If your build emitted a target-specific sysroot instead of `./build/host/stage1`, link that path instead. The linked `trust` alias is the supported install story and the simplest compiler-discovery path for `cargo-trust`. Native compiler discovery should prefer `TRUSTC`, sibling `trustc` next to `cargo-trust`, the linked `trust` toolchain, then repo-local `build/.../stage{2,1}`. Legacy compatibility `rustc` paths may still exist during the transition, but the tRust-owned product name is `trustc`.
 
-| Test | What z4 Does | Time |
-|------|-------------|------|
-| Buggy midpoint `(lo+hi)/2` | Finds overflow: `lo=2^64-1, hi=1` | 6ms |
-| Division by constant 2 | Proves safe (UNSAT) | 8ms |
-| Division by variable | Finds div-by-zero: `b=0` | 6ms |
-| Safe midpoint `lo+(hi-lo)/2` | Finds missing precondition: `hi=0, lo=1` | 6ms |
+## Glossary
 
-## Architecture
+| Name | Meaning |
+|------|---------|
+| `tRust` | The product and repository: a trust-first compiler fork plus verification tooling |
+| `trust` | The local `rustup` toolchain alias you link to a built tRust sysroot |
+| `trustc` | The canonical tRust compiler binary |
+| legacy compatibility `rustc` | Alias/shim kept only where inherited tooling still requires that executable name |
+| `cargo trust` | The public verifier command users run |
+| `cargo-trust` | The package/binary that implements the `cargo trust` subcommand |
+| `-Z trust-verify` | Low-level compiler transport used by `cargo-trust` and tests |
+| `LLVM2` | Experimental alternate codegen backend; not the default path |
 
-tRust is the full `rust-lang/rust` source tree with a verification pass added after MIR construction:
+## What Works Today
 
-```
-Source -> rustc_parse -> rustc_ast -> rustc_hir -> rustc_mir_build
-                                                       |
-                                               +-------v-------+
-                                               |  VERIFICATION  |
-                                               |  PASS (new)    |
-                                               +-------+-------+
-                                                       |
-                                               LLVM codegen
-```
+- `./x.py build --stage 1` produces a local stage1 tRust toolchain that can be linked into `rustup` as `trust`
+- The linked `trust` toolchain works as a practical local `trust` toolchain for `cargo +trust check/build/test/doc/fmt/clippy/miri`; see `tests/e2e_trust_toolchain.sh`
+- `cargo trust check` produces the canonical human-readable verification report
+- `cargo trust check --format json` produces the canonical machine-readable verification report
+- `cargo-trust` uses a discoverable `trustc` compiler when one supports `-Z trust-verify`; for `check` and `report`, it falls back to standalone source analysis when that compiler is missing or lacks the flag
+- `cargo-trust` uses LLVM by default and can opt into LLVM2 with `--backend llvm2` or `codegen_backend = "llvm2"` in `trust.toml`
 
-### Verification Pipeline
+## Packaging Status
 
-```
-MIR --> trust-mir-extract --> trust-vcgen --> trust-router --> solvers
-                                                                  |
-         +--------------------------------------------------------+
-         v
-    z4 (SMT) . zani (BMC) . sunder (deductive) . certus (ownership)
-    tla2 (temporal) . lean5 (higher-order) . gamma-crown (neural net)
-```
+- The current public install story is the linked/local flow shown in the quick start.
+- The checked daily-driver contract is the linked `trust` alias plus `cargo +trust ...` or `rustup run trust cargo ...`, with `cargo-trust` installed separately from this checkout when you want `cargo trust ...`.
+- Release-readiness evidence is tracked as separate gates: linked/local launch approximation, pre-publish dist rehearsal, installed-toolchain acceptance, installed default/no-flags acceptance, and stage0 lineage/self-host proof.
+- Future packaged releases should build on the existing bootstrap packaging commands `./x install` and `./x dist`, not on a separate new installer.
+- The default-profile replacement checklist requires the canonical `trustc` compiler, `cargo`, `cargo-trust`, formatter/linter/analyzer/source/docs/std/LLVM components under `trust` ownership, and any legacy compatibility shims still needed by inherited tooling.
+- Until the replacement gates are freshly green for a release commit, treat the linked/local flow as the public baseline and the installed/default flow as release-candidate evidence.
+- A future "no inherited upstream bootstrap" claim also requires `src/stage0` to target a tRust-owned local dist root or owned dist server/channel seeded by a previous tRust release.
 
-### Verification Crates
+## Canonical Interfaces
 
-| Crate | Role |
-|-------|------|
-| `trust-mir-extract` | MIR -> logical model extraction |
-| `trust-vcgen` | Verification condition generation (WP transformer, overflow, Horn clauses) |
-| `trust-router` | VC dispatch to solvers (portfolio racer, termination) |
-| `trust-cache` | Incremental verification result caching |
-| `trust-cegar` | Counterexample-guided abstraction refinement |
-| `trust-symex` | Symbolic execution engine |
-| `trust-report` | Verification report generation (text + HTML) |
-| `trust-proof-cert` | Proof certificate generation and chain verification |
-| `trust-types` | Shared type definitions (Formula, Ty, proof strength) |
-| `trust-strengthen` | AI specification inference (Idea 2) |
-| `trust-backprop` | Source rewriting from proof failures (Idea 3) |
-| `trust-convergence` | Fixed-point detection for the verification loop |
-| `trust-loop` | Loop orchestration |
-| `trust-driver` | Compiler integration driver (rustc_private) |
-| `trust-config` | Configuration and feature flags |
-| `trust-debug` | Debug output and tracing |
-| `trust-lean5` | lean5 prover integration |
-| `trust-temporal` | Temporal property verification (state machines) |
-| `trust-transval` | Translation validation |
-| `trust-testgen` | Automatic test generation from counterexamples |
-| `trust-runtime` | Runtime verification support |
-| `trust-integration-tests` | Cross-crate integration tests |
-
-### Proof Dimensions
-
-Two orthogonal dimensions classify every proof result:
-
-**ReasoningKind** -- How the proof was obtained:
-SMT, Inductive, BoundedModelCheck, Deductive, PDR, AbstractInterpretation, ExhaustiveFinite, Constructive
-
-**AssuranceLevel** -- How much to trust it:
-- `Trusted` -- tool output taken at face value
-- `SmtBacked` -- backed by SMT solver proof
-- `Certified` -- independently checkable proof certificate
-
-### Proof Levels
-
-| Level | What | How |
-|-------|------|-----|
-| **0: Safety** | No panics, overflow, OOB, div-by-zero, deadlocks | Extracted from MIR. z4 + zani. Zero annotation. |
-| **1: Functional** | Strongest postconditions (sort -> sorted permutation) | sunder infers from implementation. |
-| **2: Domain** | Linearizability, fairness, robustness | AI-proposed, solver-verified. |
-
-### Escape Hatches
-
-| Annotation | Meaning |
-|------------|---------|
-| *(none)* | Full verification + rewriting (default) |
-| `#[trust_bounded(N)]` | Bounded check to depth N |
-| `#[trust_skip]` | No verification; taint propagates |
-| `#[trust_freeze]` | Verify but don't rewrite |
-| `#[trust_axiom("...")]` | Assert without proof; flagged in audit |
-
-## Upstream Tracking
-
-tRust tracks `rust-lang/rust` via the `upstream` remote. All valid Rust compiles identically. Verification is additive.
+### Local `trust` toolchain
 
 ```bash
-git fetch upstream
-git merge upstream/main
+cargo +trust check --manifest-path cargo-trust/Cargo.toml
+(cd examples/contracts/basic-contracts && cargo +trust test)
 ```
 
-## Documentation
+### Human-facing verification
 
-| Document | Content |
-|----------|---------|
-| [VISION.md](VISION.md) | Full design: three big ideas, architecture, milestones, TCB analysis |
-| `docs/` | Design documents, architecture specs, and reference material |
+```bash
+cargo trust check
+cargo trust check path/to/file.rs
+```
+
+### Machine-facing verification
+
+```bash
+cargo trust check --format json
+cargo trust check --format json path/to/file.rs
+```
+
+LLVM is the default backend for all of the above. LLVM2 remains explicitly opt-in and experimental.
+
+`cargo trust report` exists, but the public verifier surface to optimize docs, scripts, and automation around is still `cargo trust check` and `cargo trust check --format json`.
+
+## Developer Transport
+
+These are real interfaces, but they are not the blessed public front door:
+
+- raw compiler transport: `trustc -Z trust-verify ...`
+- running the subcommand from source without installing it: `cargo run --manifest-path cargo-trust/Cargo.toml -- trust ...`
+- direct stage paths under `build/.../stage1/bin/*`
+
+Use them for compiler work, transport debugging, or repo-local development. For regular users and automation, prefer `cargo trust check` and `cargo trust check --format json`.
 
 ## License
 
@@ -266,3 +133,18 @@ repository-level license statement matches the distributed contents.
 
 See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT), and
 individual crate `Cargo.toml` files for package-level metadata.
+
+## Current Trackers
+
+- `#1001`: overall toolchain replacement, install/docs coherence, and release-readiness program
+- `#1011`: fresh-machine install/default-toolchain launch gate for “switch 100% now”
+- `#1009`: bootstrap/dist/install work to ship `cargo-trust` with the toolchain
+- `#995`: user-facing tool completeness in the stage1/shipped sysroot
+- `#996`: native verification on the shipped `trust` toolchain
+- `#1008`: public proof corpus and crate-first verification workflow
+- `#998`: long-form/docs rebaseline to current shipped reality
+- `#829`: LLVM2 experimental backend
+
+## More
+
+- [cargo-trust/README.md](cargo-trust/README.md): verifier-specific usage and contract

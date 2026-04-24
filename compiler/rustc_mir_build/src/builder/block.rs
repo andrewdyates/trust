@@ -224,7 +224,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     last_remainder_scope = *remainder_scope;
                 }
                 StmtKind::Let { init_scope, initializer: None, else_block: Some(_), .. } => {
-                    // tRust: invariant — `let ... else` lowering always supplies an initializer; HIR never carries an `else` block on an uninitialized `let`.
                     span_bug!(
                         init_scope.span(this.tcx, this.region_scope_tree),
                         "initializer is missing, but else block is present in this let binding",

@@ -1,32 +1,36 @@
-// tRust: Verification MIR pass
-//
-// Runs the tRust verification pipeline as a native MIR pass after optimization,
-// before codegen. This is the compiler-integrated equivalent of trust-driver's
-// after_analysis callback.
-//
-// Pipeline: MIR Body -> trust-mir-extract -> trust-vcgen -> trust-router -> report
-//
-// The pass delegates to the trust-* crates for extraction and VC generation:
-//
-//   let func = trust_mir_extract::extract_function(tcx, body);
-//   let vcs = trust_vcgen::generate_vcs(&func);
-//
-// The pass is ON by default. Disable with -Z no-trust-verify (rustc_session).
-//
-// Design: designs/2026-03-27-proof-carrying-mir.md
-// Master plan: designs/2026-03-27-trust-master-plan.md
-//
-// Author: Andrew Yates <andrew@andrewdyates.com>
-// Copyright 2026 Andrew Yates | License: Apache 2.0
+//! tRust: Verification MIR pass.
+//!
+//! Runs the tRust verification pipeline as a native MIR pass after optimization,
+//! before codegen. This is the compiler-integrated equivalent of trust-driver's
+//! after_analysis callback.
+//!
+//! Pipeline: MIR Body -> trust-mir-extract -> trust-vcgen -> trust-router -> report
+//!
+//! The pass delegates to the trust-* crates for extraction and VC generation:
+//!
+//!   let func = trust_mir_extract::extract_function(tcx, body);
+//!   let vcs = trust_vcgen::generate_vcs(&func);
+//!
+//! Enable with `-Z trust-verify`. Disable explicitly with `-Z no-trust-verify`.
+//!
+//! Design: designs/2026-03-27-proof-carrying-mir.md
+//! Master plan: designs/2026-03-27-trust-master-plan.md
+//!
+//! Author: Andrew Yates <andrew@andrewdyates.com>
+//! Copyright 2026 Andrew Yates | License: Apache 2.0
 
 // tRust: Proof-carrying MIR types for building query results.
-use rustc_data_structures::fx::FxHashMap;
+// tRust: deterministic — Use FxIndexMap for the verification results map to preserve
+// insertion order, ensuring deterministic iteration for report generation.
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 use rustc_data_structures::fingerprint::Fingerprint;
+use rustc_data_structures::fx::{FxHashSet, FxIndexMap};
+use rustc_hir::def::DefKind;
+use rustc_hir::{LocalSource, Node};
 use rustc_index::IndexVec;
 use rustc_middle::mir::trust_proof::{
     ObligationId, TrustBinOp, TrustDisposition, TrustFunctionSummary, TrustObligationDetail,
@@ -44,8 +48,8 @@ use tracing::{debug, trace};
 use trust_loop::{LoopConfig, VerifyContext};
 use trust_types::{
     BinOp, CounterexampleValue, FunctionTransportResult, ProofStrength, ReasoningKind,
-    TransportMessage, TransportObligationResult, VcKind, VerificationCondition,
-    VerificationResult, TRANSPORT_PREFIX,
+    TRANSPORT_PREFIX, TransportMessage, TransportObligationResult, VcKind, VerificationCondition,
+    VerificationResult,
 };
 
 /// tRust: Static flag to track whether we've already printed the report header
@@ -56,6 +60,15 @@ static TRUST_HEADER_PRINTED: AtomicBool = AtomicBool::new(false);
 /// compilation session via OnceLock. Avoids repeated filesystem probing
 /// for solver binaries on every function verification.
 static ROUTER: OnceLock<trust_router::Router> = OnceLock::new();
+
+/// tRust: Shared backend inventory reused by both the VC router and MIR router.
+/// This keeps backend discovery one-time per compilation session.
+type SharedRouterBackends = Vec<Arc<dyn trust_router::VerificationBackend>>;
+static ROUTER_BACKENDS: OnceLock<SharedRouterBackends> = OnceLock::new();
+
+fn get_router_backends() -> &'static SharedRouterBackends {
+    ROUTER_BACKENDS.get_or_init(discover_router_backends)
+}
 
 /// tRust: Get or initialize the cached router with real solver backends.
 fn get_router() -> &'static trust_router::Router {
@@ -104,8 +117,12 @@ pub enum VerificationStatus {
 }
 
 /// tRust #538: Global map of function def-path -> verification status.
-static VERIFICATION_RESULTS: LazyLock<Mutex<FxHashMap<String, VerificationStatus>>> =
-    LazyLock::new(|| Mutex::new(FxHashMap::default()));
+// tRust: deterministic — FxIndexMap preserves insertion order, so iteration
+// during report generation produces deterministic output across compilations
+// (functions appear in the order they were verified, which is determined by
+// the MIR pass traversal order).
+static VERIFICATION_RESULTS: LazyLock<Mutex<FxIndexMap<String, VerificationStatus>>> =
+    LazyLock::new(|| Mutex::new(FxIndexMap::default()));
 
 /// tRust #538: Query the verification status of a function by its def-path string.
 ///
@@ -123,10 +140,7 @@ static VERIFICATION_RESULTS: LazyLock<Mutex<FxHashMap<String, VerificationStatus
 /// }
 /// ```
 pub fn trust_verification_status(fn_name: &str) -> Option<VerificationStatus> {
-    VERIFICATION_RESULTS
-        .lock()
-        .ok()
-        .and_then(|map| map.get(fn_name).cloned())
+    VERIFICATION_RESULTS.lock().ok().and_then(|map| map.get(fn_name).cloned())
 }
 
 /// tRust #538: Store the verification status for a function in the global map.
@@ -186,8 +200,8 @@ fn strengthen_failed_vcs(
     failed: &[(VerificationCondition, VerificationResult)],
 ) -> Vec<VerificationCondition> {
     use std::collections::BTreeMap;
-    use trust_strengthen::{FailureAnalysis, analyze_failure};
-    use trust_strengthen::{Proposal, ProposalKind, strengthen};
+
+    use trust_strengthen::{FailureAnalysis, Proposal, ProposalKind, analyze_failure, strengthen};
     use trust_types::{Formula, Sort};
 
     if failed.is_empty() {
@@ -199,7 +213,7 @@ fn strengthen_failed_vcs(
         BTreeMap::new();
     for (vc, result) in failed {
         let analysis = analyze_failure(vc, result);
-        by_function.entry(vc.function.clone()).or_default().push((vc, analysis));
+        by_function.entry(vc.function.to_string()).or_default().push((vc, analysis));
     }
 
     let mut strengthened = Vec::new();
@@ -249,7 +263,7 @@ fn strengthen_failed_vcs(
                 .collect();
 
             let guard = if guard_formulas.len() == 1 {
-                guard_formulas.into_iter().next().expect("invariant: non-empty")
+                guard_formulas.into_iter().next().unwrap()
             } else {
                 Formula::And(guard_formulas)
             };
@@ -289,73 +303,120 @@ fn get_cache() -> &'static Mutex<trust_cache::VerificationCache> {
     })
 }
 
+fn compiler_cache_enabled() -> bool {
+    std::env::var_os("TRUST_COMPILER_CACHE").is_some()
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ExactVcKey {
+    function: String,
+    file: String,
+    line_start: u32,
+    col_start: u32,
+    line_end: u32,
+    col_end: u32,
+    fingerprint: u64,
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+enum VerificationOutcomeKey {
+    Proved,
+    Failed,
+    Unknown,
+    Timeout,
+    Other,
+}
+
+fn exact_vc_key(vc: &VerificationCondition) -> ExactVcKey {
+    ExactVcKey {
+        function: vc.function.to_string(),
+        file: vc.location.file.clone(),
+        line_start: vc.location.line_start,
+        col_start: vc.location.col_start,
+        line_end: vc.location.line_end,
+        col_end: vc.location.col_end,
+        fingerprint: trust_vcgen::vc_fingerprint(vc),
+    }
+}
+
+fn dedupe_exact_vcs(vcs: Vec<VerificationCondition>) -> Vec<VerificationCondition> {
+    let mut seen = FxHashSet::default();
+    let mut deduped = Vec::with_capacity(vcs.len());
+
+    for vc in vcs {
+        if seen.insert(exact_vc_key(&vc)) {
+            deduped.push(vc);
+        }
+    }
+
+    deduped
+}
+
+fn verification_outcome_key(result: &VerificationResult) -> VerificationOutcomeKey {
+    match result {
+        VerificationResult::Proved { .. } => VerificationOutcomeKey::Proved,
+        VerificationResult::Failed { .. } => VerificationOutcomeKey::Failed,
+        VerificationResult::Unknown { .. } => VerificationOutcomeKey::Unknown,
+        VerificationResult::Timeout { .. } => VerificationOutcomeKey::Timeout,
+        _ => VerificationOutcomeKey::Other,
+    }
+}
+
+fn dedupe_exact_results(
+    results: Vec<(VerificationCondition, VerificationResult)>,
+) -> Vec<(VerificationCondition, VerificationResult)> {
+    let mut seen = FxHashSet::default();
+    let mut deduped = Vec::with_capacity(results.len());
+
+    for (vc, result) in results {
+        let key = (exact_vc_key(&vc), verification_outcome_key(&result));
+        if seen.insert(key) {
+            deduped.push((vc, result));
+        }
+    }
+
+    deduped
+}
+
 pub(crate) struct VerificationArtifacts {
     pub(crate) proof_results: TrustProofResults,
     pub(crate) telemetry: TrustProofTelemetry,
     pub(crate) results: Vec<(VerificationCondition, VerificationResult)>,
+    pub(crate) transport_results: Vec<TransportObligationResult>,
 }
 
-/// tRust #529: Build router with portfolio solver backends when available.
+/// tRust #529: Build router with the shared backend inventory.
+fn build_router() -> trust_router::Router {
+    trust_router::Router::with_arc_backends(get_router_backends().clone())
+}
+
+/// tRust #529: Discover portfolio solver backends when available.
 ///
 /// Probes for solver binaries on the system and registers all available
 /// backends for portfolio dispatch. Each backend communicates via subprocess
 /// (SMT-LIB2 over stdin/stdout), avoiding library linking conflicts.
 ///
 /// Backend portfolio:
-/// 1. SmtLibBackend with z4 (Z4_PATH env var, then PATH lookup) — primary SMT
-/// 2. SmtLibBackend with z3 (Z3_PATH env var, then PATH lookup) — SMT fallback
-/// 3. ZaniBackend (ZANI_PATH env var, then PATH lookup) — bounded model checking
-/// 4. SunderBackend (SUNDER_PATH env var, then PATH lookup) — deductive proofs
-/// 5. CertusBackend (CERTUS_PATH env var, then PATH lookup) — ownership properties
-/// 6. MockBackend (always present as fallback)
-fn build_router() -> trust_router::Router {
-    let mut backends: Vec<Box<dyn trust_router::VerificationBackend>> = Vec::new();
+/// 1. IncrementalZ4Session with z4 (Z4_PATH env var, then PATH lookup) — primary SMT
+/// 2. Tla2Backend — temporal obligations and protocol-style properties
+/// 3. MockBackend (always present as fallback)
+fn discover_router_backends() -> SharedRouterBackends {
+    let mut backends: SharedRouterBackends = Vec::new();
 
-    // tRust #529: Probe for z4/z3 SMT solver (primary backend).
+    // tRust #529: Probe for z4 SMT solver (primary backend).
     let z4_path = std::env::var("Z4_PATH").ok().or_else(|| which_solver("z4"));
 
     if let Some(path) = z4_path {
         debug!("tRust: using z4 solver at {path}");
-        backends
-            .push(Box::new(trust_router::smtlib_backend::SmtLibBackend::with_solver_path(path)));
+        backends.push(Arc::new(
+            trust_router::IncrementalZ4Session::with_solver_path(path).with_timeout(30_000),
+        ));
     } else {
-        // tRust: Fallback to z3 if z4 is not available.
-        let z3_path = std::env::var("Z3_PATH").ok().or_else(|| which_solver("z3"));
-
-        if let Some(path) = z3_path {
-            debug!("tRust: using z3 solver at {path}");
-            backends.push(Box::new(trust_router::smtlib_backend::SmtLibBackend::with_solver_path(
-                path,
-            )));
-        } else {
-            debug!("tRust: no SMT solver found");
-        }
+        debug!("tRust: no z4 solver found");
     }
 
-    // tRust #529: Probe for zani — bounded model checking backend.
-    let zani_path = std::env::var("ZANI_PATH").ok().or_else(|| which_solver("zani"));
-    if let Some(path) = zani_path {
-        debug!("tRust: using zani solver at {path}");
-        backends.push(Box::new(trust_router::zani_backend::ZaniBackend::with_solver_path(path)));
-    }
-
-    // tRust #529: Probe for sunder — deductive verification backend.
-    let sunder_path = std::env::var("SUNDER_PATH").ok().or_else(|| which_solver("sunder"));
-    if let Some(path) = sunder_path {
-        debug!("tRust: using sunder solver at {path}");
-        backends.push(Box::new(
-            trust_router::sunder_backend::SunderBackend::with_solver_path(path),
-        ));
-    }
-
-    // tRust #529: Probe for certus — ownership-aware verification backend.
-    let certus_path = std::env::var("CERTUS_PATH").ok().or_else(|| which_solver("certus"));
-    if let Some(path) = certus_path {
-        debug!("tRust: using certus solver at {path}");
-        backends.push(Box::new(
-            trust_router::certus_backend::CertusBackend::with_solver_path(path),
-        ));
-    }
+    // tRust: Register the temporal backend for temporal / protocol obligations.
+    backends.push(Arc::new(trust_router::tla2_backend::Tla2Backend));
 
     // tRust: Log how many solver backends were discovered.
     let solver_count = backends.len();
@@ -366,9 +427,9 @@ fn build_router() -> trust_router::Router {
     }
 
     // tRust: Always include mock backend as fallback.
-    backends.push(Box::new(trust_router::mock_backend::MockBackend));
+    backends.push(Arc::new(trust_router::mock_backend::MockBackend));
 
-    trust_router::Router::with_backends(backends)
+    backends
 }
 
 /// tRust: Search PATH for a solver binary by name.
@@ -392,6 +453,31 @@ fn which_solver(name: &str) -> Option<String> {
 /// Follows the pattern of InstrumentCoverage: gated behind a flag, runs
 /// per-function, does not modify MIR semantics.
 pub(super) struct TrustVerify;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TrustOutputMode {
+    Human,
+    Json,
+    Both,
+}
+
+impl TrustOutputMode {
+    fn parse(sess: &Session) -> Self {
+        match sess.opts.unstable_opts.trust_verify_output.as_str() {
+            "json" => Self::Json,
+            "both" => Self::Both,
+            _ => Self::Human,
+        }
+    }
+
+    fn emit_human(self) -> bool {
+        matches!(self, Self::Human | Self::Both)
+    }
+
+    fn emit_json(self) -> bool {
+        matches!(self, Self::Json | Self::Both)
+    }
+}
 
 impl<'tcx> crate::MirPass<'tcx> for TrustVerify {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
@@ -426,15 +512,26 @@ impl<'tcx> crate::MirPass<'tcx> for TrustVerify {
             artifacts.proof_results.summary.unknown,
         );
 
-        // tRust: Report results via rustc diagnostics (future: also feed into query system).
-        if !artifacts.results.is_empty() {
-            report_results(tcx, body, &artifacts.results);
+        let output_mode = TrustOutputMode::parse(tcx.sess);
+
+        // tRust: Report results via rustc diagnostics when human-readable output is enabled.
+        if output_mode.emit_human() {
+            if !artifacts.results.is_empty() {
+                report_results(tcx, body, &artifacts.results);
+            } else if !artifacts.transport_results.is_empty() {
+                report_transport_results(tcx, body, &artifacts.transport_results);
+            }
         }
 
         // tRust #542: Emit structured JSON transport line for this function.
         // cargo-trust and trust-driver parse these lines to get structured
         // verification results without fragile text parsing.
-        emit_transport_json(&func_path, tcx.sess, &artifacts.results);
+        emit_transport_json(
+            &func_path,
+            tcx.sess,
+            &artifacts.results,
+            &artifacts.proof_results.summary,
+        );
 
         // tRust #538: Store function-level verification status in the global
         // map so other compiler passes can query it without TyCtxt.
@@ -483,6 +580,18 @@ fn should_verify_body<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> bool {
         return false;
     }
 
+    if matches!(tcx.def_kind(def_id), DefKind::Closure) {
+        if let Some(local_def_id) = def_id.as_local() {
+            let closure_hir_id = tcx.local_def_id_to_hir_id(local_def_id);
+            if tcx.hir_parent_iter(closure_hir_id).any(
+                |(_, node)| matches!(node, Node::LetStmt(local) if matches!(local.source, LocalSource::Contract)),
+            ) {
+                trace!("tRust: skipping contract-generated closure {def_id:?}");
+                return false;
+            }
+        }
+    }
+
     // tRust: Skip compiler-generated shims and items without proper HIR backing.
     // These include drop glue, vtable shims, and other synthetic MIR bodies
     // where extracting HIR attributes would panic.
@@ -520,11 +629,48 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
     }
 
     let func = trust_mir_extract::extract_function(tcx, body);
+    debug!(
+        "tRust: extracted {} with {} contract(s), {} precondition(s), {} postcondition(s)",
+        func.def_path,
+        func.contracts.len(),
+        func.preconditions.len(),
+        func.postconditions.len(),
+    );
+
+    // tRust #941: Dump extracted VerifiableFunction as JSON for test fixture generation.
+    // When TRUST_DUMP_MIR=<dir> is set, serialize each function to <dir>/<sanitized_name>.json.
+    // Used to produce real-MIR fixtures for integration tests without requiring rustc_private.
+    if let Ok(dump_dir) = std::env::var("TRUST_DUMP_MIR") {
+        let dump_path = std::path::Path::new(&dump_dir);
+        if let Err(e) = std::fs::create_dir_all(dump_path) {
+            debug!("tRust: failed to create TRUST_DUMP_MIR dir {dump_dir}: {e}");
+        } else {
+            // Sanitize def_path for use as filename (replace :: with __)
+            let sanitized = func.def_path.replace("::", "__");
+            let file_path = dump_path.join(format!("{sanitized}.json"));
+            match serde_json::to_string_pretty(&func) {
+                Ok(json) => {
+                    if let Err(e) = std::fs::write(&file_path, &json) {
+                        debug!("tRust: failed to write MIR dump to {}: {e}", file_path.display());
+                    } else {
+                        trace!(
+                            "tRust: dumped MIR for {} to {}",
+                            func.def_path,
+                            file_path.display()
+                        );
+                    }
+                }
+                Err(e) => {
+                    debug!("tRust: failed to serialize {} for MIR dump: {e}", func.def_path);
+                }
+            }
+        }
+    }
 
     // tRust #67: Check incremental verification cache before dispatching to solver.
     // If the function body + contracts hash matches a cached entry, we can skip
     // the expensive solver dispatch entirely.
-    {
+    if compiler_cache_enabled() {
         if let Ok(mut cache) = get_cache().lock() {
             if let trust_cache::CacheLookup::Hit(entry) = cache.lookup_function(&func) {
                 debug!(
@@ -548,17 +694,11 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
                     fingerprints: IndexVec::new(),
                     summary,
                 };
-                let telemetry = TrustProofTelemetry {
-                    details: IndexVec::new(),
-                };
+                let telemetry = TrustProofTelemetry { details: IndexVec::new() };
                 // Individual results are not stored in the cache, so return
                 // empty results. The caller skips per-VC diagnostics when
                 // results is empty but still logs the summary.
-                return Some(VerificationArtifacts {
-                    proof_results,
-                    telemetry,
-                    results: vec![],
-                });
+                return Some(VerificationArtifacts { proof_results, telemetry, results: vec![] });
             }
         }
     }
@@ -574,15 +714,17 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
         let strategy = mir_router.classify(&func);
         debug!("tRust: pipeline-v2 classified {} as {strategy}", func.def_path);
 
-        let max_level = match tcx.sess.opts.unstable_opts.trust_verify_level {
-            0 => trust_types::ProofLevel::L0Safety,
-            1 => trust_types::ProofLevel::L1Functional,
-            _ => trust_types::ProofLevel::L2Domain,
-        };
+        let max_level = effective_max_level(tcx.sess, &func);
 
         // tRust #796: Generate VCs regardless of strategy — needed for proof results.
         let (solver_vcs, discharged) = trust_vcgen::generate_vcs_with_discharge(&func);
-        let solver_vcs = trust_vcgen::filter_vcs_by_level(solver_vcs, max_level);
+        let solver_vcs = dedupe_exact_vcs(trust_vcgen::filter_vcs_by_level(solver_vcs, max_level));
+        debug!(
+            "tRust: {} max_level={max_level:?}, solver_vcs={}, discharged={}",
+            func.def_path,
+            solver_vcs.len(),
+            discharged.len(),
+        );
 
         let results = match strategy {
             trust_router::MirStrategy::V1Fallback => {
@@ -601,7 +743,7 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
 
                 let mut combined = discharged;
                 combined.extend(loop_result.final_results);
-                combined
+                dedupe_exact_results(combined)
             }
             _ => {
                 // tRust #796: MIR router dispatch — verify function as a whole,
@@ -615,6 +757,7 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
                         VerificationResult::Failed { .. } => "failed",
                         VerificationResult::Unknown { .. } => "unknown",
                         VerificationResult::Timeout { .. } => "timeout",
+                        _ => "other",
                     },
                 );
 
@@ -626,20 +769,18 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
                 for vc in solver_vcs {
                     combined.push((vc, mir_result.clone()));
                 }
-                combined
+                dedupe_exact_results(combined)
             }
         };
 
-        let vcs: Vec<VerificationCondition> =
-            results.iter().map(|(vc, _)| vc.clone()).collect();
-        let proof_results = build_proof_results(tcx.sess, &vcs, &results);
-        let telemetry = build_proof_telemetry(tcx.sess, &vcs, &results);
+        let proof_results = build_proof_results(tcx.sess, &results, &[]);
+        let telemetry = build_proof_telemetry(tcx.sess, &results);
 
         // tRust #67: Store verification result in cache for future compilations.
-        {
+        if compiler_cache_enabled() {
             if let Ok(mut cache) = get_cache().lock() {
                 let summary = &proof_results.summary;
-                cache.store_function(
+                if cache.store_function(
                     &func,
                     summarize_verdict(&proof_results.summary),
                     summary.total as usize,
@@ -647,27 +788,30 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
                     summary.failed as usize,
                     summary.unknown as usize,
                     summary.runtime_checked as usize,
-                );
-                if let Err(e) = cache.save() {
-                    debug!("tRust: failed to save proof cache: {e}");
+                ) {
+                    if let Err(e) = cache.save() {
+                        debug!("tRust: failed to save proof cache: {e}");
+                    }
                 }
             }
         }
 
-        return Some(VerificationArtifacts { proof_results, telemetry, results });
+        return Some(VerificationArtifacts { proof_results, telemetry, results, transport_results });
     }
 
     // tRust: V1 pipeline — existing iterative verification loop.
     #[cfg(not(feature = "pipeline-v2"))]
     {
-        let max_level = match tcx.sess.opts.unstable_opts.trust_verify_level {
-            0 => trust_types::ProofLevel::L0Safety,
-            1 => trust_types::ProofLevel::L1Functional,
-            _ => trust_types::ProofLevel::L2Domain,
-        };
+        let max_level = effective_max_level(tcx.sess, &func);
         // tRust #428: Abstract interp pre-pass discharges cheap numeric VCs before solver dispatch.
         let (solver_vcs, discharged) = trust_vcgen::generate_vcs_with_discharge(&func);
-        let solver_vcs = trust_vcgen::filter_vcs_by_level(solver_vcs, max_level);
+        let solver_vcs = dedupe_exact_vcs(trust_vcgen::filter_vcs_by_level(solver_vcs, max_level));
+        debug!(
+            "tRust: {} max_level={max_level:?}, solver_vcs={}, discharged={}",
+            func.def_path,
+            solver_vcs.len(),
+            discharged.len(),
+        );
 
         // tRust #169: Keep the compiler-side loop configuration self-contained for
         // now instead of adding a new rustc_session unstable option.
@@ -698,16 +842,15 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
         // proof results and telemetry alongside solver results.
         let mut results = discharged;
         results.extend(loop_result.final_results);
-        let vcs: Vec<VerificationCondition> =
-            results.iter().map(|(vc, _)| vc.clone()).collect();
-        let proof_results = build_proof_results(tcx.sess, &vcs, &results);
-        let telemetry = build_proof_telemetry(tcx.sess, &vcs, &results);
+        let results = dedupe_exact_results(results);
+        let proof_results = build_proof_results(tcx.sess, &results, &[]);
+        let telemetry = build_proof_telemetry(tcx.sess, &results);
 
         // tRust #67: Store verification result in cache for future compilations.
-        {
+        if compiler_cache_enabled() {
             if let Ok(mut cache) = get_cache().lock() {
                 let summary = &proof_results.summary;
-                cache.store_function(
+                if cache.store_function(
                     &func,
                     summarize_verdict(&proof_results.summary),
                     summary.total as usize,
@@ -715,15 +858,36 @@ pub(crate) fn collect_verification_artifacts<'tcx>(
                     summary.failed as usize,
                     summary.unknown as usize,
                     summary.runtime_checked as usize,
-                );
-                // tRust: Best-effort persist — errors are non-fatal since cache is advisory.
-                if let Err(e) = cache.save() {
-                    debug!("tRust: failed to save proof cache: {e}");
+                ) {
+                    // tRust: Best-effort persist — errors are non-fatal since cache is advisory.
+                    if let Err(e) = cache.save() {
+                        debug!("tRust: failed to save proof cache: {e}");
+                    }
                 }
             }
         }
 
-        Some(VerificationArtifacts { proof_results, telemetry, results })
+        Some(VerificationArtifacts { proof_results, telemetry, results, transport_results })
+    }
+}
+
+fn effective_max_level(
+    sess: &Session,
+    func: &trust_types::VerifiableFunction,
+) -> trust_types::ProofLevel {
+    let configured = match sess.opts.unstable_opts.trust_verify_level {
+        0 => trust_types::ProofLevel::L0Safety,
+        1 => trust_types::ProofLevel::L1Functional,
+        _ => trust_types::ProofLevel::L2Domain,
+    };
+
+    if !func.contracts.is_empty()
+        || !func.preconditions.is_empty()
+        || !func.postconditions.is_empty()
+    {
+        configured.max(trust_types::ProofLevel::L1Functional)
+    } else {
+        configured
     }
 }
 
@@ -776,7 +940,7 @@ fn report_results(
         // tRust: All results emitted as notes — verification must NEVER break builds.
         // The verification pass is additive: it reports findings without blocking compilation.
         match result {
-            VerificationResult::Proved { solver, strength, time_ms } => {
+            VerificationResult::Proved { solver, strength, time_ms, .. } => {
                 tcx.dcx()
                     .struct_span_note(
                         func_span,
@@ -839,19 +1003,59 @@ fn report_results(
                         .emit();
                 }
             }
+            _ => {
+                tcx.dcx()
+                    .struct_span_note(
+                        func_span,
+                        format!(
+                            "tRust [{tag}]: {desc} — UNKNOWN (unsupported verification result variant)"
+                        ),
+                    )
+                    .emit();
+            }
         }
     }
 }
 
-/// tRust #542: Emit structured JSON transport line for a function's verification results.
-///
-/// Writes a single `TRUST_JSON:{"type":"function_result",...}` line to stderr.
-/// This is consumed by cargo-trust and trust-driver for programmatic access
-/// to verification results without fragile text parsing of compiler diagnostics.
-fn emit_transport_json(
-    func_path: &str,
+fn report_transport_results(
+    tcx: TyCtxt<'_>,
+    body: &Body<'_>,
+    results: &[TransportObligationResult],
+) {
+    let func_span = body.span;
+
+    for result in results {
+        let mut diag = tcx.dcx().struct_span_note(
+            func_span,
+            format!(
+                "tRust [{}]: {} — {} ({}, {}ms)",
+                result.kind,
+                result.description,
+                result.outcome.to_ascii_uppercase().replace('_', "-"),
+                result.solver,
+                result.time_ms,
+            ),
+        );
+        if let Some(location) = &result.location {
+            diag.note(format!(
+                "location: {}:{}:{}",
+                location.file, location.line_start, location.col_start
+            ));
+        }
+        if let Some(counterexample) = &result.counterexample {
+            diag.note(format!("counterexample: {counterexample}"));
+        }
+        if let Some(reason) = &result.reason {
+            diag.note(format!("reason: {reason}"));
+        }
+        diag.emit();
+    }
+}
+
+fn build_transport_results(
     sess: &Session,
     results: &[(VerificationCondition, VerificationResult)],
+    summary: &TrustFunctionSummary,
 ) {
     let mut proved: usize = 0;
     let mut failed: usize = 0;
@@ -863,75 +1067,122 @@ fn emit_transport_json(
         .map(|(vc, result)| {
             let tag = format_vc_kind(&vc.kind).to_string();
             let desc = vc.kind.description();
-            let (outcome, solver, time_ms, counterexample, reason) = match result {
-                VerificationResult::Proved { solver, time_ms, .. } => {
-                    proved += 1;
-                    ("proved".to_string(), solver.clone(), *time_ms, None, None)
-                }
-                VerificationResult::Failed { solver, time_ms, counterexample } => {
-                    failed += 1;
-                    let cex_str = counterexample.as_ref().map(|c| c.to_string());
-                    ("failed".to_string(), solver.clone(), *time_ms, cex_str, None)
-                }
-                VerificationResult::Unknown { solver, time_ms, reason } => {
-                    if has_runtime_check(sess, &vc.kind) {
-                        runtime_checked += 1;
+            let (outcome, solver, time_ms, counterexample, counterexample_model, reason) =
+                match result {
+                    VerificationResult::Proved { solver, time_ms, .. } => {
+                        proved += 1;
+                        ("proved".to_string(), solver.to_string(), *time_ms, None, None, None)
+                    }
+                    VerificationResult::Failed { solver, time_ms, counterexample } => {
+                        failed += 1;
+                        let cex_str = counterexample.as_ref().map(|c| c.to_string());
                         (
-                            "runtime_checked".to_string(),
-                            solver.clone(),
+                            "failed".to_string(),
+                            solver.to_string(),
                             *time_ms,
+                            cex_str,
+                            counterexample.clone(),
                             None,
-                            Some(reason.clone()),
                         )
-                    } else {
+                    }
+                    VerificationResult::Unknown { solver, time_ms, reason } => {
+                        if has_runtime_check(sess, &vc.kind) {
+                            runtime_checked += 1;
+                            (
+                                "runtime_checked".to_string(),
+                                solver.to_string(),
+                                *time_ms,
+                                None,
+                                None,
+                                Some(reason.clone()),
+                            )
+                        } else {
+                            unknown += 1;
+                            (
+                                "unknown".to_string(),
+                                solver.to_string(),
+                                *time_ms,
+                                None,
+                                None,
+                                Some(reason.clone()),
+                            )
+                        }
+                    }
+                    VerificationResult::Timeout { solver, timeout_ms } => {
+                        if has_runtime_check(sess, &vc.kind) {
+                            runtime_checked += 1;
+                            (
+                                "runtime_checked".to_string(),
+                                solver.to_string(),
+                                *timeout_ms,
+                                None,
+                                None,
+                                Some("solver timed out".to_string()),
+                            )
+                        } else {
+                            unknown += 1;
+                            (
+                                "timeout".to_string(),
+                                solver.to_string(),
+                                *timeout_ms,
+                                None,
+                                None,
+                                Some("solver timed out".to_string()),
+                            )
+                        }
+                    }
+                    _ => {
                         unknown += 1;
                         (
                             "unknown".to_string(),
-                            solver.clone(),
-                            *time_ms,
+                            result.solver_name().to_string(),
+                            result.time_ms(),
                             None,
-                            Some(reason.clone()),
+                            None,
+                            Some("unsupported verification result variant".to_string()),
                         )
                     }
-                }
-                VerificationResult::Timeout { solver, timeout_ms } => {
-                    if has_runtime_check(sess, &vc.kind) {
-                        runtime_checked += 1;
-                        (
-                            "runtime_checked".to_string(),
-                            solver.clone(),
-                            *timeout_ms,
-                            None,
-                            Some("solver timed out".to_string()),
-                        )
-                    } else {
-                        unknown += 1;
-                        (
-                            "timeout".to_string(),
-                            solver.clone(),
-                            *timeout_ms,
-                            None,
-                            Some("solver timed out".to_string()),
-                        )
-                    }
-                }
-            };
+                };
             TransportObligationResult {
                 kind: tag,
                 description: desc,
+                location: Some(vc.location.clone()),
                 outcome,
                 solver,
                 time_ms,
                 counterexample,
+                counterexample_model,
                 reason,
             }
         })
-        .collect();
+        .collect()
+}
+
+/// tRust #542: Emit structured JSON transport line for a function's verification results.
+///
+/// Writes a single `TRUST_JSON:{"type":"function_result",...}` line to stderr.
+/// This is consumed by cargo-trust and trust-driver for programmatic access
+/// to verification results without fragile text parsing of compiler diagnostics.
+fn emit_transport_json(func_path: &str, obligation_results: &[TransportObligationResult]) {
+    let mut proved: usize = 0;
+    let mut failed: usize = 0;
+    let mut unknown: usize = 0;
+    let mut runtime_checked: usize = 0;
+
+    for result in obligation_results {
+        match result.outcome.as_str() {
+            "proved" => proved += 1,
+            "failed" => failed += 1,
+            "runtime_checked" => runtime_checked += 1,
+            "unknown" | "timeout" => unknown += 1,
+            _ => unknown += 1,
+        }
+    }
 
     let total = proved + failed + unknown + runtime_checked;
     let msg = TransportMessage::FunctionResult(FunctionTransportResult {
         function: func_path.to_string(),
-        results: obligation_results,
+        results: obligation_results.to_vec(),
         proved,
         failed,
         unknown,
@@ -957,31 +1208,7 @@ fn has_runtime_check(sess: &Session, kind: &VcKind) -> bool {
 
 /// tRust: Pure runtime-check classification helper for unit tests and diagnostics.
 fn runtime_check_available(kind: &VcKind, overflow_checks: bool) -> bool {
-    match kind {
-        VcKind::ArithmeticOverflow { .. }
-        | VcKind::ShiftOverflow { .. }
-        | VcKind::NegationOverflow { .. } => overflow_checks,
-        VcKind::DivisionByZero
-        | VcKind::RemainderByZero
-        | VcKind::IndexOutOfBounds
-        | VcKind::SliceBoundsCheck
-        | VcKind::Assertion { .. }
-        | VcKind::Unreachable => true,
-        VcKind::CastOverflow { .. }
-        | VcKind::Precondition { .. }
-        | VcKind::Postcondition
-        | VcKind::DeadState { .. }
-        | VcKind::Deadlock
-        | VcKind::Temporal { .. }
-        | VcKind::Liveness { .. }
-        | VcKind::Fairness { .. }
-        | VcKind::TaintViolation { .. }
-        | VcKind::RefinementViolation { .. }
-        | VcKind::ResilienceViolation { .. }
-        | VcKind::ProtocolViolation { .. }
-        | VcKind::NonTermination { .. } => false,
-        _ => false,
-    }
+    kind.has_runtime_fallback(overflow_checks)
 }
 
 /// tRust: Human-readable note explaining the runtime fallback.
@@ -1003,6 +1230,9 @@ fn runtime_check_note(kind: &VcKind) -> &'static str {
         }
         VcKind::Unreachable => {
             "compiler retained the existing unreachable trap because the proof is not yet static"
+        }
+        VcKind::FloatDivisionByZero | VcKind::FloatOverflowToInfinity { .. } => {
+            "floating-point operations do not trap at runtime; no dynamic fallback exists"
         }
         VcKind::CastOverflow { .. }
         | VcKind::Precondition { .. }
@@ -1039,6 +1269,8 @@ fn format_vc_kind(kind: &VcKind) -> &'static str {
         },
         VcKind::DivisionByZero => "divzero",
         VcKind::RemainderByZero => "remzero",
+        VcKind::FloatDivisionByZero => "float_division_by_zero",
+        VcKind::FloatOverflowToInfinity { .. } => "float_overflow_to_infinity",
         VcKind::IndexOutOfBounds => "bounds",
         VcKind::SliceBoundsCheck => "slice",
         VcKind::Assertion { .. } => "assert",
@@ -1078,8 +1310,8 @@ fn format_vc_kind(kind: &VcKind) -> &'static str {
 /// (pending #32 query registration).
 fn build_proof_results(
     sess: &Session,
-    vcs: &[VerificationCondition],
     results: &[(VerificationCondition, VerificationResult)],
+    fallback_vcs: &[VerificationCondition],
 ) -> TrustProofResults {
     // tRust: Build parallel IndexVec<ObligationId, _> for dispositions and fingerprints.
     let mut dispositions: IndexVec<ObligationId, TrustDisposition> = IndexVec::new();
@@ -1104,7 +1336,7 @@ fn build_proof_results(
             let disposition = TrustDisposition { kind, status, strength, certified: is_certified };
 
             dispositions.push(disposition);
-            fingerprints.push(compute_obligation_fingerprint(idx, &vc.kind, &vc.function));
+            fingerprints.push(compute_obligation_fingerprint(idx, &vc.kind, vc.function.as_str()));
 
             // tRust: Accumulate summary counts.
             match status {
@@ -1123,7 +1355,7 @@ fn build_proof_results(
         }
     } else {
         // tRust: No solver results — create Unknown dispositions for all VCs.
-        for (idx, vc) in vcs.iter().enumerate() {
+        for (idx, vc) in fallback_vcs.iter().enumerate() {
             let kind = convert_vc_kind(&vc.kind);
             let disposition = TrustDisposition {
                 kind,
@@ -1133,7 +1365,7 @@ fn build_proof_results(
             };
 
             dispositions.push(disposition);
-            fingerprints.push(compute_obligation_fingerprint(idx, &vc.kind, &vc.function));
+            fingerprints.push(compute_obligation_fingerprint(idx, &vc.kind, vc.function.as_str()));
             unknown += 1;
 
             let level = convert_proof_level(&vc.kind);
@@ -1160,22 +1392,22 @@ fn build_proof_results(
 
 fn build_proof_telemetry(
     sess: &Session,
-    vcs: &[VerificationCondition],
     results: &[(VerificationCondition, VerificationResult)],
 ) -> TrustProofTelemetry {
     let mut details: IndexVec<ObligationId, TrustObligationDetail> = IndexVec::new();
-    debug_assert_eq!(vcs.len(), results.len(), "telemetry expects paired VCs/results");
 
-    for (vc, (_, result)) in vcs.iter().zip(results.iter()) {
+    for (vc, result) in results.iter() {
         let (solver, time_ms, counterexample, runtime_fallback) = match result {
-            VerificationResult::Proved { solver, time_ms, .. } => (solver, *time_ms, None, None),
+            VerificationResult::Proved { solver, time_ms, .. } => {
+                (solver.as_str(), *time_ms, None, None)
+            }
             VerificationResult::Failed { solver, time_ms, counterexample } => {
-                (solver, *time_ms, counterexample.as_ref(), None)
+                (solver.as_str(), *time_ms, counterexample.as_ref(), None)
             }
             VerificationResult::Unknown { solver, time_ms, reason } => {
                 let fallback =
                     runtime_fallback_for(sess, &vc.kind, RuntimeFallbackOutcome::Unknown, reason);
-                (solver, *time_ms, None, fallback)
+                (solver.as_str(), *time_ms, None, fallback)
             }
             VerificationResult::Timeout { solver, timeout_ms } => {
                 let fallback = runtime_fallback_for(
@@ -1184,12 +1416,23 @@ fn build_proof_telemetry(
                     RuntimeFallbackOutcome::Timeout,
                     "solver timed out before proving the obligation",
                 );
-                (solver, *timeout_ms, None, fallback)
+                (solver.as_str(), *timeout_ms, None, fallback)
             }
+            _ => (
+                result.solver_name(),
+                result.time_ms(),
+                None,
+                runtime_fallback_for(
+                    sess,
+                    &vc.kind,
+                    RuntimeFallbackOutcome::Unknown,
+                    "unsupported verification result variant",
+                ),
+            ),
         };
 
         details.push(TrustObligationDetail {
-            solver: Symbol::intern(solver),
+            solver: Symbol::intern(solver.as_str()),
             time_us: time_ms.saturating_mul(1_000),
             counterexample: counterexample
                 .map(|cex| {
@@ -1248,8 +1491,12 @@ fn convert_vc_kind(kind: &VcKind) -> TrustObligationKind {
         VcKind::ArithmeticOverflow { op, .. } => {
             TrustObligationKind::ArithmeticOverflow(convert_binop(op))
         }
+        VcKind::FloatOverflowToInfinity { op, .. } => {
+            TrustObligationKind::ArithmeticOverflow(convert_binop(op))
+        }
         VcKind::ShiftOverflow { .. } => TrustObligationKind::ShiftOverflow,
         VcKind::DivisionByZero => TrustObligationKind::DivisionByZero,
+        VcKind::FloatDivisionByZero => TrustObligationKind::DivisionByZero,
         VcKind::RemainderByZero => TrustObligationKind::RemainderByZero,
         VcKind::IndexOutOfBounds | VcKind::SliceBoundsCheck => {
             TrustObligationKind::IndexOutOfBounds
@@ -1294,6 +1541,7 @@ fn convert_binop(op: &BinOp) -> TrustBinOp {
         | BinOp::BitAnd
         | BinOp::BitOr
         | BinOp::BitXor => TrustBinOp::Add,
+        _ => TrustBinOp::Add,
     }
 }
 
@@ -1331,6 +1579,7 @@ fn convert_result(
                 (TrustStatus::Timeout, TrustProofStrength::None)
             }
         }
+        _ => (TrustStatus::Unknown, TrustProofStrength::None),
     }
 }
 
@@ -1358,6 +1607,7 @@ fn convert_proof_level(kind: &VcKind) -> TrustProofLevel {
         trust_types::ProofLevel::L0Safety => TrustProofLevel::L0Safety,
         trust_types::ProofLevel::L1Functional => TrustProofLevel::L1Functional,
         trust_types::ProofLevel::L2Domain => TrustProofLevel::L2Domain,
+        _ => TrustProofLevel::L2Domain,
     }
 }
 
@@ -1396,6 +1646,7 @@ fn encode_counterexample_value(value: &CounterexampleValue) -> i128 {
         CounterexampleValue::Int(value) => *value,
         CounterexampleValue::Uint(value) => (*value).min(i128::MAX as u128) as i128,
         CounterexampleValue::Float(value) => i128::from(value.to_bits()),
+        _ => 0,
     }
 }
 
@@ -1405,6 +1656,22 @@ mod tests {
     use rustc_middle::mir::trust_proof::{TrustObligationDetail, TrustRuntimeFallbackReason};
 
     use super::*;
+
+    fn test_vc(line_start: u32) -> VerificationCondition {
+        VerificationCondition {
+            kind: VcKind::DivisionByZero,
+            function: Symbol::intern("test::f"),
+            location: trust_types::SourceSpan {
+                file: "test.rs".to_string(),
+                line_start,
+                col_start: 1,
+                line_end: line_start,
+                col_end: 5,
+            },
+            formula: trust_types::Formula::Bool(true),
+            contract_metadata: None,
+        }
+    }
 
     #[test]
     fn unknown_overflow_is_runtime_checked_when_overflow_checks_are_on() {
@@ -1435,6 +1702,53 @@ mod tests {
             &VcKind::Precondition { callee: "callee".to_string() },
             true,
         ));
+    }
+
+    #[test]
+    fn float_unknown_has_no_runtime_fallback() {
+        assert!(!runtime_check_available(&VcKind::FloatDivisionByZero, true));
+        assert!(!runtime_check_available(
+            &VcKind::FloatOverflowToInfinity {
+                op: BinOp::Add,
+                operand_ty: trust_types::Ty::Float { width: 64 },
+            },
+            true,
+        ));
+    }
+
+    #[test]
+    fn float_runtime_check_note_explains_no_dynamic_fallback() {
+        assert_eq!(
+            runtime_check_note(&VcKind::FloatDivisionByZero),
+            "floating-point operations do not trap at runtime; no dynamic fallback exists",
+        );
+    }
+
+    #[test]
+    fn float_vc_tags_are_not_unknown() {
+        assert_eq!(format_vc_kind(&VcKind::FloatDivisionByZero), "float_division_by_zero");
+        assert_eq!(
+            format_vc_kind(&VcKind::FloatOverflowToInfinity {
+                op: BinOp::Add,
+                operand_ty: trust_types::Ty::Float { width: 64 },
+            }),
+            "float_overflow_to_infinity",
+        );
+    }
+
+    #[test]
+    fn float_vc_kinds_map_to_existing_internal_obligation_buckets() {
+        assert_eq!(
+            convert_vc_kind(&VcKind::FloatDivisionByZero),
+            TrustObligationKind::DivisionByZero,
+        );
+        assert_eq!(
+            convert_vc_kind(&VcKind::FloatOverflowToInfinity {
+                op: BinOp::Add,
+                operand_ty: trust_types::Ty::Float { width: 64 },
+            }),
+            TrustObligationKind::ArithmeticOverflow(TrustBinOp::Add),
+        );
     }
 
     #[test]
@@ -1493,6 +1807,31 @@ mod tests {
         assert_eq!(telemetry.runtime_checked_count(), 0);
         assert!(telemetry.runtime_checked_details().next().is_none());
         assert!(telemetry.details[ObligationId::from_usize(0)].runtime_fallback().is_none());
+    }
+
+    #[test]
+    fn dedupe_exact_vcs_drops_duplicate_slot() {
+        let vc = test_vc(10);
+        let deduped = dedupe_exact_vcs(vec![vc.clone(), vc]);
+        assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn dedupe_exact_vcs_preserves_distinct_spans() {
+        let deduped = dedupe_exact_vcs(vec![test_vc(10), test_vc(11)]);
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn dedupe_exact_results_drops_duplicate_outcome() {
+        let vc = test_vc(10);
+        let result = VerificationResult::Unknown {
+            solver: Symbol::intern("mock"),
+            time_ms: 3,
+            reason: "duplicate".to_string(),
+        };
+        let deduped = dedupe_exact_results(vec![(vc.clone(), result.clone()), (vc, result)]);
+        assert_eq!(deduped.len(), 1);
     }
 
     // tRust #538: Tests for global verification status map.

@@ -89,7 +89,7 @@ pub enum TypeKind {
     X86_AMX,
 }
 
-// NOTE(mw): Anything produced via DepGraph::with_task() must implement
+// FIXME(mw): Anything that is produced via DepGraph::with_task() must implement
 //            the HashStable trait. Normally DepGraph::with_task() calls are
 //            hidden behind queries, but CGU creation is a special case in two
 //            ways: (1) it's not a query and (2) CGU are output nodes, so their
@@ -142,7 +142,6 @@ pub(crate) fn shift_mask_val<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 shift_mask_val(bx, bx.element_type(llty), bx.element_type(mask_llty), invert);
             bx.vector_splat(bx.vector_length(mask_llty), mask)
         }
-        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
         _ => bug!("shift_mask_val: expected Integer or Vector, found {:?}", kind),
     }
 }
@@ -154,7 +153,6 @@ pub fn asm_const_to_str<'tcx>(
     ty_and_layout: TyAndLayout<'tcx>,
 ) -> String {
     let mir::ConstValue::Scalar(scalar) = const_value else {
-        // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
         span_bug!(sp, "expected Scalar for promoted asm const, but got {:#?}", const_value)
     };
     let value = scalar.assert_scalar_int().to_bits(ty_and_layout.size);
@@ -168,7 +166,6 @@ pub fn asm_const_to_str<'tcx>(
             ty::IntTy::I128 => (value as i128).to_string(),
             ty::IntTy::Isize => unreachable!(),
         },
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         _ => span_bug!(sp, "asm const has bad type {}", ty_and_layout.ty),
     }
 }
@@ -229,10 +226,10 @@ pub fn i686_decorated_name(
             DllCallingConvention::C => {}
             DllCallingConvention::Stdcall(arg_list_size)
             | DllCallingConvention::Fastcall(arg_list_size) => {
-                write!(&mut decorated_name, "@{arg_list_size}").expect("write to buffer is infallible");
+                write!(&mut decorated_name, "@{arg_list_size}").unwrap();
             }
             DllCallingConvention::Vectorcall(arg_list_size) => {
-                write!(&mut decorated_name, "@@{arg_list_size}").expect("write to buffer is infallible");
+                write!(&mut decorated_name, "@@{arg_list_size}").unwrap();
             }
         }
     }

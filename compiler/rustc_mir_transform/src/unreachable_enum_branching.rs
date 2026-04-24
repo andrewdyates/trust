@@ -71,7 +71,7 @@ fn variant_discriminants<'tcx>(
             .iter_enumerated()
             .filter_map(|(idx, layout)| {
                 (!layout.is_uninhabited())
-                    .then(|| ty.discriminant_for_variant(tcx, idx).expect("invariant: inhabited variant must have a discriminant").val // tRust: unwrap elimination)
+                    .then(|| ty.discriminant_for_variant(tcx, idx).unwrap().val)
             })
             .collect(),
     }
@@ -106,7 +106,7 @@ impl<'tcx> crate::MirPass<'tcx> for UnreachableEnumBranching {
                 // If there are some generics, we can still get the allowed variants.
                 variant_range
                     .map(|variant| {
-                        discriminant_ty.discriminant_for_variant(tcx, variant).expect("invariant: enum variant must have a discriminant").val // tRust: unwrap elimination
+                        discriminant_ty.discriminant_for_variant(tcx, variant).unwrap().val
                     })
                     .collect()
             } else {
@@ -117,7 +117,6 @@ impl<'tcx> crate::MirPass<'tcx> for UnreachableEnumBranching {
 
             unreachable_targets.clear();
             let TerminatorKind::SwitchInt { targets, discr } = &bb_data.terminator().kind else {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!()
             };
 
@@ -197,7 +196,7 @@ impl<'tcx> crate::MirPass<'tcx> for UnreachableEnumBranching {
                 if otherwise_is_last_variant {
                     // We have checked that `allowed_variants` has only one element.
                     #[allow(rustc::potential_query_instability)]
-                    let last_variant = *allowed_variants.iter().next().expect("invariant: allowed_variants must be non-empty when otherwise_is_last_variant"); // tRust: unwrap elimination
+                    let last_variant = *allowed_variants.iter().next().unwrap();
                     targets.add_target(last_variant, targets.otherwise());
                 }
                 unreachable_targets.push(targets.iter().count());

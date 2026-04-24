@@ -47,18 +47,10 @@ impl OctagonDomain {
             dbm[i * dim + i] = Some(0);
         }
 
-        let var_index: BTreeMap<String, usize> = vars
-            .iter()
-            .enumerate()
-            .map(|(i, v)| (v.clone(), i))
-            .collect();
+        let var_index: BTreeMap<String, usize> =
+            vars.iter().enumerate().map(|(i, v)| (v.clone(), i)).collect();
 
-        Self {
-            vars,
-            var_index,
-            dbm,
-            is_bottom: false,
-        }
+        Self { vars, var_index, dbm, is_bottom: false }
     }
 
     /// Create a bottom (empty) octagon.
@@ -237,10 +229,11 @@ impl OctagonDomain {
         // Check for negative cycles: any negative diagonal entry means bottom
         for i in 0..dim {
             if let Some(d) = self.get(i, i)
-                && d < 0 {
-                    self.is_bottom = true;
-                    return;
-                }
+                && d < 0
+            {
+                self.is_bottom = true;
+                return;
+            }
         }
     }
 
@@ -264,10 +257,7 @@ impl OctagonDomain {
                 Some(h) => Bound::Finite(h),
                 None => Bound::Unbounded,
             };
-            IntervalDomain::Interval {
-                low: low_bound,
-                high: high_bound,
-            }
+            IntervalDomain::Interval { low: low_bound, high: high_bound }
         } else {
             IntervalDomain::top()
         }
@@ -372,7 +362,7 @@ impl AbstractDomainOps for OctagonDomain {
                             None // Increased: widen to unconstrained
                         }
                     }
-                    (None, _) => None, // Already unconstrained
+                    (None, _) => None,       // Already unconstrained
                     (Some(_), None) => None, // New is unconstrained
                 };
             }
@@ -444,7 +434,7 @@ impl AbstractDomainOps for OctagonDomain {
             for j in 0..dim {
                 let idx = i * dim + j;
                 match (self.dbm[idx], other.dbm[idx]) {
-                    (_, None) => {} // Other unconstrained: ok
+                    (_, None) => {}                  // Other unconstrained: ok
                     (None, Some(_)) => return false, // We're unconstrained, other isn't
                     (Some(a), Some(b)) => {
                         if a > b {

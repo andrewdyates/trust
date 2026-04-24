@@ -50,7 +50,7 @@ pub enum PrintKind {
 }
 
 impl PrintKind {
-    /// tRust: known issue — rust-analyzer doesn't support `#![feature(macro_derive)]` yet
+    /// FIXME: rust-analyzer doesn't support `#![feature(macro_derive)]` yet
     /// (<https://github.com/rust-lang/rust-analyzer/issues/21043>), which breaks autocomplete.
     /// Work around that by aliasing the trait constant to a regular constant.
     const ALL_VARIANTS: &[Self] = <Self as AllVariants>::ALL_VARIANTS;

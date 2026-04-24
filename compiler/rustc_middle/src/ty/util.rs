@@ -235,7 +235,6 @@ impl<'tcx> TyCtxt<'tcx> {
         match tail.kind() {
             ty::Foreign(..) => false,
             ty::Str | ty::Slice(..) | ty::Dynamic(..) => true,
-            // tRust: invariant: unexpected unsized tail: <...>
             _ => bug!("unexpected unsized tail: {:?}", tail),
         }
     }
@@ -370,7 +369,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 (&ty::Tuple(a_tys), &ty::Tuple(b_tys)) if a_tys.len() == b_tys.len() => {
                     if let Some(&a_last) = a_tys.last() {
                         a = a_last;
-                        b = *b_tys.last().expect("invariant: collection is non-empty");
+                        b = *b_tys.last().unwrap();
                     } else {
                         break;
                     }
@@ -520,7 +519,6 @@ impl<'tcx> TyCtxt<'tcx> {
 
         let impl_args = match *self.type_of(impl_def_id).instantiate_identity().kind() {
             ty::Adt(def_, args) if def_ == def => args,
-            // tRust: invariant: expected ADT for self type of Drop impl
             _ => span_bug!(self.def_span(impl_def_id), "expected ADT for self type of `Drop` impl"),
         };
 
@@ -732,7 +730,7 @@ impl<'tcx> TyCtxt<'tcx> {
         } else if self.is_foreign_item(def_id) {
             Ty::new_imm_ptr(self, static_ty)
         } else {
-            // tRust: known issue — These things don't *really* have 'static lifetime.
+            // FIXME: These things don't *really* have 'static lifetime.
             Ty::new_imm_ref(self, self.lifetimes.re_static, static_ty)
         }
     }
@@ -771,7 +769,7 @@ impl<'tcx> TyCtxt<'tcx> {
             tcx: self,
         };
 
-        let expanded_type = visitor.expand_opaque_ty(def_id, args).expect("invariant: expand_opaque_ty returned a valid value");
+        let expanded_type = visitor.expand_opaque_ty(def_id, args).unwrap();
         if visitor.found_recursion { Err(expanded_type) } else { Ok(expanded_type) }
     }
 
@@ -1003,7 +1001,7 @@ impl<'tcx> OpaqueTypeExpander<'tcx> {
             // If another opaque type that we contain is recursive, then it
             // will report the error, so we don't have to.
             self.found_any_recursion = true;
-            self.found_recursion = def_id == *self.primary_def_id.as_ref().expect("invariant: value is Some");
+            self.found_recursion = def_id == *self.primary_def_id.as_ref().unwrap();
             None
         }
     }
@@ -1092,7 +1090,6 @@ impl<'tcx> Ty<'tcx> {
             ty::Int(ity) => Integer::from_int_ty(&tcx, ity).size(),
             ty::Uint(uty) => Integer::from_uint_ty(&tcx, uty).size(),
             ty::Float(fty) => Float::from_float_ty(fty).size(),
-            // tRust: invariant: non primitive type
             _ => bug!("non primitive type"),
         }
     }
@@ -1101,7 +1098,6 @@ impl<'tcx> Ty<'tcx> {
         match *self.kind() {
             ty::Int(ity) => (Integer::from_int_ty(&tcx, ity).size(), true),
             ty::Uint(uty) => (Integer::from_uint_ty(&tcx, uty).size(), false),
-            // tRust: invariant: non integer discriminant
             _ => bug!("non integer discriminant"),
         }
     }
@@ -1288,8 +1284,8 @@ impl<'tcx> Ty<'tcx> {
             | ty::FnDef(..)
             | ty::Error(_)
             | ty::FnPtr(..) => true,
-            // tRust: UnsafeBinder wraps an inner type; delegate to it for async drop check
-            ty::UnsafeBinder(inner) => inner.skip_binder().is_trivially_not_async_drop(),
+            // FIXME(unsafe_binders):
+            ty::UnsafeBinder(_) => todo!(),
             ty::Tuple(fields) => fields.iter().all(Self::is_trivially_not_async_drop),
             ty::Pat(elem_ty, _) | ty::Slice(elem_ty) | ty::Array(elem_ty, _) => {
                 elem_ty.is_trivially_not_async_drop()
@@ -1351,7 +1347,7 @@ impl<'tcx> Ty<'tcx> {
     /// (Note that this implies that if `ty` has an async destructor attached,
     /// then `needs_async_drop` will definitely return `true` for `ty`.)
     ///
-    // tRust: known issue (zetanumbers) — Note that this method is used to check eligible types
+    // FIXME(zetanumbers): Note that this method is used to check eligible types
     // in unions.
     #[inline]
     pub fn needs_async_drop(self, tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>) -> bool {
@@ -1402,7 +1398,8 @@ impl<'tcx> Ty<'tcx> {
                     _ => self,
                 };
 
-                // tRust: known issue — // We should be canonicalizing, or else moving this to a method of inference
+                // FIXME
+                // We should be canonicalizing, or else moving this to a method of inference
                 // context, or *something* like that,
                 // but for now just avoid passing inference variables
                 // to queries that can't cope with them.
@@ -1467,7 +1464,7 @@ impl<'tcx> Ty<'tcx> {
 
             // Generic or inferred types
             //
-            // tRust: known issue (ecstaticmorse) — Maybe we should `bug` here? This should probably only be
+            // FIXME(ecstaticmorse): Maybe we should `bug` here? This should probably only be
             // called for known, fully-monomorphized types.
             ty::Alias(..) | ty::Param(_) | ty::Bound(..) | ty::Placeholder(_) | ty::Infer(_) => {
                 false
@@ -1495,7 +1492,7 @@ impl<'tcx> Ty<'tcx> {
         ty
     }
 
-    // tRust: known issue (compiler-errors) — Think about removing this.
+    // FIXME(compiler-errors): Think about removing this.
     #[inline]
     pub fn outer_exclusive_binder(self) -> ty::DebruijnIndex {
         self.0.outer_exclusive_binder
@@ -1506,7 +1503,7 @@ impl<'tcx> Ty<'tcx> {
 /// *any* of the returned types need drop. Returns `Err(AlwaysRequiresDrop)` if
 /// this type always needs drop.
 //
-// tRust: known issue (zetanumbers) — consider replacing this with only
+// FIXME(zetanumbers): consider replacing this with only
 // `needs_drop_components_with_async`
 #[inline]
 pub fn needs_drop_components<'tcx>(
@@ -1542,7 +1539,7 @@ pub fn needs_drop_components_with_async<'tcx>(
         // Foreign types can never have destructors.
         ty::Foreign(..) => Ok(SmallVec::new()),
 
-        // tRust: known issue (zetanumbers) — Temporary workaround for async drop of dynamic types
+        // FIXME(zetanumbers): Temporary workaround for async drop of dynamic types
         ty::Dynamic(..) | ty::Error(_) => {
             if asyncness.is_async() {
                 Ok(SmallVec::new())

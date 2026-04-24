@@ -31,7 +31,7 @@ impl<'ll, 'tcx> AsmBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         dest: Option<Self::BasicBlock>,
         catch_funclet: Option<(Self::BasicBlock, Option<&Self::Funclet>)>,
     ) {
-        let asm_arch = self.tcx.sess.asm_arch.expect("invariant: target has asm architecture");
+        let asm_arch = self.tcx.sess.asm_arch.unwrap();
 
         // Collect the types of output operands
         let mut constraints = vec![];
@@ -326,7 +326,6 @@ impl<'ll, 'tcx> AsmBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
             dest,
             catch_funclet,
         )
-        // tRust: invariant — rustc's inline asm lowering must produce a constraint string LLVM accepts
         .unwrap_or_else(|| span_bug!(line_spans[0], "LLVM asm constraint validation failed"));
 
         let mut attrs = SmallVec::<[_; 2]>::new();
@@ -383,7 +382,7 @@ impl<'tcx> AsmCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
         options: InlineAsmOptions,
         _line_spans: &[Span],
     ) {
-        let asm_arch = self.tcx.sess.asm_arch.expect("invariant: target has asm architecture");
+        let asm_arch = self.tcx.sess.asm_arch.unwrap();
 
         // Build the template string
         let mut template_str = String::new();
@@ -413,7 +412,6 @@ impl<'tcx> AsmCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
                         GlobalAsmOperandRef::SymFn { instance } => {
                             let llval = self.get_fn(instance);
                             self.add_compiler_used_global(llval);
-                            // SAFETY: The value is a valid LLVM global value, and the output function pointer is valid.
                             let symbol = llvm::build_string(|s| unsafe {
                                 llvm::LLVMRustGetMangledName(llval, s);
                             })
@@ -428,7 +426,6 @@ impl<'tcx> AsmCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
                                 .copied()
                                 .unwrap_or_else(|| self.get_static(def_id));
                             self.add_compiler_used_global(llval);
-                            // SAFETY: The value is a valid LLVM global value, and the output function pointer is valid.
                             let symbol = llvm::build_string(|s| unsafe {
                                 llvm::LLVMRustGetMangledName(llval, s);
                             })
@@ -452,7 +449,6 @@ impl<'tcx> AsmCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
 
     fn mangled_name(&self, instance: Instance<'tcx>) -> String {
         let llval = self.get_fn(instance);
-        // SAFETY: The value is a valid LLVM global value, and the output function pointer is valid.
         llvm::build_string(|s| unsafe {
             llvm::LLVMRustGetMangledName(llval, s);
         })
@@ -487,7 +483,6 @@ pub(crate) fn inline_asm_call<'ll>(
     let fty = bx.cx.type_func(&argtys, output);
 
     // Ask LLVM to verify that the constraints are well-formed.
-    // SAFETY: `fty` is a valid function type, and the constraint string buffer and length are valid.
     let constraints_ok = unsafe { llvm::LLVMRustInlineAsmVerify(fty, cons.as_ptr(), cons.len()) };
     debug!("constraint verification result: {:?}", constraints_ok);
     if !constraints_ok {
@@ -495,7 +490,6 @@ pub(crate) fn inline_asm_call<'ll>(
         return None;
     }
 
-    // SAFETY: The LLVM context is valid, the assembly template and constraints are valid strings, and the function type is valid.
     let v = unsafe {
         llvm::LLVMGetInlineAsm(
             fty,
@@ -512,9 +506,9 @@ pub(crate) fn inline_asm_call<'ll>(
 
     let call = if !labels.is_empty() {
         assert!(catch_funclet.is_none());
-        bx.callbr(fty, None, None, v, inputs, dest.expect("invariant: asm destination block is set"), labels, None, None)
+        bx.callbr(fty, None, None, v, inputs, dest.unwrap(), labels, None, None)
     } else if let Some((catch, funclet)) = catch_funclet {
-        bx.invoke(fty, None, None, v, inputs, dest.expect("invariant: asm destination block is set"), catch, funclet, None)
+        bx.invoke(fty, None, None, v, inputs, dest.unwrap(), catch, funclet, None)
     } else {
         bx.call(fty, None, None, v, inputs, None, None)
     };
@@ -713,7 +707,6 @@ fn reg_to_llvm(reg: InlineAsmRegOrRegClass, layout: Option<&TyAndLayout<'_>>) ->
             M68k(M68kInlineAsmRegClass::reg_data) => "d",
             CSKY(CSKYInlineAsmRegClass::reg) => "r",
             CSKY(CSKYInlineAsmRegClass::freg) => "f",
-            // tRust: invariant — LLVM inline asm register-class lowering must never be asked to handle SPIR-V
             SpirV(SpirVInlineAsmRegClass::reg) => bug!("LLVM backend does not support SPIR-V"),
             Err => unreachable!(),
         }
@@ -809,7 +802,6 @@ fn modifier_to_llvm(
         S390x(_) => None,
         Sparc(_) => None,
         Msp430(_) => None,
-        // tRust: invariant — LLVM inline asm modifier lowering must never be asked to handle SPIR-V registers
         SpirV(SpirVInlineAsmRegClass::reg) => bug!("LLVM backend does not support SPIR-V"),
         M68k(_) => None,
         CSKY(_) => None,
@@ -895,7 +887,6 @@ fn dummy_output_type<'ll>(cx: &CodegenCx<'ll, '_>, reg: InlineAsmRegClass) -> &'
         M68k(M68kInlineAsmRegClass::reg_data) => cx.type_i32(),
         CSKY(CSKYInlineAsmRegClass::reg) => cx.type_i32(),
         CSKY(CSKYInlineAsmRegClass::freg) => cx.type_f32(),
-        // tRust: invariant — LLVM register type selection must never be requested for SPIR-V inline asm registers
         SpirV(SpirVInlineAsmRegClass::reg) => bug!("LLVM backend does not support SPIR-V"),
         Err => unreachable!(),
     }
@@ -914,7 +905,7 @@ fn llvm_asm_scalar_type<'ll>(cx: &CodegenCx<'ll, '_>, scalar: Scalar) -> &'ll Ty
         Primitive::Float(Float::F32) => cx.type_f32(),
         Primitive::Float(Float::F64) => cx.type_f64(),
         Primitive::Float(Float::F128) => cx.type_f128(),
-        // tRust: known issue — (erikdesjardins): handle non-default addrspace ptr sizes
+        // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
         Primitive::Pointer(_) => cx.type_from_integer(dl.ptr_sized_integer()),
         _ => unreachable!(),
     }
@@ -954,7 +945,7 @@ fn llvm_fixup_input<'ll, 'tcx>(
             let elem_ty = llvm_asm_scalar_type(bx.cx, s);
             let count = 16 / layout.size.bytes();
             let vec_ty = bx.cx.type_vector(elem_ty, count);
-            // tRust: known issue — (erikdesjardins): handle non-default addrspace ptr sizes
+            // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
             if let Primitive::Pointer(_) = s.primitive() {
                 let t = bx.type_from_integer(dl.ptr_sized_integer());
                 value = bx.ptrtoint(value, t);

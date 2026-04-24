@@ -9,8 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::fmt::Write;
+use trust_types::fx::FxHashMap;
 
 use trust_report::diagnostics::{error_code_for_kind, suggested_fix};
 use trust_types::{
@@ -89,10 +89,7 @@ pub(crate) fn obligation_to_diagnostic(obligation: &ObligationReport) -> Diagnos
         }
         ObligationOutcome::RuntimeChecked { note } => {
             let msg = match note {
-                Some(n) => format!(
-                    "Runtime checked: {} ({})",
-                    obligation.description, n
-                ),
+                Some(n) => format!("Runtime checked: {} ({})", obligation.description, n),
                 None => format!("Runtime checked: {}", obligation.description),
             };
             (DiagnosticSeverity::Hint, msg)
@@ -110,14 +107,10 @@ pub(crate) fn obligation_to_diagnostic(obligation: &ObligationReport) -> Diagnos
         }
     };
 
-    let range = obligation
-        .location
-        .as_ref()
-        .map(source_span_to_range)
-        .unwrap_or(Range {
-            start: Position { line: 0, character: 0 },
-            end: Position { line: 0, character: 0 },
-        });
+    let range = obligation.location.as_ref().map(source_span_to_range).unwrap_or(Range {
+        start: Position { line: 0, character: 0 },
+        end: Position { line: 0, character: 0 },
+    });
 
     // Add suggested fix as related information when applicable.
     let mut related = Vec::new();
@@ -196,9 +189,7 @@ fn format_proved_message(description: &str, strength: &ProofStrength, time_ms: u
     let method = match &strength.reasoning {
         trust_types::ReasoningKind::Smt => "SMT",
         trust_types::ReasoningKind::BoundedModelCheck { depth } => {
-            return format!(
-                "Proved safe (BMC depth {depth}, {time_ms}ms): {description}"
-            );
+            return format!("Proved safe (BMC depth {depth}, {time_ms}ms): {description}");
         }
         trust_types::ReasoningKind::Inductive => "induction",
         trust_types::ReasoningKind::Deductive => "deduction",
@@ -208,9 +199,7 @@ fn format_proved_message(description: &str, strength: &ProofStrength, time_ms: u
         trust_types::ReasoningKind::AbstractInterpretation => "abstract interpretation",
         trust_types::ReasoningKind::CdclResolution => "CDCL resolution",
         trust_types::ReasoningKind::TheoryLemma { theory } => {
-            return format!(
-                "Proved safe by {theory:?} theory lemma ({time_ms}ms): {description}"
-            );
+            return format!("Proved safe by {theory:?} theory lemma ({time_ms}ms): {description}");
         }
         trust_types::ReasoningKind::BitBlasting => "bit-blasting",
         trust_types::ReasoningKind::SymbolicExecution => "symbolic execution",
@@ -236,11 +225,8 @@ fn format_failed_message(
     let mut msg = format!("{title}: {description}");
 
     if let Some(cex) = counterexample {
-        let vars: Vec<String> = cex
-            .variables
-            .iter()
-            .map(|v| format!("{} = {}", v.name, v.display))
-            .collect();
+        let vars: Vec<String> =
+            cex.variables.iter().map(|v| format!("{} = {}", v.name, v.display)).collect();
         if !vars.is_empty() {
             let _ = write!(msg, "\nCounterexample: {}", vars.join(", "));
         }
@@ -295,10 +281,7 @@ mod tests {
 
     #[test]
     fn test_file_to_uri_already_uri() {
-        assert_eq!(
-            file_to_uri("file:///src/lib.rs"),
-            "file:///src/lib.rs"
-        );
+        assert_eq!(file_to_uri("file:///src/lib.rs"), "file:///src/lib.rs");
     }
 
     #[test]
@@ -314,10 +297,8 @@ mod tests {
                 line_end: 10,
                 col_end: 15,
             }),
-            outcome: ObligationOutcome::Proved {
-                strength: ProofStrength::smt_unsat(),
-            },
-            solver: "z4".to_string(),
+            outcome: ObligationOutcome::Proved { strength: ProofStrength::smt_unsat() },
+            solver: "z4".into(),
             time_ms: 3,
             evidence: None,
         };
@@ -363,7 +344,7 @@ mod tests {
                     ],
                 }),
             },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 3,
             evidence: None,
         };
@@ -392,10 +373,8 @@ mod tests {
                 line_end: 12,
                 col_end: 20,
             }),
-            outcome: ObligationOutcome::Unknown {
-                reason: "nonlinear arithmetic".to_string(),
-            },
-            solver: "z4".to_string(),
+            outcome: ObligationOutcome::Unknown { reason: "nonlinear arithmetic".to_string() },
+            solver: "z4".into(),
             time_ms: 50,
             evidence: None,
         };
@@ -414,7 +393,7 @@ mod tests {
             proof_level: ProofLevel::L1Functional,
             location: None,
             outcome: ObligationOutcome::Timeout { timeout_ms: 5000 },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 5000,
             evidence: None,
         };
@@ -436,7 +415,7 @@ mod tests {
             outcome: ObligationOutcome::RuntimeChecked {
                 note: Some("overflow_checks enabled".to_string()),
             },
-            solver: "runtime".to_string(),
+            solver: "runtime".into(),
             time_ms: 0,
             evidence: None,
         };
@@ -455,7 +434,7 @@ mod tests {
             proof_level: ProofLevel::L0Safety,
             location: None,
             outcome: ObligationOutcome::Failed { counterexample: None },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 1,
             evidence: None,
         };
@@ -491,7 +470,7 @@ mod tests {
             },
             functions: vec![
                 FunctionProofReport {
-                    function: "safe_fn".to_string(),
+                    function: "safe_fn".into(),
                     summary: FunctionSummary {
                         total_obligations: 1,
                         proved: 1,
@@ -513,16 +492,14 @@ mod tests {
                             line_end: 3,
                             col_end: 10,
                         }),
-                        outcome: ObligationOutcome::Proved {
-                            strength: ProofStrength::smt_unsat(),
-                        },
-                        solver: "z4".to_string(),
+                        outcome: ObligationOutcome::Proved { strength: ProofStrength::smt_unsat() },
+                        solver: "z4".into(),
                         time_ms: 5,
                         evidence: None,
                     }],
                 },
                 FunctionProofReport {
-                    function: "risky_fn".to_string(),
+                    function: "risky_fn".into(),
                     summary: FunctionSummary {
                         total_obligations: 2,
                         proved: 1,
@@ -545,10 +522,8 @@ mod tests {
                                 line_end: 5,
                                 col_end: 10,
                             }),
-                            outcome: ObligationOutcome::Failed {
-                                counterexample: None,
-                            },
-                            solver: "z4".to_string(),
+                            outcome: ObligationOutcome::Failed { counterexample: None },
+                            solver: "z4".into(),
                             time_ms: 3,
                             evidence: None,
                         },
@@ -566,7 +541,7 @@ mod tests {
                             outcome: ObligationOutcome::Proved {
                                 strength: ProofStrength::smt_unsat(),
                             },
-                            solver: "z4".to_string(),
+                            solver: "z4".into(),
                             time_ms: 7,
                             evidence: None,
                         },
@@ -589,47 +564,30 @@ mod tests {
 
         // safe.rs has 1 diagnostic (proved)
         assert_eq!(params[1].diagnostics.len(), 1);
-        assert_eq!(
-            params[1].diagnostics[0].severity,
-            Some(DiagnosticSeverity::Information)
-        );
+        assert_eq!(params[1].diagnostics[0].severity, Some(DiagnosticSeverity::Information));
     }
 
     #[test]
     fn test_proved_message_formatting() {
-        let msg = format_proved_message(
-            "division by zero",
-            &ProofStrength::smt_unsat(),
-            5,
-        );
+        let msg = format_proved_message("division by zero", &ProofStrength::smt_unsat(), 5);
         assert_eq!(msg, "Proved safe by SMT (5ms): division by zero");
 
-        let msg = format_proved_message(
-            "loop invariant",
-            &ProofStrength::bounded(10),
-            100,
-        );
+        let msg = format_proved_message("loop invariant", &ProofStrength::bounded(10), 100);
         assert_eq!(msg, "Proved safe (BMC depth 10, 100ms): loop invariant");
 
-        let msg = format_proved_message(
-            "postcondition",
-            &ProofStrength::deductive(),
-            25,
-        );
+        let msg = format_proved_message("postcondition", &ProofStrength::deductive(), 25);
         assert_eq!(msg, "Proved safe by deduction (25ms): postcondition");
     }
 
     #[test]
     fn test_failed_message_with_counterexample() {
         let cex = CounterexampleReport {
-            variables: vec![
-                CounterexampleVariable {
-                    name: "x".to_string(),
-                    value: "42".to_string(),
-                    value_type: "int".to_string(),
-                    display: "42".to_string(),
-                },
-            ],
+            variables: vec![CounterexampleVariable {
+                name: "x".to_string(),
+                value: "42".to_string(),
+                value_type: "int".to_string(),
+                display: "42".to_string(),
+            }],
         };
         let msg = format_failed_message("possible overflow", "add overflow", Some(&cex));
         assert!(msg.contains("possible overflow: add overflow"));
@@ -650,10 +608,8 @@ mod tests {
             kind: "division_by_zero".to_string(),
             proof_level: ProofLevel::L0Safety,
             location: None,
-            outcome: ObligationOutcome::Proved {
-                strength: ProofStrength::smt_unsat(),
-            },
-            solver: "z4".to_string(),
+            outcome: ObligationOutcome::Proved { strength: ProofStrength::smt_unsat() },
+            solver: "z4".into(),
             time_ms: 5,
             evidence: None,
         };

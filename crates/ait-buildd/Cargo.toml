@@ -1,0 +1,42 @@
+# ait-buildd: Memory-aware build daemon for tRust multi-agent builds.
+#
+# Phase 3 of #895 (epic #894, build efficiency). Provides a long-lived daemon
+# that accepts cargo build requests over a Unix-domain socket and coalesces
+# redundant work across concurrent agents. This crate currently combines:
+#   - the `scheduler` module (memory-pressure reader, per-build job-cap math,
+#     and SIGSTOP/SIGCONT backpressure), and
+#   - the socket server skeleton that echoes Build requests and answers
+#     HealthCheck/Shutdown.
+# Wiring the scheduler into the server's request-handling loop, request
+# deduplication, and cargo-wrapper auto-start arrive in subsequent milestones
+# of #895.
+#
+# Design: designs/2026-04-17-multi-agent-build-coordination.md (Component 5).
+#
+# Author: Andrew Yates <andrewyates.name@gmail.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "ait-buildd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "ait_buildd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ait-buildd"
+path = "src/bin/ait-buildd.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+dirs = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

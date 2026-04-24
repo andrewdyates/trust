@@ -14,6 +14,61 @@ use trust_disasm::{ControlFlow, Decoder, Instruction};
 use crate::cfg::{Cfg, LiftedBlock};
 use crate::error::LiftError;
 
+fn strict_cfg_error(message: impl Into<String>) -> LiftError {
+    LiftError::Ssa(format!("CFG proof mode: {}", message.into()))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DirectBranchTarget {
+    InFunction(u64),
+    External(u64),
+}
+
+fn classify_direct_branch_target(
+    insn: &Instruction,
+    entry: u64,
+    func_end: u64,
+) -> Result<DirectBranchTarget, LiftError> {
+    match insn.branch_target() {
+        Some(target) if target >= entry && target < func_end => {
+            Ok(DirectBranchTarget::InFunction(target))
+        }
+        Some(target) => Ok(DirectBranchTarget::External(target)),
+        None => Err(strict_cfg_error(format!(
+            "branch at 0x{:x} has no direct CFG target",
+            insn.address
+        ))),
+    }
+}
+
+fn conditional_branch_successors(
+    insn: &Instruction,
+    fallthrough: u64,
+    entry: u64,
+    func_end: u64,
+) -> Result<Vec<u64>, LiftError> {
+    let target = classify_direct_branch_target(insn, entry, func_end)?;
+    let raw_fallthrough = fallthrough;
+    let fallthrough = (fallthrough >= entry && fallthrough < func_end).then_some(fallthrough);
+
+    match (fallthrough, target) {
+        (Some(fallthrough), DirectBranchTarget::InFunction(target)) => {
+            Ok(vec![fallthrough, target])
+        }
+        (None, DirectBranchTarget::External(_)) => Ok(Vec::new()),
+        (Some(fallthrough), DirectBranchTarget::External(target)) => {
+            Err(strict_cfg_error(format!(
+                "conditional branch at 0x{:x} has in-function fallthrough 0x{fallthrough:x} and external target 0x{target:x}; existing CFG edges cannot represent the external arm",
+                insn.address
+            )))
+        }
+        (None, DirectBranchTarget::InFunction(target)) => Err(strict_cfg_error(format!(
+            "conditional branch at 0x{:x} has in-function target 0x{target:x} and external fallthrough 0x{raw_fallthrough:x}; existing CFG edges cannot represent the external arm",
+            insn.address
+        ))),
+    }
+}
+
 /// Recover the control flow graph starting from `entry` within the given
 /// code bytes (which begin at virtual address `base_addr`).
 ///
@@ -58,22 +113,18 @@ pub(crate) fn recover_cfg(
                         break;
                     }
                     ControlFlow::Branch => {
-                        if let Some(target) = insn.branch_target()
-                            && target >= entry && target < func_end {
-                                successors.push(target);
-                            }
+                        match classify_direct_branch_target(insn, entry, func_end)? {
+                            DirectBranchTarget::InFunction(target) => successors.push(target),
+                            DirectBranchTarget::External(_) => {}
+                        }
                         instructions.push(insn.clone());
                         break;
                     }
                     ControlFlow::ConditionalBranch => {
                         // Fallthrough + target.
-                        if next_addr < func_end {
-                            successors.push(next_addr);
-                        }
-                        if let Some(target) = insn.branch_target()
-                            && target >= entry && target < func_end {
-                                successors.push(target);
-                            }
+                        successors.extend(conditional_branch_successors(
+                            insn, next_addr, entry, func_end,
+                        )?);
                         instructions.push(insn.clone());
                         break;
                     }
@@ -94,9 +145,15 @@ pub(crate) fn recover_cfg(
                         instructions.push(insn.clone());
                         break;
                     }
-                    ControlFlow::Fallthrough | _ => {
+                    ControlFlow::Fallthrough => {
                         instructions.push(insn.clone());
                         addr = next_addr;
+                    }
+                    other => {
+                        return Err(strict_cfg_error(format!(
+                            "unsupported control-flow classification at 0x{:x}: {other:?}",
+                            insn.address
+                        )));
                     }
                 }
             } else {
@@ -107,17 +164,22 @@ pub(crate) fn recover_cfg(
 
         // If we fell off the end without a terminator, add fallthrough to next leader.
         if !is_return && successors.is_empty() && !instructions.is_empty() {
-            let last = instructions
-                .last()
-                .ok_or(LiftError::EmptyBlock { address: leader_addr })?;
+            let last = instructions.last().ok_or(LiftError::EmptyBlock { address: leader_addr })?;
             let fallthrough = last.address + last.size as u64;
-            if fallthrough < func_end
-                && !matches!(
-                    last.flow,
-                    ControlFlow::Branch | ControlFlow::Return | ControlFlow::Exception
-                )
-            {
-                successors.push(fallthrough);
+            match last.flow {
+                ControlFlow::Fallthrough if fallthrough < func_end => successors.push(fallthrough),
+                ControlFlow::Fallthrough
+                | ControlFlow::Call
+                | ControlFlow::Branch
+                | ControlFlow::ConditionalBranch
+                | ControlFlow::Return
+                | ControlFlow::Exception => {}
+                other => {
+                    return Err(strict_cfg_error(format!(
+                        "unsupported control-flow classification at 0x{:x}: {other:?}",
+                        last.address
+                    )));
+                }
             }
         }
 
@@ -131,7 +193,11 @@ pub(crate) fn recover_cfg(
     }
 
     // Set entry to the block containing the entry address.
-    cfg.entry = cfg.block_index(entry).unwrap_or(0);
+    cfg.entry = cfg.block_index(entry).ok_or_else(|| {
+        strict_cfg_error(format!(
+            "entry address 0x{entry:x} does not map to a recovered basic block"
+        ))
+    })?;
 
     Ok(cfg)
 }
@@ -170,43 +236,43 @@ fn find_leaders(
             if offset >= code.len() {
                 break;
             }
-            let insn = decoder.decode(&code[offset..], cur).map_err(|e| {
-                LiftError::Disasm {
-                    address: cur,
-                    source: e,
-                }
-            })?;
+            let insn = decoder
+                .decode(&code[offset..], cur)
+                .map_err(|e| LiftError::Disasm { address: cur, source: e })?;
             let next = cur + insn.size as u64;
 
             match insn.flow {
                 ControlFlow::Return | ControlFlow::Exception => break,
                 ControlFlow::Branch => {
-                    if let Some(target) = insn.branch_target()
-                        && target >= entry && target < func_end {
+                    match classify_direct_branch_target(&insn, entry, func_end)? {
+                        DirectBranchTarget::InFunction(target) => {
                             leaders.insert(target);
                             worklist.push_back(target);
                         }
+                        DirectBranchTarget::External(_) => {}
+                    }
                     break;
                 }
                 ControlFlow::ConditionalBranch => {
                     // Fallthrough is a leader.
-                    if next < func_end {
-                        leaders.insert(next);
-                        worklist.push_back(next);
+                    for successor in conditional_branch_successors(&insn, next, entry, func_end)? {
+                        leaders.insert(successor);
+                        worklist.push_back(successor);
                     }
-                    if let Some(target) = insn.branch_target()
-                        && target >= entry && target < func_end {
-                            leaders.insert(target);
-                            worklist.push_back(target);
-                        }
                     break;
                 }
                 ControlFlow::Call => {
                     // After a call, fallthrough is a leader if we split here.
                     cur = next;
                 }
-                ControlFlow::Fallthrough | _ => {
+                ControlFlow::Fallthrough => {
                     cur = next;
+                }
+                other => {
+                    return Err(strict_cfg_error(format!(
+                        "unsupported control-flow classification at 0x{:x}: {other:?}",
+                        insn.address
+                    )));
                 }
             }
         }
@@ -256,5 +322,31 @@ mod tests {
         // module compiles and the types are correct.
         let leaders = BTreeSet::from([0x1000u64]);
         assert!(leaders.contains(&0x1000));
+    }
+
+    #[test]
+    fn test_recover_cfg_indirect_branch_fails_closed() {
+        let decoder = trust_disasm::aarch64::Aarch64Decoder::new();
+        let code = 0xD61F0200u32.to_le_bytes(); // BR X16
+
+        let err = recover_cfg(&decoder, &code, 0x1000, 0x1000, 0x1004)
+            .expect_err("indirect branch target is not recoverable");
+        assert!(err.to_string().contains("has no direct CFG target"));
+    }
+
+    #[test]
+    fn test_recover_cfg_direct_external_branch_is_terminal() {
+        let decoder = trust_disasm::aarch64::Aarch64Decoder::new();
+        let code = 0x14000040u32.to_le_bytes(); // B #0x100 from 0x1000 -> 0x1100
+
+        let cfg = recover_cfg(&decoder, &code, 0x1000, 0x1000, 0x1004)
+            .expect("direct external branch should recover as a terminal block");
+
+        assert_eq!(cfg.block_count(), 1);
+        let block = &cfg.blocks[0];
+        assert_eq!(block.start_addr, 0x1000);
+        assert!(block.successors.is_empty());
+        assert!(!block.is_return);
+        assert_eq!(block.instructions.last().and_then(Instruction::branch_target), Some(0x1100));
     }
 }

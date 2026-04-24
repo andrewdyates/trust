@@ -44,10 +44,17 @@ impl QuantifierEliminator {
 
     /// Classify a quantified formula into a tier.
     #[must_use]
-    pub fn classify(&self, bindings: &[(String, Sort)], body: &Formula) -> TierClassification {
+    pub fn classify(
+        &self,
+        bindings: &[(trust_types::Symbol, Sort)],
+        body: &Formula,
+    ) -> TierClassification {
         // Try Tier 1: finite domain detection.
         if let Some(domain) = detect_finite_domain(bindings, body, self.config.max_unroll) {
-            return TierClassification { tier: QuantifierTier::FiniteUnrolling, domain: Some(domain) };
+            return TierClassification {
+                tier: QuantifierTier::FiniteUnrolling,
+                domain: Some(domain),
+            };
         }
 
         // Try Tier 2: Presburger arithmetic detection.
@@ -193,11 +200,17 @@ pub fn has_quantifiers(formula: &Formula) -> bool {
         Formula::Forall(..) | Formula::Exists(..) => true,
         Formula::Not(inner) | Formula::Neg(inner) => has_quantifiers(inner),
         Formula::And(cs) | Formula::Or(cs) => cs.iter().any(has_quantifiers),
-        Formula::Implies(a, b) | Formula::Eq(a, b) | Formula::Lt(a, b) | Formula::Le(a, b)
-        | Formula::Gt(a, b) | Formula::Ge(a, b) | Formula::Add(a, b) | Formula::Sub(a, b)
-        | Formula::Mul(a, b) | Formula::Div(a, b) | Formula::Rem(a, b) => {
-            has_quantifiers(a) || has_quantifiers(b)
-        }
+        Formula::Implies(a, b)
+        | Formula::Eq(a, b)
+        | Formula::Lt(a, b)
+        | Formula::Le(a, b)
+        | Formula::Gt(a, b)
+        | Formula::Ge(a, b)
+        | Formula::Add(a, b)
+        | Formula::Sub(a, b)
+        | Formula::Mul(a, b)
+        | Formula::Div(a, b)
+        | Formula::Rem(a, b) => has_quantifiers(a) || has_quantifiers(b),
         Formula::Ite(c, t, e) | Formula::Store(c, t, e) => {
             has_quantifiers(c) || has_quantifiers(t) || has_quantifiers(e)
         }
@@ -226,25 +239,26 @@ fn worst_tier_strategy(formula: &Formula, elim: &QuantifierEliminator) -> Solver
                 worse_strategy(acc, worst_tier_strategy(c, elim))
             })
         }
-        Formula::Implies(a, b) | Formula::Eq(a, b) | Formula::Lt(a, b) | Formula::Le(a, b)
-        | Formula::Gt(a, b) | Formula::Ge(a, b) | Formula::Add(a, b) | Formula::Sub(a, b)
-        | Formula::Mul(a, b) | Formula::Div(a, b) | Formula::Rem(a, b) => {
-            worse_strategy(
-                worst_tier_strategy(a, elim),
-                worst_tier_strategy(b, elim),
-            )
+        Formula::Implies(a, b)
+        | Formula::Eq(a, b)
+        | Formula::Lt(a, b)
+        | Formula::Le(a, b)
+        | Formula::Gt(a, b)
+        | Formula::Ge(a, b)
+        | Formula::Add(a, b)
+        | Formula::Sub(a, b)
+        | Formula::Mul(a, b)
+        | Formula::Div(a, b)
+        | Formula::Rem(a, b) => {
+            worse_strategy(worst_tier_strategy(a, elim), worst_tier_strategy(b, elim))
         }
         Formula::Ite(c, t, e) | Formula::Store(c, t, e) => {
-            let ct = worse_strategy(
-                worst_tier_strategy(c, elim),
-                worst_tier_strategy(t, elim),
-            );
+            let ct = worse_strategy(worst_tier_strategy(c, elim), worst_tier_strategy(t, elim));
             worse_strategy(ct, worst_tier_strategy(e, elim))
         }
-        Formula::Select(a, i) => worse_strategy(
-            worst_tier_strategy(a, elim),
-            worst_tier_strategy(i, elim),
-        ),
+        Formula::Select(a, i) => {
+            worse_strategy(worst_tier_strategy(a, elim), worst_tier_strategy(i, elim))
+        }
         _ => SolverStrategy::QuantifierFree,
     }
 }

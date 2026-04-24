@@ -172,7 +172,6 @@ impl CheckInlineAssembly {
                     self.items.push((ItemKind::NakedAsm, span));
                 }
                 rustc_ast::AsmMacro::GlobalAsm => {
-                    // tRust: invariant — expression-position asm handling in naked functions can only encounter `asm!` or `naked_asm!`, while `global_asm!` stays item-only
                     span_bug!(span, "`global_asm!` is not allowed in this position")
                 }
             },

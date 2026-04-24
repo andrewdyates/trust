@@ -70,7 +70,7 @@ impl ZaniResult {
     pub fn to_verification_result(&self) -> trust_types::VerificationResult {
         match &self.verdict {
             Verdict::Proved => trust_types::VerificationResult::Proved {
-                solver: "zani-lib".to_string(),
+                solver: "zani-lib".into(),
                 time_ms: self.time_ms,
                 strength: trust_types::ProofStrength::bounded(u64::from(self.bmc_depth)),
                 proof_certificate: self.proof_certificate.clone(),
@@ -81,25 +81,23 @@ impl ZaniResult {
                     let assignments: Vec<(String, trust_types::CounterexampleValue)> = tc
                         .variables
                         .iter()
-                        .map(|(name, value)| {
-                            (name.clone(), typed_value_to_cex_value(value))
-                        })
+                        .map(|(name, value)| (name.clone(), typed_value_to_cex_value(value)))
                         .collect();
                     trust_types::Counterexample::new(assignments)
                 });
                 trust_types::VerificationResult::Failed {
-                    solver: "zani-lib".to_string(),
+                    solver: "zani-lib".into(),
                     time_ms: self.time_ms,
                     counterexample: cex,
                 }
             }
             Verdict::Unknown { reason } => trust_types::VerificationResult::Unknown {
-                solver: "zani-lib".to_string(),
+                solver: "zani-lib".into(),
                 time_ms: self.time_ms,
                 reason: reason.clone(),
             },
             Verdict::Timeout => trust_types::VerificationResult::Timeout {
-                solver: "zani-lib".to_string(),
+                solver: "zani-lib".into(),
                 timeout_ms: self.time_ms,
             },
         }
@@ -113,9 +111,9 @@ fn typed_value_to_cex_value(value: &TypedValue) -> trust_types::CounterexampleVa
         TypedValue::Int(n) => trust_types::CounterexampleValue::Int(*n),
         TypedValue::Uint(n) => trust_types::CounterexampleValue::Uint(*n),
         TypedValue::BitVec { value, .. } => trust_types::CounterexampleValue::Uint(*value),
-        TypedValue::String(s) => trust_types::CounterexampleValue::Uint(
-            s.parse::<u128>().unwrap_or(0),
-        ),
+        TypedValue::String(s) => {
+            trust_types::CounterexampleValue::Uint(s.parse::<u128>().unwrap_or(0))
+        }
     }
 }
 
@@ -159,11 +157,7 @@ pub struct TypedCounterexample {
 impl TypedCounterexample {
     /// Create a new counterexample with the given variable assignments.
     pub fn new(variables: BTreeMap<String, TypedValue>) -> Self {
-        Self {
-            variables,
-            trace: None,
-            violated_properties: Vec::new(),
-        }
+        Self { variables, trace: None, violated_properties: Vec::new() }
     }
 
     /// Add a trace to this counterexample.
@@ -289,11 +283,6 @@ impl EncodingContext {
             })
             .collect();
 
-        Self {
-            function_name,
-            smtlib_script,
-            bmc_depth,
-            variable_names,
-        }
+        Self { function_name, smtlib_script, bmc_depth, variable_names }
     }
 }

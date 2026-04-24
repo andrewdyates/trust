@@ -28,7 +28,7 @@ where
     }
 }
 
-// tRust: known issue — Nix this cfg, so we can write unit tests independently of rustc
+// FIXME: Nix this cfg, so we can write unit tests independently of rustc
 #[cfg(feature = "rustc")]
 mod rustc {
     use rustc_middle::ty::layout::LayoutCx;

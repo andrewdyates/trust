@@ -7,9 +7,9 @@ use trust_types::fx::FxHashSet;
 
 use trust_types::{VcKind, VerifiableFunction};
 
+use super::cross_check_all_vcs;
 use super::reference_vcgen::reference_vcgen;
 use super::warnings::CrossCheckWarning;
-use super::{cross_check_all_vcs};
 
 // ---------------------------------------------------------------------------
 // CrossCheckResult: dual-method VC comparison (#192)
@@ -25,21 +25,14 @@ pub enum CrossCheckVerdict {
     /// The primary method produced a VC kind that the reference method missed.
     /// This could mean the primary is overly conservative (generating spurious VCs)
     /// or the reference method has a gap.
-    PrimaryOnly {
-        missing_from_reference: Vec<VcKind>,
-    },
+    PrimaryOnly { missing_from_reference: Vec<VcKind> },
     /// The reference method produced a VC kind that the primary method missed.
     /// This is the DANGEROUS case: the primary VC generator may be UNSOUND,
     /// missing a real safety check.
-    ReferenceOnly {
-        missing_from_primary: Vec<VcKind>,
-    },
+    ReferenceOnly { missing_from_primary: Vec<VcKind> },
     /// Both directions have mismatches. Likely a fundamental disagreement
     /// about which operations need checking.
-    Divergent {
-        primary_only: Vec<VcKind>,
-        reference_only: Vec<VcKind>,
-    },
+    Divergent { primary_only: Vec<VcKind>, reference_only: Vec<VcKind> },
 }
 
 /// Result of cross-checking a function's VCs via two independent generation methods.
@@ -79,9 +72,7 @@ impl CrossCheckResult {
 /// Run a full cross-check for a function: generate VCs via both methods,
 /// run structural checks on the primary VCs, and compare the VC-kind sets.
 #[must_use]
-pub fn full_cross_check(
-    func: &VerifiableFunction,
-) -> CrossCheckResult {
+pub fn full_cross_check(func: &VerifiableFunction) -> CrossCheckResult {
     let reference_kinds = reference_vcgen(func);
     let primary_vcs = crate::generate_vcs(func);
     let primary_kinds: Vec<VcKind> = primary_vcs.iter().map(|vc| vc.kind.clone()).collect();
@@ -137,8 +128,7 @@ pub(crate) fn categorize_vc(kind: &VcKind) -> VcCategory {
 
 pub(crate) fn compare_vc_sets(primary: &[VcKind], reference: &[VcKind]) -> CrossCheckVerdict {
     let primary_cats: FxHashSet<VcCategory> = primary.iter().map(categorize_vc).collect();
-    let reference_cats: FxHashSet<VcCategory> =
-        reference.iter().map(categorize_vc).collect();
+    let reference_cats: FxHashSet<VcCategory> = reference.iter().map(categorize_vc).collect();
 
     let in_primary_only: FxHashSet<_> = primary_cats.difference(&reference_cats).copied().collect();
     let in_reference_only: FxHashSet<_> =
@@ -171,9 +161,6 @@ pub(crate) fn compare_vc_sets(primary: &[VcKind], reference: &[VcKind]) -> Cross
             .filter(|k| in_reference_only.contains(&categorize_vc(k)))
             .cloned()
             .collect();
-        CrossCheckVerdict::Divergent {
-            primary_only: p_only,
-            reference_only: r_only,
-        }
+        CrossCheckVerdict::Divergent { primary_only: p_only, reference_only: r_only }
     }
 }

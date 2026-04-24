@@ -559,6 +559,7 @@ impl<T: ?Sized> RwLock<T> {
     /// Determines whether the lock is poisoned.
     ///
     /// If another thread is active, the lock can still become poisoned at any
+    
     /// without additional synchronization.
     ///
     /// # Examples

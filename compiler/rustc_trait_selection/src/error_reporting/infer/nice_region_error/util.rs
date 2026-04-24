@@ -53,7 +53,7 @@ pub fn find_param_with_region<'tcx>(
 
     let def_id = id.as_local()?;
 
-    // tRust: known issue — use def_kind
+    // FIXME: use def_kind
     // Don't perform this on closures
     match tcx.hir_node_by_def_id(generic_param_scope) {
         hir::Node::Expr(&hir::Expr { kind: hir::ExprKind::Closure { .. }, .. }) => {
@@ -110,7 +110,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
 
     // Here, we check for the case where the anonymous region
     // is in the return type as written by the user.
-    // tRust: known issue (#42703) — - Need to handle certain cases here.
+    // FIXME(#42703) - Need to handle certain cases here.
     pub(super) fn is_return_type_anon(
         &self,
         scope_def_id: LocalDefId,
@@ -151,7 +151,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
 
     // Here we check for the case where anonymous region
     // corresponds to self and if yes, we display E0312.
-    // tRust: known issue (#42700) — - Need to format self properly to
+    // FIXME(#42700) - Need to format self properly to
     // enable E0621 for it.
     pub(super) fn is_self_anon(&self, is_first: bool, scope_def_id: LocalDefId) -> bool {
         is_first

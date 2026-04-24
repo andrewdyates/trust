@@ -39,10 +39,11 @@ impl FormulaArena {
         match &node {
             FormulaNode::Var(name, _) if name == var && !bound.contains(var) => replacement,
 
+            // tRust #883: Quantifier bindings use Symbol; convert to String for tracking.
             FormulaNode::Forall(bindings, body) | FormulaNode::Exists(bindings, body) => {
                 let mut new_bound = bound.clone();
-                for (name, _) in bindings {
-                    new_bound.insert(name.clone());
+                for (sym, _) in bindings {
+                    new_bound.insert(sym.as_str().to_string());
                 }
                 let new_body = self.substitute_inner(*body, var, replacement, &new_bound);
                 if new_body == *body {
@@ -113,10 +114,11 @@ impl FormulaArena {
                 root
             }
 
+            // tRust #883: Quantifier bindings use Symbol; convert to String for tracking.
             FormulaNode::Forall(bindings, body) | FormulaNode::Exists(bindings, body) => {
                 let mut new_bound = bound.clone();
-                for (name, _) in bindings {
-                    new_bound.insert(name.clone());
+                for (sym, _) in bindings {
+                    new_bound.insert(sym.as_str().to_string());
                 }
                 let new_body = self.substitute_all_inner(*body, mapping, &new_bound);
                 if new_body == *body {
@@ -264,15 +266,9 @@ impl FormulaArena {
                 self.push(FormulaNode::BvExtract { inner: new_children[0], high, low })
             }
 
-            // N-ary
-            FormulaNode::And(..) => {
-                let (start, count) = self.push_refs(new_children);
-                self.push(FormulaNode::And(start, count))
-            }
-            FormulaNode::Or(..) => {
-                let (start, count) = self.push_refs(new_children);
-                self.push(FormulaNode::Or(start, count))
-            }
+            // N-ary (use push_nary for hash-consing)
+            FormulaNode::And(..) => self.push_nary(new_children, true),
+            FormulaNode::Or(..) => self.push_nary(new_children, false),
 
             // Binary
             FormulaNode::Implies(..) => {

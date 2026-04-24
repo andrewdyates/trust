@@ -332,7 +332,7 @@ impl<Wrapped, Tag> AstNodeWrapper<Wrapped, Tag> {
     }
 }
 
-// tRust: known issue — remove after `stmt_expr_attributes` is stabilized.
+// FIXME: remove after `stmt_expr_attributes` is stabilized.
 impl<T, Tag> From<AstNodeWrapper<Box<T>, Tag>> for AstNodeWrapper<T, Tag> {
     fn from(value: AstNodeWrapper<Box<T>, Tag>) -> Self {
         AstNodeWrapper { wrapped: *value.wrapped, tag: value.tag }

@@ -71,13 +71,6 @@ fn current_dll_path() -> Result<PathBuf, String> {
             use std::os::unix::prelude::*;
 
             #[cfg(not(target_os = "aix"))]
-            // SAFETY: `addr` is derived from a valid function pointer (`current_dll_path`) in
-            // this shared object, so it is a valid code address for `dladdr` to resolve.
-            // `info` is zero-initialized via `mem::zeroed()` which is valid for `Dl_info`
-            // (a plain C struct of pointers and integers). `dladdr` writes to `info` only on
-            // success (returns non-zero). The `dli_fname` pointer returned is valid for the
-            // lifetime of the loaded shared object, which outlives this function call.
-            // tRust: improved SAFETY comment specificity
             unsafe {
                 let addr = current_dll_path as fn() -> Result<PathBuf, String> as *mut _;
                 let mut info = std::mem::zeroed();
@@ -97,15 +90,6 @@ fn current_dll_path() -> Result<PathBuf, String> {
             }
 
             #[cfg(target_os = "aix")]
-            // SAFETY: `addr` is the function descriptor address of `current_dll_path`, which
-            // resides in the data section of this loaded module. `loadquery(L_GETINFO)` fills
-            // the buffer with `ld_info` structs describing all loaded modules. The buffer is
-            // resized in a loop until `loadquery` succeeds (ENOMEM means buffer too small).
-            // Each `ld_info` entry's `ldinfo_dataorg`/`ldinfo_datasize` describe a valid data
-            // segment range. Pointer arithmetic via `ldinfo_next` is safe because the kernel
-            // guarantees the linked list terminates (next==0). `ldinfo_filename` is a valid
-            // C string within the `ld_info` allocation.
-            // tRust: improved SAFETY comment specificity
             unsafe {
                 // On AIX, the symbol `current_dll_path` references a function descriptor.
                 // A function descriptor is consisted of (See https://reviews.llvm.org/D62532)
@@ -124,7 +108,7 @@ fn current_dll_path() -> Result<PathBuf, String> {
                     {
                         break;
                     } else {
-                        if std::io::Error::last_os_error().raw_os_error().expect("invariant: OS error from loadquery always has a raw error code") != libc::ENOMEM { // tRust: unwrap -> expect
+                        if std::io::Error::last_os_error().raw_os_error().unwrap() != libc::ENOMEM {
                             return Err("loadquery failed".into());
                         }
                         buffer.resize(buffer.len() * 2, std::mem::zeroed::<libc::ld_info>());
@@ -164,11 +148,6 @@ fn current_dll_path() -> Result<PathBuf, String> {
     use windows::core::PCWSTR;
 
     let mut module = HMODULE::default();
-    // SAFETY: `current_dll_path` is a valid function pointer in this module's code segment,
-    // so casting it to `*mut u16` yields a valid address for GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS.
-    // `module` is a local variable with exclusive access. GetModuleHandleExW with FROM_ADDRESS
-    // resolves the module containing the given address without incrementing the refcount.
-    // tRust: improved SAFETY comment specificity
     unsafe {
         GetModuleHandleExW(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -182,11 +161,6 @@ fn current_dll_path() -> Result<PathBuf, String> {
     .map_err(|e| e.to_string())?;
 
     let mut filename = vec![0; 1024];
-    // SAFETY: `module` was successfully obtained from GetModuleHandleExW above (the `?`
-    // propagated any failure). `filename` is a freshly allocated Vec<u16> with capacity 1024,
-    // and we pass a mutable slice of it, so the buffer is valid for writes up to its length.
-    // GetModuleFileNameW writes at most `filename.len()` wide chars and returns the count written.
-    // tRust: improved SAFETY comment specificity
     let n = unsafe { GetModuleFileNameW(Some(module), &mut filename) } as usize;
     if n == 0 {
         return Err(format!("GetModuleFileNameW failed: {}", io::Error::last_os_error()));

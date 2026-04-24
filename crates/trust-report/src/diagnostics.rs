@@ -52,8 +52,7 @@ impl std::fmt::Display for ErrorCode {
 // Error code constants — one per VcKind category.
 pub const E_ARITHMETIC_OVERFLOW: ErrorCode =
     ErrorCode { number: 1, title: "possible arithmetic overflow" };
-pub const E_SHIFT_OVERFLOW: ErrorCode =
-    ErrorCode { number: 2, title: "possible shift overflow" };
+pub const E_SHIFT_OVERFLOW: ErrorCode = ErrorCode { number: 2, title: "possible shift overflow" };
 pub const E_DIVISION_BY_ZERO: ErrorCode =
     ErrorCode { number: 3, title: "possible division by zero" };
 pub const E_REMAINDER_BY_ZERO: ErrorCode =
@@ -62,36 +61,25 @@ pub const E_INDEX_OUT_OF_BOUNDS: ErrorCode =
     ErrorCode { number: 5, title: "possible index out of bounds" };
 pub const E_SLICE_BOUNDS_CHECK: ErrorCode =
     ErrorCode { number: 6, title: "possible slice bounds violation" };
-pub const E_ASSERTION_FAILURE: ErrorCode =
-    ErrorCode { number: 7, title: "assertion may fail" };
-pub const E_PRECONDITION: ErrorCode =
-    ErrorCode { number: 8, title: "precondition may not hold" };
-pub const E_POSTCONDITION: ErrorCode =
-    ErrorCode { number: 9, title: "postcondition may not hold" };
-pub const E_CAST_OVERFLOW: ErrorCode =
-    ErrorCode { number: 10, title: "possible cast overflow" };
+pub const E_ASSERTION_FAILURE: ErrorCode = ErrorCode { number: 7, title: "assertion may fail" };
+pub const E_PRECONDITION: ErrorCode = ErrorCode { number: 8, title: "precondition may not hold" };
+pub const E_POSTCONDITION: ErrorCode = ErrorCode { number: 9, title: "postcondition may not hold" };
+pub const E_CAST_OVERFLOW: ErrorCode = ErrorCode { number: 10, title: "possible cast overflow" };
 pub const E_NEGATION_OVERFLOW: ErrorCode =
     ErrorCode { number: 11, title: "possible negation overflow" };
 pub const E_UNREACHABLE: ErrorCode =
     ErrorCode { number: 12, title: "unreachable code may be reached" };
-pub const E_DEAD_STATE: ErrorCode =
-    ErrorCode { number: 13, title: "dead state reachable" };
-pub const E_DEADLOCK: ErrorCode =
-    ErrorCode { number: 14, title: "possible deadlock" };
-pub const E_TEMPORAL: ErrorCode =
-    ErrorCode { number: 15, title: "temporal property violation" };
-pub const E_LIVENESS: ErrorCode =
-    ErrorCode { number: 16, title: "liveness property violation" };
-pub const E_FAIRNESS: ErrorCode =
-    ErrorCode { number: 17, title: "fairness constraint violation" };
-pub const E_TAINT_VIOLATION: ErrorCode =
-    ErrorCode { number: 18, title: "taint policy violation" };
+pub const E_DEAD_STATE: ErrorCode = ErrorCode { number: 13, title: "dead state reachable" };
+pub const E_DEADLOCK: ErrorCode = ErrorCode { number: 14, title: "possible deadlock" };
+pub const E_TEMPORAL: ErrorCode = ErrorCode { number: 15, title: "temporal property violation" };
+pub const E_LIVENESS: ErrorCode = ErrorCode { number: 16, title: "liveness property violation" };
+pub const E_FAIRNESS: ErrorCode = ErrorCode { number: 17, title: "fairness constraint violation" };
+pub const E_TAINT_VIOLATION: ErrorCode = ErrorCode { number: 18, title: "taint policy violation" };
 pub const E_REFINEMENT_VIOLATION: ErrorCode =
     ErrorCode { number: 19, title: "refinement violation" };
 pub const E_RESILIENCE_VIOLATION: ErrorCode =
     ErrorCode { number: 20, title: "resilience violation" };
-pub const E_PROTOCOL_VIOLATION: ErrorCode =
-    ErrorCode { number: 21, title: "protocol violation" };
+pub const E_PROTOCOL_VIOLATION: ErrorCode = ErrorCode { number: 21, title: "protocol violation" };
 pub const E_NON_TERMINATION: ErrorCode =
     ErrorCode { number: 22, title: "possible non-termination" };
 
@@ -250,13 +238,14 @@ impl DiagnosticFormatter {
 
         // Counterexample for failures
         if self.include_counterexamples
-            && let ObligationOutcome::Failed { counterexample: Some(cex) } = &obligation.outcome {
-                let vars: Vec<String> =
-                    cex.variables.iter().map(|v| format!("{} = {}", v.name, v.display)).collect();
-                if !vars.is_empty() {
-                    lines.push(format!("   = note: counterexample: {}", vars.join(", ")));
-                }
+            && let ObligationOutcome::Failed { counterexample: Some(cex) } = &obligation.outcome
+        {
+            let vars: Vec<String> =
+                cex.variables.iter().map(|v| format!("{} = {}", v.name, v.display)).collect();
+            if !vars.is_empty() {
+                lines.push(format!("   = note: counterexample: {}", vars.join(", ")));
             }
+        }
 
         // Reason for unknown/timeout
         match &obligation.outcome {
@@ -280,11 +269,8 @@ impl DiagnosticFormatter {
     /// Format all non-proved obligations from a function report.
     #[must_use]
     pub fn format_function(&self, function: &FunctionProofReport) -> String {
-        let diagnostics: Vec<String> = function
-            .obligations
-            .iter()
-            .filter_map(|ob| self.format_obligation(ob))
-            .collect();
+        let diagnostics: Vec<String> =
+            function.obligations.iter().filter_map(|ob| self.format_obligation(ob)).collect();
 
         diagnostics.join("\n\n")
     }
@@ -474,7 +460,7 @@ mod tests {
                     ],
                 }),
             },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 3,
             evidence: None,
         }
@@ -493,7 +479,7 @@ mod tests {
                 col_end: 23,
             }),
             outcome: ObligationOutcome::Proved { strength: ProofStrength::smt_unsat() },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 1,
             evidence: None,
         }
@@ -511,10 +497,8 @@ mod tests {
                 line_end: 12,
                 col_end: 20,
             }),
-            outcome: ObligationOutcome::Unknown {
-                reason: "nonlinear arithmetic".to_string(),
-            },
-            solver: "z4".to_string(),
+            outcome: ObligationOutcome::Unknown { reason: "nonlinear arithmetic".to_string() },
+            solver: "z4".into(),
             time_ms: 50,
             evidence: None,
         }
@@ -527,7 +511,7 @@ mod tests {
             proof_level: ProofLevel::L1Functional,
             location: None,
             outcome: ObligationOutcome::Timeout { timeout_ms: 5000 },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 5000,
             evidence: None,
         }
@@ -616,7 +600,7 @@ mod tests {
             outcome: ObligationOutcome::RuntimeChecked {
                 note: Some("validated by runtime".to_string()),
             },
-            solver: "runtime".to_string(),
+            solver: "runtime".into(),
             time_ms: 1,
             evidence: None,
         };
@@ -634,7 +618,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::usize(), Ty::usize()),
                     },
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -646,7 +630,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: Some(Counterexample::new(vec![
                         ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -657,22 +641,24 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             // Use Postcondition (no runtime fallback) so Auto policy keeps it as Unknown.
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "lookup".to_string(),
+                    function: "lookup".into(),
                     location: SourceSpan {
                         file: "src/lookup.rs".to_string(),
                         line_start: 12,
@@ -684,7 +670,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Unknown {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 50,
                     reason: "nonlinear arithmetic".to_string(),
                 },
@@ -715,16 +701,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_fn".to_string(),
+                function: "safe_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
 
         let report = build_json_report("safe_crate", &results);
@@ -738,13 +726,13 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "f".to_string(),
+                    function: "f".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
                     counterexample: None,
                 },
@@ -752,13 +740,13 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::IndexOutOfBounds,
-                    function: "f".to_string(),
+                    function: "f".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 2,
                     counterexample: None,
                 },
@@ -775,7 +763,7 @@ mod tests {
     fn test_format_function_mixed_obligations() {
         let formatter = DiagnosticFormatter::new();
         let func = FunctionProofReport {
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             summary: FunctionSummary {
                 total_obligations: 3,
                 proved: 1,
@@ -815,7 +803,7 @@ mod tests {
                 col_end: 15,
             }),
             outcome: ObligationOutcome::Failed { counterexample: None },
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 5,
             evidence: None,
         };

@@ -59,7 +59,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let mut user_written_bounds = Vec::new();
         let mut potential_assoc_items = Vec::new();
         for poly_trait_ref in hir_bounds.iter() {
-            // tRust: known issue — (mgca): We actually leak `trait_object_dummy_self` if the type of any assoc
+            // FIXME(mgca): We actually leak `trait_object_dummy_self` if the type of any assoc
             //              const mentions `Self` (in "Self projections" which we intentionally
             //              allow). That's because we query feed the instantiated type to `type_of`.
             //              That's really bad, dummy self should never escape lowering! It leads us
@@ -90,7 +90,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let (mut elaborated_trait_bounds, elaborated_projection_bounds) =
             traits::expand_trait_aliases(tcx, user_written_bounds.iter().copied());
 
-        // tRust: known issue — (sized-hierarchy): https://github.com/rust-lang/rust/pull/142712#issuecomment-3013231794
+        // FIXME(sized-hierarchy): https://github.com/rust-lang/rust/pull/142712#issuecomment-3013231794
         debug!(?user_written_bounds, ?elaborated_trait_bounds);
         let meta_sized_did = tcx.require_lang_item(LangItem::MetaSized, span);
         // Don't strip out `MetaSized` when the user wrote it explicitly, only when it was
@@ -148,7 +148,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         //
         // Also make sure we detect conflicting bounds from expanding trait aliases.
         //
-        // tRust: known issue — (#150936): Since the elaborated projection bounds also include the user-written ones
+        // FIXME(#150936): Since the elaborated projection bounds also include the user-written ones
         //                 and we're separately rejecting duplicate+conflicting bindings for trait
         //                 object types when lowering assoc item bindings, there are basic cases
         //                 where we're emitting two distinct but very similar diagnostics.
@@ -214,7 +214,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 tcx,
                 [ClauseWithSupertraitSpan::new(
                     ty::TraitRef::identity(tcx, principal_trait.def_id()).upcast(tcx),
-                    *spans.last().expect("invariant: non-empty collection"),
+                    *spans.last().unwrap(),
                 )],
             )
             .filter_only_self()
@@ -225,7 +225,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 let bound_predicate = clause.kind();
                 match bound_predicate.skip_binder() {
                     ty::ClauseKind::Trait(pred) => {
-                        // tRust: known issue — (negative_bounds): Handle this correctly...
+                        // FIXME(negative_bounds): Handle this correctly...
                         let trait_ref =
                             tcx.anonymize_bound_vars(bound_predicate.rebind(pred.trait_ref));
                         ordered_associated_items.extend(
@@ -277,7 +277,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
 
                         self.check_elaborated_projection_mentions_input_lifetimes(
                             pred,
-                            *spans.first().expect("invariant: non-empty collection"),
+                            *spans.first().unwrap(),
                             supertrait_span,
                         );
                     }
@@ -290,7 +290,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         for &(projection_bound, span) in projection_bounds.values() {
             let def_id = projection_bound.item_def_id();
             if tcx.generics_require_sized_self(def_id) {
-                // tRust: known issue — (mgca): Ideally we would generalize the name of this lint to sth. like
+                // FIXME(mgca): Ideally we would generalize the name of this lint to sth. like
                 // `unused_associated_item_bindings` since this can now also trigger on *const*
                 // projections / assoc *const* bindings.
                 tcx.emit_node_span_lint(
@@ -354,7 +354,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 assert_eq!(trait_pred.polarity, ty::PredicatePolarity::Positive);
                 assert_eq!(trait_ref.self_ty(), dummy_self);
 
-                let span = *spans.first().expect("invariant: non-empty collection");
+                let span = *spans.first().unwrap();
 
                 // Verify that `dummy_self` did not leak inside generic parameter defaults. This
                 // could not be done at path creation, since we need to see through trait aliases.
@@ -433,7 +433,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         auto_trait_predicates.dedup();
 
         // N.b. principal, projections, auto traits
-        // tRust: known issue — This is actually wrong with multiple principals in regards to symbol mangling
+        // FIXME: This is actually wrong with multiple principals in regards to symbol mangling
         let mut v = principal_trait_ref
             .into_iter()
             .chain(existential_projections)
@@ -492,7 +492,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         debug!(?late_bound_in_projection_term);
         debug!(?late_bound_in_term);
 
-        // tRust: known issue — point at the type params that don't have appropriate lifetimes:
+        // FIXME: point at the type params that don't have appropriate lifetimes:
         // struct S1<F: for<'a> Fn(&i32, &i32) -> &'a i32>(F);
         //                         ----  ----     ^^^^^^^
         // NOTE(mgca): This error should be impossible to trigger with assoc const bindings.
@@ -805,7 +805,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             _ => return false,
         }
 
-        // tRust: known issue — Only emit this suggestion if the trait is dyn-compatible.
+        // FIXME: Only emit this suggestion if the trait is dyn-compatible.
         diag.multipart_suggestion(
             "you can add the `dyn` keyword if you want a trait object",
             sugg,
@@ -841,7 +841,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
     ) -> bool {
         let tcx = self.tcx();
         let parent_id = tcx.hir_get_parent_item(hir_id).def_id;
-        // tRust: known issue — If `type_alias_impl_trait` is enabled, also look for `Trait0<Ty = Trait1>`
+        // FIXME: If `type_alias_impl_trait` is enabled, also look for `Trait0<Ty = Trait1>`
         //        and suggest `Trait0<Ty = impl Trait1>`.
         // Functions are found in three different contexts.
         // 1. Independent functions

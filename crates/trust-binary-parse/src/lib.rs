@@ -7,11 +7,10 @@
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
 pub(crate) mod constants;
 pub(crate) mod cursor;
-pub(crate) mod demangle;
 pub(crate) mod detect;
 pub(crate) mod dwarf;
 pub(crate) mod elf;
@@ -27,11 +26,11 @@ pub(crate) mod relocation;
 pub(crate) mod symbol;
 pub(crate) mod unified;
 
-pub use detect::{detect_format, BinaryFormat};
+pub use detect::{BinaryFormat, detect_format};
 pub use dwarf::DwarfInfo;
 pub use elf::Elf64;
 pub use elf_relocation::{Elf64Dyn, Elf64Rel, Elf64Rela, ResolvedRelocation};
 pub use error::{DwarfError, ParseError};
 pub use macho::MachO;
 pub use pe::Pe;
-pub use unified::{parse_binary, Architecture, BinaryInfo, SectionInfo, SymbolInfo};
+pub use unified::{Architecture, BinaryInfo, SectionInfo, SymbolInfo, parse_binary};

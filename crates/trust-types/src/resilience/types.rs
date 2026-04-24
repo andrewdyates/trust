@@ -82,10 +82,7 @@ impl FailureModel {
     /// Each dependency can be in one of (1 + failure_modes.len()) states:
     /// healthy, or any of its failure modes.
     pub fn failure_combination_count(&self) -> usize {
-        self.dependencies
-            .iter()
-            .map(|dep| 1 + dep.failure_modes.len())
-            .product()
+        self.dependencies.iter().map(|dep| 1 + dep.failure_modes.len()).product()
     }
 
     /// Generate all failure scenarios as a list of (dep_index, Option<FailureMode>) tuples.
@@ -251,10 +248,7 @@ impl FaultAssumptions {
 
     /// Get the recovery strategy for a specific failure mode.
     pub fn recovery_for(&self, mode: &FailureMode) -> Option<&RecoveryStrategy> {
-        self.recovery_strategies
-            .iter()
-            .find(|(m, _)| m == mode)
-            .map(|(_, s)| s)
+        self.recovery_strategies.iter().find(|(m, _)| m == mode).map(|(_, s)| s)
     }
 
     /// Classify the actual resilience level based on the analysis report.

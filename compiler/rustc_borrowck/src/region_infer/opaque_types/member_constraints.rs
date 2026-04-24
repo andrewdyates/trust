@@ -122,7 +122,6 @@ fn apply_member_constraint<'tcx>(
             (true, true) => r1.min(r2),
             (true, false) => r2,
             (false, true) => r1,
-            // tRust: invariant: structural invariant — region total order must make all pairs comparable
             (false, false) => bug!("incomparable regions in total order"),
         }
     }) else {

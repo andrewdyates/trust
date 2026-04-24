@@ -153,8 +153,6 @@
 //!     b: bool,
 //! }
 //! let x = U8AsBool { n: 1 };
-//! # // SAFETY: `x` stores the byte `1`, which is a valid representation for both
-//! # // `u8` and `bool`, so every union field read performed by this match is valid.
 //! unsafe {
 //!     match x {
 //!         U8AsBool { n: 2 } => {}
@@ -299,7 +297,7 @@ impl IntRange {
     #[inline]
     pub fn from_singleton(x: MaybeInfiniteInt) -> IntRange {
         // `unwrap()` is ok on a finite value
-        IntRange { lo: x, hi: x.plus_one().expect("invariant: x is Finite, so plus_one succeeds") } // tRust: unwrap -> expect
+        IntRange { lo: x, hi: x.plus_one().unwrap() }
     }
 
     /// Construct a range with these boundaries.
@@ -307,7 +305,7 @@ impl IntRange {
     #[inline]
     pub fn from_range(lo: MaybeInfiniteInt, mut hi: MaybeInfiniteInt, end: RangeEnd) -> IntRange {
         if end == RangeEnd::Included {
-            hi = hi.plus_one().expect("invariant: included range end is Finite, so plus_one succeeds"); // tRust: unwrap -> expect
+            hi = hi.plus_one().unwrap();
         }
         if lo >= hi {
             // This should have been caught earlier by E0030.
@@ -858,7 +856,7 @@ impl<Cx: PatCx> Constructor<Cx> {
                     }
             }
             (Str(self_val), Str(other_val)) => {
-                // tRust: known issue — Once valtrees are available we can directly use the bytes
+                // FIXME Once valtrees are available we can directly use the bytes
                 // in the `Str` variant of the valtree for the comparison here.
                 self_val == other_val
             }
@@ -914,7 +912,7 @@ impl<Cx: PatCx> Constructor<Cx> {
             // be careful to detect strings here. However a string literal pattern will never
             // be reported as a non-exhaustiveness witness, so we can ignore this issue.
             Ref => {
-                write!(f, "&{:?}", fields.next().expect("invariant: Ref constructor always has exactly one field"))?; // tRust: unwrap -> expect
+                write!(f, "&{:?}", fields.next().unwrap())?;
             }
             Slice(slice) => {
                 write!(f, "[")?;
@@ -944,7 +942,7 @@ impl<Cx: PatCx> Constructor<Cx> {
             F64Range(lo, hi, end) => write!(f, "{lo}{end}{hi}")?,
             F128Range(lo, hi, end) => write!(f, "{lo}{end}{hi}")?,
             Str(value) => write!(f, "{value:?}")?,
-            DerefPattern(_) => write!(f, "deref!({:?})", fields.next().expect("invariant: DerefPattern constructor always has exactly one field"))?, // tRust: unwrap -> expect
+            DerefPattern(_) => write!(f, "deref!({:?})", fields.next().unwrap())?,
             Opaque(..) => write!(f, "<constant pattern>")?,
             Or => {
                 for pat in fields {

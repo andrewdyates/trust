@@ -228,8 +228,6 @@ pub(crate) fn save_temp_bitcode(
         return;
     }
     unimplemented!();
-    // SAFETY: `llmod` would be the live backend handle for `module`, and `cstr` would stay
-    // alive for the duration of `LLVMWriteBitcodeToFile`.
     /*unsafe {
         let ext = format!("{}.bc", name);
         let cgu = Some(&module.name[..]);

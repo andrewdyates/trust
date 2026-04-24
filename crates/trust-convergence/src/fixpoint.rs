@@ -42,11 +42,7 @@ pub struct FixpointConfig {
 
 impl Default for FixpointConfig {
     fn default() -> Self {
-        Self {
-            max_iterations: 100,
-            widening_delay: 3,
-            use_narrowing: true,
-        }
+        Self { max_iterations: 100, widening_delay: 3, use_narrowing: true }
     }
 }
 
@@ -215,15 +211,9 @@ impl FixpointComputer {
                     let next_val = next.values.get(&key).unwrap_or(&AbstractValue::Bottom);
                     widened_values.insert(key, widen(cur_val, next_val));
                 }
-                current = FixpointState {
-                    values: widened_values,
-                    iteration: i + 1,
-                };
+                current = FixpointState { values: widened_values, iteration: i + 1 };
             } else {
-                current = FixpointState {
-                    values: next.values,
-                    iteration: i + 1,
-                };
+                current = FixpointState { values: next.values, iteration: i + 1 };
             }
         }
         current
@@ -319,7 +309,8 @@ pub(crate) fn join(a: &AbstractValue, b: &AbstractValue) -> AbstractValue {
 ///
 /// Returns the largest value contained in both `a` and `b`.
 #[must_use]
-pub(crate) fn meet(a: &AbstractValue, b: &AbstractValue) -> AbstractValue {
+#[cfg(test)]
+fn meet(a: &AbstractValue, b: &AbstractValue) -> AbstractValue {
     match (a, b) {
         (AbstractValue::Bottom, _) | (_, AbstractValue::Bottom) => AbstractValue::Bottom,
         (AbstractValue::Top, other) | (other, AbstractValue::Top) => other.clone(),
@@ -341,15 +332,10 @@ pub(crate) fn meet(a: &AbstractValue, b: &AbstractValue) -> AbstractValue {
         (AbstractValue::Interval(lo1, hi1), AbstractValue::Interval(lo2, hi2)) => {
             let lo = (*lo1).max(*lo2);
             let hi = (*hi1).min(*hi2);
-            if lo > hi {
-                AbstractValue::Bottom
-            } else {
-                AbstractValue::Interval(lo, hi)
-            }
+            if lo > hi { AbstractValue::Bottom } else { AbstractValue::Interval(lo, hi) }
         }
         (AbstractValue::Set(s1), AbstractValue::Set(s2)) => {
-            let intersection: Vec<i64> =
-                s1.iter().filter(|v| s2.contains(v)).copied().collect();
+            let intersection: Vec<i64> = s1.iter().filter(|v| s2.contains(v)).copied().collect();
             if intersection.is_empty() {
                 AbstractValue::Bottom
             } else {
@@ -368,11 +354,7 @@ pub(crate) fn meet(a: &AbstractValue, b: &AbstractValue) -> AbstractValue {
         | (AbstractValue::Interval(lo, hi), AbstractValue::Set(s)) => {
             let filtered: Vec<i64> =
                 s.iter().filter(|v| **v >= *lo && **v <= *hi).copied().collect();
-            if filtered.is_empty() {
-                AbstractValue::Bottom
-            } else {
-                AbstractValue::Set(filtered)
-            }
+            if filtered.is_empty() { AbstractValue::Bottom } else { AbstractValue::Set(filtered) }
         }
     }
 }
@@ -460,13 +442,9 @@ pub(crate) fn includes(a: &AbstractValue, b: &AbstractValue) -> bool {
         (AbstractValue::Interval(lo, hi), AbstractValue::Constant(c)) => c >= lo && c <= hi,
         (AbstractValue::Constant(c1), AbstractValue::Constant(c2)) => c1 == c2,
         (AbstractValue::Constant(_), AbstractValue::Interval(..)) => false,
-        (AbstractValue::Set(s1), AbstractValue::Set(s2)) => {
-            s2.iter().all(|v| s1.contains(v))
-        }
+        (AbstractValue::Set(s1), AbstractValue::Set(s2)) => s2.iter().all(|v| s1.contains(v)),
         (AbstractValue::Set(s), AbstractValue::Constant(c)) => s.contains(c),
-        (AbstractValue::Constant(c), AbstractValue::Set(s)) => {
-            s.len() == 1 && s.contains(c)
-        }
+        (AbstractValue::Constant(c), AbstractValue::Set(s)) => s.len() == 1 && s.contains(c),
         (AbstractValue::Interval(lo, hi), AbstractValue::Set(s)) => {
             s.iter().all(|v| v >= lo && v <= hi)
         }
@@ -486,10 +464,10 @@ fn bounds_of(v: &AbstractValue) -> (i64, i64) {
                 (1, 0)
             } else {
                 // SAFETY: The else-branch only runs when s is non-empty.
-                let lo = s.iter().copied().min()
-                    .unwrap_or_else(|| unreachable!("min on non-empty set"));
-                let hi = s.iter().copied().max()
-                    .unwrap_or_else(|| unreachable!("max on non-empty set"));
+                let lo =
+                    s.iter().copied().min().unwrap_or_else(|| unreachable!("min on non-empty set"));
+                let hi =
+                    s.iter().copied().max().unwrap_or_else(|| unreachable!("max on non-empty set"));
                 (lo, hi)
             }
         }
@@ -535,10 +513,7 @@ mod tests {
     #[test]
     fn test_join_intervals() {
         assert_eq!(
-            join(
-                &AbstractValue::Interval(1, 5),
-                &AbstractValue::Interval(3, 10)
-            ),
+            join(&AbstractValue::Interval(1, 5), &AbstractValue::Interval(3, 10)),
             AbstractValue::Interval(1, 10)
         );
     }
@@ -546,10 +521,7 @@ mod tests {
     #[test]
     fn test_join_sets() {
         assert_eq!(
-            join(
-                &AbstractValue::Set(vec![1, 3]),
-                &AbstractValue::Set(vec![2, 3])
-            ),
+            join(&AbstractValue::Set(vec![1, 3]), &AbstractValue::Set(vec![2, 3])),
             AbstractValue::Set(vec![1, 2, 3])
         );
     }
@@ -581,10 +553,7 @@ mod tests {
     #[test]
     fn test_meet_disjoint_intervals() {
         assert_eq!(
-            meet(
-                &AbstractValue::Interval(1, 3),
-                &AbstractValue::Interval(5, 10)
-            ),
+            meet(&AbstractValue::Interval(1, 3), &AbstractValue::Interval(5, 10)),
             AbstractValue::Bottom
         );
     }
@@ -592,10 +561,7 @@ mod tests {
     #[test]
     fn test_meet_overlapping_intervals() {
         assert_eq!(
-            meet(
-                &AbstractValue::Interval(1, 7),
-                &AbstractValue::Interval(5, 10)
-            ),
+            meet(&AbstractValue::Interval(1, 7), &AbstractValue::Interval(5, 10)),
             AbstractValue::Interval(5, 7)
         );
     }
@@ -611,10 +577,7 @@ mod tests {
     #[test]
     fn test_meet_constant_outside_interval() {
         assert_eq!(
-            meet(
-                &AbstractValue::Constant(15),
-                &AbstractValue::Interval(1, 10)
-            ),
+            meet(&AbstractValue::Constant(15), &AbstractValue::Interval(1, 10)),
             AbstractValue::Bottom
         );
     }
@@ -622,10 +585,7 @@ mod tests {
     #[test]
     fn test_meet_sets() {
         assert_eq!(
-            meet(
-                &AbstractValue::Set(vec![1, 2, 3]),
-                &AbstractValue::Set(vec![2, 3, 4])
-            ),
+            meet(&AbstractValue::Set(vec![1, 2, 3]), &AbstractValue::Set(vec![2, 3, 4])),
             AbstractValue::Set(vec![2, 3])
         );
     }
@@ -641,10 +601,7 @@ mod tests {
     #[test]
     fn test_widen_intervals_upper_grows() {
         assert_eq!(
-            widen(
-                &AbstractValue::Interval(0, 10),
-                &AbstractValue::Interval(0, 15)
-            ),
+            widen(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(0, 15)),
             AbstractValue::Interval(0, i64::MAX)
         );
     }
@@ -652,10 +609,7 @@ mod tests {
     #[test]
     fn test_widen_intervals_lower_shrinks() {
         assert_eq!(
-            widen(
-                &AbstractValue::Interval(0, 10),
-                &AbstractValue::Interval(-5, 10)
-            ),
+            widen(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(-5, 10)),
             AbstractValue::Interval(i64::MIN, 10)
         );
     }
@@ -663,10 +617,7 @@ mod tests {
     #[test]
     fn test_widen_intervals_stable() {
         assert_eq!(
-            widen(
-                &AbstractValue::Interval(0, 10),
-                &AbstractValue::Interval(2, 8)
-            ),
+            widen(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(2, 8)),
             AbstractValue::Interval(0, 10)
         );
     }
@@ -676,10 +627,7 @@ mod tests {
     #[test]
     fn test_narrow_from_widened() {
         assert_eq!(
-            narrow(
-                &AbstractValue::Interval(i64::MIN, i64::MAX),
-                &AbstractValue::Interval(3, 7)
-            ),
+            narrow(&AbstractValue::Interval(i64::MIN, i64::MAX), &AbstractValue::Interval(3, 7)),
             AbstractValue::Interval(3, 7)
         );
     }
@@ -687,10 +635,7 @@ mod tests {
     #[test]
     fn test_narrow_partial_infinite() {
         assert_eq!(
-            narrow(
-                &AbstractValue::Interval(i64::MIN, 10),
-                &AbstractValue::Interval(2, 10)
-            ),
+            narrow(&AbstractValue::Interval(i64::MIN, 10), &AbstractValue::Interval(2, 10)),
             AbstractValue::Interval(2, 10)
         );
     }
@@ -698,10 +643,7 @@ mod tests {
     #[test]
     fn test_narrow_finite_unchanged() {
         assert_eq!(
-            narrow(
-                &AbstractValue::Interval(0, 10),
-                &AbstractValue::Interval(2, 8)
-            ),
+            narrow(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(2, 8)),
             AbstractValue::Interval(0, 10)
         );
     }
@@ -722,38 +664,20 @@ mod tests {
 
     #[test]
     fn test_includes_interval_contains_subinterval() {
-        assert!(includes(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Interval(2, 8)
-        ));
-        assert!(!includes(
-            &AbstractValue::Interval(2, 8),
-            &AbstractValue::Interval(0, 10)
-        ));
+        assert!(includes(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(2, 8)));
+        assert!(!includes(&AbstractValue::Interval(2, 8), &AbstractValue::Interval(0, 10)));
     }
 
     #[test]
     fn test_includes_interval_contains_constant() {
-        assert!(includes(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Constant(5)
-        ));
-        assert!(!includes(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Constant(15)
-        ));
+        assert!(includes(&AbstractValue::Interval(0, 10), &AbstractValue::Constant(5)));
+        assert!(!includes(&AbstractValue::Interval(0, 10), &AbstractValue::Constant(15)));
     }
 
     #[test]
     fn test_includes_set_contains_subset() {
-        assert!(includes(
-            &AbstractValue::Set(vec![1, 2, 3]),
-            &AbstractValue::Set(vec![1, 3])
-        ));
-        assert!(!includes(
-            &AbstractValue::Set(vec![1, 3]),
-            &AbstractValue::Set(vec![1, 2, 3])
-        ));
+        assert!(includes(&AbstractValue::Set(vec![1, 2, 3]), &AbstractValue::Set(vec![1, 3])));
+        assert!(!includes(&AbstractValue::Set(vec![1, 3]), &AbstractValue::Set(vec![1, 2, 3])));
     }
 
     // --- FixpointComputer ---
@@ -765,9 +689,7 @@ mod tests {
             widening_delay: 3,
             use_narrowing: false,
         });
-        let result = computer.compute(AbstractValue::Constant(0), |_| {
-            AbstractValue::Constant(0)
-        });
+        let result = computer.compute(AbstractValue::Constant(0), |_| AbstractValue::Constant(0));
         assert!(result.converged);
         assert_eq!(result.value, AbstractValue::Constant(0));
         assert_eq!(result.widening_applied, 0);
@@ -818,9 +740,8 @@ mod tests {
             use_narrowing: true,
         });
         // Transfer always produces [0, 10]. Widening overshoots, narrowing recovers.
-        let result = computer.compute(AbstractValue::Interval(0, 0), |_| {
-            AbstractValue::Interval(0, 10)
-        });
+        let result =
+            computer.compute(AbstractValue::Interval(0, 0), |_| AbstractValue::Interval(0, 10));
         assert!(result.converged);
         assert_eq!(result.value, AbstractValue::Interval(0, 10));
     }
@@ -846,14 +767,12 @@ mod tests {
     #[test]
     fn test_is_fixpoint() {
         let computer = FixpointComputer::new(FixpointConfig::default());
-        assert!(computer.is_fixpoint(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Interval(0, 10)
-        ));
-        assert!(!computer.is_fixpoint(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Interval(0, 5)
-        ));
+        assert!(
+            computer.is_fixpoint(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(0, 10))
+        );
+        assert!(
+            !computer.is_fixpoint(&AbstractValue::Interval(0, 10), &AbstractValue::Interval(0, 5))
+        );
     }
 
     // --- FixpointState ---
@@ -1040,24 +959,15 @@ mod tests {
     #[test]
     fn test_meet_set_and_interval() {
         assert_eq!(
-            meet(
-                &AbstractValue::Set(vec![1, 5, 10, 15]),
-                &AbstractValue::Interval(3, 12)
-            ),
+            meet(&AbstractValue::Set(vec![1, 5, 10, 15]), &AbstractValue::Interval(3, 12)),
             AbstractValue::Set(vec![5, 10])
         );
     }
 
     #[test]
     fn test_includes_interval_contains_set() {
-        assert!(includes(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Set(vec![1, 5, 10])
-        ));
-        assert!(!includes(
-            &AbstractValue::Interval(0, 10),
-            &AbstractValue::Set(vec![1, 5, 15])
-        ));
+        assert!(includes(&AbstractValue::Interval(0, 10), &AbstractValue::Set(vec![1, 5, 10])));
+        assert!(!includes(&AbstractValue::Interval(0, 10), &AbstractValue::Set(vec![1, 5, 15])));
     }
 
     #[test]

@@ -41,9 +41,6 @@ fn erase(context: &ImplicitCtxt<'_, '_>) -> *const () {
 
 #[inline]
 unsafe fn downcast<'a, 'tcx>(context: *const ()) -> &'a ImplicitCtxt<'a, 'tcx> {
-    // SAFETY: The caller guarantees that `context` was created by `erase()`, which casts
-    // a valid `&ImplicitCtxt` to `*const ()`. We cast it back to the original type,
-    // restoring the original reference. The lifetime 'a is bounded by the caller's scope.
     unsafe { &*(context as *const ImplicitCtxt<'a, 'tcx>) }
 }
 
@@ -75,9 +72,6 @@ where
         // Ensure that `ImplicitCtxt` is `DynSync`.
         sync::assert_dyn_sync::<ImplicitCtxt<'_, '_>>();
 
-        // SAFETY: `context` is non-null (checked above) and was stored by
-        // `enter_context` via `erase()`, which preserves the `ImplicitCtxt` pointer.
-        // `DynSync` is asserted above, ensuring safe cross-thread access.
         unsafe { f(Some(downcast(context))) }
     }
 }

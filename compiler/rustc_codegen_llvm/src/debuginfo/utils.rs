@@ -28,7 +28,6 @@ pub(crate) fn create_DIArray<'ll>(
     builder: &DIBuilder<'ll>,
     arr: &[Option<&'ll DIDescriptor>],
 ) -> &'ll DIArray {
-    // SAFETY: The `DIBuilder` is valid, and all metadata elements in the array are valid.
     unsafe { llvm::LLVMDIBuilderGetOrCreateArray(builder, arr.as_ptr(), arr.len()) }
 }
 
@@ -36,13 +35,13 @@ pub(crate) fn create_DIArray<'ll>(
 pub(crate) fn debug_context<'a, 'll, 'tcx>(
     cx: &'a CodegenCx<'ll, 'tcx>,
 ) -> &'a CodegenUnitDebugContext<'ll, 'tcx> {
-    cx.dbg_cx.as_ref().expect("invariant: value is Some")
+    cx.dbg_cx.as_ref().unwrap()
 }
 
 #[inline]
 #[allow(non_snake_case)]
 pub(crate) fn DIB<'a, 'll>(cx: &'a CodegenCx<'ll, '_>) -> &'a DIBuilder<'ll> {
-    cx.dbg_cx.as_ref().expect("invariant: value is Some").builder.as_ref()
+    cx.dbg_cx.as_ref().unwrap().builder.as_ref()
 }
 
 pub(crate) fn get_namespace_for_item<'ll>(cx: &CodegenCx<'ll, '_>, def_id: DefId) -> &'ll DIScope {

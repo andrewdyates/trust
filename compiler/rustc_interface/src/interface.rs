@@ -342,7 +342,7 @@ pub struct Config {
     /// To track any other state you can write to the given hasher. If the hash changes between
     /// runs the incremental cache will be cleared.
     ///
-    /// The hashing functionality has no known user. tRust: known issue — should this be removed?
+    /// The hashing functionality has no known user. FIXME should this be removed?
     pub track_state: Option<Box<dyn FnOnce(&Session, &mut StableHasher) + Send>>,
 
     /// This is a callback from the driver that is called when we're registering lints;

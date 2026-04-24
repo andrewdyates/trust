@@ -10,8 +10,8 @@
 
 use trust_types::fx::FxHashMap;
 
-use trust_types::{Formula, VcKind};
 use trust_types::fx::FxHashSet;
+use trust_types::{Formula, VcKind};
 
 // ---------------------------------------------------------------------------
 // Proof obligation
@@ -189,21 +189,16 @@ pub fn split_obligation(
     mut next_id: impl FnMut() -> ObligationId,
 ) -> Vec<ProofObligation> {
     match &obligation.goal {
-        Formula::And(conjuncts) if conjuncts.len() > 1 => {
-            conjuncts
-                .iter()
-                .map(|conjunct| {
-                    let mut sub = ProofObligation::new(
-                        next_id(),
-                        conjunct.clone(),
-                        obligation.source.clone(),
-                    );
-                    sub.hypotheses = obligation.hypotheses.clone();
-                    sub.dependencies = obligation.dependencies.clone();
-                    sub
-                })
-                .collect()
-        }
+        Formula::And(conjuncts) if conjuncts.len() > 1 => conjuncts
+            .iter()
+            .map(|conjunct| {
+                let mut sub =
+                    ProofObligation::new(next_id(), conjunct.clone(), obligation.source.clone());
+                sub.hypotheses = obligation.hypotheses.clone();
+                sub.dependencies = obligation.dependencies.clone();
+                sub
+            })
+            .collect(),
         _ => vec![obligation.clone()],
     }
 }
@@ -224,10 +219,7 @@ impl ObligationSet {
     /// Create an empty obligation set.
     #[must_use]
     pub fn new() -> Self {
-        ObligationSet {
-            obligations: FxHashMap::default(),
-            next_id: 1,
-        }
+        ObligationSet { obligations: FxHashMap::default(), next_id: 1 }
     }
 
     /// Generate a fresh obligation ID.
@@ -243,11 +235,7 @@ impl ObligationSet {
     }
 
     /// Create and add a new obligation, returning its ID.
-    pub fn create(
-        &mut self,
-        goal: Formula,
-        source: ObligationSource,
-    ) -> ObligationId {
+    pub fn create(&mut self, goal: Formula, source: ObligationSource) -> ObligationId {
         let id = self.fresh_id();
         let obl = ProofObligation::new(id, goal, source);
         self.obligations.insert(id, obl);
@@ -335,18 +323,14 @@ impl ObligationSet {
     /// Returns `true` if all obligations are discharged.
     #[must_use]
     pub fn all_discharged(&self) -> bool {
-        !self.obligations.is_empty()
-            && self.obligations.values().all(|o| o.status.is_discharged())
+        !self.obligations.is_empty() && self.obligations.values().all(|o| o.status.is_discharged())
     }
 
     /// Return all pending obligations in insertion order (by ID).
     #[must_use]
     pub fn pending(&self) -> Vec<&ProofObligation> {
-        let mut pending: Vec<_> = self
-            .obligations
-            .values()
-            .filter(|o| o.status.is_pending())
-            .collect();
+        let mut pending: Vec<_> =
+            self.obligations.values().filter(|o| o.status.is_pending()).collect();
         pending.sort_by_key(|o| o.id.0);
         pending
     }
@@ -392,38 +376,25 @@ impl ObligationSet {
     /// cycle are placed at the end.
     #[must_use]
     pub fn dependency_order(&self) -> Vec<ObligationId> {
-        let pending: Vec<&ProofObligation> = self
-            .obligations
-            .values()
-            .filter(|o| o.status.is_pending())
-            .collect();
+        let pending: Vec<&ProofObligation> =
+            self.obligations.values().filter(|o| o.status.is_pending()).collect();
 
         // Kahn's algorithm for topological sort
-        let discharged_ids: FxHashSet<ObligationId> = self
-            .obligations
-            .values()
-            .filter(|o| o.status.is_discharged())
-            .map(|o| o.id)
-            .collect();
+        let discharged_ids: FxHashSet<ObligationId> =
+            self.obligations.values().filter(|o| o.status.is_discharged()).map(|o| o.id).collect();
 
         // Compute in-degree: count of unsatisfied dependencies per obligation
         let mut in_degree: FxHashMap<ObligationId, usize> = FxHashMap::default();
         for obl in &pending {
-            let unsatisfied = obl
-                .dependencies
-                .iter()
-                .filter(|dep| !discharged_ids.contains(dep))
-                .count();
+            let unsatisfied =
+                obl.dependencies.iter().filter(|dep| !discharged_ids.contains(dep)).count();
             in_degree.insert(obl.id, unsatisfied);
         }
 
         let mut result = Vec::with_capacity(pending.len());
         let mut queue: std::collections::VecDeque<ObligationId> = {
-            let mut initial: Vec<ObligationId> = in_degree
-                .iter()
-                .filter(|(_, deg)| **deg == 0)
-                .map(|(&id, _)| id)
-                .collect();
+            let mut initial: Vec<ObligationId> =
+                in_degree.iter().filter(|(_, deg)| **deg == 0).map(|(&id, _)| id).collect();
             initial.sort_by_key(|id| id.0);
             initial.into_iter().collect()
         };
@@ -434,12 +405,13 @@ impl ObligationSet {
             let mut newly_ready = Vec::new();
             for obl in &pending {
                 if obl.dependencies.contains(&id)
-                    && let Some(deg) = in_degree.get_mut(&obl.id) {
-                        *deg = deg.saturating_sub(1);
-                        if *deg == 0 && !result.contains(&obl.id) {
-                            newly_ready.push(obl.id);
-                        }
+                    && let Some(deg) = in_degree.get_mut(&obl.id)
+                {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 && !result.contains(&obl.id) {
+                        newly_ready.push(obl.id);
                     }
+                }
             }
             newly_ready.sort_by_key(|nid| nid.0);
             for nid in newly_ready {
@@ -479,7 +451,7 @@ mod tests {
     fn sample_source() -> ObligationSource {
         ObligationSource {
             vc_kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             description: "division safety".to_string(),
         }
     }
@@ -490,7 +462,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "add_fn".to_string(),
+            function: "add_fn".into(),
             description: "overflow check".to_string(),
         }
     }
@@ -520,11 +492,7 @@ mod tests {
 
     #[test]
     fn test_obligation_new_is_pending() {
-        let obl = ProofObligation::new(
-            ObligationId(1),
-            Formula::Bool(true),
-            sample_source(),
-        );
+        let obl = ProofObligation::new(ObligationId(1), Formula::Bool(true), sample_source());
         assert!(obl.status.is_pending());
         assert!(obl.hypotheses.is_empty());
         assert!(obl.dependencies.is_empty());
@@ -543,11 +511,7 @@ mod tests {
 
     #[test]
     fn test_obligation_discharge() {
-        let mut obl = ProofObligation::new(
-            ObligationId(1),
-            Formula::Bool(true),
-            sample_source(),
-        );
+        let mut obl = ProofObligation::new(ObligationId(1), Formula::Bool(true), sample_source());
         obl.start();
         assert!(matches!(obl.status, ObligationStatus::InProgress));
         obl.discharge(vec![0xDE, 0xAD]);
@@ -559,11 +523,7 @@ mod tests {
 
     #[test]
     fn test_obligation_fail() {
-        let mut obl = ProofObligation::new(
-            ObligationId(1),
-            Formula::Bool(true),
-            sample_source(),
-        );
+        let mut obl = ProofObligation::new(ObligationId(1), Formula::Bool(true), sample_source());
         obl.fail("solver timeout");
         assert!(obl.status.is_failed());
     }
@@ -574,11 +534,7 @@ mod tests {
 
     #[test]
     fn test_is_trivial_bool_true() {
-        let obl = ProofObligation::new(
-            ObligationId(1),
-            Formula::Bool(true),
-            sample_source(),
-        );
+        let obl = ProofObligation::new(ObligationId(1), Formula::Bool(true), sample_source());
         assert!(obl.is_trivial());
     }
 
@@ -679,11 +635,7 @@ mod tests {
 
     #[test]
     fn test_split_non_conjunction() {
-        let obl = ProofObligation::new(
-            ObligationId(1),
-            Formula::Bool(true),
-            sample_source(),
-        );
+        let obl = ProofObligation::new(ObligationId(1), Formula::Bool(true), sample_source());
         let subs = split_obligation(&obl, || ObligationId(99));
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].id, ObligationId(1)); // original
@@ -724,11 +676,8 @@ mod tests {
     #[test]
     fn test_obligation_set_create_with_hypotheses() {
         let mut set = ObligationSet::new();
-        let id = set.create_with_hypotheses(
-            Formula::Bool(true),
-            vec![Formula::Int(1)],
-            sample_source(),
-        );
+        let id =
+            set.create_with_hypotheses(Formula::Bool(true), vec![Formula::Int(1)], sample_source());
         let obl = set.get(id).unwrap();
         assert_eq!(obl.hypotheses.len(), 1);
     }
@@ -811,10 +760,8 @@ mod tests {
     #[test]
     fn test_obligation_set_split_conjunction() {
         let mut set = ObligationSet::new();
-        let id = set.create(
-            Formula::And(vec![Formula::Bool(true), Formula::Bool(false)]),
-            sample_source(),
-        );
+        let id = set
+            .create(Formula::And(vec![Formula::Bool(true), Formula::Bool(false)]), sample_source());
         assert_eq!(set.len(), 1);
 
         let sub_ids = set.split(id);

@@ -33,7 +33,7 @@ impl<'a> ExtCtxt<'a> {
         if add_root {
             segments.push(ast::PathSegment::path_root(span));
         }
-        let last_ident = idents.pop().expect("invariant: idents is non-empty, checked by assert above"); // tRust: unwrap -> expect
+        let last_ident = idents.pop().unwrap();
         segments.extend(
             idents.into_iter().map(|ident| ast::PathSegment::from_ident(ident.with_span_pos(span))),
         );
@@ -625,7 +625,7 @@ impl<'a> ExtCtxt<'a> {
             ast::FnRetTy::Default(span),
         );
 
-        // tRust: known issue — -- We are using `span` as the span of the `|...|`
+        // FIXME -- We are using `span` as the span of the `|...|`
         // part of the lambda, but it probably (maybe?) corresponds to
         // the entire lambda body. Probably we should extend the API
         // here, but that's not entirely clear.
@@ -640,7 +640,7 @@ impl<'a> ExtCtxt<'a> {
                 fn_decl,
                 body,
                 fn_decl_span: span,
-                // tRust: known issue —(SarthakSingh31): This points to the start of the declaration block and
+                // FIXME(SarthakSingh31): This points to the start of the declaration block and
                 // not the span of the argument block.
                 fn_arg_span: span,
             })),
@@ -736,7 +736,7 @@ impl<'a> ExtCtxt<'a> {
                 ast::ConstItem {
                     defaultness,
                     ident,
-                    // tRust: known issue —(generic_const_items): Pass the generics as a parameter.
+                    // FIXME(generic_const_items): Pass the generics as a parameter.
                     generics: ast::Generics::default(),
                     ty,
                     rhs_kind,

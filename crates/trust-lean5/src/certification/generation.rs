@@ -6,10 +6,12 @@
 use trust_types::{Formula, VerificationCondition};
 
 use crate::logic_classification::{
-    SmtLogic, classify_formula, degradation_strategy, is_certifiable, scope_from_logic,
-    CertificationScope,
+    CertificationScope, SmtLogic, classify_formula, degradation_strategy, is_certifiable,
+    scope_from_logic,
 };
-use crate::reconstruction::{LeanProofTerm, ProofStep, SolverProof, reconstruct};
+#[cfg(test)]
+use crate::reconstruction::LeanProofTerm;
+use crate::reconstruction::{ProofStep, SolverProof, reconstruct};
 
 use super::types::{ProofGeneration, ProofTheory};
 
@@ -85,6 +87,7 @@ pub fn qf_uf_axiom(name: &str, formula: Formula) -> ProofStep {
 /// Uses a compact JSON representation since `LeanProofTerm` is our intermediate
 /// form (not a lean5-kernel `ProofCert`). The serialized bytes are stored in the
 /// certificate's `proof_term` field.
+#[cfg(test)]
 #[must_use]
 pub(crate) fn serialize_lean_proof_term(term: &LeanProofTerm) -> Vec<u8> {
     // tRust: Use debug format as a stable serialization for our intermediate form.

@@ -92,7 +92,11 @@ pub struct GateDiagnostic {
 impl GateDiagnostic {
     /// Create a new rejection diagnostic.
     #[must_use]
-    pub fn reject(kind: DiagnosticKind, message: impl Into<String>, span: impl Into<String>) -> Self {
+    pub fn reject(
+        kind: DiagnosticKind,
+        message: impl Into<String>,
+        span: impl Into<String>,
+    ) -> Self {
         Self {
             severity: Severity::Reject,
             kind,
@@ -166,10 +170,7 @@ impl FixSuggestion {
     /// Create a new fix suggestion.
     #[must_use]
     pub fn new(description: impl Into<String>) -> Self {
-        Self {
-            description: description.into(),
-            replacement: None,
-        }
+        Self { description: description.into(), replacement: None }
     }
 
     /// Create a fix suggestion with a replacement spec body.
@@ -178,10 +179,7 @@ impl FixSuggestion {
         description: impl Into<String>,
         replacement: impl Into<String>,
     ) -> Self {
-        Self {
-            description: description.into(),
-            replacement: Some(replacement.into()),
-        }
+        Self { description: description.into(), replacement: Some(replacement.into()) }
     }
 }
 
@@ -189,9 +187,9 @@ impl FixSuggestion {
 #[must_use]
 pub fn suggest_fix(kind: &DiagnosticKind, spec_body: &str) -> Option<FixSuggestion> {
     match kind {
-        DiagnosticKind::EmptySpec => Some(FixSuggestion::new(
-            "Provide a non-empty boolean expression as the spec body",
-        )),
+        DiagnosticKind::EmptySpec => {
+            Some(FixSuggestion::new("Provide a non-empty boolean expression as the spec body"))
+        }
         DiagnosticKind::Tautology => {
             // If it's x == x, suggest removing
             if spec_body.contains("==") {
@@ -202,9 +200,7 @@ pub fn suggest_fix(kind: &DiagnosticKind, spec_body: &str) -> Option<FixSuggesti
                     ));
                 }
             }
-            Some(FixSuggestion::new(
-                "Replace with a meaningful constraint that restricts behavior",
-            ))
+            Some(FixSuggestion::new("Replace with a meaningful constraint that restricts behavior"))
         }
         DiagnosticKind::UnsafeContent => {
             if spec_body.contains("assume(false)") || spec_body.contains("assume( false)") {
@@ -223,9 +219,7 @@ pub fn suggest_fix(kind: &DiagnosticKind, spec_body: &str) -> Option<FixSuggesti
                     "Remove unreachable!() -- specs must be pure boolean expressions",
                 ));
             }
-            Some(FixSuggestion::new(
-                "Remove unsafe constructs from the spec body",
-            ))
+            Some(FixSuggestion::new("Remove unsafe constructs from the spec body"))
         }
         DiagnosticKind::Contradiction => Some(FixSuggestion::new(
             "Check for contradictions with existing specs; ensure requires(false) is not used",
@@ -234,15 +228,15 @@ pub fn suggest_fix(kind: &DiagnosticKind, spec_body: &str) -> Option<FixSuggesti
             "requires(false) makes the function trivially correct by making it unreachable; \
              use a meaningful precondition instead",
         )),
-        DiagnosticKind::ComplexityExceeded => Some(FixSuggestion::new(
-            "Simplify the spec or break it into multiple simpler specs",
-        )),
+        DiagnosticKind::ComplexityExceeded => {
+            Some(FixSuggestion::new("Simplify the spec or break it into multiple simpler specs"))
+        }
         DiagnosticKind::SyntaxError => Some(FixSuggestion::new(
             "Check for unbalanced parentheses, missing operators, or invalid identifiers",
         )),
-        DiagnosticKind::ScopeViolation => Some(FixSuggestion::new(
-            "Only reference function parameters and return value in specs",
-        )),
+        DiagnosticKind::ScopeViolation => {
+            Some(FixSuggestion::new("Only reference function parameters and return value in specs"))
+        }
         DiagnosticKind::SideEffect => Some(FixSuggestion::new(
             "Specs must be pure boolean expressions with no side effects (no function calls, \
              assignments, or I/O)",
@@ -260,21 +254,14 @@ pub fn format_diagnostics(diagnostics: &[GateDiagnostic]) -> String {
         return "No diagnostics.".to_string();
     }
 
-    let rejections: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Reject)
-        .collect();
-    let warnings: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Warn)
-        .collect();
-    let infos: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Info)
-        .collect();
+    let rejections: Vec<_> =
+        diagnostics.iter().filter(|d| d.severity == Severity::Reject).collect();
+    let warnings: Vec<_> = diagnostics.iter().filter(|d| d.severity == Severity::Warn).collect();
+    let infos: Vec<_> = diagnostics.iter().filter(|d| d.severity == Severity::Info).collect();
 
     let mut out = String::new();
-    let _ = writeln!(out, 
+    let _ = writeln!(
+        out,
         "Gate diagnostics: {} rejection(s), {} warning(s), {} info(s)",
         rejections.len(),
         warnings.len(),
@@ -326,11 +313,7 @@ mod tests {
 
     #[test]
     fn test_warn_diagnostic_creation() {
-        let d = GateDiagnostic::warn(
-            DiagnosticKind::Tautology,
-            "spec is always true",
-            "true",
-        );
+        let d = GateDiagnostic::warn(DiagnosticKind::Tautology, "spec is always true", "true");
         assert_eq!(d.severity, Severity::Warn);
         assert!(!d.is_rejection());
     }
@@ -348,12 +331,8 @@ mod tests {
 
     #[test]
     fn test_diagnostic_with_suggestion() {
-        let d = GateDiagnostic::reject(
-            DiagnosticKind::EmptySpec,
-            "empty spec body",
-            "",
-        )
-        .with_suggestion(FixSuggestion::new("provide a boolean expression"));
+        let d = GateDiagnostic::reject(DiagnosticKind::EmptySpec, "empty spec body", "")
+            .with_suggestion(FixSuggestion::new("provide a boolean expression"));
         assert!(d.suggestion.is_some());
         assert_eq!(
             d.suggestion.as_ref().map(|s| s.description.as_str()),
@@ -376,23 +355,15 @@ mod tests {
 
     #[test]
     fn test_diagnostic_display_empty_span() {
-        let d = GateDiagnostic::reject(
-            DiagnosticKind::EmptySpec,
-            "empty spec body",
-            "",
-        );
+        let d = GateDiagnostic::reject(DiagnosticKind::EmptySpec, "empty spec body", "");
         let s = d.to_string();
         assert!(!s.contains("(in "));
     }
 
     #[test]
     fn test_diagnostic_display_with_suggestion() {
-        let d = GateDiagnostic::reject(
-            DiagnosticKind::Tautology,
-            "always true",
-            "true",
-        )
-        .with_suggestion(FixSuggestion::new("use meaningful constraint"));
+        let d = GateDiagnostic::reject(DiagnosticKind::Tautology, "always true", "true")
+            .with_suggestion(FixSuggestion::new("use meaningful constraint"));
         let s = d.to_string();
         assert!(s.contains("suggestion:"));
         assert!(s.contains("meaningful constraint"));

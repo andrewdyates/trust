@@ -49,13 +49,15 @@ impl TacticHint {
         match self {
             TacticHint::Simplify => vec![Tactic::Simp(vec![])],
             TacticHint::Rewrite(rule) => vec![Tactic::Rewrite(rule.clone())],
-            TacticHint::Induction(var) => vec![
-                Tactic::Induction { var: var.clone(), pattern: None },
-            ],
+            TacticHint::Induction(var) => {
+                vec![Tactic::Induction { var: var.clone(), pattern: None }]
+            }
             TacticHint::CaseSplit(expr) => vec![Tactic::Cases(expr.clone())],
             TacticHint::OmegaNat => vec![Tactic::Omega],
             TacticHint::Ring => vec![Tactic::Ring],
-            TacticHint::SimpAll => vec![Tactic::Simp(vec![]), Tactic::AllGoals(Box::new(Tactic::Simp(vec![])))],
+            TacticHint::SimpAll => {
+                vec![Tactic::Simp(vec![]), Tactic::AllGoals(Box::new(Tactic::Simp(vec![])))]
+            }
             TacticHint::Decide => vec![Tactic::Decide],
         }
     }
@@ -96,11 +98,7 @@ impl TacticSequence {
     /// Create a new empty tactic sequence.
     #[must_use]
     pub fn new(theorem_name: &str) -> Self {
-        Self {
-            theorem_name: theorem_name.to_string(),
-            hints: Vec::new(),
-            params: Vec::new(),
-        }
+        Self { theorem_name: theorem_name.to_string(), hints: Vec::new(), params: Vec::new() }
     }
 
     /// Add a hint with an optional parameter.
@@ -216,7 +214,7 @@ pub fn estimate_difficulty(vc: &VerificationCondition) -> Difficulty {
 /// be lowered to a `TacticScript` via `to_tactic_script()`.
 #[must_use]
 pub fn generate_tactics(vc: &VerificationCondition) -> TacticSequence {
-    let theorem_name = format!("tRust.vc.{}", sanitize_name(&vc.function));
+    let theorem_name = format!("tRust.vc.{}", sanitize_name(vc.function.as_str()));
     let mut seq = TacticSequence::new(&theorem_name);
 
     // Phase 1: Intro tactics for top-level structure
@@ -353,13 +351,11 @@ fn generate_formula_hints(formula: &Formula, seq: &mut TacticSequence) {
         Formula::Or(children) if !children.is_empty() => {
             seq.push(TacticHint::CaseSplit("h".to_string()), Some("disjunction".to_string()));
         }
-        Formula::Eq(lhs, rhs) => {
-            if is_arithmetic_term(lhs) && is_arithmetic_term(rhs) {
-                if has_nonlinear_arithmetic(formula) {
-                    seq.push(TacticHint::Ring, Some("ring equality".to_string()));
-                } else {
-                    seq.push(TacticHint::OmegaNat, Some("arithmetic equality".to_string()));
-                }
+        Formula::Eq(lhs, rhs) if is_arithmetic_term(lhs) && is_arithmetic_term(rhs) => {
+            if has_nonlinear_arithmetic(formula) {
+                seq.push(TacticHint::Ring, Some("ring equality".to_string()));
+            } else {
+                seq.push(TacticHint::OmegaNat, Some("arithmetic equality".to_string()));
             }
         }
         Formula::Le(_, _) | Formula::Lt(_, _) | Formula::Ge(_, _) | Formula::Gt(_, _) => {
@@ -462,7 +458,7 @@ fn find_induction_variable(formula: &Formula) -> Option<String> {
     match formula {
         Formula::Forall(bindings, _) => {
             // Prefer the first integer-sorted binding
-            bindings.iter().find(|(_, sort)| *sort == Sort::Int).map(|(name, _)| name.clone())
+            bindings.iter().find(|(_, sort)| *sort == Sort::Int).map(|(name, _)| name.to_string())
         }
         _ => {
             // Collect variables and pick the first integer one
@@ -476,9 +472,10 @@ fn find_induction_variable(formula: &Formula) -> Option<String> {
 /// Collect integer-sorted variable names from a formula.
 fn collect_int_variables(formula: &Formula, vars: &mut Vec<String>) {
     if let Formula::Var(name, Sort::Int) = formula
-        && !vars.contains(name) {
-            vars.push(name.clone());
-        }
+        && !vars.contains(name)
+    {
+        vars.push(name.clone());
+    }
     for child in formula.children() {
         collect_int_variables(child, vars);
     }
@@ -486,9 +483,7 @@ fn collect_int_variables(formula: &Formula, vars: &mut Vec<String>) {
 
 /// Sanitize a function name for use as a Lean5 identifier.
 fn sanitize_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
-        .collect()
+    name.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +504,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "add_safe".to_string(),
+            function: "add_safe".into(),
             location: SourceSpan::default(),
             formula: Formula::Le(
                 Box::new(Formula::Add(
@@ -525,14 +520,11 @@ mod tests {
     fn make_ground_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Assertion { message: "1 + 1 = 2".to_string() },
-            function: "trivial".to_string(),
+            function: "trivial".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(
                 Box::new(Formula::Int(2)),
-                Box::new(Formula::Add(
-                    Box::new(Formula::Int(1)),
-                    Box::new(Formula::Int(1)),
-                )),
+                Box::new(Formula::Add(Box::new(Formula::Int(1)), Box::new(Formula::Int(1)))),
             ),
             contract_metadata: None,
         }
@@ -541,7 +533,7 @@ mod tests {
     fn make_nonlinear_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "square_nonneg".to_string(),
+            function: "square_nonneg".into(),
             location: SourceSpan::default(),
             formula: Formula::Ge(
                 Box::new(Formula::Mul(
@@ -557,7 +549,7 @@ mod tests {
     fn make_forall_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "forall_bound".to_string(),
+            function: "forall_bound".into(),
             location: SourceSpan::default(),
             formula: Formula::Forall(
                 vec![("n".into(), Sort::Int)],
@@ -576,7 +568,7 @@ mod tests {
     fn make_disjunction_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Assertion { message: "or case".to_string() },
-            function: "or_test".to_string(),
+            function: "or_test".into(),
             location: SourceSpan::default(),
             formula: Formula::Or(vec![
                 Formula::Gt(
@@ -612,10 +604,7 @@ mod tests {
     fn test_tactic_hint_expand_induction() {
         let tactics = TacticHint::Induction("n".to_string()).expand();
         assert_eq!(tactics.len(), 1);
-        assert_eq!(
-            tactics[0],
-            Tactic::Induction { var: "n".to_string(), pattern: None }
-        );
+        assert_eq!(tactics[0], Tactic::Induction { var: "n".to_string(), pattern: None });
     }
 
     #[test]
@@ -623,7 +612,9 @@ mod tests {
         assert!(TacticHint::Decide.cost() < TacticHint::Simplify.cost());
         assert!(TacticHint::Simplify.cost() < TacticHint::Ring.cost());
         assert!(TacticHint::Ring.cost() < TacticHint::CaseSplit("h".into()).cost());
-        assert!(TacticHint::CaseSplit("h".into()).cost() < TacticHint::Induction("n".into()).cost());
+        assert!(
+            TacticHint::CaseSplit("h".into()).cost() < TacticHint::Induction("n".into()).cost()
+        );
     }
 
     // --- TacticSequence tests ---
@@ -709,10 +700,7 @@ mod tests {
         // Should contain omega for linear arithmetic
         let script = seq.to_tactic_script();
         let code = script.to_lean_code();
-        assert!(
-            code.contains("omega"),
-            "linear vc should use omega, got:\n{code}"
-        );
+        assert!(code.contains("omega"), "linear vc should use omega, got:\n{code}");
     }
 
     #[test]
@@ -722,10 +710,7 @@ mod tests {
         assert!(!seq.is_empty());
         let script = seq.to_tactic_script();
         let code = script.to_lean_code();
-        assert!(
-            code.contains("decide"),
-            "ground vc should use decide, got:\n{code}"
-        );
+        assert!(code.contains("decide"), "ground vc should use decide, got:\n{code}");
     }
 
     #[test]
@@ -734,10 +719,7 @@ mod tests {
         let seq = generate_tactics(&vc);
         let script = seq.to_tactic_script();
         let code = script.to_lean_code();
-        assert!(
-            code.contains("cases"),
-            "disjunction vc should use cases, got:\n{code}"
-        );
+        assert!(code.contains("cases"), "disjunction vc should use cases, got:\n{code}");
     }
 
     // --- tactic_for_arithmetic tests ---
@@ -789,10 +771,7 @@ mod tests {
         let seq = tactic_for_induction(&formula);
         assert!(!seq.is_empty());
         let code = seq.to_tactic_script().to_lean_code();
-        assert!(
-            code.contains("induction n"),
-            "induction should target variable n, got:\n{code}"
-        );
+        assert!(code.contains("induction n"), "induction should target variable n, got:\n{code}");
     }
 
     #[test]
@@ -853,18 +832,12 @@ mod tests {
     fn test_formula_depth() {
         assert_eq!(formula_depth(&Formula::Int(1)), 0);
         assert_eq!(
-            formula_depth(&Formula::Add(
-                Box::new(Formula::Int(1)),
-                Box::new(Formula::Int(2)),
-            )),
+            formula_depth(&Formula::Add(Box::new(Formula::Int(1)), Box::new(Formula::Int(2)),)),
             1
         );
         assert_eq!(
             formula_depth(&Formula::Add(
-                Box::new(Formula::Add(
-                    Box::new(Formula::Int(1)),
-                    Box::new(Formula::Int(2)),
-                )),
+                Box::new(Formula::Add(Box::new(Formula::Int(1)), Box::new(Formula::Int(2)),)),
                 Box::new(Formula::Int(3)),
             )),
             2

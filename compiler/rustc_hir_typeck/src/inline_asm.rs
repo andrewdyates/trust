@@ -50,7 +50,7 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
         }
     }
 
-    // NOTE(compiler-errors): This could use `<$ty as Pointee>::Metadata == ()`
+    // FIXME(compiler-errors): This could use `<$ty as Pointee>::Metadata == ()`
     fn is_thin_ptr_ty(&self, span: Span, ty: Ty<'tcx>) -> bool {
         // Type still may have region variables, but `Sized` does not depend
         // on those, so just erase them before querying.
@@ -72,7 +72,6 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
             16 => InlineAsmType::I16,
             32 => InlineAsmType::I32,
             64 => InlineAsmType::I64,
-            // tRust: invariant — rustc target specs only expose 16-, 32-, or 64-bit pointer widths when lowering inline asm operand types
             width => bug!("unsupported pointer width: {width}"),
         };
 
@@ -113,7 +112,7 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
 
                 let (size, ty) = match *elem_ty.kind() {
                     ty::Array(ty, len) => {
-                        // NOTE: `try_structurally_resolve_const` doesn't eval consts
+                        // FIXME: `try_structurally_resolve_const` doesn't eval consts
                         // in the old solver.
                         let len = if self.fcx.next_trait_solver() {
                             self.fcx.try_structurally_resolve_const(span, len)
@@ -146,7 +145,6 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
                             16 => InlineAsmType::VecI16(size),
                             32 => InlineAsmType::VecI32(size),
                             64 => InlineAsmType::VecI64(size),
-                            // tRust: invariant — rustc target specs only expose 16-, 32-, or 64-bit pointer widths when lowering inline asm vector element types
                             width => bug!("unsupported pointer width: {width}"),
                         })
                     }
@@ -157,7 +155,6 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
                     _ => Err(NonAsmTypeReason::InvalidElement(field.did, ty)),
                 }
             }
-            // tRust: invariant — get_asm_ty is only called on fully resolved operand types, so inline asm classification must not see ty::Infer
             ty::Infer(_) => bug!("unexpected infer ty in asm operand"),
             _ => Err(NonAsmTypeReason::Invalid(ty)),
         }
@@ -208,7 +205,6 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
 
         let ty = self.expr_ty(expr);
         if ty.has_non_region_infer() {
-            // tRust: invariant — inline asm operand checking runs after expression types are resolved, so operand tys must not retain non-region inference variables
             bug!("inference variable in asm operand ty: {:?} {:?}", expr, ty);
         }
 
@@ -320,7 +316,7 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
 
         // Check the type against the list of types supported by the selected
         // register class.
-        let asm_arch = self.tcx().sess.asm_arch.expect("invariant: value is present");
+        let asm_arch = self.tcx().sess.asm_arch.unwrap();
         let allow_experimental_reg = self.tcx().features().asm_experimental_reg();
         let reg_class = reg.reg_class();
         let supported_tys = reg_class.supported_types(asm_arch, allow_experimental_reg);
@@ -400,7 +396,7 @@ impl<'a, 'tcx> InlineAsmCtxt<'a, 'tcx> {
                     modifier: default_modifier,
                     result: default_result,
                     size: default_size,
-                } = reg_class.default_modifier(asm_arch).expect("invariant: value is present");
+                } = reg_class.default_modifier(asm_arch).unwrap();
                 self.tcx().emit_node_span_lint(
                     lint::builtin::ASM_SUB_REGISTER,
                     expr.hir_id,

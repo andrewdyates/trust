@@ -1335,7 +1335,7 @@ fn prepare_source_tarball<'a>(
         "yarn.lock",
         // tidy-alphabetical-end
     ];
-    let src_dirs = ["src", "compiler", "library", "tests", "LICENSES"];
+    let src_dirs = ["src", "compiler", "library", "tests", "crates", "cargo-trust", "LICENSES"];
 
     copy_src_dirs(builder, &builder.src, &src_dirs, exclude_dirs, plain_dst_src);
 
@@ -1455,6 +1455,51 @@ impl Step for Cargo {
 
     fn metadata(&self) -> Option<StepMetadata> {
         Some(StepMetadata::dist("cargo", self.target).built_by(self.build_compiler))
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct CargoTrust {
+    pub build_compiler: Compiler,
+    pub target: TargetSelection,
+}
+
+impl Step for CargoTrust {
+    type Output = Option<GeneratedTarball>;
+    const IS_HOST: bool = true;
+
+    fn should_run(run: ShouldRun<'_>) -> ShouldRun<'_> {
+        run.path("cargo-trust")
+    }
+
+    fn is_default_step(builder: &Builder<'_>) -> bool {
+        should_build_extended_tool(builder, "cargo-trust")
+    }
+
+    fn make_run(run: RunConfig<'_>) {
+        run.builder.ensure(CargoTrust {
+            build_compiler: get_tool_target_compiler(
+                run.builder,
+                ToolTargetBuildMode::Build(run.target),
+            ),
+            target: run.target,
+        });
+    }
+
+    fn run(self, builder: &Builder<'_>) -> Option<GeneratedTarball> {
+        let cargo_trust =
+            builder.ensure(tool::CargoTrust::from_build_compiler(self.build_compiler, self.target));
+
+        let mut tarball = Tarball::new(builder, "cargo-trust", &self.target.triple);
+        tarball.set_overlay(OverlayKind::CargoTrust);
+        tarball.add_file(&cargo_trust.tool_path, "bin", FileType::Executable);
+        tarball.add_legal_and_readme_to("share/doc/cargo-trust");
+
+        Some(tarball.generate())
+    }
+
+    fn metadata(&self) -> Option<StepMetadata> {
+        Some(StepMetadata::dist("cargo-trust", self.target).built_by(self.build_compiler))
     }
 }
 
@@ -1668,6 +1713,64 @@ impl Step for CraneliftCodegenBackend {
     fn metadata(&self) -> Option<StepMetadata> {
         Some(
             StepMetadata::dist("rustc_codegen_cranelift", self.target)
+                .built_by(self.compilers.build_compiler()),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Llvm2CodegenBackend {
+    pub compilers: RustcPrivateCompilers,
+    pub target: TargetSelection,
+}
+
+impl Step for Llvm2CodegenBackend {
+    type Output = Option<GeneratedTarball>;
+    const IS_HOST: bool = true;
+
+    fn should_run(run: ShouldRun<'_>) -> ShouldRun<'_> {
+        run.alias("rustc_codegen_llvm2").alias("rustc-codegen-llvm2")
+    }
+
+    fn is_default_step(builder: &Builder<'_>) -> bool {
+        builder
+            .config
+            .enabled_codegen_backends(builder.host_target)
+            .contains(&CodegenBackendKind::Llvm2)
+    }
+
+    fn make_run(run: RunConfig<'_>) {
+        run.builder.ensure(Llvm2CodegenBackend {
+            compilers: RustcPrivateCompilers::new(run.builder, run.builder.top_stage, run.target),
+            target: run.target,
+        });
+    }
+
+    fn run(self, builder: &Builder<'_>) -> Option<GeneratedTarball> {
+        if !builder.build.unstable_features() {
+            return None;
+        }
+
+        let mut tarball = Tarball::new(builder, "rustc-codegen-llvm2", &self.target.triple);
+        tarball.set_overlay(OverlayKind::RustcCodegenLlvm2);
+        tarball.is_preview(true);
+        tarball.add_legal_and_readme_to("share/doc/rustc_codegen_llvm2");
+
+        let compilers = self.compilers;
+        let stamp = builder.ensure(compile::Llvm2CodegenBackend { compilers });
+
+        if builder.config.dry_run() {
+            return None;
+        }
+
+        add_codegen_backend_to_tarball(builder, &tarball, compilers.target_compiler(), &stamp);
+
+        Some(tarball.generate())
+    }
+
+    fn metadata(&self) -> Option<StepMetadata> {
+        Some(
+            StepMetadata::dist("rustc_codegen_llvm2", self.target)
                 .built_by(self.compilers.build_compiler()),
         )
     }
@@ -1887,6 +1990,7 @@ impl Step for Extended {
         // Std stage N is documented with compiler stage N
         add_component!("rust-json-docs" => JsonDocs { build_compiler: target_compiler, target });
         add_component!("cargo" => Cargo { build_compiler, target });
+        add_component!("cargo-trust" => CargoTrust { build_compiler, target });
         add_component!("rustfmt" => Rustfmt { compilers: rustc_private_compilers, target });
         add_component!("rust-analyzer" => RustAnalyzer { compilers: rustc_private_compilers, target });
         add_component!("llvm-components" => LlvmTools { target });
@@ -1894,6 +1998,10 @@ impl Step for Extended {
         add_component!("miri" => Miri { compilers: rustc_private_compilers, target });
         add_component!("analysis" => Analysis { build_compiler, target });
         add_component!("rustc-codegen-cranelift" => CraneliftCodegenBackend {
+            compilers: rustc_private_compilers,
+            target
+        });
+        add_component!("rustc-codegen-llvm2" => Llvm2CodegenBackend {
             compilers: rustc_private_compilers,
             target
         });
@@ -1951,7 +2059,7 @@ impl Step for Extended {
 
         let xform = |p: &Path| {
             let mut contents = t!(fs::read_to_string(p));
-            for tool in &["miri", "rust-docs"] {
+            for tool in &["cargo-trust", "miri", "rust-docs"] {
                 if !built_tools.contains(tool) {
                     contents = filter(&contents, tool);
                 }
@@ -1992,6 +2100,7 @@ impl Step for Extended {
             prepare("rust-analysis");
 
             for tool in &[
+                "cargo-trust",
                 "clippy",
                 "rustfmt",
                 "rust-analyzer",
@@ -2059,7 +2168,14 @@ impl Step for Extended {
             prepare("cargo");
             prepare("rust-analysis");
             prepare("rust-std");
-            for tool in &["clippy", "rustfmt", "rust-analyzer", "rust-docs", "miri"] {
+            for tool in &[
+                "cargo-trust",
+                "clippy",
+                "rustfmt",
+                "rust-analyzer",
+                "rust-docs",
+                "miri",
+            ] {
                 if built_tools.contains(tool) {
                     prepare(tool);
                 }
@@ -2127,6 +2243,24 @@ impl Step for Extended {
                 .arg("-t")
                 .arg(etc.join("msi/remove-duplicates.xsl"))
                 .run(builder);
+            if built_tools.contains("cargo-trust") {
+                command(&heat)
+                    .current_dir(&exe)
+                    .arg("dir")
+                    .arg("cargo-trust")
+                    .args(heat_flags)
+                    .arg("-cg")
+                    .arg("CargoTrustGroup")
+                    .arg("-dr")
+                    .arg("CargoTrust")
+                    .arg("-var")
+                    .arg("var.CargoTrustDir")
+                    .arg("-out")
+                    .arg(exe.join("CargoTrustGroup.wxs"))
+                    .arg("-t")
+                    .arg(etc.join("msi/remove-duplicates.xsl"))
+                    .run(builder);
+            }
             command(&heat)
                 .current_dir(&exe)
                 .arg("dir")
@@ -2269,6 +2403,9 @@ impl Step for Extended {
                 if built_tools.contains("rustfmt") {
                     cmd.arg("-dRustFmtDir=rustfmt");
                 }
+                if built_tools.contains("cargo-trust") {
+                    cmd.arg("-dCargoTrustDir=cargo-trust");
+                }
                 if built_tools.contains("rust-docs") {
                     cmd.arg("-dDocsDir=rust-docs");
                 }
@@ -2291,6 +2428,9 @@ impl Step for Extended {
                 candle("DocsGroup.wxs".as_ref());
             }
             candle("CargoGroup.wxs".as_ref());
+            if built_tools.contains("cargo-trust") {
+                candle("CargoTrustGroup.wxs".as_ref());
+            }
             candle("StdGroup.wxs".as_ref());
             if built_tools.contains("clippy") {
                 candle("ClippyGroup.wxs".as_ref());
@@ -2333,6 +2473,9 @@ impl Step for Extended {
                 .arg("AnalysisGroup.wixobj")
                 .current_dir(&exe);
 
+            if built_tools.contains("cargo-trust") {
+                cmd.arg("CargoTrustGroup.wixobj");
+            }
             if built_tools.contains("clippy") {
                 cmd.arg("ClippyGroup.wixobj");
             }
@@ -2402,6 +2545,7 @@ fn add_env(
     };
     define_optional_tool("rustfmt", "CFG_RUSTFMT");
     define_optional_tool("clippy", "CFG_CLIPPY");
+    define_optional_tool("cargo-trust", "CFG_CARGO_TRUST");
     define_optional_tool("miri", "CFG_MIRI");
     define_optional_tool("rust-analyzer", "CFG_RA");
 }

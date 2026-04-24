@@ -28,7 +28,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for [hir::Attribute] {
             .iter()
             .filter(|attr| {
                 attr.is_doc_comment().is_none()
-                    // tRust: known issue (jdonszelmann) — have a better way to handle ignored attrs
+                    // FIXME(jdonszelmann) have a better way to handle ignored attrs
                     && !attr.name().is_some_and(|ident| is_ignored_attr(ident))
             })
             .collect();
@@ -43,7 +43,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for [hir::Attribute] {
 #[inline]
 fn is_ignored_attr(name: Symbol) -> bool {
     const IGNORED_ATTRIBUTES: &[Symbol] = &[
-        sym::cfg_trace, // tRust: known issue (#138844) — should this really be ignored?
+        sym::cfg_trace, // FIXME(#138844) should this really be ignored?
         sym::rustc_if_this_changed,
         sym::rustc_then_this_would_need,
         sym::rustc_clean,

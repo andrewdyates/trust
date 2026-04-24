@@ -268,8 +268,6 @@ fn fold_arc<T: Clone, E>(
     // We merely want to replace the contained `T`, if at all possible,
     // so that we don't needlessly allocate a new `Arc` or indeed clone
     // the contained type.
-    // SAFETY: The layout matches the original allocation, and the
-    // pointer was allocated by the same allocator.
     unsafe {
         // First step is to ensure that we have a unique reference to
         // the contained type, which `Arc::make_mut` will accomplish (by

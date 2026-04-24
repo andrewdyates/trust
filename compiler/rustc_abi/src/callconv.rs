@@ -148,7 +148,7 @@ impl<'a, Ty> TyAndLayout<'a, Ty> {
                     Variants::Single { .. } | Variants::Empty => {}
                     Variants::Multiple { variants, .. } => {
                         // Treat enum variants like union members.
-                        // tRust: known issue (eddyb) — pretend the `enum` field (discriminant)
+                        // HACK(eddyb) pretend the `enum` field (discriminant)
                         // is at the start of every variant (otherwise the gap
                         // at the start of all variants would disqualify them).
                         //

@@ -180,7 +180,7 @@ impl LocalizedConstraintGraphVisitor for LoanLivenessVisitor<'_> {
         // wish to explore later, namely handling kills appropriately during traversal, instead
         // of continuing traversal to all the reachable nodes.
         //
-        // // NOTE: potential unsoundness here should be analyzed in concert with borrowck, possibly in concert with a borrowck
+        // FIXME: analyze potential unsoundness, possibly in concert with a borrowck
         // implementation in a-mir-formality, fuzzing, or manually crafting counter-examples.
         if self.liveness.is_live_at_point(node.region, node.point) {
             self.live_loans.insert(node.point, loan);

@@ -56,7 +56,7 @@ struct ReachableContext<'tcx> {
     reachable_symbols: LocalDefIdSet,
     // A worklist of item IDs. Each item ID in this worklist will be inlined
     // and will be scanned for further references.
-    // tRust: known issue — (eddyb) benchmark if this would be faster as a `VecDeque`.
+    // FIXME(eddyb) benchmark if this would be faster as a `VecDeque`.
     worklist: Vec<LocalDefId>,
     // Whether any output of this compilation is a library
     any_library: bool,
@@ -296,7 +296,6 @@ impl<'tcx> ReachableContext<'tcx> {
             | Node::Synthetic
             | Node::OpaqueTy(..) => {}
             _ => {
-                // tRust: invariant — reachability worklist must only contain expected HIR node kinds
                 bug!(
                     "found unexpected node kind in worklist: {} ({:?})",
                     self.tcx.hir_id_to_string(self.tcx.local_def_id_to_hir_id(search_item)),
@@ -434,7 +433,7 @@ fn has_custom_linkage(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
 
     let codegen_attrs = tcx.codegen_fn_attrs(def_id);
     codegen_attrs.contains_extern_indicator()
-        // tRust: known issue — (nbdd0121) `#[used]` are marked as reachable here so it's picked up by
+        // FIXME(nbdd0121): `#[used]` are marked as reachable here so it's picked up by
         // `linked_symbols` in cg_ssa. They won't be exported in binary or cdylib due to their
         // `SymbolExportLevel::Rust` export level but may end up being exported in dylibs.
         || codegen_attrs.flags.contains(CodegenFnAttrFlags::USED_COMPILER)
@@ -487,7 +486,7 @@ fn reachable_set(tcx: TyCtxt<'_>, (): ()) -> LocalDefIdSet {
         // `item_might_be_inlined` items as reachable. The issue is, when those functions are
         // generic and call a trait method, we have no idea where that call goes! So, we
         // conservatively mark all trait impl items as reachable.
-        // tRust: known issue — One possible strategy for pruning the reachable set is to avoid marking impl
+        // FIXME: One possible strategy for pruning the reachable set is to avoid marking impl
         // items of non-exported traits (or maybe all local traits?) unless their respective
         // trait items are used from inlinable code through method call syntax or UFCS, or their
         // trait is a lang item.

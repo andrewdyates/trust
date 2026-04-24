@@ -7,7 +7,7 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::locator::{find_function_first, FunctionLocation};
+use crate::locator::{FunctionLocation, find_function_first};
 use crate::rewriter::RewriteError;
 use crate::{RewriteKind, SourceRewrite};
 use trust_strengthen::{Proposal, ProposalKind};
@@ -21,11 +21,7 @@ pub enum ConvertError {
     FunctionNotFound { name: String, file_path: String },
     /// The expression to replace was not found in the function body.
     #[error("expression `{expr}` not found in function `{name}` in `{file_path}`")]
-    ExpressionNotFound {
-        expr: String,
-        name: String,
-        file_path: String,
-    },
+    ExpressionNotFound { expr: String, name: String, file_path: String },
 }
 
 impl From<ConvertError> for RewriteError {
@@ -36,15 +32,9 @@ impl From<ConvertError> for RewriteError {
                 offset: 0,
                 expected: format!("fn {name}("),
             },
-            ConvertError::ExpressionNotFound {
-                expr,
-                name: _,
-                file_path,
-            } => RewriteError::SourceMismatch {
-                file_path,
-                offset: 0,
-                expected: expr,
-            },
+            ConvertError::ExpressionNotFound { expr, name: _, file_path } => {
+                RewriteError::SourceMismatch { file_path, offset: 0, expected: expr }
+            }
         }
     }
 }
@@ -76,37 +66,28 @@ pub fn convert_proposal(
     })?;
 
     match &proposal.kind {
-        ProposalKind::AddPrecondition { spec_body } => {
-            Ok(vec![make_attribute_rewrite(
-                file_path,
-                &loc,
-                &proposal.function_name,
-                &format!("#[requires(\"{spec_body}\")]"),
-                &proposal.rationale,
-            )])
-        }
-        ProposalKind::AddPostcondition { spec_body } => {
-            Ok(vec![make_attribute_rewrite(
-                file_path,
-                &loc,
-                &proposal.function_name,
-                &format!("#[ensures(\"{spec_body}\")]"),
-                &proposal.rationale,
-            )])
-        }
-        ProposalKind::AddInvariant { spec_body } => {
-            Ok(vec![make_attribute_rewrite(
-                file_path,
-                &loc,
-                &proposal.function_name,
-                &format!("#[invariant(\"{spec_body}\")]"),
-                &proposal.rationale,
-            )])
-        }
-        ProposalKind::SafeArithmetic {
-            original,
-            replacement,
-        } => {
+        ProposalKind::AddPrecondition { spec_body } => Ok(vec![make_attribute_rewrite(
+            file_path,
+            &loc,
+            &proposal.function_name,
+            &format!("#[requires(\"{spec_body}\")]"),
+            &proposal.rationale,
+        )]),
+        ProposalKind::AddPostcondition { spec_body } => Ok(vec![make_attribute_rewrite(
+            file_path,
+            &loc,
+            &proposal.function_name,
+            &format!("#[ensures(\"{spec_body}\")]"),
+            &proposal.rationale,
+        )]),
+        ProposalKind::AddInvariant { spec_body } => Ok(vec![make_attribute_rewrite(
+            file_path,
+            &loc,
+            &proposal.function_name,
+            &format!("#[invariant(\"{spec_body}\")]"),
+            &proposal.rationale,
+        )]),
+        ProposalKind::SafeArithmetic { original, replacement } => {
             let expr_offset = find_expr_in_function(source, &loc, original).ok_or_else(|| {
                 ConvertError::ExpressionNotFound {
                     expr: original.clone(),
@@ -125,26 +106,22 @@ pub fn convert_proposal(
                 rationale: proposal.rationale.clone(),
             }])
         }
-        ProposalKind::AddBoundsCheck { check_expr } => {
-            Ok(vec![make_assertion_rewrite(
-                file_path,
-                source,
-                &loc,
-                &proposal.function_name,
-                check_expr,
-                &proposal.rationale,
-            )])
-        }
-        ProposalKind::AddNonZeroCheck { check_expr } => {
-            Ok(vec![make_assertion_rewrite(
-                file_path,
-                source,
-                &loc,
-                &proposal.function_name,
-                check_expr,
-                &proposal.rationale,
-            )])
-        }
+        ProposalKind::AddBoundsCheck { check_expr } => Ok(vec![make_assertion_rewrite(
+            file_path,
+            source,
+            &loc,
+            &proposal.function_name,
+            check_expr,
+            &proposal.rationale,
+        )]),
+        ProposalKind::AddNonZeroCheck { check_expr } => Ok(vec![make_assertion_rewrite(
+            file_path,
+            source,
+            &loc,
+            &proposal.function_name,
+            check_expr,
+            &proposal.rationale,
+        )]),
     }
 }
 
@@ -166,9 +143,7 @@ fn make_attribute_rewrite(
     SourceRewrite {
         file_path: file_path.to_owned(),
         offset: loc.item_offset,
-        kind: RewriteKind::InsertAttribute {
-            attribute: formatted,
-        },
+        kind: RewriteKind::InsertAttribute { attribute: formatted },
         function_name: function_name.to_owned(),
         rationale: rationale.to_owned(),
     }
@@ -190,34 +165,23 @@ fn make_assertion_rewrite(
         .unwrap_or(loc.fn_offset);
 
     // Skip any newline right after `{`
-    let insert_at = if source[body_start..].starts_with('\n') {
-        body_start + 1
-    } else {
-        body_start
-    };
+    let insert_at =
+        if source[body_start..].starts_with('\n') { body_start + 1 } else { body_start };
 
     SourceRewrite {
         file_path: file_path.to_owned(),
         offset: insert_at,
-        kind: RewriteKind::InsertAssertion {
-            assertion: assertion.to_owned(),
-        },
+        kind: RewriteKind::InsertAssertion { assertion: assertion.to_owned() },
         function_name: function_name.to_owned(),
         rationale: rationale.to_owned(),
     }
 }
 
 /// Find an expression within the function body, returning its byte offset in the full source.
-fn find_expr_in_function(
-    source: &str,
-    loc: &FunctionLocation,
-    expr: &str,
-) -> Option<usize> {
+fn find_expr_in_function(source: &str, loc: &FunctionLocation, expr: &str) -> Option<usize> {
     // Search from the fn keyword onward for the expression
     let search_start = loc.fn_offset;
-    source[search_start..]
-        .find(expr)
-        .map(|i| search_start + i)
+    source[search_start..].find(expr).map(|i| search_start + i)
 }
 
 #[cfg(test)]
@@ -242,9 +206,8 @@ mod tests {
     #[test]
     fn test_convert_precondition() {
         let source = make_source();
-        let proposal = make_proposal(ProposalKind::AddPrecondition {
-            spec_body: "a + b < u64::MAX".into(),
-        });
+        let proposal =
+            make_proposal(ProposalKind::AddPrecondition { spec_body: "a + b < u64::MAX".into() });
         let rewrites = convert_proposal(&proposal, source, "src/lib.rs").unwrap();
         assert_eq!(rewrites.len(), 1);
         assert_eq!(rewrites[0].offset, 0); // item starts at 0
@@ -293,9 +256,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "crate::index_into".into(),
             function_name: "index_into".into(),
-            kind: ProposalKind::AddBoundsCheck {
-                check_expr: "assert!(i < v.len());".into(),
-            },
+            kind: ProposalKind::AddBoundsCheck { check_expr: "assert!(i < v.len());".into() },
             confidence: 0.85,
             rationale: "bounds check".into(),
         };
@@ -330,15 +291,10 @@ mod tests {
     #[test]
     fn test_convert_function_not_found() {
         let source = "fn foo() {}\n";
-        let proposal = make_proposal(ProposalKind::AddPrecondition {
-            spec_body: "true".into(),
-        });
+        let proposal = make_proposal(ProposalKind::AddPrecondition { spec_body: "true".into() });
         let result = convert_proposal(&proposal, source, "src/lib.rs");
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            ConvertError::FunctionNotFound { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), ConvertError::FunctionNotFound { .. }));
     }
 
     #[test]
@@ -350,10 +306,7 @@ mod tests {
         });
         let result = convert_proposal(&proposal, source, "src/lib.rs");
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            ConvertError::ExpressionNotFound { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), ConvertError::ExpressionNotFound { .. }));
     }
 
     #[test]
@@ -362,9 +315,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "crate::Calculator::add".into(),
             function_name: "add".into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "a + b < u64::MAX".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "a + b < u64::MAX".into() },
             confidence: 0.9,
             rationale: "overflow".into(),
         };
@@ -380,10 +331,7 @@ mod tests {
 
     #[test]
     fn test_convert_error_into_rewrite_error() {
-        let err = ConvertError::FunctionNotFound {
-            name: "foo".into(),
-            file_path: "bar.rs".into(),
-        };
+        let err = ConvertError::FunctionNotFound { name: "foo".into(), file_path: "bar.rs".into() };
         let rewrite_err: RewriteError = err.into();
         assert!(matches!(rewrite_err, RewriteError::SourceMismatch { .. }));
     }
@@ -391,9 +339,7 @@ mod tests {
     #[test]
     fn test_convert_invariant() {
         let source = make_source();
-        let proposal = make_proposal(ProposalKind::AddInvariant {
-            spec_body: "i < n".into(),
-        });
+        let proposal = make_proposal(ProposalKind::AddInvariant { spec_body: "i < n".into() });
         let rewrites = convert_proposal(&proposal, source, "src/lib.rs").unwrap();
         assert_eq!(rewrites.len(), 1);
         assert!(matches!(

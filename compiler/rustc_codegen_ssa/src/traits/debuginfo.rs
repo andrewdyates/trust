@@ -29,7 +29,7 @@ pub trait DebugInfoCodegenMethods<'tcx>: BackendTypes {
         mir: &mir::Body<'tcx>,
     ) -> Option<FunctionDebugContext<'tcx, Self::DIScope, Self::DILocation>>;
 
-    // NOTE(eddyb): Debuginfo-related types lack a common naming convention.
+    // FIXME(eddyb) find a common convention for all of the debuginfo-related
     // names (choose between `dbg`, `debug`, `debuginfo`, `debug_info` etc.).
     fn dbg_scope_fn(
         &self,
@@ -52,7 +52,7 @@ pub trait DebugInfoCodegenMethods<'tcx>: BackendTypes {
     ) -> Self::DIScope;
     fn debuginfo_finalize(&self);
 
-    // NOTE(eddyb): Debuginfo-related types lack a common naming convention.
+    // FIXME(eddyb) find a common convention for all of the debuginfo-related
     // names (choose between `dbg`, `debug`, `debuginfo`, `debug_info` etc.).
     fn create_dbg_var(
         &self,
@@ -65,7 +65,7 @@ pub trait DebugInfoCodegenMethods<'tcx>: BackendTypes {
 }
 
 pub trait DebugInfoBuilderMethods<'tcx>: BackendTypes {
-    // NOTE(eddyb): Debuginfo-related types lack a common naming convention.
+    // FIXME(eddyb) find a common convention for all of the debuginfo-related
     // names (choose between `dbg`, `debug`, `debuginfo`, `debug_info` etc.).
     fn dbg_var_addr(
         &mut self,

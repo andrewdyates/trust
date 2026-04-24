@@ -649,7 +649,7 @@ where
             debug_assert_eq!(r, Some(node));
 
             // Remove the frame, it's done.
-            let frame = stack.pop().expect("invariant: SCC stack must not be empty during unwind"); // tRust: unwrap -> expect
+            let frame = stack.pop().unwrap();
             let current_component_annotation = frame.current_component_annotation;
             debug_assert_eq!(frame.node, node);
 
@@ -698,6 +698,6 @@ where
         self.successors_stack = successors_stack;
         debug_assert_eq!(self.successors_stack.len(), 0);
 
-        return_value.expect("invariant: SCC walk must produce a return value") // tRust: unwrap -> expect
+        return_value.unwrap()
     }
 }

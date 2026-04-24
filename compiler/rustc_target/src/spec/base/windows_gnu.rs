@@ -80,7 +80,7 @@ pub(crate) fn opts() -> TargetOptions {
         os: Os::Windows,
         env: Env::Gnu,
         vendor: "pc".into(),
-        // tRust: known issue (#13846) — this should be enabled for windows
+        // FIXME(#13846) this should be enabled for windows
         function_sections: false,
         linker: Some("gcc".into()),
         dynamic_linking: true,
@@ -103,7 +103,7 @@ pub(crate) fn opts() -> TargetOptions {
         requires_uwtable: true,
         eh_frame_header: false,
         debuginfo_kind: DebuginfoKind::Dwarf,
-        // tRust: known issue (davidtwco) — Support Split DWARF on Windows GNU - may require LLVM changes to
+        // FIXME(davidtwco): Support Split DWARF on Windows GNU - may require LLVM changes to
         // output DWO, despite using DWARF, doesn't use ELF..
         supported_split_debuginfo: Cow::Borrowed(&[SplitDebuginfo::Off]),
         mcount: "_mcount".into(),

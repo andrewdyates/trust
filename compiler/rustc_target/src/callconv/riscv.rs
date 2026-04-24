@@ -292,7 +292,7 @@ fn classify_arg<'a, Ty, C>(
     Ty: TyAbiInterface<'a, C> + Copy,
 {
     if !arg.layout.is_sized() {
-        // tRust: known issue — Update avail_gprs?
+        // FIXME: Update avail_gprs?
         // Not touching this...
         return;
     }

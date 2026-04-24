@@ -132,7 +132,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "test_func".to_string(),
+            function: "test_func".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -142,7 +142,7 @@ mod tests {
     fn make_divzero_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_func".to_string(),
+            function: "test_func".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -187,7 +187,7 @@ mod tests {
         // Same formula and kind but different source locations
         let vc1 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "func_a".to_string(),
+            function: "func_a".into(),
             location: SourceSpan {
                 file: "a.rs".to_string(),
                 line_start: 1,
@@ -200,7 +200,7 @@ mod tests {
         };
         let vc2 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "func_b".to_string(),
+            function: "func_b".into(),
             location: SourceSpan {
                 file: "b.rs".to_string(),
                 line_start: 99,

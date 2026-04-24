@@ -119,7 +119,7 @@ mod tests {
     fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
         VerificationCondition {
             kind,
-            function: function.to_string(),
+            function: function.into(),
             location: SourceSpan {
                 file: "test.rs".into(),
                 line_start: 1,
@@ -138,7 +138,7 @@ mod tests {
             time_ms: 1,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
-                solver_warnings: None,
+            solver_warnings: None,
         }
     }
 
@@ -207,10 +207,7 @@ mod tests {
     #[test]
     fn test_from_tracker_with_timestamp() {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
-        let cr = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, proved())],
-        )]);
+        let cr = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, proved())])]);
         tracker.observe(&cr);
 
         let snap = from_tracker_with_timestamp(&tracker, 1711612800);

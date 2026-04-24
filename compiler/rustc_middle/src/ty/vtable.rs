@@ -110,7 +110,7 @@ pub(super) fn vtable_allocation_provider<'tcx>(
     let ptr_size = tcx.data_layout.pointer_size();
     let ptr_align = tcx.data_layout.pointer_align().abi;
 
-    let vtable_size = ptr_size * u64::try_from(vtable_entries.len()).expect("invariant: value fits in target type");
+    let vtable_size = ptr_size * u64::try_from(vtable_entries.len()).unwrap();
     let mut vtable = Allocation::new(vtable_size, ptr_align, AllocInit::Uninit, ());
 
     // No need to do any alignment checks on the memory accesses below, because we know the
@@ -118,7 +118,7 @@ pub(super) fn vtable_allocation_provider<'tcx>(
     // multiples of `ptr_align`, which means that it will stay aligned to `ptr_align`.
 
     for (idx, entry) in vtable_entries.iter().enumerate() {
-        let idx: u64 = u64::try_from(idx).expect("invariant: value fits in target type");
+        let idx: u64 = u64::try_from(idx).unwrap();
         let scalar = match *entry {
             VtblEntry::MetadataDropInPlace => {
                 if ty.needs_drop(tcx, ty::TypingEnv::fully_monomorphized()) {

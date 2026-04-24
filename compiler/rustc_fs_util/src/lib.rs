@@ -93,11 +93,11 @@ pub fn path_to_c_string(p: &Path) -> CString {
     use std::os::wasi::ffi::OsStrExt;
 
     let p: &OsStr = p.as_ref();
-    CString::new(p.as_bytes()).expect("invariant: path must not contain interior NUL bytes") // tRust: unwrap -> expect
+    CString::new(p.as_bytes()).unwrap()
 }
 #[cfg(windows)]
 pub fn path_to_c_string(p: &Path) -> CString {
-    CString::new(p.to_str().expect("invariant: windows path must be valid UTF-8")).expect("invariant: path must not contain interior NUL bytes") // tRust: unwrap -> expect
+    CString::new(p.to_str().unwrap()).unwrap()
 }
 
 #[inline]

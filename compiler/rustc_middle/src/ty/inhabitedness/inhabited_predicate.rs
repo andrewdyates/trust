@@ -266,7 +266,6 @@ impl<'tcx> InhabitedPredicate<'tcx> {
             },
             Self::True | Self::False | Self::NotInModule(_) => None,
             Self::OpaqueType(_) => {
-                // tRust: invariant: unexpected OpaqueType in InhabitedPredicate
                 bug!("unexpected OpaqueType in InhabitedPredicate");
             }
         }

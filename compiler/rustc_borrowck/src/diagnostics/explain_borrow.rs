@@ -121,7 +121,7 @@ impl<'tcx> BorrowExplanation<'tcx> {
                         span: _,
                         pat,
                         init,
-                        // // NOTE(#101728): enable rewrite when type ascription is stabilized again
+                        // FIXME(#101728): enable rewrite when type ascription is stabilized again
                         ty: None,
                         recovered: _,
                     }) = cond.kind
@@ -140,7 +140,7 @@ impl<'tcx> BorrowExplanation<'tcx> {
                     }
                 } else {
                     // path_span must be `Some` as otherwise the if condition is true
-                    let path_span = path_span.expect("invariant: borrow path span must be available");
+                    let path_span = path_span.unwrap();
                     // path_span is only present in the case of closure capture
                     assert_matches!(later_use_kind, LaterUseKind::ClosureCapture);
                     if !borrow_span.is_some_and(|sp| sp.overlaps(var_or_use_span)) {
@@ -172,7 +172,7 @@ impl<'tcx> BorrowExplanation<'tcx> {
                     err.span_label(var_or_use_span, format!("{borrow_desc}{message}"));
                 } else {
                     // path_span must be `Some` as otherwise the if condition is true
-                    let path_span = path_span.expect("invariant: borrow path span must be available");
+                    let path_span = path_span.unwrap();
                     // path_span is only present in the case of closure capture
                     assert_matches!(later_use_kind, LaterUseKind::ClosureCapture);
                     if borrow_span.map(|sp| !sp.overlaps(var_or_use_span)).unwrap_or(true) {
@@ -295,7 +295,7 @@ impl<'tcx> BorrowExplanation<'tcx> {
                                 span: _,
                                 pat,
                                 init,
-                                // NOTE(#101728): enable rewrite when type ascription is
+                                // FIXME(#101728): enable rewrite when type ascription is
                                 // stabilized again.
                                 ty: None,
                                 recovered: _,

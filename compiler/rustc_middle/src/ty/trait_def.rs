@@ -138,7 +138,7 @@ impl<'tcx> TyCtxt<'tcx> {
         self_ty: Ty<'tcx>,
         mut f: impl FnMut(DefId),
     ) {
-        // tRust: known issue — This depends on the set of all impls for the trait. That is
+        // FIXME: This depends on the set of all impls for the trait. That is
         // unfortunate wrt. incremental compilation.
         //
         // If we want to be faster, we could have separate queries for

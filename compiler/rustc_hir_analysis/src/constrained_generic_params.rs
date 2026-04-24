@@ -70,7 +70,6 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ParameterCollector {
             }
             // All free alias types should've been expanded beforehand.
             ty::Alias(ty::Free, _) if !self.include_nonconstraining => {
-                // tRust: invariant — free alias types should not appear in constrained generic param analysis
                 bug!("unexpected free alias type")
             }
             ty::Param(param) => self.parameters.push(Parameter::from(param)),
@@ -168,7 +167,7 @@ pub(crate) fn setup_constraining_predicates<'tcx>(
     // which is `O(nt)` where `t` is the depth of type-parameter constraints,
     // remembering that `t` should be less than 7 in practice.
     //
-    // tRust: known issue — (hkBst): the big-O bound above would be accurate for the number
+    // FIXME(hkBst): the big-O bound above would be accurate for the number
     // of calls to `parameters_for`, which itself is some O(complexity of type).
     // That would make this potentially cubic instead of merely quadratic...
     // ...unless we cache those `parameters_for` calls.

@@ -67,12 +67,7 @@ impl QualityScore {
     /// Create a new quality score.
     #[must_use]
     pub fn new(kind: MetricKind, value: u32, max_value: u32, details: impl Into<String>) -> Self {
-        Self {
-            kind,
-            value: value.min(max_value),
-            max_value,
-            details: details.into(),
-        }
+        Self { kind, value: value.min(max_value), max_value, details: details.into() }
     }
 
     /// Score as a percentage (0..=100).
@@ -102,11 +97,7 @@ impl QualityMetrics {
     pub fn from_scores(scores: Vec<QualityScore>) -> Self {
         let overall_score = scores.iter().map(|s| s.value).sum();
         let max_score = scores.iter().map(|s| s.max_value).sum();
-        Self {
-            scores,
-            overall_score,
-            max_score,
-        }
+        Self { scores, overall_score, max_score }
     }
 
     /// Overall percentage (0..=100).
@@ -230,10 +221,7 @@ impl QualityEvaluator {
         };
 
         let suggestions = self.suggest_improvements(&report);
-        QualityReport {
-            suggestions,
-            ..report
-        }
+        QualityReport { suggestions, ..report }
     }
 
     /// Analyze how well a specification covers the given execution paths.
@@ -279,10 +267,7 @@ impl QualityEvaluator {
                 let a = preconditions[i].trim();
                 let b = preconditions[j].trim();
                 // Textual subsumption or exact duplicate after normalization.
-                if a.contains(b)
-                    || b.contains(a)
-                    || normalize_clause(a) == normalize_clause(b)
-                {
+                if a.contains(b) || b.contains(a) || normalize_clause(a) == normalize_clause(b) {
                     pairs.push((i, j));
                 }
             }
@@ -305,12 +290,7 @@ impl QualityEvaluator {
         let max_val = 100u32;
 
         if clauses.is_empty() {
-            return QualityScore::new(
-                MetricKind::Minimality,
-                0,
-                max_val,
-                "Empty specification",
-            );
+            return QualityScore::new(MetricKind::Minimality, 0, max_val, "Empty specification");
         }
 
         // Check for duplicates.
@@ -388,14 +368,12 @@ impl QualityEvaluator {
                         );
                     }
                     MetricKind::Consistency => {
-                        suggestions.push(
-                            "Check for contradictory requires/ensures clauses.".to_string(),
-                        );
+                        suggestions
+                            .push("Check for contradictory requires/ensures clauses.".to_string());
                     }
                     MetricKind::Coverage => {
-                        suggestions.push(
-                            "Add specifications for uncovered execution paths.".to_string(),
-                        );
+                        suggestions
+                            .push("Add specifications for uncovered execution paths.".to_string());
                     }
                 }
             }
@@ -431,10 +409,8 @@ impl QualityEvaluator {
         // Reward mentioning function parameters.
         let param_vars = extract_identifiers(function_body);
         let spec_lower = spec.to_lowercase();
-        let mentioned = param_vars
-            .iter()
-            .filter(|v| spec_lower.contains(&v.to_lowercase()))
-            .count();
+        let mentioned =
+            param_vars.iter().filter(|v| spec_lower.contains(&v.to_lowercase())).count();
         let param_coverage = if param_vars.is_empty() {
             40
         } else {
@@ -454,10 +430,8 @@ impl QualityEvaluator {
         let mut score = 0u32;
 
         // Reward numeric bounds.
-        let has_bounds = spec.contains('<')
-            || spec.contains('>')
-            || spec.contains("<=")
-            || spec.contains(">=");
+        let has_bounds =
+            spec.contains('<') || spec.contains('>') || spec.contains("<=") || spec.contains(">=");
         if has_bounds {
             score += 40;
         }
@@ -469,7 +443,8 @@ impl QualityEvaluator {
         }
 
         // Reward mentioning return value.
-        let mentions_result = spec.contains("result") || spec.contains("ret") || spec.contains("output");
+        let mentions_result =
+            spec.contains("result") || spec.contains("ret") || spec.contains("output");
         if mentions_result {
             score += 20;
         }
@@ -477,10 +452,8 @@ impl QualityEvaluator {
         // Reward referencing variables from the body.
         let body_vars = extract_identifiers(function_body);
         let spec_lower = spec.to_lowercase();
-        let referenced = body_vars
-            .iter()
-            .filter(|v| spec_lower.contains(&v.to_lowercase()))
-            .count();
+        let referenced =
+            body_vars.iter().filter(|v| spec_lower.contains(&v.to_lowercase())).count();
         if referenced > 0 {
             score += 20u32.min(referenced as u32 * 5);
         }
@@ -556,9 +529,10 @@ fn extract_identifiers(text: &str) -> Vec<String> {
             if !current.is_empty()
                 && !current.chars().next().is_none_or(|c| c.is_ascii_digit())
                 && !is_keyword(&current)
-                && !ids.contains(&current) {
-                    ids.push(current.clone());
-                }
+                && !ids.contains(&current)
+            {
+                ids.push(current.clone());
+            }
             current.clear();
         }
     }
@@ -566,9 +540,10 @@ fn extract_identifiers(text: &str) -> Vec<String> {
     if !current.is_empty()
         && !current.chars().next().is_none_or(|c| c.is_ascii_digit())
         && !is_keyword(&current)
-        && !ids.contains(&current) {
-            ids.push(current);
-        }
+        && !ids.contains(&current)
+    {
+        ids.push(current);
+    }
 
     ids
 }
@@ -577,31 +552,53 @@ fn extract_identifiers(text: &str) -> Vec<String> {
 fn is_keyword(word: &str) -> bool {
     matches!(
         word,
-        "fn" | "let" | "mut" | "if" | "else" | "match" | "return" | "pub"
-            | "struct" | "enum" | "impl" | "for" | "while" | "loop" | "break"
-            | "continue" | "true" | "false" | "self" | "use" | "mod" | "const"
-            | "static" | "type" | "where" | "as" | "in" | "ref" | "move"
-            | "async" | "await" | "dyn" | "trait" | "super" | "crate" | "extern"
+        "fn" | "let"
+            | "mut"
+            | "if"
+            | "else"
+            | "match"
+            | "return"
+            | "pub"
+            | "struct"
+            | "enum"
+            | "impl"
+            | "for"
+            | "while"
+            | "loop"
+            | "break"
+            | "continue"
+            | "true"
+            | "false"
+            | "self"
+            | "use"
+            | "mod"
+            | "const"
+            | "static"
+            | "type"
+            | "where"
+            | "as"
+            | "in"
+            | "ref"
+            | "move"
+            | "async"
+            | "await"
+            | "dyn"
+            | "trait"
+            | "super"
+            | "crate"
+            | "extern"
             | "unsafe"
     )
 }
 
 /// Normalize a clause for deduplication: lowercase, collapse whitespace.
 fn normalize_clause(clause: &str) -> String {
-    clause
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ")
-        .to_lowercase()
+    clause.split_whitespace().collect::<Vec<&str>>().join(" ").to_lowercase()
 }
 
 /// Count the number of clauses in a spec (split by && and commas).
 fn count_clauses(spec: &str) -> usize {
-    spec.split("&&")
-        .flat_map(|s| s.split(','))
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .count()
+    spec.split("&&").flat_map(|s| s.split(',')).map(str::trim).filter(|s| !s.is_empty()).count()
 }
 
 /// Heuristic contradiction detector for simple comparisons.
@@ -611,11 +608,15 @@ fn is_contradictory(a: &str, b: &str) -> bool {
     let b_trimmed = b.trim();
 
     // Direct negation: "x > 0" vs "x <= 0".
-    if let (Some(var_a), Some(op_a)) = (extract_comparison_var(a_trimmed), extract_comparison_op(a_trimmed))
-        && let (Some(var_b), Some(op_b)) = (extract_comparison_var(b_trimmed), extract_comparison_op(b_trimmed))
-            && var_a == var_b && is_negation(op_a, op_b) {
-                return true;
-            }
+    if let (Some(var_a), Some(op_a)) =
+        (extract_comparison_var(a_trimmed), extract_comparison_op(a_trimmed))
+        && let (Some(var_b), Some(op_b)) =
+            (extract_comparison_var(b_trimmed), extract_comparison_op(b_trimmed))
+        && var_a == var_b
+        && is_negation(op_a, op_b)
+    {
+        return true;
+    }
 
     false
 }
@@ -641,9 +642,7 @@ fn extract_comparison_op(clause: &str) -> Option<&str> {
 fn is_negation(a: &str, b: &str) -> bool {
     matches!(
         (a, b),
-        (">" , "<=") | ("<=" , ">")
-        | ("<" , ">=") | (">=" , "<")
-        | ("==" , "!=") | ("!=" , "==")
+        (">", "<=") | ("<=", ">") | ("<", ">=") | (">=", "<") | ("==", "!=") | ("!=", "==")
     )
 }
 
@@ -711,10 +710,7 @@ mod tests {
             QualityScore::new(MetricKind::Minimality, 90, 100, ""),
         ];
         let metrics = QualityMetrics::from_scores(scores);
-        assert_eq!(
-            metrics.score_for(MetricKind::Minimality).unwrap().value,
-            90
-        );
+        assert_eq!(metrics.score_for(MetricKind::Minimality).unwrap().value, 90);
         assert!(metrics.score_for(MetricKind::Precision).is_none());
     }
 
@@ -732,11 +728,7 @@ mod tests {
 
     #[test]
     fn test_spec_coverage_zero_paths() {
-        let cov = SpecCoverage {
-            total_paths: 0,
-            covered_paths: 0,
-            uncovered_variables: vec![],
-        };
+        let cov = SpecCoverage { total_paths: 0, covered_paths: 0, uncovered_variables: vec![] };
         assert_eq!(cov.coverage_percentage(), 0);
     }
 

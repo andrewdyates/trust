@@ -40,7 +40,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
             && sub_trace.values == sup_trace.values
             && let ValuePairs::PolySigs(ExpectedFound { expected, found }) = sub_trace.values
         {
-            // tRust: known issue (compiler-errors) — Don't like that this needs `Ty`s, but
+            // FIXME(compiler-errors): Don't like that this needs `Ty`s, but
             // all of the region highlighting machinery only deals with those.
             let guar = self.emit_err(var_origin.span(), expected, found, trait_item_def_id);
             return Some(guar);

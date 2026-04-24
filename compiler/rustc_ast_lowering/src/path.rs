@@ -323,14 +323,14 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                             let open_param = data.inputs_span.shrink_to_lo().to(data
                                 .inputs
                                 .first()
-                                .expect("invariant: inputs is non-empty (checked above)") // tRust: unwrap -> expect
+                                .unwrap()
                                 .span
                                 .shrink_to_lo());
                             // Last character position of last argument to the end of the span
                             let close_param = data
                                 .inputs
                                 .last()
-                                .expect("invariant: inputs is non-empty (checked above)") // tRust: unwrap -> expect
+                                .unwrap()
                                 .span
                                 .shrink_to_hi()
                                 .to(data.inputs_span.shrink_to_hi());
@@ -386,7 +386,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         let has_lifetimes =
             generic_args.args.iter().any(|arg| matches!(arg, GenericArg::Lifetime(_)));
 
-        // tRust: known issue — (return_type_notation) Is this correct? I think so.
+        // FIXME(return_type_notation): Is this correct? I think so.
         if generic_args.parenthesized != hir::GenericArgsParentheses::ParenSugar && !has_lifetimes {
             self.maybe_insert_elided_lifetimes_in_path(
                 path_span,
@@ -437,7 +437,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         // See rustc_resolve::late::lifetimes::LifetimeContext::add_missing_lifetime_specifiers_label
         let (elided_lifetime_span, angle_brackets) = if generic_args.span.is_empty() {
             // No brackets, e.g. `Path`: use an empty span just past the end of the identifier.
-            // tRust: known issue — we use find_ancestor_inside to properly suggest elided spans in paths
+            // HACK: we use find_ancestor_inside to properly suggest elided spans in paths
             // originating from macros, since the segment's span might be from a macro arg.
             (
                 segment_ident_span.find_ancestor_inside(path_span).unwrap_or(path_span),
@@ -539,7 +539,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             FnRetTy::Default(_) => self.arena.alloc(self.ty_tup(*span, &[])),
         };
         let args = smallvec![GenericArg::Type(
-            self.arena.alloc(self.ty_tup(*inputs_span, inputs)).try_as_ambig_ty().expect("invariant: tuple type is representable as ambiguous type") // tRust:
+            self.arena.alloc(self.ty_tup(*inputs_span, inputs)).try_as_ambig_ty().unwrap()
         )];
 
         // If we have a bound like `async Fn() -> T`, make sure that we mark the

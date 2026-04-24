@@ -134,7 +134,6 @@ impl ConstValue {
     ) -> Option<&'tcx [u8]> {
         let (alloc_id, start, len) = match self {
             ConstValue::Scalar(_) | ConstValue::ZeroSized => {
-                // tRust: invariant: try_get_slice_bytes on non-slice constant
                 bug!("`try_get_slice_bytes` on non-slice constant")
             }
             &ConstValue::Slice { alloc_id, meta } => (alloc_id, 0, meta),
@@ -177,8 +176,8 @@ impl ConstValue {
         let data = tcx.global_alloc(alloc_id).unwrap_memory();
 
         // This is for diagnostics only, so we are okay to use `inspect_with_uninit_and_ptr_outside_interpreter`.
-        let start = start.try_into().expect("invariant: value fits in target type");
-        let end = start + usize::try_from(len).expect("invariant: value fits in target type");
+        let start = start.try_into().unwrap();
+        let end = start + usize::try_from(len).unwrap();
         Some(data.inner().inspect_with_uninit_and_ptr_outside_interpreter(start..end))
     }
 
@@ -217,7 +216,7 @@ pub enum Const<'tcx> {
     /// this ensures that we consistently produce "clean" values without data in the padding or
     /// anything like that.
     ///
-    /// tRust: known issue (BoxyUwU) — We should remove this `Ty` and look up the type for params via `ParamEnv`
+    /// FIXME(BoxyUwU): We should remove this `Ty` and look up the type for params via `ParamEnv`
     Ty(Ty<'tcx>, ty::Const<'tcx>),
 
     /// An unevaluated mir constant which is not part of the type system.
@@ -325,7 +324,6 @@ impl<'tcx> Const<'tcx> {
                 match c.kind() {
                     ConstKind::Value(cv) => Ok(tcx.valtree_to_const_val(cv)),
                     ConstKind::Expr(_) => {
-                        // tRust: invariant: feature not yet supported: :ConstKind::Expr` is unimplemented
                         bug!("Normalization of `ty::ConstKind::Expr` is unimplemented")
                     }
                     _ => Err(ReportedErrorInfo::non_const_eval_error(
@@ -335,7 +333,7 @@ impl<'tcx> Const<'tcx> {
                 }
             }
             Const::Unevaluated(uneval, _) => {
-                // tRust: known issue — We might want to have a `try_eval`-like function on `Unevaluated`
+                // FIXME: We might want to have a `try_eval`-like function on `Unevaluated`
                 tcx.const_eval_resolve(typing_env, uneval, span)
             }
             Const::Val(val, _) => Ok(val),
@@ -384,7 +382,6 @@ impl<'tcx> Const<'tcx> {
     #[inline]
     pub fn eval_bits(self, tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>) -> u128 {
         self.try_eval_bits(tcx, typing_env)
-            // tRust: invariant: expected value must exist: expected bits of {:#?}, got {:#?}
             .unwrap_or_else(|| bug!("expected bits of {:#?}, got {:#?}", self.ty(), self))
     }
 
@@ -401,7 +398,6 @@ impl<'tcx> Const<'tcx> {
     /// Panics if the value cannot be evaluated or doesn't contain a valid `usize`.
     pub fn eval_target_usize(self, tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>) -> u64 {
         self.try_eval_target_usize(tcx, typing_env)
-            // tRust: invariant: expected value must exist: expected usize, got {:#?}
             .unwrap_or_else(|| bug!("expected usize, got {:#?}", self))
     }
 
@@ -428,7 +424,6 @@ impl<'tcx> Const<'tcx> {
     ) -> Self {
         let size = tcx
             .layout_of(typing_env.as_query_input(ty))
-            // tRust: invariant: expected value must exist: could not compute layout for {ty:?}: {e:?}
             .unwrap_or_else(|e| bug!("could not compute layout for {ty:?}: {e:?}"))
             .size;
         let cv = ConstValue::Scalar(Scalar::from_uint(bits, size));
@@ -495,10 +490,10 @@ impl<'tcx> Display for Const<'tcx> {
         match *self {
             Const::Ty(_, c) => pretty_print_const(c, fmt, true),
             Const::Val(val, ty) => pretty_print_const_value(val, ty, fmt),
-            // tRust: known issue (valtrees) — Correctly print mir constants.
+            // FIXME(valtrees): Correctly print mir constants.
             Const::Unevaluated(c, _ty) => {
                 ty::tls::with(move |tcx| {
-                    let c = tcx.lift(c).expect("invariant: lift returned a valid value");
+                    let c = tcx.lift(c).unwrap();
                     // Matches `GlobalId` printing.
                     let instance =
                         with_no_trimmed_paths!(tcx.def_path_str_with_args(c.def, c.args));

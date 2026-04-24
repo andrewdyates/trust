@@ -79,11 +79,7 @@ pub struct WitnessConfig {
 
 impl Default for WitnessConfig {
     fn default() -> Self {
-        Self {
-            max_depth: 10,
-            prefer_small_values: true,
-            timeout_ms: 5000,
-        }
+        Self { max_depth: 10, prefer_small_values: true, timeout_ms: 5000 }
     }
 }
 
@@ -130,9 +126,7 @@ impl WitnessGenerator {
         constraints: &[&str],
     ) -> Result<Witness, WitnessError> {
         if property.is_empty() {
-            return Err(WitnessError::GenerationFailed(
-                "empty property".to_string(),
-            ));
+            return Err(WitnessError::GenerationFailed("empty property".to_string()));
         }
 
         // Check for trivially unsatisfiable constraints.
@@ -144,11 +138,8 @@ impl WitnessGenerator {
 
         // Extract variable names from constraints and property.
         let mut variables = Vec::new();
-        let all_text: Vec<&str> = constraints
-            .iter()
-            .copied()
-            .chain(std::iter::once(property))
-            .collect();
+        let all_text: Vec<&str> =
+            constraints.iter().copied().chain(std::iter::once(property)).collect();
 
         for text in &all_text {
             for token in text.split(|c: char| !c.is_alphanumeric() && c != '_') {
@@ -178,18 +169,11 @@ impl WitnessGenerator {
                 } else {
                     default_value(i)
                 };
-                WitnessAssignment {
-                    variable: var,
-                    value,
-                }
+                WitnessAssignment { variable: var, value }
             })
             .collect();
 
-        Ok(Witness {
-            assignments,
-            property: property.to_string(),
-            is_valid: true,
-        })
+        Ok(Witness { assignments, property: property.to_string(), is_valid: true })
     }
 
     /// Validate that a witness satisfies the stated property.
@@ -209,10 +193,7 @@ impl WitnessGenerator {
         }
         // Check no duplicate variable names.
         let mut seen = FxHashSet::default();
-        witness
-            .assignments
-            .iter()
-            .all(|a| seen.insert(&a.variable))
+        witness.assignments.iter().all(|a| seen.insert(&a.variable))
     }
 
     /// Convert a witness to a Rust test function body.
@@ -223,30 +204,15 @@ impl WitnessGenerator {
     pub fn witness_to_test(&self, witness: &Witness, function_name: &str) -> String {
         let mut out = String::new();
         out.push_str("#[test]\n");
-        let _ = writeln!(out, 
-            "fn test_witness_{function_name}() {{"
-        );
+        let _ = writeln!(out, "fn test_witness_{function_name}() {{");
 
         for assign in &witness.assignments {
-            let _ = writeln!(out, 
-                "    let {} = {};",
-                assign.variable, assign.value
-            );
+            let _ = writeln!(out, "    let {} = {};", assign.variable, assign.value);
         }
 
-        let args: Vec<&str> = witness
-            .assignments
-            .iter()
-            .map(|a| a.variable.as_str())
-            .collect();
-        let _ = writeln!(out, 
-            "    let _result = {function_name}({});",
-            args.join(", ")
-        );
-        let _ = writeln!(out, 
-            "    // Property: {}",
-            witness.property
-        );
+        let args: Vec<&str> = witness.assignments.iter().map(|a| a.variable.as_str()).collect();
+        let _ = writeln!(out, "    let _result = {function_name}({});", args.join(", "));
+        let _ = writeln!(out, "    // Property: {}", witness.property);
         out.push_str("}\n");
         out
     }
@@ -256,16 +222,10 @@ impl WitnessGenerator {
     pub fn format_witness(&self, witness: &Witness) -> String {
         let mut out = String::new();
         let _ = writeln!(out, "Witness for: {}", witness.property);
-        let _ = writeln!(out, 
-            "Valid: {}",
-            if witness.is_valid { "yes" } else { "no" }
-        );
+        let _ = writeln!(out, "Valid: {}", if witness.is_valid { "yes" } else { "no" });
         out.push_str("Assignments:\n");
         for assign in &witness.assignments {
-            let _ = writeln!(out, 
-                "  {} = {}",
-                assign.variable, assign.value
-            );
+            let _ = writeln!(out, "  {} = {}", assign.variable, assign.value);
         }
         out
     }
@@ -284,11 +244,7 @@ impl WitnessGenerator {
                 value: minimize_value(&a.value, self.config.max_depth),
             })
             .collect();
-        Witness {
-            assignments,
-            property: witness.property.clone(),
-            is_valid: witness.is_valid,
-        }
+        Witness { assignments, property: witness.property.clone(), is_valid: witness.is_valid }
     }
 }
 
@@ -296,8 +252,19 @@ impl WitnessGenerator {
 fn is_keyword(token: &str) -> bool {
     matches!(
         token,
-        "true" | "false" | "and" | "or" | "not" | "if" | "then" | "else"
-            | "let" | "fn" | "return" | "forall" | "exists"
+        "true"
+            | "false"
+            | "and"
+            | "or"
+            | "not"
+            | "if"
+            | "then"
+            | "else"
+            | "let"
+            | "fn"
+            | "return"
+            | "forall"
+            | "exists"
     )
 }
 
@@ -329,18 +296,12 @@ fn minimize_value(value: &WitnessValue, max_depth: usize) -> WitnessValue {
         WitnessValue::Int(_) => WitnessValue::Int(0),
         WitnessValue::Uint(_) => WitnessValue::Uint(0),
         WitnessValue::Str(_) => WitnessValue::Str(String::new()),
-        WitnessValue::Array(elems) => WitnessValue::Array(
-            elems
-                .iter()
-                .map(|e| minimize_value(e, max_depth - 1))
-                .collect(),
-        ),
-        WitnessValue::Tuple(elems) => WitnessValue::Tuple(
-            elems
-                .iter()
-                .map(|e| minimize_value(e, max_depth - 1))
-                .collect(),
-        ),
+        WitnessValue::Array(elems) => {
+            WitnessValue::Array(elems.iter().map(|e| minimize_value(e, max_depth - 1)).collect())
+        }
+        WitnessValue::Tuple(elems) => {
+            WitnessValue::Tuple(elems.iter().map(|e| minimize_value(e, max_depth - 1)).collect())
+        }
     }
 }
 
@@ -371,19 +332,13 @@ mod tests {
 
     #[test]
     fn test_witness_value_display_array() {
-        let arr = WitnessValue::Array(vec![
-            WitnessValue::Int(1),
-            WitnessValue::Int(2),
-        ]);
+        let arr = WitnessValue::Array(vec![WitnessValue::Int(1), WitnessValue::Int(2)]);
         assert_eq!(arr.to_string(), "[1, 2]");
     }
 
     #[test]
     fn test_witness_value_display_tuple() {
-        let tup = WitnessValue::Tuple(vec![
-            WitnessValue::Bool(true),
-            WitnessValue::Int(3),
-        ]);
+        let tup = WitnessValue::Tuple(vec![WitnessValue::Bool(true), WitnessValue::Int(3)]);
         assert_eq!(tup.to_string(), "(true, 3)");
     }
 
@@ -395,9 +350,7 @@ mod tests {
     #[test]
     fn test_generate_witness_simple_property() {
         let wg = default_generator();
-        let witness = wg
-            .generate_witness("x > 0", &["x > 0"])
-            .expect("should generate witness");
+        let witness = wg.generate_witness("x > 0", &["x > 0"]).expect("should generate witness");
         assert!(witness.is_valid);
         assert_eq!(witness.property, "x > 0");
         assert!(!witness.assignments.is_empty());
@@ -406,9 +359,8 @@ mod tests {
     #[test]
     fn test_generate_witness_multiple_variables() {
         let wg = default_generator();
-        let witness = wg
-            .generate_witness("x + y > 0", &["x > 0", "y > 0"])
-            .expect("should generate witness");
+        let witness =
+            wg.generate_witness("x + y > 0", &["x > 0", "y > 0"]).expect("should generate witness");
         assert_eq!(witness.assignments.len(), 2);
         let vars: Vec<&str> = witness.assignments.iter().map(|a| a.variable.as_str()).collect();
         assert!(vars.contains(&"x"));
@@ -481,11 +433,7 @@ mod tests {
     #[test]
     fn test_validate_witness_empty_assignments() {
         let wg = default_generator();
-        let witness = Witness {
-            assignments: vec![],
-            property: "x > 0".into(),
-            is_valid: true,
-        };
+        let witness = Witness { assignments: vec![], property: "x > 0".into(), is_valid: true };
         assert!(!wg.validate_witness(&witness, "x > 0"));
     }
 
@@ -543,11 +491,7 @@ mod tests {
     #[test]
     fn test_format_witness_invalid() {
         let wg = default_generator();
-        let witness = Witness {
-            assignments: vec![],
-            property: "p".into(),
-            is_valid: false,
-        };
+        let witness = Witness { assignments: vec![], property: "p".into(), is_valid: false };
         let formatted = wg.format_witness(&witness);
         assert!(formatted.contains("Valid: no"));
     }
@@ -583,10 +527,7 @@ mod tests {
         let witness = Witness {
             assignments: vec![WitnessAssignment {
                 variable: "arr".into(),
-                value: WitnessValue::Array(vec![
-                    WitnessValue::Int(10),
-                    WitnessValue::Int(20),
-                ]),
+                value: WitnessValue::Array(vec![WitnessValue::Int(10), WitnessValue::Int(20)]),
             }],
             property: "p".into(),
             is_valid: true,
@@ -604,10 +545,7 @@ mod tests {
         let witness = Witness {
             assignments: vec![WitnessAssignment {
                 variable: "t".into(),
-                value: WitnessValue::Tuple(vec![
-                    WitnessValue::Bool(true),
-                    WitnessValue::Uint(77),
-                ]),
+                value: WitnessValue::Tuple(vec![WitnessValue::Bool(true), WitnessValue::Uint(77)]),
             }],
             property: "p".into(),
             is_valid: true,
@@ -633,9 +571,7 @@ mod tests {
             prefer_small_values: false,
             ..WitnessConfig::default()
         });
-        let witness = wg
-            .generate_witness("x > 0", &["x > 0"])
-            .expect("should generate witness");
+        let witness = wg.generate_witness("x > 0", &["x > 0"]).expect("should generate witness");
         // With prefer_small_values=false, first variable gets Int(42).
         assert_eq!(witness.assignments[0].value, WitnessValue::Int(42));
     }
@@ -658,9 +594,8 @@ mod tests {
     #[test]
     fn test_generate_witness_filters_keywords() {
         let wg = default_generator();
-        let witness = wg
-            .generate_witness("x and y", &["not false"])
-            .expect("should generate witness");
+        let witness =
+            wg.generate_witness("x and y", &["not false"]).expect("should generate witness");
         let vars: Vec<&str> = witness.assignments.iter().map(|a| a.variable.as_str()).collect();
         // "and", "not", "false" are keywords and should be excluded.
         assert!(!vars.contains(&"and"));

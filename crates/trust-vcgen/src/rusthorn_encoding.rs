@@ -17,8 +17,7 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use trust_types::{
-    BorrowEncoding, Formula, ProphecyVar, Rvalue, Sort, Statement,
-    Terminator, VerifiableFunction,
+    BorrowEncoding, Formula, ProphecyVar, Rvalue, Sort, Statement, Terminator, VerifiableFunction,
 };
 
 use crate::chc::{ChcClause, ChcPredicate, ChcSystem, ClauseRole};
@@ -40,7 +39,10 @@ pub fn encode_borrows(func: &VerifiableFunction) -> BorrowEncoding {
     for block in &func.body.blocks {
         for stmt in &block.stmts {
             // Borrow creation: `_dst = &[mut] _src`
-            if let Statement::Assign { place, rvalue: Rvalue::Ref { mutable, place: src }, .. } = stmt {
+            if let Statement::Assign {
+                place, rvalue: Rvalue::Ref { mutable, place: src }, ..
+            } = stmt
+            {
                 let place_name = local_name(func, src.local);
                 let sort = local_sort(func, src.local);
                 let prophecy = if *mutable {
@@ -83,11 +85,8 @@ pub fn encode_borrows(func: &VerifiableFunction) -> BorrowEncoding {
     // are independent (no constraint). If they target the same place, that's
     // an aliasing violation (caught by ownership.rs), but we encode the
     // mutual exclusion here for completeness.
-    let mutable_prophecies: Vec<&ProphecyVar> = encoding
-        .prophecies
-        .iter()
-        .filter(|p| p.mutable)
-        .collect();
+    let mutable_prophecies: Vec<&ProphecyVar> =
+        encoding.prophecies.iter().filter(|p| p.mutable).collect();
 
     for i in 0..mutable_prophecies.len() {
         for j in (i + 1)..mutable_prophecies.len() {
@@ -97,12 +96,10 @@ pub fn encode_borrows(func: &VerifiableFunction) -> BorrowEncoding {
                 // Same place borrowed mutably twice: encode exclusion.
                 // NOT(both active simultaneously) -- this is always false
                 // in well-formed Rust, but we encode it for the solver.
-                encoding.aliasing_constraints.push(Formula::Not(Box::new(
-                    Formula::And(vec![
-                        Formula::Bool(true), // pi active
-                        Formula::Bool(true), // pj active
-                    ]),
-                )));
+                encoding.aliasing_constraints.push(Formula::Not(Box::new(Formula::And(vec![
+                    Formula::Bool(true), // pi active
+                    Formula::Bool(true), // pj active
+                ]))));
             }
         }
     }
@@ -131,10 +128,7 @@ pub fn augment_chc_with_borrows(system: &ChcSystem, encoding: &BorrowEncoding) -
         .map(|pred| {
             let mut params = pred.params.clone();
             params.extend(prophecy_params.clone());
-            ChcPredicate {
-                name: pred.name.clone(),
-                params,
-            }
+            ChcPredicate { name: pred.name.clone(), params }
         })
         .collect();
 
@@ -180,10 +174,7 @@ pub fn augment_chc_with_borrows(system: &ChcSystem, encoding: &BorrowEncoding) -
                     args.push(Formula::Var(p.current_var.clone(), p.sort.clone()));
                     args.push(Formula::Var(p.prophecy_var.clone(), p.sort.clone()));
                 }
-                crate::chc::ChcAtom {
-                    predicate: atom.predicate.clone(),
-                    args,
-                }
+                crate::chc::ChcAtom { predicate: atom.predicate.clone(), args }
             });
 
             let body_atoms: Vec<crate::chc::ChcAtom> = clause
@@ -195,10 +186,7 @@ pub fn augment_chc_with_borrows(system: &ChcSystem, encoding: &BorrowEncoding) -
                         args.push(Formula::Var(p.current_var.clone(), p.sort.clone()));
                         args.push(Formula::Var(p.prophecy_var.clone(), p.sort.clone()));
                     }
-                    crate::chc::ChcAtom {
-                        predicate: atom.predicate.clone(),
-                        args,
-                    }
+                    crate::chc::ChcAtom { predicate: atom.predicate.clone(), args }
                 })
                 .collect();
 
@@ -248,20 +236,12 @@ pub fn encode_function_with_borrows(
 
 /// Get a human-readable name for a local variable.
 fn local_name(func: &VerifiableFunction, local: usize) -> String {
-    func.body
-        .locals
-        .get(local)
-        .and_then(|d| d.name.clone())
-        .unwrap_or_else(|| format!("_{local}"))
+    func.body.locals.get(local).and_then(|d| d.name.clone()).unwrap_or_else(|| format!("_{local}"))
 }
 
 /// Get the SMT sort for a local variable.
 fn local_sort(func: &VerifiableFunction, local: usize) -> Sort {
-    func.body
-        .locals
-        .get(local)
-        .map(|d| Sort::from_ty(&d.ty))
-        .unwrap_or(Sort::Int)
+    func.body.locals.get(local).map(|d| Sort::from_ty(&d.ty)).unwrap_or(Sort::Int)
 }
 
 // ---------------------------------------------------------------------------
@@ -272,9 +252,8 @@ fn local_sort(func: &VerifiableFunction, local: usize) -> Sort {
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BinOp, BlockId, LocalDecl, Operand, Place,
-        Rvalue, Sort, SourceSpan, Statement, Terminator, Ty,
-        VerifiableBody,
+        BasicBlock, BinOp, BlockId, LocalDecl, Operand, Place, Rvalue, Sort, SourceSpan, Statement,
+        Terminator, Ty, VerifiableBody,
     };
 
     /// Build a function with a mutable borrow:
@@ -300,23 +279,18 @@ mod tests {
                     },
                     LocalDecl { index: 2, ty: Ty::u32(), name: Some("val".into()) },
                 ],
-                blocks: vec![
-                    BasicBlock {
-                        id: BlockId(0),
-                        stmts: vec![
-                            // val = &mut x (reborrow for the read-modify-write)
-                            Statement::Assign {
-                                place: Place::local(2),
-                                rvalue: Rvalue::Ref {
-                                    mutable: true,
-                                    place: Place::local(1),
-                                },
-                                span: SourceSpan::default(),
-                            },
-                        ],
-                        terminator: Terminator::Return,
-                    },
-                ],
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![
+                        // val = &mut x (reborrow for the read-modify-write)
+                        Statement::Assign {
+                            place: Place::local(2),
+                            rvalue: Rvalue::Ref { mutable: true, place: Place::local(1) },
+                            span: SourceSpan::default(),
+                        },
+                    ],
+                    terminator: Terminator::Return,
+                }],
                 arg_count: 1,
                 return_ty: Ty::Unit,
             },
@@ -348,16 +322,11 @@ mod tests {
                 ],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
-                    stmts: vec![
-                        Statement::Assign {
-                            place: Place::local(2),
-                            rvalue: Rvalue::Ref {
-                                mutable: false,
-                                place: Place::local(1),
-                            },
-                            span: SourceSpan::default(),
-                        },
-                    ],
+                    stmts: vec![Statement::Assign {
+                        place: Place::local(2),
+                        rvalue: Rvalue::Ref { mutable: false, place: Place::local(1) },
+                        span: SourceSpan::default(),
+                    }],
                     terminator: Terminator::Return,
                 }],
                 arg_count: 1,
@@ -472,10 +441,10 @@ mod tests {
 
         let params = enc.predicate_params();
         assert_eq!(params.len(), 4); // 2 vars per prophecy
-        assert_eq!(params[0], ("x__curr".to_string(), Sort::Int));
-        assert_eq!(params[1], ("x__final".to_string(), Sort::Int));
-        assert_eq!(params[2], ("y__curr".to_string(), Sort::BitVec(32)));
-        assert_eq!(params[3], ("y__final".to_string(), Sort::BitVec(32)));
+        assert_eq!(params[0], ("x__curr".into(), Sort::Int));
+        assert_eq!(params[1], ("x__final".into(), Sort::Int));
+        assert_eq!(params[2], ("y__curr".into(), Sort::BitVec(32)));
+        assert_eq!(params[3], ("y__final".into(), Sort::BitVec(32)));
     }
 
     #[test]
@@ -558,10 +527,7 @@ mod tests {
     #[test]
     fn test_augment_chc_empty_encoding_is_noop() {
         // Build a minimal CHC system
-        let pred = ChcPredicate {
-            name: "inv".to_string(),
-            params: vec![("i".to_string(), Sort::Int)],
-        };
+        let pred = ChcPredicate { name: "inv".to_string(), params: vec![("i".into(), Sort::Int)] };
         let clause = ChcClause {
             head: Some(pred.apply_unprimed()),
             body_atoms: vec![],
@@ -585,10 +551,7 @@ mod tests {
 
     #[test]
     fn test_augment_chc_adds_prophecy_params() {
-        let pred = ChcPredicate {
-            name: "inv".to_string(),
-            params: vec![("i".to_string(), Sort::Int)],
-        };
+        let pred = ChcPredicate { name: "inv".to_string(), params: vec![("i".into(), Sort::Int)] };
         let clause = ChcClause {
             head: Some(pred.apply_unprimed()),
             body_atoms: vec![],
@@ -615,10 +578,7 @@ mod tests {
 
     #[test]
     fn test_augment_chc_entry_gets_creation_constraints() {
-        let pred = ChcPredicate {
-            name: "inv".to_string(),
-            params: vec![("i".to_string(), Sort::Int)],
-        };
+        let pred = ChcPredicate { name: "inv".to_string(), params: vec![("i".into(), Sort::Int)] };
         let clause = ChcClause {
             head: Some(pred.apply_unprimed()),
             body_atoms: vec![],
@@ -634,22 +594,19 @@ mod tests {
 
         let mut encoding = BorrowEncoding::default();
         encoding.prophecies.push(ProphecyVar::shared_borrow("x", Sort::Int));
-        encoding.creation_constraints.push(
-            encoding.prophecies[0].identity_constraint(),
-        );
+        encoding.creation_constraints.push(encoding.prophecies[0].identity_constraint());
 
         let augmented = augment_chc_with_borrows(&system, &encoding);
 
         // Entry clause should have And([original_constraint, creation_constraint])
-        assert!(matches!(&augmented.clauses[0].constraint, Formula::And(terms) if terms.len() == 2));
+        assert!(
+            matches!(&augmented.clauses[0].constraint, Formula::And(terms) if terms.len() == 2)
+        );
     }
 
     #[test]
     fn test_augment_chc_exit_gets_expiry_constraints() {
-        let pred = ChcPredicate {
-            name: "inv".to_string(),
-            params: vec![("i".to_string(), Sort::Int)],
-        };
+        let pred = ChcPredicate { name: "inv".to_string(), params: vec![("i".into(), Sort::Int)] };
         let exit_clause = ChcClause {
             head: None,
             body_atoms: vec![pred.apply_unprimed()],
@@ -673,15 +630,14 @@ mod tests {
         let augmented = augment_chc_with_borrows(&system, &encoding);
 
         // Exit clause should have And([original_constraint, expiry_constraint])
-        assert!(matches!(&augmented.clauses[0].constraint, Formula::And(terms) if terms.len() == 2));
+        assert!(
+            matches!(&augmented.clauses[0].constraint, Formula::And(terms) if terms.len() == 2)
+        );
     }
 
     #[test]
     fn test_augment_chc_labels_annotated() {
-        let pred = ChcPredicate {
-            name: "inv".to_string(),
-            params: vec![("i".to_string(), Sort::Int)],
-        };
+        let pred = ChcPredicate { name: "inv".to_string(), params: vec![("i".into(), Sort::Int)] };
         let clause = ChcClause {
             head: Some(pred.apply_unprimed()),
             body_atoms: vec![],
@@ -707,9 +663,7 @@ mod tests {
         let mut encoding = BorrowEncoding::default();
         encoding.prophecies.push(ProphecyVar::mutable_borrow("x", Sort::Int));
         encoding.prophecies.push(ProphecyVar::shared_borrow("y", Sort::BitVec(32)));
-        encoding.creation_constraints.push(
-            encoding.prophecies[1].identity_constraint(),
-        );
+        encoding.creation_constraints.push(encoding.prophecies[1].identity_constraint());
 
         let json = serde_json::to_string(&encoding).expect("serialize");
         let round: BorrowEncoding = serde_json::from_str(&json).expect("deserialize");

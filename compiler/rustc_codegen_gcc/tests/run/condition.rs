@@ -15,7 +15,6 @@ use mini_core::*;
 
 #[no_mangle]
 extern "C" fn main(argc: i32, _argv: *const *const u8) -> i32 {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         if argc == 1 {
             libc::printf(b"true\n\0" as *const u8 as *const i8);

@@ -168,6 +168,7 @@ mod tests {
             runtime_checked: 0,
             cached_at: 0,
             spec_hash: String::new(),
+            obligation_results: vec![],
         }
     }
 
@@ -381,12 +382,7 @@ mod tests {
             added: vec![],
             removed: vec![],
         };
-        let result = apply_strategy(
-            InvalidationStrategy::Full,
-            &mut cache,
-            &changes,
-            &deps,
-        );
+        let result = apply_strategy(InvalidationStrategy::Full, &mut cache, &changes, &deps);
         assert!(cache.is_empty());
         assert_eq!(result.cache_size_after, 0);
     }
@@ -400,12 +396,7 @@ mod tests {
             added: vec![],
             removed: vec![],
         };
-        let result = apply_strategy(
-            InvalidationStrategy::Selective,
-            &mut cache,
-            &changes,
-            &deps,
-        );
+        let result = apply_strategy(InvalidationStrategy::Selective, &mut cache, &changes, &deps);
         // Selective doesn't follow deps
         assert_eq!(result.removed_count(), 1);
         assert_eq!(cache.len(), 3);
@@ -420,12 +411,7 @@ mod tests {
             added: vec![],
             removed: vec![],
         };
-        let result = apply_strategy(
-            InvalidationStrategy::Dependency,
-            &mut cache,
-            &changes,
-            &deps,
-        );
+        let result = apply_strategy(InvalidationStrategy::Dependency, &mut cache, &changes, &deps);
         // Dependency follows call graph
         assert_eq!(result.removed_count(), 3);
         assert_eq!(cache.len(), 1);

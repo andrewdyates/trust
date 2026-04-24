@@ -12,7 +12,6 @@
 #[macro_export]
 macro_rules! bug {
     () => (
-        // tRust: invariant: impossible case reached
         $crate::bug!("impossible case reached")
     );
     ($($arg:tt)+) => (

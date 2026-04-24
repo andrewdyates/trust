@@ -82,7 +82,7 @@ impl<'ll> Funclet<'ll> {
 }
 
 impl<'ll, CX: Borrow<SCx<'ll>>> BackendTypes for GenericCx<'ll, CX> {
-    // tRust: known issue — (eddyb) replace this with a `Function` "subclass" of `Value`.
+    // FIXME(eddyb) replace this with a `Function` "subclass" of `Value`.
     type Function = &'ll Value;
     type BasicBlock = &'ll BasicBlock;
     type Funclet = Funclet<'ll>;
@@ -99,7 +99,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> BackendTypes for GenericCx<'ll, CX> {
 impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     pub(crate) fn const_array(&self, ty: &'ll Type, elts: &[&'ll Value]) -> &'ll Value {
         let len = u64::try_from(elts.len()).expect("LLVMConstArray2 elements len overflow");
-        // SAFETY: `ty` is a valid LLVM element type, all values in `elts` are valid LLVM constants of that type, and `len` matches the slice length.
         unsafe { llvm::LLVMConstArray2(ty, elts.as_ptr(), len) }
     }
 
@@ -112,10 +111,9 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     }
 
     pub(crate) fn const_get_elt(&self, v: &'ll Value, idx: u64) -> &'ll Value {
-        // SAFETY: The value is a valid LLVM constant aggregate, and the index is within the aggregate element count.
         unsafe {
             let idx = c_uint::try_from(idx).expect("LLVMGetAggregateElement index overflow");
-            let r = llvm::LLVMGetAggregateElement(v, idx).expect("invariant: aggregate element exists at index");
+            let r = llvm::LLVMGetAggregateElement(v, idx).unwrap();
 
             debug!("const_get_elt(v={:?}, idx={}, r={:?})", v, idx, r);
 
@@ -124,7 +122,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     }
 
     pub(crate) fn const_null(&self, t: &'ll Type) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM type that supports null constant creation.
         unsafe { llvm::LLVMConstNull(t) }
     }
 
@@ -135,17 +132,14 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
 
 impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
     fn const_null(&self, t: &'ll Type) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM type that supports null constant creation.
         unsafe { llvm::LLVMConstNull(t) }
     }
 
     fn const_undef(&self, t: &'ll Type) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM type.
         unsafe { llvm::LLVMGetUndef(t) }
     }
 
     fn const_poison(&self, t: &'ll Type) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM type.
         unsafe { llvm::LLVMGetPoison(t) }
     }
 
@@ -170,7 +164,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
             self.type_kind(t) == TypeKind::Integer,
             "only allows integer types in const_int"
         );
-        // SAFETY: `t` is a valid LLVM integer type (verified by the assertion above), and the integer value is within representable range.
         unsafe { llvm::LLVMConstInt(t, i as u64, TRUE) }
     }
 
@@ -205,7 +198,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
             self.type_kind(t) == TypeKind::Integer,
             "only allows integer types in const_uint"
         );
-        // SAFETY: `t` is a valid LLVM integer type (verified by the assertion above), and the integer value is within representable range.
         unsafe { llvm::LLVMConstInt(t, i, FALSE) }
     }
 
@@ -214,7 +206,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
             self.type_kind(t) == TypeKind::Integer,
             "only allows integer types in const_uint_big"
         );
-        // SAFETY: `t` is a valid LLVM integer type, the word count matches the number of 64-bit words needed, and the data pointer is valid.
         unsafe {
             let words = [u as u64, (u >> 64) as u64];
             llvm::LLVMConstIntOfArbitraryPrecision(t, 2, words.as_ptr())
@@ -222,7 +213,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
     }
 
     fn const_real(&self, t: &'ll Type, val: f64) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM floating-point type, and `val` is a valid f64.
         unsafe { llvm::LLVMConstReal(t, val) }
     }
 
@@ -232,7 +222,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
             let sc = self.const_bytes(s.as_bytes());
             let sym = self.generate_local_symbol_name("str");
             let g = self.define_global(&sym, self.val_ty(sc)).unwrap_or_else(|| {
-                // tRust: invariant — freshly generated local symbol names are unique within the module
                 bug!("symbol `{}` is already defined", sym);
             });
             llvm::set_initializer(g, sc);
@@ -256,12 +245,10 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
 
     fn const_vector(&self, elts: &[&'ll Value]) -> &'ll Value {
         let len = c_uint::try_from(elts.len()).expect("LLVMConstVector elements len overflow");
-        // SAFETY: All values in the slice are valid LLVM constants of the same type, and the count matches the slice length.
         unsafe { llvm::LLVMConstVector(elts.as_ptr(), len) }
     }
 
     fn const_to_opt_uint(&self, v: &'ll Value) -> Option<u64> {
-        // SAFETY: The value is a valid LLVM 128-bit integer constant, and the output pointers for high/low words are valid.
         try_as_const_integral(v).and_then(|v| unsafe {
             let mut i = 0u64;
             let success = llvm::LLVMRustConstIntGetZExtValue(v, &mut i);
@@ -270,7 +257,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
     }
 
     fn const_to_opt_u128(&self, v: &'ll Value, sign_ext: bool) -> Option<u128> {
-        // SAFETY: The constant integer value is valid and the target pointer type is valid in the same LLVM context.
         try_as_const_integral(v).and_then(|v| unsafe {
             let (mut lo, mut hi) = (0u64, 0u64);
             let success = llvm::LLVMRustConstInt128Get(v, sign_ext, &mut hi, &mut lo);
@@ -285,7 +271,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
                 let data = int.to_bits(layout.size(self));
                 let llval = self.const_uint_big(self.type_ix(bitsize), data);
                 if matches!(layout.primitive(), Pointer(_)) {
-                    // SAFETY: The constant integer value is valid and the target pointer type is valid in the same LLVM context.
                     unsafe { llvm::LLVMConstIntToPtr(llval, llty) }
                 } else {
                     self.const_bitcast(llval, llty)
@@ -303,7 +288,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
                             let val = alloc.inner().align.bytes().wrapping_add(offset.bytes());
                             let llval = self.const_usize(self.tcx.truncate_to_target_usize(val));
                             return if matches!(layout.primitive(), Pointer(_)) {
-                                // SAFETY: The constant integer value is valid and the target pointer type is valid in the same LLVM context.
                                 unsafe { llvm::LLVMConstIntToPtr(llval, llty) }
                             } else {
                                 self.const_bitcast(llval, llty)
@@ -353,12 +337,10 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
                     GlobalAlloc::TypeId { .. } => {
                         // Drop the provenance, the offset contains the bytes of the hash
                         let llval = self.const_usize(offset.bytes());
-                        // SAFETY: The constant integer value is valid and the target pointer type is valid in the same LLVM context.
                         return unsafe { llvm::LLVMConstIntToPtr(llval, llty) };
                     }
                 };
                 let base_addr_space = global_alloc.address_space(self);
-                // SAFETY: `val` is a valid constant pointer, `ty` is its pointee type, and the indices are valid constant integers.
                 let llval = unsafe {
                     llvm::LLVMConstInBoundsGEP2(
                         self.type_i8(),
@@ -369,7 +351,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
                     )
                 };
                 if !matches!(layout.primitive(), Pointer(_)) {
-                    // SAFETY: The constant pointer value is valid, the pointee type is valid, and the index array contains valid constant integers.
                     unsafe { llvm::LLVMConstPtrToInt(llval, llty) }
                 } else {
                     self.const_bitcast(llval, llty)
@@ -379,7 +360,6 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
     }
 
     fn const_ptr_byte_offset(&self, base_addr: Self::Value, offset: abi::Size) -> Self::Value {
-        // SAFETY: `val` is a valid constant pointer, `ty` is its pointee type, and the indices are valid constant integers.
         unsafe {
             llvm::LLVMConstInBoundsGEP2(
                 self.type_i8(),
@@ -393,12 +373,10 @@ impl<'ll, 'tcx> ConstCodegenMethods for CodegenCx<'ll, 'tcx> {
 
 /// Get the [LLVM type][Type] of a [`Value`].
 pub(crate) fn val_ty(v: &Value) -> &Type {
-    // SAFETY: The value is a valid LLVM reference.
     unsafe { llvm::LLVMTypeOf(v) }
 }
 
 pub(crate) fn bytes_in_context<'ll>(llcx: &'ll llvm::Context, bytes: &[u8]) -> &'ll Value {
-    // SAFETY: The LLVM context is valid, the string pointer and length are valid, and `DontNullTerminate` controls null termination.
     unsafe {
         let ptr = bytes.as_ptr() as *const c_char;
         llvm::LLVMConstStringInContext2(llcx, ptr, bytes.len(), TRUE)
@@ -409,7 +387,6 @@ pub(crate) fn null_terminate_bytes_in_context<'ll>(
     llcx: &'ll llvm::Context,
     bytes: &[u8],
 ) -> &'ll Value {
-    // SAFETY: The LLVM context is valid, the string pointer and length are valid, and `DontNullTerminate` controls null termination.
     unsafe {
         let ptr = bytes.as_ptr() as *const c_char;
         llvm::LLVMConstStringInContext2(llcx, ptr, bytes.len(), FALSE)
@@ -418,7 +395,6 @@ pub(crate) fn null_terminate_bytes_in_context<'ll>(
 
 pub(crate) fn named_struct<'ll>(ty: &'ll Type, elts: &[&'ll Value]) -> &'ll Value {
     let len = c_uint::try_from(elts.len()).expect("LLVMConstStructInContext elements len overflow");
-    // SAFETY: The LLVM context is valid, all field values are valid LLVM constants, and the count matches the slice length.
     unsafe { llvm::LLVMConstNamedStruct(ty, elts.as_ptr(), len) }
 }
 
@@ -428,7 +404,6 @@ fn struct_in_context<'ll>(
     packed: bool,
 ) -> &'ll Value {
     let len = c_uint::try_from(elts.len()).expect("LLVMConstStructInContext elements len overflow");
-    // SAFETY: The LLVM context is valid, all field values are valid LLVM constants, and the count matches the slice length.
     unsafe { llvm::LLVMConstStructInContext(llcx, elts.as_ptr(), len, packed.to_llvm_bool()) }
 }
 
@@ -438,7 +413,6 @@ fn hi_lo_to_u128(lo: u64, hi: u64) -> u128 {
 }
 
 fn try_as_const_integral(v: &Value) -> Option<&ConstantInt> {
-    // SAFETY: The value is a valid LLVM reference. Returns null if the value is not a constant integer.
     unsafe { llvm::LLVMIsAConstantInt(v) }
 }
 

@@ -347,7 +347,7 @@ impl InlineAsmReg {
     }
 
     pub fn parse(arch: InlineAsmArch, name: Symbol) -> Result<Self, &'static str> {
-        // tRust: known issue — use direct symbol comparison for register names
+        // FIXME: use direct symbol comparison for register names
         // Use `Symbol::as_str` instead of `Symbol::with` here because `has_feature` may access `Symbol`.
         let name = name.as_str();
         Ok(match arch {

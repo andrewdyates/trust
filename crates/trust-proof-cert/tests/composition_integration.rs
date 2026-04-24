@@ -1,6 +1,6 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 
-use trust_types::fx::FxHashMap;
+use std::collections::BTreeMap;
 
 use trust_proof_cert::{
     CertificateId, CertificationStatus, CompositionError, CompositionNodeStatus, DepGraph,
@@ -11,13 +11,19 @@ use trust_proof_cert::{
 use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
 fn sample_solver(strength: ProofStrength, time_ms: u64) -> SolverInfo {
-    SolverInfo { name: "z4".to_string(), version: "1.0.0".to_string(), time_ms, strength, evidence: None }
+    SolverInfo {
+        name: "z4".to_string(),
+        version: "1.0.0".to_string(),
+        time_ms,
+        strength,
+        evidence: None,
+    }
 }
 
 fn sample_vc(function: &str) -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::Assertion { message: "must hold".to_string() },
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan {
             file: "src/lib.rs".to_string(),
             line_start: 10,
@@ -63,7 +69,7 @@ fn test_vc_to_cert_roundtrip() {
     let vc = sample_vc("alpha");
     let snapshot = VcSnapshot::from_vc(&vc).unwrap();
     let cert = ProofCertificate::new_trusted(
-        vc.function.clone(),
+        vc.function.as_str().to_string(),
         FunctionHash::from_bytes(b"alpha-body"),
         snapshot.clone(),
         sample_solver(ProofStrength::smt_unsat(), 12),
@@ -181,7 +187,7 @@ fn test_modular_composition_with_call_edges() {
     let callee_one = make_cert("callee_one", "2026-03-29T00:07:00Z", ProofStrength::smt_unsat());
     let callee_two = make_cert("callee_two", "2026-03-29T00:08:00Z", ProofStrength::constructive());
     let needed = vec!["callee_one".to_string(), "callee_two".to_string()];
-    let call_graph = FxHashMap::default();
+    let call_graph = BTreeMap::new();
     let composed: Result<_, CompositionError> =
         modular_composition(&caller, &[&callee_one, &callee_two], &needed, &call_graph);
     let composed = composed.unwrap();

@@ -149,7 +149,7 @@ fn fill_region_tables<'tcx>(
 
     let llvm_cov::Regions {
         code_regions,
-        expansion_regions: _, // tRust: known issue — (Zalathar): Fill out support for expansion regions
+        expansion_regions: _, // FIXME(Zalathar): Fill out support for expansion regions
         branch_regions,
     } = &mut covfun.regions;
 
@@ -230,7 +230,7 @@ pub(crate) fn generate_covfun_record<'tcx>(
     // unused copies of the same function (from different CGUs), so that if a
     // linker sees both it won't discard the used copy's data.
     let u = if is_used { "u" } else { "" };
-    let covfun_var_name = CString::new(format!("__covrec_{func_name_hash:X}{u}")).expect("invariant: CString::new failed - input contains null byte");
+    let covfun_var_name = CString::new(format!("__covrec_{func_name_hash:X}{u}")).unwrap();
     debug!("function record var name: {covfun_var_name:?}");
 
     let covfun_global = llvm::add_global(cx.llmod, cx.val_ty(covfun_record), &covfun_var_name);

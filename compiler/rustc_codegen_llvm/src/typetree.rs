@@ -61,7 +61,7 @@ pub(crate) fn add_tt<'ll>(
     // TypeTree processing uses functions from Enzyme, which we might not have available if we did
     // not build this compiler with `llvm_enzyme`. This feature is not strictly necessary, but
     // skipping this function increases the chance that Enzyme fails to compile some code.
-    // tRust: known issue — (autodiff): In the future we should conditionally run this function even without the
+    // FIXME(autodiff): In the future we should conditionally run this function even without the
     // `llvm_enzyme` feature, in case that libEnzyme was provided via rustup.
     #[cfg(not(feature = "llvm_enzyme"))]
     return;
@@ -69,19 +69,15 @@ pub(crate) fn add_tt<'ll>(
     let inputs = tt.args;
     let ret_tt: RustTypeTree = tt.ret;
 
-    // SAFETY: The LLVM context is valid, and the attribute name/value string buffers and lengths are valid.
     let llvm_data_layout: *const c_char = unsafe { llvm::LLVMGetDataLayoutStr(&*llmod) };
     let llvm_data_layout =
-        // SAFETY: The byte slice is valid, non-null, and contains a
-        // nul terminator with no interior nul bytes.
         std::str::from_utf8(unsafe { std::ffi::CStr::from_ptr(llvm_data_layout) }.to_bytes())
             .expect("got a non-UTF8 data-layout from LLVM");
 
     let attr_name = "enzyme_type";
-    let c_attr_name = CString::new(attr_name).expect("invariant: CString::new failed - input contains null byte");
+    let c_attr_name = CString::new(attr_name).unwrap();
 
     for (i, input) in inputs.iter().enumerate() {
-        // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
         unsafe {
             let enzyme_tt = to_enzyme_typetree(input.clone(), llvm_data_layout, llcx);
             let enzyme_wrapper = EnzymeWrapper::get_instance();
@@ -101,7 +97,6 @@ pub(crate) fn add_tt<'ll>(
         }
     }
 
-    // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
     unsafe {
         let enzyme_tt = to_enzyme_typetree(ret_tt, llvm_data_layout, llcx);
         let enzyme_wrapper = EnzymeWrapper::get_instance();

@@ -137,7 +137,7 @@ impl<'tcx> Ty<'tcx> {
             ty::Dynamic(..) => "trait object".into(),
             ty::Closure(..) => "closure".into(),
             ty::Coroutine(def_id, ..) => {
-                format!("{:#}", tcx.coroutine_kind(def_id).expect("invariant: coroutine_kind returned a valid value")).into()
+                format!("{:#}", tcx.coroutine_kind(def_id).unwrap()).into()
             }
             ty::CoroutineWitness(..) => "coroutine witness".into(),
             ty::Infer(ty::TyVar(_)) => "inferred type".into(),
@@ -203,7 +203,7 @@ impl<'tcx> Ty<'tcx> {
             ty::Dynamic(..) => "trait object".into(),
             ty::Closure(..) | ty::CoroutineClosure(..) => "closure".into(),
             ty::Coroutine(def_id, ..) => {
-                format!("{:#}", tcx.coroutine_kind(def_id).expect("invariant: coroutine_kind returned a valid value")).into()
+                format!("{:#}", tcx.coroutine_kind(def_id).unwrap()).into()
             }
             ty::CoroutineWitness(..) => "coroutine witness".into(),
             ty::Tuple(..) => "tuple".into(),
@@ -299,7 +299,7 @@ impl<'tcx> TyCtxt<'tcx> {
             self.output_filenames(()).temp_path_for_diagnostic(&format!("long-type-{hash}.txt"))
         }));
         let Ok(mut file) =
-            File::options().create(true).read(true).append(true).open(&path.as_ref().expect("invariant: value is Some"))
+            File::options().create(true).read(true).append(true).open(&path.as_ref().unwrap())
         else {
             return regular;
         };

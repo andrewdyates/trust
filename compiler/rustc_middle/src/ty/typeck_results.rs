@@ -323,7 +323,6 @@ impl<'tcx> TypeckResults<'tcx> {
 
     pub fn node_type(&self, id: HirId) -> Ty<'tcx> {
         self.node_type_opt(id).unwrap_or_else(|| {
-            // tRust: invariant: expected value must exist: node_type: no type for node {}
             bug!("node_type: no type for node {}", tls::with(|tcx| tcx.hir_id_to_string(id)))
         })
     }
@@ -588,7 +587,6 @@ fn validate_hir_id_for_typeck_results(hir_owner: OwnerId, hir_id: HirId) {
 #[inline(never)]
 fn invalid_hir_id_for_typeck_results(hir_owner: OwnerId, hir_id: HirId) {
     ty::tls::with(|tcx| {
-        // tRust: invariant: unexpected state in invalid_hir_id_for_typeck_results
         bug!(
             "node {} cannot be placed in TypeckResults with hir_owner {:?}",
             tcx.hir_id_to_string(hir_id),
@@ -630,7 +628,6 @@ impl<'a, V> ::std::ops::Index<HirId> for LocalTableInContext<'a, V> {
 
     fn index(&self, key: HirId) -> &V {
         self.get(key).unwrap_or_else(|| {
-            // tRust: invariant: expected value must exist: LocalTableInContext({:?}): key {:?} not found
             bug!("LocalTableInContext({:?}): key {:?} not found", self.hir_owner, key)
         })
     }

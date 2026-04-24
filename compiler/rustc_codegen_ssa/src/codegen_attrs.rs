@@ -78,7 +78,7 @@ fn process_builtin_attrs(
             AttributeKind::Naked(_) => codegen_fn_attrs.flags |= CodegenFnAttrFlags::NAKED,
             AttributeKind::RustcAlign { align, .. } => codegen_fn_attrs.alignment = Some(*align),
             AttributeKind::LinkName { name, .. } => {
-                // NOTE: Foreign function check will be removable once #[link_name] on non-foreign
+                // FIXME Remove check for foreign functions once #[link_name] on non-foreign
                 // functions is a hard error
                 if tcx.is_foreign_item(did) {
                     codegen_fn_attrs.symbol_name = Some(*name);

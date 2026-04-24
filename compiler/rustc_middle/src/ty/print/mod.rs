@@ -153,7 +153,7 @@ pub trait Printer<'tcx>: Sized {
             DefPathData::Impl => self.print_impl_path(def_id, args),
 
             _ => {
-                let parent_def_id = DefId { index: key.parent.expect("invariant: def key has parent"), ..def_id };
+                let parent_def_id = DefId { index: key.parent.unwrap(), ..def_id };
 
                 let mut parent_args = args;
                 let mut trait_qualify_parent = false;
@@ -202,7 +202,7 @@ pub trait Printer<'tcx>: Sized {
                         }
                     }
 
-                    // tRust: known issue (eddyb) — try to move this into the parent's printing
+                    // FIXME(eddyb) try to move this into the parent's printing
                     // logic, instead of doing it when printing the child.
                     trait_qualify_parent = generics.has_self
                         && generics.parent == Some(parent_def_id)
@@ -241,7 +241,7 @@ pub trait Printer<'tcx>: Sized {
         );
 
         let key = self.tcx().def_key(impl_def_id);
-        let parent_def_id = DefId { index: key.parent.expect("invariant: def key has parent"), ..impl_def_id };
+        let parent_def_id = DefId { index: key.parent.unwrap(), ..impl_def_id };
 
         // Decide whether to print the parent path for the impl.
         // Logically, since impls are global, it's never needed, but

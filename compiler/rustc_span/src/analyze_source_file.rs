@@ -37,8 +37,6 @@ cfg_select! {
             multi_byte_chars: &mut Vec<MultiByteChar>,
         ) {
             if is_x86_feature_detected!("sse2") {
-                // SAFETY: SSE2 feature is confirmed present by the runtime check above.
-                // `analyze_source_file_sse2` requires `#[target_feature(enable = "sse2")]`.
                 unsafe {
                     analyze_source_file_sse2(src, lines, multi_byte_chars);
                 }
@@ -81,9 +79,6 @@ cfg_select! {
             for (chunk_index, chunk) in chunks.iter().enumerate() {
                 // We don't know if the pointer is aligned to 16 bytes, so we
                 // use `loadu`, which supports unaligned loading.
-                // SAFETY: `chunk` is a valid `&[u8; CHUNK_SIZE]` from `as_chunks`, so
-                // `chunk.as_ptr()` points to at least 16 readable bytes. `_mm_loadu_si128`
-                // does not require alignment. SSE2 availability is guaranteed by the caller.
                 let chunk = unsafe { _mm_loadu_si128(chunk.as_ptr() as *const __m128i) };
 
                 // For each character in the chunk, see if its byte value is < 0,
@@ -146,8 +141,6 @@ cfg_select! {
             use std::arch::is_loongarch_feature_detected;
 
             if is_loongarch_feature_detected!("lsx") {
-                // SAFETY: LSX feature is confirmed present by the runtime check above.
-                // `analyze_source_file_lsx` requires `#[target_feature(enable = "lsx")]`.
                 unsafe {
                     analyze_source_file_lsx(src, lines, multi_byte_chars);
                 }
@@ -187,12 +180,6 @@ cfg_select! {
             for (chunk_index, chunk) in chunks.iter().enumerate() {
                 // All LSX memory instructions support unaligned access, so using
                 // vld is fine.
-                // SAFETY: `chunk` is a valid `&[u8; CHUNK_SIZE]` from `as_chunks`, so
-                // `chunk.as_ptr()` points to at least 16 readable bytes. LSX memory
-                // instructions support unaligned access. LSX availability is guaranteed
-                // by the caller.
-                // SAFETY: `chunk.as_ptr()` points to `CHUNK_SIZE` readable bytes, and LSX
-                // explicitly permits this unaligned load.
                 let chunk = unsafe { lsx_vld::<0>(chunk.as_ptr() as *const i8) };
 
                 // For each character in the chunk, see if its byte value is < 0,
@@ -281,12 +268,8 @@ fn analyze_source_file_generic(
     let src_bytes = src.as_bytes();
 
     while i < scan_len {
-        // SAFETY: The loop condition `i < scan_len` and the assertion
-        // `src.len() >= scan_len` guarantee that `i` is a valid index into
-        // `src_bytes`. Using `get_unchecked` avoids a bounds check on each
-        // byte in this performance-critical loop.
-        // SAFETY: `i < scan_len <= src_bytes.len()` keeps this unchecked read in bounds.
         let byte = unsafe {
+            // We verified that i < scan_len <= src.len()
             *src_bytes.get_unchecked(i)
         };
 
@@ -299,7 +282,7 @@ fn analyze_source_file_generic(
             lines.push(pos + RelativeBytePos(1));
         } else if byte >= 128 {
             // This is the beginning of a multibyte char. Just decode to `char`.
-            let c = src[i..].chars().next().expect("invariant: non-empty slice at multibyte char boundary"); // tRust: unwrap -> expect
+            let c = src[i..].chars().next().unwrap();
             char_len = c.len_utf8();
 
             let pos = RelativeBytePos::from_usize(i) + output_offset;

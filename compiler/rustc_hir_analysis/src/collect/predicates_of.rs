@@ -113,7 +113,7 @@ fn gather_explicit_predicates_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Gen
         }
 
         Some(ImplTraitInTraitData::Impl { fn_def_id }) => {
-            let trait_item_def_id = tcx.trait_item_of(def_id).expect("invariant: item is a trait item");
+            let trait_item_def_id = tcx.trait_item_of(def_id).unwrap();
             let trait_assoc_predicates = tcx.explicit_predicates_of(trait_item_def_id);
 
             let impl_assoc_identity_args = ty::GenericArgs::identity_for_item(tcx, def_id);
@@ -304,7 +304,6 @@ fn gather_explicit_predicates_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Gen
                             lt.ident.span,
                         ),
                         bound => {
-                            // tRust: invariant — only lifetime predicates expected in this context
                             span_bug!(
                                 bound.span(),
                                 "lifetime param bounds must be outlives, but found {bound:?}"
@@ -318,7 +317,7 @@ fn gather_explicit_predicates_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Gen
             }
 
             hir::WherePredicateKind::EqPredicate(..) => {
-                // tRust: known issue — (#20041)
+                // FIXME(#20041)
             }
         }
     }
@@ -328,7 +327,7 @@ fn gather_explicit_predicates_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Gen
     }
 
     let attrs = tcx.hir_attrs(tcx.local_def_id_to_hir_id(def_id));
-    // tRust: known issue — (staged_api): We might want to look at the normal stability attributes too but
+    // FIXME(staged_api): We might want to look at the normal stability attributes too but
     // first we would need a way to let std/core use APIs with unstable feature bounds from
     // within stable APIs.
     let allow_unstable_feature_attr =
@@ -417,7 +416,7 @@ fn const_evaluatable_predicates_of<'tcx>(
             .hir_parent_iter(hir_id)
             .skip_while(|(_, n)| matches!(n, Node::ConstArg(..)))
             .next()
-            .expect("invariant: value is present");
+            .unwrap();
         matches!(
             parent_node,
             Node::GenericParam(hir::GenericParam { kind: hir::GenericParamKind::Const { .. }, .. })
@@ -516,7 +515,7 @@ pub(super) fn explicit_predicates_of<'tcx>(
             //   supertrait).
             if let ty::Alias(ty::Projection, projection) = ty.kind() {
                 projection.args == trait_identity_args
-                    // tRust: known issue — (return_type_notation): This check should be more robust
+                    // FIXME(return_type_notation): This check should be more robust
                     && !tcx.is_impl_trait_in_trait(projection.def_id)
                     && tcx.parent(projection.def_id) == def_id.to_def_id()
             } else {
@@ -567,7 +566,7 @@ pub(super) fn explicit_predicates_of<'tcx>(
             let parent_preds = tcx.explicit_predicates_of(parent_def_id);
 
             // If we dont filter out `ConstArgHasType` predicates then every single defaulted const parameter
-            // will ICE because of #106994. tRust: known issue — (generic_const_exprs): remove this when a more general solution
+            // will ICE because of #106994. FIXME(generic_const_exprs): remove this when a more general solution
             // to #106994 is implemented.
             let filtered_predicates = parent_preds
                 .predicates
@@ -581,7 +580,6 @@ pub(super) fn explicit_predicates_of<'tcx>(
                                     .param_def_id_to_index[&defaulted_param_def_id.to_def_id()];
                                 param_const.index < defaulted_param_idx
                             }
-                            // tRust: invariant — all bound predicate kinds for super predicates handled above
                             _ => bug!(
                                 "`ConstArgHasType` in `predicates_of`\
                                  that isn't a `Param` const"
@@ -653,14 +651,12 @@ pub(super) fn implied_predicates_with_filter<'tcx>(
     };
 
     let Node::Item(item) = tcx.hir_node_by_def_id(trait_def_id) else {
-        // tRust: invariant — trait_def_id must correspond to an item node in HIR
         bug!("trait_def_id {trait_def_id:?} is not an item");
     };
 
     let (generics, superbounds) = match item.kind {
         hir::ItemKind::Trait(.., generics, supertraits, _) => (generics, supertraits),
         hir::ItemKind::TraitAlias(_, _, generics, supertraits) => (generics, supertraits),
-        // tRust: invariant — super_predicates is only called on trait items
         _ => span_bug!(item.span, "super_predicates invoked on non-trait"),
     };
 
@@ -794,7 +790,6 @@ pub(super) fn assert_only_contains_predicates_from<'tcx>(
                     | ty::ClauseKind::WellFormed(_)
                     | ty::ClauseKind::UnstableFeature(_)
                     | ty::ClauseKind::ConstEvaluatable(_) => {
-                        // tRust: invariant — only trait clauses expected in const conditions
                         bug!(
                             "unexpected non-`Self` predicate when computing \
                             `{filter:?}` implied bounds: {clause:?}"
@@ -823,7 +818,6 @@ pub(super) fn assert_only_contains_predicates_from<'tcx>(
                     | ty::ClauseKind::ConstEvaluatable(_)
                     | ty::ClauseKind::UnstableFeature(_)
                     | ty::ClauseKind::HostEffect(..) => {
-                        // tRust: invariant — only trait clauses expected in const conditions
                         bug!(
                             "unexpected non-`Self` predicate when computing \
                             `{filter:?}` implied bounds: {clause:?}"
@@ -840,7 +834,6 @@ pub(super) fn assert_only_contains_predicates_from<'tcx>(
                         constness: ty::BoundConstness::Maybe,
                     }) => {}
                     _ => {
-                        // tRust: invariant — only trait clauses expected in const conditions
                         bug!(
                             "unexpected non-`HostEffect` predicate when computing \
                             `{filter:?}` implied bounds: {clause:?}"
@@ -867,7 +860,6 @@ pub(super) fn assert_only_contains_predicates_from<'tcx>(
                         );
                     }
                     _ => {
-                        // tRust: invariant — only trait clauses expected in const conditions
                         bug!(
                             "unexpected non-`HostEffect` predicate when computing \
                             `{filter:?}` implied bounds: {clause:?}"
@@ -906,7 +898,7 @@ pub(super) fn type_param_predicates<'tcx>(
 
     // Don't look for bounds where the type parameter isn't in scope.
     let parent = if item_def_id == param_owner {
-        // tRust: known issue — Shouldn't this be unreachable?
+        // FIXME: Shouldn't this be unreachable?
         None
     } else {
         tcx.generics_of(item_def_id).parent.map(|def_id| def_id.expect_local())
@@ -1024,7 +1016,6 @@ pub(super) fn const_conditions<'tcx>(
     def_id: LocalDefId,
 ) -> ty::ConstConditions<'tcx> {
     if !tcx.is_conditionally_const(def_id) {
-        // tRust: invariant — const_conditions is only invoked for conditionally-const items
         bug!("const_conditions invoked for item that is not conditionally const: {def_id:?}");
     }
 
@@ -1048,7 +1039,6 @@ pub(super) fn const_conditions<'tcx>(
             hir::ItemKind::TraitAlias(_, _, generics, supertraits) => {
                 (generics, Some((None, supertraits)), false)
             }
-            // tRust: invariant — const_conditions caller ensures def_id is a valid const item kind
             _ => bug!("const_conditions called on wrong item: {def_id:?}"),
         },
         // While associated types are not really const, we do allow them to have `[const]`
@@ -1059,19 +1049,16 @@ pub(super) fn const_conditions<'tcx>(
             hir::TraitItemKind::Fn(_, _) | hir::TraitItemKind::Type(_, _) => {
                 (item.generics, None, true)
             }
-            // tRust: invariant — const_conditions caller ensures def_id is a valid const item kind
             _ => bug!("const_conditions called on wrong item: {def_id:?}"),
         },
         Node::ImplItem(item) => match item.kind {
             hir::ImplItemKind::Fn(_, _) | hir::ImplItemKind::Type(_) => {
                 (item.generics, None, tcx.is_conditionally_const(tcx.local_parent(def_id)))
             }
-            // tRust: invariant — const_conditions caller ensures def_id is a valid const item kind
             _ => bug!("const_conditions called on wrong item: {def_id:?}"),
         },
         Node::ForeignItem(item) => match item.kind {
             hir::ForeignItemKind::Fn(_, _, generics) => (generics, None, false),
-            // tRust: invariant — const_conditions caller ensures def_id is a valid const item kind
             _ => bug!("const_conditions called on wrong item: {def_id:?}"),
         },
         Node::OpaqueTy(opaque) => match opaque.origin {
@@ -1085,7 +1072,6 @@ pub(super) fn const_conditions<'tcx>(
         Node::Expr(hir::Expr { kind: hir::ExprKind::Closure(_), .. }) => {
             (hir::Generics::empty(), None, tcx.is_conditionally_const(tcx.local_parent(def_id)))
         }
-        // tRust: invariant — const_conditions caller ensures def_id is a valid const item kind
         _ => bug!("const_conditions called on wrong item: {def_id:?}"),
     };
 
@@ -1139,7 +1125,6 @@ pub(super) fn const_conditions<'tcx>(
                         trait_ref,
                         constness: ty::BoundConstness::Maybe,
                     }) => trait_ref,
-                    // tRust: invariant — clause conversion from const conditions only produces trait clauses
                     _ => bug!("converted {clause:?}"),
                 }),
                 span,
@@ -1153,7 +1138,6 @@ pub(super) fn explicit_implied_const_bounds<'tcx>(
     def_id: LocalDefId,
 ) -> ty::EarlyBinder<'tcx, &'tcx [(ty::PolyTraitRef<'tcx>, Span)]> {
     if !tcx.is_conditionally_const(def_id) {
-        // tRust: invariant — implied_const_bounds should only be called for items that can have const bounds
         bug!(
             "explicit_implied_const_bounds invoked for item that is not conditionally const: {def_id:?}"
         );
@@ -1166,7 +1150,6 @@ pub(super) fn explicit_implied_const_bounds<'tcx>(
             explicit_item_bounds_with_filter(tcx, def_id, PredicateFilter::ConstIfConst)
         }
         Some(ty::ImplTraitInTraitData::Impl { .. }) => {
-            // tRust: invariant — RPITIT in impl position should use trait bounds, not separate item bounds
             span_bug!(tcx.def_span(def_id), "RPITIT in impl should not have item bounds")
         }
         None => match tcx.hir_node_by_def_id(def_id) {
@@ -1182,7 +1165,6 @@ pub(super) fn explicit_implied_const_bounds<'tcx>(
             | Node::OpaqueTy(_) => {
                 explicit_item_bounds_with_filter(tcx, def_id, PredicateFilter::ConstIfConst)
             }
-            // tRust: invariant — explicit_implied_const_bounds caller ensures valid item kind
             _ => bug!("explicit_implied_const_bounds called on wrong item: {def_id:?}"),
         },
     };
@@ -1195,7 +1177,6 @@ pub(super) fn explicit_implied_const_bounds<'tcx>(
                         trait_ref,
                         constness: ty::BoundConstness::Maybe,
                     }) => trait_ref,
-                    // tRust: invariant — clause conversion from const conditions only produces trait clauses
                     _ => bug!("converted {clause:?}"),
                 }),
                 span,

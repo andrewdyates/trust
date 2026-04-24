@@ -169,7 +169,6 @@ impl<'a, 'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for FullTypeResolver<'a, 'tcx> {
                     Err(FixupError { unresolved: TyOrConstInferVar::TyFloat(vid) })
                 }
                 ty::Infer(_) => {
-                    // tRust: invariant — full type resolver expects all Infer variants to be handled above
                     bug!("Unexpected type in full type resolver: {:?}", t);
                 }
                 _ => t.try_super_fold_with(self),
@@ -200,7 +199,6 @@ impl<'a, 'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for FullTypeResolver<'a, 'tcx> {
                     return Err(FixupError { unresolved: super::TyOrConstInferVar::Const(vid) });
                 }
                 ty::ConstKind::Infer(InferConst::Fresh(_)) => {
-                    // tRust: invariant — fresh inference consts must not appear in the full const resolver
                     bug!("Unexpected const in full const resolver: {:?}", c);
                 }
                 _ => {}

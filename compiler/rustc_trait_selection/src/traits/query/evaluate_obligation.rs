@@ -133,7 +133,6 @@ impl<'tcx> InferCtxt<'tcx> {
                 let mut selcx = SelectionContext::new(self);
                 selcx.evaluate_root_obligation(obligation).unwrap_or_else(|r| match r {
                     OverflowError::Canonical => {
-                        // tRust: invariant — Overflow should be caught earlier in standard query mode: ,
                         span_bug!(
                             obligation.cause.span,
                             "Overflow should be caught earlier in standard query mode: {:?}, {:?}",

@@ -174,11 +174,8 @@ pub fn concretize(abstract_state: &AbstractState) -> Formula {
         return Formula::Bool(true);
     }
 
-    let conjuncts: Vec<Formula> = abstract_state
-        .predicates
-        .iter()
-        .map(predicate_to_formula)
-        .collect();
+    let conjuncts: Vec<Formula> =
+        abstract_state.predicates.iter().map(predicate_to_formula).collect();
 
     if conjuncts.len() == 1 {
         conjuncts.into_iter().next().expect("checked len == 1")
@@ -199,10 +196,7 @@ fn predicate_to_formula(pred: &Predicate) -> Formula {
                 CmpOp::Gt => Formula::Gt(Box::new(lhs_f), Box::new(rhs_f)),
                 CmpOp::Ge => Formula::Ge(Box::new(lhs_f), Box::new(rhs_f)),
                 CmpOp::Eq => Formula::Eq(Box::new(lhs_f), Box::new(rhs_f)),
-                CmpOp::Ne => Formula::Not(Box::new(Formula::Eq(
-                    Box::new(lhs_f),
-                    Box::new(rhs_f),
-                ))),
+                CmpOp::Ne => Formula::Not(Box::new(Formula::Eq(Box::new(lhs_f), Box::new(rhs_f)))),
             }
         }
         Predicate::Range { var, lo, hi } => {
@@ -214,10 +208,7 @@ fn predicate_to_formula(pred: &Predicate) -> Formula {
         }
         Predicate::NonNull(var) => {
             let var_f = name_to_formula(var);
-            Formula::Not(Box::new(Formula::Eq(
-                Box::new(var_f),
-                Box::new(Formula::Int(0)),
-            )))
+            Formula::Not(Box::new(Formula::Eq(Box::new(var_f), Box::new(Formula::Int(0)))))
         }
         Predicate::Custom(s) => {
             // Custom predicates cannot be faithfully converted; use a sentinel var.
@@ -275,15 +266,13 @@ fn formula_contains_comparison(formula: &Formula, lhs: &str, op: CmpOp, rhs: &st
 
     // Structural descent into compound formulas
     match formula {
-        Formula::And(children) => children
-            .iter()
-            .any(|c| formula_contains_comparison(c, lhs, op, rhs)),
+        Formula::And(children) => {
+            children.iter().any(|c| formula_contains_comparison(c, lhs, op, rhs))
+        }
         Formula::Or(children) => {
             // If ALL branches contain the comparison, the disjunction implies it
             !children.is_empty()
-                && children
-                    .iter()
-                    .all(|c| formula_contains_comparison(c, lhs, op, rhs))
+                && children.iter().all(|c| formula_contains_comparison(c, lhs, op, rhs))
         }
         Formula::Implies(_antecedent, _consequent) => {
             // #778: Cannot extract the consequent unconditionally from P => Q.
@@ -302,34 +291,18 @@ fn formula_contains_comparison(formula: &Formula, lhs: &str, op: CmpOp, rhs: &st
 fn formula_node_matches(formula: &Formula, lhs: &str, op: CmpOp, rhs: &str) -> bool {
     match formula {
         // Direct form: Lt(a, b) matches a < b
-        Formula::Lt(a, b) if op == CmpOp::Lt => {
-            matches_names(a, lhs) && matches_names(b, rhs)
-        }
+        Formula::Lt(a, b) if op == CmpOp::Lt => matches_names(a, lhs) && matches_names(b, rhs),
         // Flipped: Lt(a, b) also matches b > a
-        Formula::Lt(a, b) if op == CmpOp::Gt => {
-            matches_names(a, rhs) && matches_names(b, lhs)
-        }
-        Formula::Le(a, b) if op == CmpOp::Le => {
-            matches_names(a, lhs) && matches_names(b, rhs)
-        }
+        Formula::Lt(a, b) if op == CmpOp::Gt => matches_names(a, rhs) && matches_names(b, lhs),
+        Formula::Le(a, b) if op == CmpOp::Le => matches_names(a, lhs) && matches_names(b, rhs),
         // Flipped: Le(a, b) also matches b >= a
-        Formula::Le(a, b) if op == CmpOp::Ge => {
-            matches_names(a, rhs) && matches_names(b, lhs)
-        }
-        Formula::Gt(a, b) if op == CmpOp::Gt => {
-            matches_names(a, lhs) && matches_names(b, rhs)
-        }
+        Formula::Le(a, b) if op == CmpOp::Ge => matches_names(a, rhs) && matches_names(b, lhs),
+        Formula::Gt(a, b) if op == CmpOp::Gt => matches_names(a, lhs) && matches_names(b, rhs),
         // Flipped: Gt(a, b) also matches b < a
-        Formula::Gt(a, b) if op == CmpOp::Lt => {
-            matches_names(a, rhs) && matches_names(b, lhs)
-        }
-        Formula::Ge(a, b) if op == CmpOp::Ge => {
-            matches_names(a, lhs) && matches_names(b, rhs)
-        }
+        Formula::Gt(a, b) if op == CmpOp::Lt => matches_names(a, rhs) && matches_names(b, lhs),
+        Formula::Ge(a, b) if op == CmpOp::Ge => matches_names(a, lhs) && matches_names(b, rhs),
         // Flipped: Ge(a, b) also matches b <= a
-        Formula::Ge(a, b) if op == CmpOp::Le => {
-            matches_names(a, rhs) && matches_names(b, lhs)
-        }
+        Formula::Ge(a, b) if op == CmpOp::Le => matches_names(a, rhs) && matches_names(b, lhs),
         // Eq is commutative: Eq(a, b) matches both a == b and b == a
         Formula::Eq(a, b) if op == CmpOp::Eq => {
             (matches_names(a, lhs) && matches_names(b, rhs))
@@ -353,9 +326,7 @@ fn matches_names(formula: &Formula, name: &str) -> bool {
     match formula {
         Formula::Var(n, _) => n == name,
         Formula::Int(n) => name.parse::<i128>().ok() == Some(*n),
-        Formula::Bool(b) => {
-            (name == "1" && *b) || (name == "0" && !*b)
-        }
+        Formula::Bool(b) => (name == "1" && *b) || (name == "0" && !*b),
         _ => false,
     }
 }
@@ -455,9 +426,10 @@ impl BooleanAbstraction {
         let mut state = AbstractState::top();
         for (i, val) in self.values.iter().enumerate() {
             if *val == Some(true)
-                && let Some(pred) = predicates.get(i) {
-                    state.add(pred.clone());
-                }
+                && let Some(pred) = predicates.get(i)
+            {
+                state.add(pred.clone());
+            }
         }
         state
     }
@@ -574,9 +546,10 @@ impl CartesianAbstraction {
         let mut state = AbstractState::top();
         for (i, val) in self.values.iter().enumerate() {
             if *val == CartesianValue::True
-                && let Some(pred) = predicates.get(i) {
-                    state.add(pred.clone());
-                }
+                && let Some(pred) = predicates.get(i)
+            {
+                state.add(pred.clone());
+            }
         }
         state
     }
@@ -658,12 +631,10 @@ mod tests {
             Predicate::comparison("x", CmpOp::Ge, "0"),
             Predicate::comparison("y", CmpOp::Lt, "10"),
         ]);
-        let formula = Formula::And(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-        ]);
+        let formula = Formula::And(vec![Formula::Ge(
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Int(0)),
+        )]);
         let state = abstract_state(&formula, &preds);
         assert!(state.contains(&Predicate::comparison("x", CmpOp::Ge, "0")));
         assert!(!state.contains(&Predicate::comparison("y", CmpOp::Lt, "10")));
@@ -730,9 +701,9 @@ mod tests {
         let a = BooleanAbstraction::from_values(vec![Some(true), Some(false), Some(true)]);
         let b = BooleanAbstraction::from_values(vec![Some(true), Some(true), Some(true)]);
         let joined = a.join(&b);
-        assert_eq!(joined.get(0), Some(true));  // both true
-        assert_eq!(joined.get(1), None);         // disagree
-        assert_eq!(joined.get(2), Some(true));   // both true
+        assert_eq!(joined.get(0), Some(true)); // both true
+        assert_eq!(joined.get(1), None); // disagree
+        assert_eq!(joined.get(2), Some(true)); // both true
     }
 
     #[test]
@@ -779,10 +750,14 @@ mod tests {
     #[test]
     fn test_cartesian_join_agree() {
         let a = CartesianAbstraction::from_values(vec![
-            CartesianValue::True, CartesianValue::False, CartesianValue::True,
+            CartesianValue::True,
+            CartesianValue::False,
+            CartesianValue::True,
         ]);
         let b = CartesianAbstraction::from_values(vec![
-            CartesianValue::True, CartesianValue::True, CartesianValue::True,
+            CartesianValue::True,
+            CartesianValue::True,
+            CartesianValue::True,
         ]);
         let joined = a.join(&b);
         assert_eq!(joined.get(0), CartesianValue::True);
@@ -793,10 +768,14 @@ mod tests {
     #[test]
     fn test_cartesian_meet_prefer_known() {
         let a = CartesianAbstraction::from_values(vec![
-            CartesianValue::True, CartesianValue::Unknown, CartesianValue::False,
+            CartesianValue::True,
+            CartesianValue::Unknown,
+            CartesianValue::False,
         ]);
         let b = CartesianAbstraction::from_values(vec![
-            CartesianValue::Unknown, CartesianValue::True, CartesianValue::Unknown,
+            CartesianValue::Unknown,
+            CartesianValue::True,
+            CartesianValue::Unknown,
         ]);
         let met = a.meet(&b);
         assert_eq!(met.get(0), CartesianValue::True);
@@ -816,7 +795,9 @@ mod tests {
     fn test_cartesian_to_abstract_state() {
         let preds = sample_predicates();
         let ca = CartesianAbstraction::from_values(vec![
-            CartesianValue::True, CartesianValue::Unknown, CartesianValue::True,
+            CartesianValue::True,
+            CartesianValue::Unknown,
+            CartesianValue::True,
         ]);
         let state = ca.to_abstract_state(&preds);
         assert!(state.contains(&Predicate::comparison("x", CmpOp::Ge, "0")));
@@ -827,9 +808,8 @@ mod tests {
     #[test]
     fn test_cartesian_different_lengths() {
         let a = CartesianAbstraction::from_values(vec![CartesianValue::True]);
-        let b = CartesianAbstraction::from_values(vec![
-            CartesianValue::True, CartesianValue::False,
-        ]);
+        let b =
+            CartesianAbstraction::from_values(vec![CartesianValue::True, CartesianValue::False]);
         let joined = a.join(&b);
         assert_eq!(joined.len(), 2);
         assert_eq!(joined.get(0), CartesianValue::True);
@@ -840,20 +820,16 @@ mod tests {
 
     #[test]
     fn test_formula_implies_comparison() {
-        let formula = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let pred = Predicate::comparison("x", CmpOp::Ge, "0");
         assert!(formula_implies_predicate(&formula, &pred));
     }
 
     #[test]
     fn test_formula_does_not_imply_unrelated() {
-        let formula = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let pred = Predicate::comparison("y", CmpOp::Lt, "10");
         assert!(!formula_implies_predicate(&formula, &pred));
     }
@@ -863,10 +839,8 @@ mod tests {
     #[test]
     fn test_formula_flipped_lt_matches_gt_predicate() {
         // Formula: Lt(x, 10) should match predicate 10 > x
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         let pred = Predicate::comparison("10", CmpOp::Gt, "x");
         assert!(formula_implies_predicate(&formula, &pred));
     }
@@ -874,10 +848,8 @@ mod tests {
     #[test]
     fn test_formula_flipped_ge_matches_le_predicate() {
         // Formula: Ge(x, 0) should match predicate 0 <= x
-        let formula = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let pred = Predicate::comparison("0", CmpOp::Le, "x");
         assert!(formula_implies_predicate(&formula, &pred));
     }
@@ -885,10 +857,8 @@ mod tests {
     #[test]
     fn test_formula_eq_commutative() {
         // Formula: Eq(x, 5) should match predicate 5 == x
-        let formula = Formula::Eq(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(5)),
-        );
+        let formula =
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5)));
         let pred = Predicate::comparison("5", CmpOp::Eq, "x");
         assert!(formula_implies_predicate(&formula, &pred));
     }
@@ -908,38 +878,20 @@ mod tests {
     fn test_formula_or_all_branches_imply() {
         // Or(x >= 0, x >= 0) => implies x >= 0
         let formula = Formula::Or(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
-        assert!(formula_implies_predicate(
-            &formula,
-            &Predicate::comparison("x", CmpOp::Ge, "0"),
-        ));
+        assert!(formula_implies_predicate(&formula, &Predicate::comparison("x", CmpOp::Ge, "0"),));
     }
 
     #[test]
     fn test_formula_or_not_all_branches() {
         // Or(x >= 0, y < 10) does NOT imply x >= 0
         let formula = Formula::Or(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
-        assert!(!formula_implies_predicate(
-            &formula,
-            &Predicate::comparison("x", CmpOp::Ge, "0"),
-        ));
+        assert!(!formula_implies_predicate(&formula, &Predicate::comparison("x", CmpOp::Ge, "0"),));
     }
 
     #[test]
@@ -954,31 +906,16 @@ mod tests {
                 Box::new(Formula::Int(0)),
             )),
         );
-        assert!(!formula_implies_predicate(
-            &formula,
-            &Predicate::comparison("x", CmpOp::Ge, "0"),
-        ));
+        assert!(!formula_implies_predicate(&formula, &Predicate::comparison("x", CmpOp::Ge, "0"),));
     }
 
     #[test]
     fn test_formula_implies_in_conjunction() {
         let formula = Formula::And(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
-        assert!(formula_implies_predicate(
-            &formula,
-            &Predicate::comparison("x", CmpOp::Ge, "0"),
-        ));
-        assert!(formula_implies_predicate(
-            &formula,
-            &Predicate::comparison("y", CmpOp::Lt, "10"),
-        ));
+        assert!(formula_implies_predicate(&formula, &Predicate::comparison("x", CmpOp::Ge, "0"),));
+        assert!(formula_implies_predicate(&formula, &Predicate::comparison("y", CmpOp::Lt, "10"),));
     }
 }

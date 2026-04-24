@@ -1,6 +1,3 @@
-//! tRust: Scalar Replacement of Aggregates for MIR locals, decomposing
-//! tRust: aggregates into scalar fields.
-
 use rustc_abi::FieldIdx;
 use rustc_data_structures::flat_map_in_place::FlatMapInPlace;
 use rustc_hir::LangItem;
@@ -402,7 +399,6 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
                 let copy = match *op {
                     Operand::Copy(_) => true,
                     Operand::Move(_) => false,
-                    // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                     Operand::Constant(_) | Operand::RuntimeChecks(_) => bug!(),
                 };
                 if let Some(final_locals) = self.replacements.place_fragments(lhs) {

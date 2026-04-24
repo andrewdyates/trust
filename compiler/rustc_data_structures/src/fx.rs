@@ -30,7 +30,7 @@ macro_rules! define_stable_id_collections {
 pub mod default {
     use super::{FxBuildHasher, FxHashMap, FxHashSet};
 
-    // tRust: known issue — These two functions will become unnecessary after
+    // FIXME: These two functions will become unnecessary after
     // <https://github.com/rust-lang/rustc-hash/pull/63> lands and we start using the corresponding
     // `rustc-hash` version. After that we can use `Default::default()` instead.
     pub const fn fx_hash_map<K, V>() -> FxHashMap<K, V> {

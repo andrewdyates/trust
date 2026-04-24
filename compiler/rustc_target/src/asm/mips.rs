@@ -54,7 +54,7 @@ def_regs! {
         r5: reg = ["$5"],
         r6: reg = ["$6"],
         r7: reg = ["$7"],
-        // tRust: known issue — Reserve $t0, $t1 if in mips16 mode.
+        // FIXME: Reserve $t0, $t1 if in mips16 mode.
         r8: reg = ["$8"],
         r9: reg = ["$9"],
         r10: reg = ["$10"],

@@ -6,10 +6,10 @@
 use trust_disasm::decode_aarch64;
 use trust_types::Formula;
 
+use crate::Aarch64Semantics;
 use crate::effect::Effect;
 use crate::semantics::Semantics;
 use crate::state::MachineState;
-use crate::Aarch64Semantics;
 
 fn sem() -> Aarch64Semantics {
     Aarch64Semantics
@@ -30,7 +30,8 @@ fn test_add_x0_x1_x2_produces_reg_write() {
     let effects = sem().effects(&state(), &insn).expect("effects");
 
     // Should contain a RegWrite to X0 and a PcUpdate.
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     let has_pc_update = effects.iter().any(|e| matches!(e, Effect::PcUpdate { .. }));
     assert!(has_reg_write, "ADD should write X0");
     assert!(has_pc_update, "ADD should advance PC");
@@ -60,7 +61,8 @@ fn test_sub_x0_x1_x2_produces_reg_write() {
     let insn = decode_aarch64(&0xCB020020u32.to_le_bytes(), 0x1000).expect("decode SUB");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "SUB should write X0");
 }
 
@@ -90,11 +92,7 @@ fn test_movz_x0_42() {
     let effects = sem().effects(&state(), &insn).expect("effects");
 
     let reg_write = effects.iter().find_map(|e| {
-        if let Effect::RegWrite { index: 0, value, .. } = e {
-            Some(value)
-        } else {
-            None
-        }
+        if let Effect::RegWrite { index: 0, value, .. } = e { Some(value) } else { None }
     });
     assert!(reg_write.is_some(), "MOVZ should write X0");
 
@@ -245,7 +243,8 @@ fn test_fadd_d_produces_fp_reg_write() {
     let insn = decode_aarch64(&0x1E622820u32.to_le_bytes(), 0x1000).expect("decode FADD");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
     let has_pc_update = effects.iter().any(|e| matches!(e, Effect::PcUpdate { .. }));
     assert!(has_fp_write, "FADD D0 should write FP register 0 at 64-bit");
     assert!(has_pc_update, "FADD should advance PC");
@@ -261,7 +260,8 @@ fn test_fsub_d_produces_fp_reg_write() {
     let insn = decode_aarch64(&0x1E623820u32.to_le_bytes(), 0x1000).expect("decode FSUB");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
     assert!(has_fp_write, "FSUB D0 should write FP register 0");
 }
 
@@ -271,7 +271,8 @@ fn test_fmul_s_produces_fp_reg_write() {
     let insn = decode_aarch64(&0x1E220820u32.to_le_bytes(), 0x1000).expect("decode FMUL");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 32, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 32, .. }));
     assert!(has_fp_write, "FMUL S0 should write FP register 0 at 32-bit");
 }
 
@@ -281,7 +282,8 @@ fn test_fdiv_s_produces_fp_reg_write() {
     let insn = decode_aarch64(&0x1E221820u32.to_le_bytes(), 0x1000).expect("decode FDIV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 32, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 32, .. }));
     assert!(has_fp_write, "FDIV S0 should write FP register 0 at 32-bit");
 }
 
@@ -314,7 +316,8 @@ fn test_fmov_reg_fp_to_fp() {
     let insn = decode_aarch64(&0x1E604020u32.to_le_bytes(), 0x1000).expect("decode FMOV reg");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
     assert!(has_fp_write, "FMOV D0, D1 should write FP register D0");
 }
 
@@ -329,7 +332,8 @@ fn test_fneg_d_produces_fp_write() {
     let insn = decode_aarch64(&0x1E614020u32.to_le_bytes(), 0x1000).expect("decode FNEG");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
     assert!(has_fp_write, "FNEG D0, D1 should write FP register D0");
 }
 
@@ -340,7 +344,8 @@ fn test_fabs_d_produces_fp_write() {
     let insn = decode_aarch64(&0x1E60C020u32.to_le_bytes(), 0x1000).expect("decode FABS");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_fp_write = effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
+    let has_fp_write =
+        effects.iter().any(|e| matches!(e, Effect::FpRegWrite { index: 0, width: 64, .. }));
     assert!(has_fp_write, "FABS D0, D1 should write FP register D0");
 }
 
@@ -413,7 +418,8 @@ fn test_and_x0_x1_x2_produces_reg_write_no_flags() {
     let insn = decode_aarch64(&0x8A020020u32.to_le_bytes(), 0x1000).expect("decode AND");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     let has_flags = effects.iter().any(|e| matches!(e, Effect::FlagUpdate { .. }));
     assert!(has_reg_write, "AND should write X0");
     assert!(!has_flags, "AND (not ANDS) should not set flags");
@@ -428,13 +434,16 @@ fn test_ands_x0_x1_x2_sets_logic_flags() {
     let insn = decode_aarch64(&0xEA020020u32.to_le_bytes(), 0x1000).expect("decode ANDS");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     let has_flags = effects.iter().any(|e| matches!(e, Effect::FlagUpdate { .. }));
     assert!(has_reg_write, "ANDS should write X0");
     assert!(has_flags, "ANDS should set NZCV flags");
 
     // Logic NZCV: C=0 and V=0 always for logical ops.
-    if let Some(Effect::FlagUpdate { c, v, .. }) = effects.iter().find(|e| matches!(e, Effect::FlagUpdate { .. })) {
+    if let Some(Effect::FlagUpdate { c, v, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::FlagUpdate { .. }))
+    {
         assert_eq!(*c, Formula::Bool(false), "ANDS C flag should be false");
         assert_eq!(*v, Formula::Bool(false), "ANDS V flag should be false");
     }
@@ -452,11 +461,14 @@ fn test_eor_x0_x1_x2_produces_xor() {
     let insn = decode_aarch64(&0xCA020020u32.to_le_bytes(), 0x1000).expect("decode EOR");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "EOR should write X0");
 
     // Verify the value is a BvXor.
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::BvXor(..)), "EOR value should be BvXor, got: {:?}", value);
     }
 }
@@ -474,7 +486,8 @@ fn test_bic_x0_x1_x2_produces_and_not() {
     let insn = decode_aarch64(&0x8A220020u32.to_le_bytes(), 0x1000).expect("decode BIC");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     let has_flags = effects.iter().any(|e| matches!(e, Effect::FlagUpdate { .. }));
     assert!(has_reg_write, "BIC should write X0");
     assert!(!has_flags, "BIC (not BICS) should not set flags");
@@ -504,7 +517,8 @@ fn test_orn_x0_x1_x2_produces_or_not() {
     let insn = decode_aarch64(&0xAA220020u32.to_le_bytes(), 0x1000).expect("decode ORN");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "ORN should write X0");
 }
 
@@ -520,7 +534,8 @@ fn test_eon_x0_x1_x2_produces_xor_not() {
     let insn = decode_aarch64(&0xCA220020u32.to_le_bytes(), 0x1000).expect("decode EON");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "EON should write X0");
 }
 
@@ -535,10 +550,13 @@ fn test_orr_x0_x1_x2_produces_or() {
     let insn = decode_aarch64(&0xAA020020u32.to_le_bytes(), 0x1000).expect("decode ORR");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "ORR should write X0");
 
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::BvOr(..)), "ORR value should be BvOr, got: {:?}", value);
     }
 }
@@ -556,11 +574,14 @@ fn test_lslv_x0_x1_x2() {
     let insn = decode_aarch64(&0x9AC22020u32.to_le_bytes(), 0x1000).expect("decode LSLV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "LSLV should write X0");
 
     // Verify it produces a BvShl (via shift_var with masked amount).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::BvShl(..)), "LSLV should produce BvShl, got: {:?}", value);
     }
 }
@@ -573,11 +594,18 @@ fn test_lsrv_x0_x1_x2() {
     let insn = decode_aarch64(&0x9AC22420u32.to_le_bytes(), 0x1000).expect("decode LSRV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "LSRV should write X0");
 
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvLShr(..)), "LSRV should produce BvLShr, got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvLShr(..)),
+            "LSRV should produce BvLShr, got: {:?}",
+            value
+        );
     }
 }
 
@@ -589,11 +617,18 @@ fn test_asrv_x0_x1_x2() {
     let insn = decode_aarch64(&0x9AC22820u32.to_le_bytes(), 0x1000).expect("decode ASRV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "ASRV should write X0");
 
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvAShr(..)), "ASRV should produce BvAShr, got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvAShr(..)),
+            "ASRV should produce BvAShr, got: {:?}",
+            value
+        );
     }
 }
 
@@ -605,12 +640,19 @@ fn test_rorv_x0_x1_x2() {
     let insn = decode_aarch64(&0x9AC22C20u32.to_le_bytes(), 0x1000).expect("decode RORV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "RORV should write X0");
 
     // RORV produces (x >> n) | (x << (width - n)), which is a BvOr.
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvOr(..)), "RORV should produce BvOr (rotate), got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvOr(..)),
+            "RORV should produce BvOr (rotate), got: {:?}",
+            value
+        );
     }
 }
 
@@ -624,12 +666,19 @@ fn test_udiv_x0_x1_x2_produces_ite_for_div_by_zero() {
     let insn = decode_aarch64(&0x9AC20820u32.to_le_bytes(), 0x1000).expect("decode UDIV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "UDIV should write X0");
 
     // The value should be an Ite (div-by-zero check).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::Ite(..)), "UDIV should produce Ite for div-by-zero guard, got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::Ite(..)),
+            "UDIV should produce Ite for div-by-zero guard, got: {:?}",
+            value
+        );
     }
 }
 
@@ -639,12 +688,19 @@ fn test_sdiv_x0_x1_x2_produces_signed_div() {
     let insn = decode_aarch64(&0x9AC20C20u32.to_le_bytes(), 0x1000).expect("decode SDIV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "SDIV should write X0");
 
     // SDIV also has div-by-zero guard (Ite).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::Ite(..)), "SDIV should produce Ite for div-by-zero guard, got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::Ite(..)),
+            "SDIV should produce Ite for div-by-zero guard, got: {:?}",
+            value
+        );
     }
 }
 
@@ -658,12 +714,19 @@ fn test_madd_x0_x1_x2_x3() {
     let insn = decode_aarch64(&0x9B020C20u32.to_le_bytes(), 0x1000).expect("decode MADD");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "MADD should write X0");
 
     // MADD: Rd = Ra + (Rn * Rm). The outer formula should be BvAdd.
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvAdd(..)), "MADD value should be BvAdd (Ra + Rn*Rm), got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvAdd(..)),
+            "MADD value should be BvAdd (Ra + Rn*Rm), got: {:?}",
+            value
+        );
     }
 }
 
@@ -673,12 +736,19 @@ fn test_msub_x0_x1_x2_x3() {
     let insn = decode_aarch64(&0x9B028C20u32.to_le_bytes(), 0x1000).expect("decode MSUB");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "MSUB should write X0");
 
     // MSUB: Rd = Ra - (Rn * Rm). The outer formula should be BvSub.
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvSub(..)), "MSUB value should be BvSub (Ra - Rn*Rm), got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvSub(..)),
+            "MSUB value should be BvSub (Ra - Rn*Rm), got: {:?}",
+            value
+        );
     }
 }
 
@@ -692,7 +762,8 @@ fn test_adc_x0_x1_x2_produces_add_with_carry() {
     let insn = decode_aarch64(&0x9A020020u32.to_le_bytes(), 0x1000).expect("decode ADC");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     let has_flags = effects.iter().any(|e| matches!(e, Effect::FlagUpdate { .. }));
     assert!(has_reg_write, "ADC should write X0");
     assert!(!has_flags, "ADC (not ADCS) should not set flags");
@@ -714,7 +785,8 @@ fn test_sbc_x0_x1_x2_produces_sub_with_borrow() {
     let insn = decode_aarch64(&0xDA020020u32.to_le_bytes(), 0x1000).expect("decode SBC");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     let has_flags = effects.iter().any(|e| matches!(e, Effect::FlagUpdate { .. }));
     assert!(has_reg_write, "SBC should write X0");
     assert!(!has_flags, "SBC (not SBCS) should not set flags");
@@ -740,11 +812,14 @@ fn test_csel_x0_x1_x2_eq() {
     let insn = decode_aarch64(&0x9A820020u32.to_le_bytes(), 0x1000).expect("decode CSEL");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "CSEL should write X0");
 
     // Value should be an Ite (condition ? Rn : Rm).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::Ite(..)), "CSEL should produce Ite, got: {:?}", value);
     }
 }
@@ -755,11 +830,14 @@ fn test_csinc_x0_x1_x2_ne() {
     let insn = decode_aarch64(&0x9A821420u32.to_le_bytes(), 0x1000).expect("decode CSINC");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "CSINC should write X0");
 
     // Value should be Ite(cond, Rn, Rm+1).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::Ite(..)), "CSINC should produce Ite, got: {:?}", value);
     }
 }
@@ -773,7 +851,8 @@ fn test_csinv_x0_x1_x2_eq() {
     let insn = decode_aarch64(&0xDA820020u32.to_le_bytes(), 0x1000).expect("decode CSINV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "CSINV should write X0");
 }
 
@@ -786,11 +865,14 @@ fn test_csneg_x0_x1_x2_eq() {
     let insn = decode_aarch64(&0xDA820420u32.to_le_bytes(), 0x1000).expect("decode CSNEG");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "CSNEG should write X0");
 
     // CSNEG value = Ite(cond, Rn, -Rm).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::Ite(..)), "CSNEG should produce Ite, got: {:?}", value);
     }
 }
@@ -848,8 +930,14 @@ fn test_ccmp_x1_imm5_nzcv_eq() {
     assert!(!has_reg_write, "CCMP should not write a register");
 
     // The flag values should contain Ite (conditional flag setting).
-    if let Some(Effect::FlagUpdate { n, .. }) = effects.iter().find(|e| matches!(e, Effect::FlagUpdate { .. })) {
-        assert!(matches!(n, Formula::Ite(..)), "CCMP N flag should be Ite (conditional), got: {:?}", n);
+    if let Some(Effect::FlagUpdate { n, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::FlagUpdate { .. }))
+    {
+        assert!(
+            matches!(n, Formula::Ite(..)),
+            "CCMP N flag should be Ite (conditional), got: {:?}",
+            n
+        );
     }
 }
 
@@ -875,7 +963,8 @@ fn test_clz_x0_x1() {
     let insn = decode_aarch64(&0xDAC01020u32.to_le_bytes(), 0x1000).expect("decode CLZ");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "CLZ should write X0");
 }
 
@@ -885,7 +974,8 @@ fn test_rbit_x0_x1() {
     let insn = decode_aarch64(&0xDAC00020u32.to_le_bytes(), 0x1000).expect("decode RBIT");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "RBIT should write X0");
 }
 
@@ -898,7 +988,8 @@ fn test_rev_x0_x1() {
     let insn = decode_aarch64(&0xDAC00C20u32.to_le_bytes(), 0x1000).expect("decode REV");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "REV should write X0");
 }
 
@@ -911,7 +1002,8 @@ fn test_rev16_x0_x1() {
     let insn = decode_aarch64(&0xDAC00420u32.to_le_bytes(), 0x1000).expect("decode REV16");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "REV16 should write X0");
 }
 
@@ -924,7 +1016,8 @@ fn test_rev32_x0_x1() {
     let insn = decode_aarch64(&0xDAC00820u32.to_le_bytes(), 0x1000).expect("decode REV32");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "REV32 should write X0");
 }
 
@@ -937,7 +1030,8 @@ fn test_cls_x0_x1() {
     let insn = decode_aarch64(&0xDAC01420u32.to_le_bytes(), 0x1000).expect("decode CLS");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "CLS should write X0");
 }
 
@@ -954,7 +1048,8 @@ fn test_ubfm_x0_x1_uxtb_alias() {
     let insn = decode_aarch64(&0xD3401C20u32.to_le_bytes(), 0x1000).expect("decode UBFM");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "UBFM should write X0");
 }
 
@@ -966,7 +1061,8 @@ fn test_sbfm_x0_x1_sxtb_alias() {
     let insn = decode_aarch64(&0x93401C20u32.to_le_bytes(), 0x1000).expect("decode SBFM");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "SBFM should write X0");
 }
 
@@ -985,7 +1081,8 @@ fn test_bfm_x0_x1() {
     let insn = decode_aarch64(&0xB3441C20u32.to_le_bytes(), 0x1000).expect("decode BFM");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "BFM should write X0");
 }
 
@@ -1002,12 +1099,19 @@ fn test_extr_x0_x1_x2_lsb8() {
     let insn = decode_aarch64(&0x93C22020u32.to_le_bytes(), 0x1000).expect("decode EXTR");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "EXTR should write X0");
 
     // With lsb=8, result = (Rm >> 8) | (Rn << 56) => BvOr
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvOr(..)), "EXTR with lsb=8 should produce BvOr, got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvOr(..)),
+            "EXTR with lsb=8 should produce BvOr, got: {:?}",
+            value
+        );
     }
 }
 
@@ -1024,11 +1128,14 @@ fn test_movn_x0_produces_bitwise_not() {
     let insn = decode_aarch64(&0x92800000u32.to_le_bytes(), 0x1000).expect("decode MOVN");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "MOVN should write X0");
 
     // MOVN produces BvNot of the immediate.
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
         assert!(matches!(value, Formula::BvNot(..)), "MOVN should produce BvNot, got: {:?}", value);
     }
 }
@@ -1039,12 +1146,19 @@ fn test_movk_x0_0x5678_lsl16_inserts_bits() {
     let insn = decode_aarch64(&0xF2AACF00u32.to_le_bytes(), 0x1000).expect("decode MOVK");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 64, .. }));
     assert!(has_reg_write, "MOVK should write X0");
 
     // MOVK produces BvOr (cleared existing | new bits).
-    if let Some(Effect::RegWrite { value, .. }) = effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. })) {
-        assert!(matches!(value, Formula::BvOr(..)), "MOVK should produce BvOr (insert field), got: {:?}", value);
+    if let Some(Effect::RegWrite { value, .. }) =
+        effects.iter().find(|e| matches!(e, Effect::RegWrite { index: 0, .. }))
+    {
+        assert!(
+            matches!(value, Formula::BvOr(..)),
+            "MOVK should produce BvOr (insert field), got: {:?}",
+            value
+        );
     }
 }
 
@@ -1096,8 +1210,14 @@ fn test_cbz_x0_produces_pc_update() {
     let has_pc_update = effects.iter().any(|e| matches!(e, Effect::PcUpdate { .. }));
     assert!(has_pc_update, "CBZ should produce PcUpdate");
 
-    if let Some(Effect::PcUpdate { value }) = effects.iter().find(|e| matches!(e, Effect::PcUpdate { .. })) {
-        assert!(matches!(value, Formula::Ite(..)), "CBZ PC value should be Ite (branch or fall through), got: {:?}", value);
+    if let Some(Effect::PcUpdate { value }) =
+        effects.iter().find(|e| matches!(e, Effect::PcUpdate { .. }))
+    {
+        assert!(
+            matches!(value, Formula::Ite(..)),
+            "CBZ PC value should be Ite (branch or fall through), got: {:?}",
+            value
+        );
     }
 }
 
@@ -1120,7 +1240,9 @@ fn test_tbz_x0_bit5_produces_pc_update() {
     let has_pc_update = effects.iter().any(|e| matches!(e, Effect::PcUpdate { .. }));
     assert!(has_pc_update, "TBZ should produce PcUpdate");
 
-    if let Some(Effect::PcUpdate { value }) = effects.iter().find(|e| matches!(e, Effect::PcUpdate { .. })) {
+    if let Some(Effect::PcUpdate { value }) =
+        effects.iter().find(|e| matches!(e, Effect::PcUpdate { .. }))
+    {
         assert!(matches!(value, Formula::Ite(..)), "TBZ PC value should be Ite, got: {:?}", value);
     }
 }
@@ -1159,7 +1281,8 @@ fn test_strb_w0_x1_produces_mem_write() {
     let insn = decode_aarch64(&0x39000020u32.to_le_bytes(), 0x1000).expect("decode STRB");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_mem_write = effects.iter().any(|e| matches!(e, Effect::MemWrite { width_bytes: 1, .. }));
+    let has_mem_write =
+        effects.iter().any(|e| matches!(e, Effect::MemWrite { width_bytes: 1, .. }));
     assert!(has_mem_write, "STRB should produce MemWrite with 1 byte");
 }
 
@@ -1169,7 +1292,8 @@ fn test_strh_w0_x1_4_produces_mem_write() {
     let insn = decode_aarch64(&0x79000820u32.to_le_bytes(), 0x1000).expect("decode STRH");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_mem_write = effects.iter().any(|e| matches!(e, Effect::MemWrite { width_bytes: 2, .. }));
+    let has_mem_write =
+        effects.iter().any(|e| matches!(e, Effect::MemWrite { width_bytes: 2, .. }));
     assert!(has_mem_write, "STRH should produce MemWrite with 2 bytes");
 }
 
@@ -1310,6 +1434,7 @@ fn test_add_w0_w1_w2_32bit() {
     let insn = decode_aarch64(&0x11002820u32.to_le_bytes(), 0x1000).expect("decode ADD W");
     let effects = sem().effects(&state(), &insn).expect("effects");
 
-    let has_reg_write = effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 32, .. }));
+    let has_reg_write =
+        effects.iter().any(|e| matches!(e, Effect::RegWrite { index: 0, width: 32, .. }));
     assert!(has_reg_write, "ADD W0 should write 32-bit register");
 }

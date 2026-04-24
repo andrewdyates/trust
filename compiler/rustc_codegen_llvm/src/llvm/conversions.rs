@@ -10,7 +10,7 @@ use crate::llvm;
 /// Helper trait for converting backend-independent types to LLVM-specific
 /// types, for FFI purposes.
 ///
-/// tRust: known issue (#147327) — These trait/method names were chosen to avoid churn in
+/// FIXME(#147327): These trait/method names were chosen to avoid churn in
 /// existing code, but are not great and could probably be made clearer.
 pub(crate) trait FromGeneric<T> {
     fn from_generic(other: T) -> Self;
@@ -19,7 +19,7 @@ pub(crate) trait FromGeneric<T> {
 /// Helper trait for converting LLVM-specific types to backend-independent
 /// types, for FFI purposes.
 ///
-/// tRust: known issue (#147327) — These trait/method names were chosen to avoid churn in
+/// FIXME(#147327): These trait/method names were chosen to avoid churn in
 /// existing code, but are not great and could probably be made clearer.
 pub(crate) trait ToGeneric<T> {
     fn to_generic(&self) -> T;

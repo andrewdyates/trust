@@ -25,9 +25,7 @@ pub fn parse_simplified_ast(source: &str) -> Vec<AstNode> {
 
         // Attribute
         if trimmed.starts_with("#[") {
-            nodes.push(AstNode::Attribute {
-                text: trimmed.to_string(),
-            });
+            nodes.push(AstNode::Attribute { text: trimmed.to_string() });
             i += 1;
             continue;
         }
@@ -48,29 +46,18 @@ pub fn parse_simplified_ast(source: &str) -> Vec<AstNode> {
             };
             let body = parse_simplified_ast(&body_lines);
 
-            nodes.push(AstNode::Function {
-                name,
-                params,
-                return_type,
-                body,
-            });
+            nodes.push(AstNode::Function { name, params, return_type, body });
             i = body_end + 1;
             continue;
         }
 
         // If expression
         if trimmed.starts_with("if ") || trimmed == "if" {
-            let condition = trimmed
-                .strip_prefix("if ")
-                .unwrap_or("")
-                .trim_end_matches('{')
-                .trim()
-                .to_string();
+            let condition =
+                trimmed.strip_prefix("if ").unwrap_or("").trim_end_matches('{').trim().to_string();
             nodes.push(AstNode::If {
                 condition,
-                then_branch: Box::new(AstNode::Block {
-                    children: Vec::new(),
-                }),
+                then_branch: Box::new(AstNode::Block { children: Vec::new() }),
                 else_branch: None,
             });
             i += 1;
@@ -89,20 +76,17 @@ pub fn parse_simplified_ast(source: &str) -> Vec<AstNode> {
         }
 
         // Loop/while/for
-        if trimmed.starts_with("loop ") || trimmed.starts_with("while ") || trimmed.starts_with("for ") {
-            nodes.push(AstNode::Loop {
-                body: Box::new(AstNode::Block {
-                    children: Vec::new(),
-                }),
-            });
+        if trimmed.starts_with("loop ")
+            || trimmed.starts_with("while ")
+            || trimmed.starts_with("for ")
+        {
+            nodes.push(AstNode::Loop { body: Box::new(AstNode::Block { children: Vec::new() }) });
             i += 1;
             continue;
         }
 
         // Generic statement
-        nodes.push(AstNode::Statement {
-            text: trimmed.to_string(),
-        });
+        nodes.push(AstNode::Statement { text: trimmed.to_string() });
         i += 1;
     }
 
@@ -153,12 +137,7 @@ pub fn check_semantic_preservation(original: &str, rewritten: &str) -> SemanticD
         )
     };
 
-    SemanticDiff {
-        added,
-        removed,
-        preserves_semantics: preserves,
-        summary,
-    }
+    SemanticDiff { added, removed, preserves_semantics: preserves, summary }
 }
 
 // --- Helper functions for AST parsing ---
@@ -194,11 +173,7 @@ pub(crate) fn extract_fn_params(line: &str) -> Vec<String> {
         return Vec::new();
     }
     let params_str = &line[open + 1..close];
-    params_str
-        .split(',')
-        .map(|p| p.trim().to_string())
-        .filter(|p| !p.is_empty())
-        .collect()
+    params_str.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()
 }
 
 pub(crate) fn extract_return_type(line: &str) -> Option<String> {
@@ -206,11 +181,7 @@ pub(crate) fn extract_return_type(line: &str) -> Option<String> {
     let after_close = &line[close_paren + 1..];
     let arrow = after_close.find("->")?;
     let ret = after_close[arrow + 2..].trim().trim_end_matches('{').trim();
-    if ret.is_empty() {
-        None
-    } else {
-        Some(ret.to_string())
-    }
+    if ret.is_empty() { None } else { Some(ret.to_string()) }
 }
 
 fn find_closing_brace(lines: &[&str], start: usize) -> usize {

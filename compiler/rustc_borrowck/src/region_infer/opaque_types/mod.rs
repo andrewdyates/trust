@@ -116,7 +116,7 @@ fn nll_var_to_universal_region<'tcx>(
                 )
             })
             .find(|&ur| rcx.universal_region_relations.equal(vid, ur))
-            .map(|ur| rcx.definitions[ur].external_name.expect("invariant: universal region must have external name")),
+            .map(|ur| rcx.definitions[ur].external_name.unwrap()),
         NllRegionVariableOrigin::Placeholder(placeholder) => {
             Some(ty::Region::new_placeholder(rcx.infcx.tcx, placeholder))
         }
@@ -167,7 +167,7 @@ fn add_hidden_type<'tcx>(
     if let Some(prev) = hidden_types.get_mut(&def_id) {
         if prev.ty == hidden_ty.ty {
             // Pick a better span if there is one.
-            // // NOTE: collecting multiple spans for better diagnostics is a future improvement. for better diagnostics down the road.
+            // FIXME(oli-obk): collect multiple spans for better diagnostics down the road.
             prev.span = prev.span.substitute_dummy(hidden_ty.span);
         } else {
             let (Ok(guar) | Err(guar)) =
@@ -380,7 +380,7 @@ fn compute_definition_site_hidden_types_from_defining_uses<'tcx>(
         // various query operations modulo regions, and thus could unsoundly select some impls
         // that don't hold.
         //
-        // // NOTE: this check can be removed once the next-gen solver is the default.. We can remove this check again.
+        // FIXME(-Znext-solver): This isn't necessary after all. We can remove this check again.
         if let Some((prev_decl_key, prev_span)) = decls_modulo_regions.insert(
             rcx.infcx.tcx.erase_and_anonymize_regions(opaque_type_key),
             (opaque_type_key, hidden_type.span),
@@ -431,7 +431,7 @@ impl<'a, 'tcx> ToArgRegionsFolder<'a, 'tcx> {
     fn fold_non_member_arg(&mut self, arg: GenericArg<'tcx>) -> GenericArg<'tcx> {
         let prev = self.erase_unknown_regions;
         self.erase_unknown_regions = true;
-        let res = arg.try_fold_with(self).expect("invariant: type folding must succeed");
+        let res = arg.try_fold_with(self).unwrap();
         self.erase_unknown_regions = prev;
         res
     }
@@ -716,7 +716,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
                 // Nothing exact found, so we pick a named upper bound, if there's only one.
                 // If there's >1 universal region, then we probably are dealing w/ an intersection
                 // region which cannot be mapped back to a universal.
-                // // NOTE: computing the LUB when possible would give better diagnostics. if there is one.
+                // FIXME: We could probably compute the LUB if there is one.
                 let scc = self.constraint_sccs.scc(vid);
                 let rev_scc_graph =
                     ReverseSccGraph::compute(&self.constraint_sccs, self.universal_regions());

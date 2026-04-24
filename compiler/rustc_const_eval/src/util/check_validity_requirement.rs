@@ -96,7 +96,6 @@ fn check_validity_requirement_lax<'tcx>(
     let scalar_allows_raw_init = move |s: Scalar| -> bool {
         match init_kind {
             ValidityRequirement::Inhabited => {
-                // tRust: invariant — ValidityRequirement::Inhabited is handled by a preceding branch
                 bug!("ValidityRequirement::Inhabited should have been handled above")
             }
             ValidityRequirement::Zero => {
@@ -113,7 +112,6 @@ fn check_validity_requirement_lax<'tcx>(
                 s.valid_range(cx).contains(val)
             }
             ValidityRequirement::Uninit => {
-                // tRust: invariant — ValidityRequirement::Uninit is handled by a preceding branch
                 bug!("ValidityRequirement::Uninit should have been handled above")
             }
         }
@@ -193,7 +191,6 @@ pub(crate) fn validate_scalar_in_layout<'tcx>(
     let mut cx = InterpCx::new(tcx, DUMMY_SP, typing_env, machine);
 
     let Ok(layout) = cx.layout_of(ty) else {
-        // tRust: invariant — scalar types always have a computable layout
         bug!("could not compute layout of {scalar:?}:{ty:?}")
     };
 
@@ -201,7 +198,7 @@ pub(crate) fn validate_scalar_in_layout<'tcx>(
     let allocated =
         cx.allocate(layout, MemoryKind::Stack).expect("OOM: failed to allocate for uninit check");
 
-    cx.write_scalar(scalar, &allocated).expect("invariant: write_scalar succeeds for validity check of allocated scalar");
+    cx.write_scalar(scalar, &allocated).unwrap();
 
     cx.validate_operand(
         &allocated.into(),

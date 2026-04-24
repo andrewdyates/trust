@@ -13,13 +13,17 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(test)]
+use std::time::Instant;
 
 use trust_types::{BasicBlock, Counterexample, Formula};
 
 use crate::error::CegarError;
 use crate::interpolation::{UnsatCore, craig_interpolant};
-use crate::predicate::{AbstractState, Predicate, abstract_block};
+#[cfg(test)]
+use crate::predicate::abstract_block;
+use crate::predicate::{AbstractState, Predicate};
 
 // ---------------------------------------------------------------------------
 // Loop outcome
@@ -129,6 +133,7 @@ pub trait FeasibilityChecker: std::fmt::Debug {
 
 /// Result of a feasibility check.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum FeasibilityResult {
     /// The counterexample is feasible (a real bug).
     Feasible,
@@ -141,6 +146,10 @@ pub enum FeasibilityResult {
         /// Unsat core from the infeasibility proof.
         unsat_core: UnsatCore,
     },
+    /// Feasibility could not be determined (solver returned Unknown or
+    /// timed out). The CEGAR loop treats this conservatively: refine
+    /// the abstraction rather than reporting a false alarm. (#773)
+    Unknown,
 }
 
 /// Predicate refiner: extracts new predicates from an infeasible
@@ -170,6 +179,7 @@ pub trait PredicateRefiner: std::fmt::Debug {
 /// - The abstract model is safe (Proved)
 /// - A feasible counterexample is found (Disproved)
 /// - Resource limits are exhausted (ResourceExhausted)
+#[cfg(test)]
 #[derive(Debug)]
 pub struct CegarDriver<C, F, R> {
     /// Abstract model checker.
@@ -182,6 +192,7 @@ pub struct CegarDriver<C, F, R> {
     config: LoopConfig,
 }
 
+#[cfg(test)]
 impl<C, F, R> CegarDriver<C, F, R>
 where
     C: AbstractChecker,
@@ -226,10 +237,8 @@ where
             }
 
             // Step 1: Compute abstract states under current predicates.
-            let abstract_states: Vec<AbstractState> = blocks
-                .iter()
-                .map(|b| abstract_block(b, &predicates))
-                .collect();
+            let abstract_states: Vec<AbstractState> =
+                blocks.iter().map(|b| abstract_block(b, &predicates)).collect();
 
             // Step 2: Check abstract model for counterexample.
             let cex = self.checker.check(blocks, &predicates, &abstract_states)?;
@@ -251,10 +260,7 @@ where
             match feasibility_result {
                 FeasibilityResult::Feasible => {
                     // Real bug found.
-                    return Ok(LoopOutcome::Disproved {
-                        counterexample,
-                        iteration,
-                    });
+                    return Ok(LoopOutcome::Disproved { counterexample, iteration });
                 }
                 FeasibilityResult::Spurious { path_a, path_b, unsat_core } => {
                     // Step 4: Refine predicates from the spurious counterexample.
@@ -271,6 +277,29 @@ where
                     }
 
                     // Add new predicates (dedup).
+                    for pred in new_preds {
+                        if !predicates.contains(&pred) {
+                            predicates.push(pred);
+                        }
+                    }
+                }
+                FeasibilityResult::Unknown => {
+                    // Solver returned Unknown or timed out. Treat
+                    // conservatively: do NOT report as a real bug (that
+                    // would be a false alarm). Instead, use heuristic
+                    // refinement to refine the abstraction. (#773)
+                    let new_preds = self.refiner.refine(
+                        &counterexample,
+                        &[],
+                        &[],
+                        &UnsatCore::default(),
+                        &predicates,
+                    )?;
+
+                    if new_preds.is_empty() {
+                        return Err(CegarError::RefinementStalled);
+                    }
+
                     for pred in new_preds {
                         if !predicates.contains(&pred) {
                             predicates.push(pred);
@@ -319,10 +348,7 @@ impl PredicateRefiner for InterpolatingRefiner {
 }
 
 /// Heuristic refinement: extract predicates from counterexample values.
-fn heuristic_refine(
-    counterexample: &Counterexample,
-    existing: &[Predicate],
-) -> Vec<Predicate> {
+fn heuristic_refine(counterexample: &Counterexample, existing: &[Predicate]) -> Vec<Predicate> {
     use crate::predicate::CmpOp;
     use trust_types::CounterexampleValue;
 
@@ -355,7 +381,7 @@ fn heuristic_refine(
                 }
             }
             CounterexampleValue::Float(_) => {}
-            _ => {},
+            _ => {}
         }
     }
 
@@ -402,9 +428,10 @@ mod tests {
             self.call_count.set(n + 1);
             if n < self.spurious_rounds {
                 // Produce a spurious counterexample.
-                Ok(Some(Counterexample::new(vec![
-                    ("x".to_string(), CounterexampleValue::Int(-(n as i128) - 1)),
-                ])))
+                Ok(Some(Counterexample::new(vec![(
+                    "x".to_string(),
+                    CounterexampleValue::Int(-(n as i128) - 1),
+                )])))
             } else {
                 // Abstraction is precise enough; safe.
                 Ok(None)
@@ -423,9 +450,7 @@ mod tests {
             _predicates: &[Predicate],
             _abstract_states: &[AbstractState],
         ) -> Result<Option<Counterexample>, CegarError> {
-            Ok(Some(Counterexample::new(vec![
-                ("x".to_string(), CounterexampleValue::Int(42)),
-            ])))
+            Ok(Some(Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(42))])))
         }
     }
 
@@ -494,16 +519,8 @@ mod tests {
     // Helper: simple program blocks.
     fn test_blocks() -> Vec<BasicBlock> {
         vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
         ]
     }
 
@@ -638,10 +655,8 @@ mod tests {
         let proved = LoopOutcome::Proved { iterations: 1, predicates: 3 };
         assert!(format!("{proved:?}").contains("Proved"));
 
-        let disproved = LoopOutcome::Disproved {
-            counterexample: Counterexample::new(vec![]),
-            iteration: 2,
-        };
+        let disproved =
+            LoopOutcome::Disproved { counterexample: Counterexample::new(vec![]), iteration: 2 };
         assert!(format!("{disproved:?}").contains("Disproved"));
 
         let exhausted = LoopOutcome::ResourceExhausted {
@@ -662,9 +677,7 @@ mod tests {
         let config = LoopConfig {
             max_iterations: 10,
             timeout: Duration::from_secs(60),
-            initial_predicates: vec![
-                Predicate::comparison("x", CmpOp::Ge, "0"),
-            ],
+            initial_predicates: vec![Predicate::comparison("x", CmpOp::Ge, "0")],
         };
 
         let driver = CegarDriver::new(checker, feasibility, refiner, config);
@@ -683,39 +696,28 @@ mod tests {
     #[test]
     fn test_interpolating_refiner_produces_predicates() {
         let refiner = InterpolatingRefiner;
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(-5)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(-5))]);
         let path_a = vec![(
             "a0".to_string(),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
         )];
         let path_b = vec![(
             "b0".to_string(),
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         )];
         let core = UnsatCore::new(vec!["a0".into(), "b0".into()]);
 
-        let preds = refiner.refine(&cex, &path_a, &path_b, &core, &[])
-            .expect("should not error");
+        let preds = refiner.refine(&cex, &path_a, &path_b, &core, &[]).expect("should not error");
         assert!(!preds.is_empty(), "interpolation should produce predicates");
     }
 
     #[test]
     fn test_interpolating_refiner_heuristic_fallback() {
         let refiner = InterpolatingRefiner;
-        let cex = Counterexample::new(vec![
-            ("y".to_string(), CounterexampleValue::Int(42)),
-        ]);
+        let cex = Counterexample::new(vec![("y".to_string(), CounterexampleValue::Int(42))]);
         // Empty path formulas + empty core => heuristic fallback.
-        let preds = refiner.refine(&cex, &[], &[], &UnsatCore::default(), &[])
-            .expect("should not error");
+        let preds =
+            refiner.refine(&cex, &[], &[], &UnsatCore::default(), &[]).expect("should not error");
         assert!(!preds.is_empty(), "heuristic should produce predicates");
     }
 
@@ -724,14 +726,13 @@ mod tests {
         use crate::predicate::CmpOp;
 
         let refiner = InterpolatingRefiner;
-        let cex = Counterexample::new(vec![
-            ("z".to_string(), CounterexampleValue::Int(5)),
-        ]);
+        let cex = Counterexample::new(vec![("z".to_string(), CounterexampleValue::Int(5))]);
         let existing = vec![
             Predicate::comparison("z", CmpOp::Ge, "0"),
             Predicate::comparison("z", CmpOp::Eq, "5"),
         ];
-        let preds = refiner.refine(&cex, &[], &[], &UnsatCore::default(), &existing)
+        let preds = refiner
+            .refine(&cex, &[], &[], &UnsatCore::default(), &existing)
             .expect("should not error");
         // The predicates z >= 0 and z == 5 are already known; only novel ones returned.
         for p in &preds {
@@ -750,5 +751,78 @@ mod tests {
             unsat_core: UnsatCore::default(),
         };
         assert!(format!("{spurious:?}").contains("Spurious"));
+
+        let unknown = FeasibilityResult::Unknown;
+        assert!(format!("{unknown:?}").contains("Unknown"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: Unknown feasibility does NOT produce false alarms (#773)
+    // -----------------------------------------------------------------------
+
+    /// Mock feasibility checker that always returns Unknown (simulates
+    /// solver timeout or inconclusive result).
+    #[derive(Debug)]
+    struct MockUnknownFeasibility;
+
+    impl FeasibilityChecker for MockUnknownFeasibility {
+        fn check_feasibility(
+            &self,
+            _counterexample: &Counterexample,
+            _blocks: &[BasicBlock],
+            _predicates: &[Predicate],
+        ) -> Result<FeasibilityResult, CegarError> {
+            Ok(FeasibilityResult::Unknown)
+        }
+    }
+
+    #[test]
+    fn test_cegar_loop_unknown_feasibility_does_not_disprove() {
+        // When the solver returns Unknown, the CEGAR loop must NOT
+        // report Disproved (that would be a false alarm). It should
+        // refine heuristically and eventually exhaust its iteration
+        // budget or converge to safe.
+        let checker = MockSafeChecker::new(2); // 2 rounds, then safe
+        let feasibility = MockUnknownFeasibility;
+        let refiner = InterpolatingRefiner;
+        let config = LoopConfig {
+            max_iterations: 10,
+            timeout: Duration::from_secs(60),
+            initial_predicates: vec![],
+        };
+
+        let driver = CegarDriver::new(checker, feasibility, refiner, config);
+        let result = driver.run(&test_blocks()).expect("should not error");
+
+        // The key assertion: Unknown feasibility must NEVER produce Disproved.
+        assert!(
+            !matches!(result, LoopOutcome::Disproved { .. }),
+            "Unknown feasibility must not cause false alarm (Disproved), got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_cegar_loop_unknown_feasibility_refines_and_converges() {
+        // Unknown feasibility with a checker that eventually reports safe:
+        // should converge to Proved after heuristic refinement.
+        let checker = MockSafeChecker::new(1); // 1 unknown round, then safe
+        let feasibility = MockUnknownFeasibility;
+        let refiner = InterpolatingRefiner;
+        let config = LoopConfig {
+            max_iterations: 10,
+            timeout: Duration::from_secs(60),
+            initial_predicates: vec![],
+        };
+
+        let driver = CegarDriver::new(checker, feasibility, refiner, config);
+        let result = driver.run(&test_blocks()).expect("should not error");
+
+        match result {
+            LoopOutcome::Proved { iterations, predicates } => {
+                assert_eq!(iterations, 1, "one unknown round then safe");
+                assert!(predicates > 0, "heuristic refinement should discover predicates");
+            }
+            other => panic!("expected Proved after unknown+refine, got: {other:?}"),
+        }
     }
 }

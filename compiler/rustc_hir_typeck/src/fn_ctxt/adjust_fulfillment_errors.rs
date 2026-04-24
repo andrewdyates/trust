@@ -264,7 +264,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 if let Some(param) = predicate_self_type_to_point_at
                     && self.point_at_generic_if_possible(error, callee_def_id, param, segment)
                 {
-                    // tRust: known issue — This is not correct, since `predicate_self_type_to_point_at` might
+                    // HACK: This is not correct, since `predicate_self_type_to_point_at` might
                     // not actually correspond to the receiver of the method call. But we
                     // re-adjust the cause code here in order to prefer pointing at one of
                     // the method's turbofish segments but still use `FunctionArgumentObligation`
@@ -623,7 +623,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         // Either way, use this expression to update the error span.
         // If it doesn't overlap the existing span at all, use the original span.
-        // NOTE: it would possibly be better to do this more continuously, at each level...
+        // FIXME: It would possibly be better to do this more continuously, at each level...
         error.obligation.cause.span = expr
             .span
             .find_ancestor_in_same_ctxt(error.obligation.cause.span)
@@ -786,7 +786,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 return Err(expr);
             }
             // Find out which of `in_ty_elements` refer to `param`.
-            // NOTE: it may be better to take the first if there are multiple,
+            // FIXME: It may be better to take the first if there are multiple,
             // just so that the error points to a smaller expression.
             let Some((drill_expr, drill_ty)) =
                 is_iterator_singleton(expr_elements.iter().zip(in_ty_elements.iter()).filter(
@@ -820,7 +820,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let variant_def_id = match expr_struct_def_kind {
                 DefKind::Struct => {
                     if in_ty_adt.did() != expr_struct_def_id {
-                        // NOTE: type alias handling could be improved here.
+                        // FIXME: Deal with type aliases?
                         return Err(expr);
                     }
                     expr_struct_def_id
@@ -828,7 +828,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 DefKind::Variant => {
                     // If this is a variant, its parent is the type definition.
                     if in_ty_adt.did() != self.tcx.parent(expr_struct_def_id) {
-                        // NOTE: type alias handling could be improved here.
+                        // FIXME: Deal with type aliases?
                         return Err(expr);
                     }
                     expr_struct_def_id
@@ -913,7 +913,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         ) = (&expr.kind, in_ty.kind())
         {
             let hir::ExprKind::Path(expr_callee_path) = &expr_callee.kind else {
-                // NOTE: this case overlaps with another one worth handling,
+                // FIXME: This case overlaps with another one worth handling,
                 // which should happen above since it applies to non-ADTs:
                 // we can drill down into regular generic functions.
                 return Err(expr);
@@ -929,7 +929,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let variant_def_id = match expr_struct_def_kind {
                 DefKind::Ctor(hir::def::CtorOf::Struct, hir::def::CtorKind::Fn) => {
                     if in_ty_adt.did() != self.tcx.parent(expr_ctor_def_id) {
-                        // NOTE: type alias handling could be improved here.
+                        // FIXME: Deal with type aliases?
                         return Err(expr);
                     }
                     self.tcx.parent(expr_ctor_def_id)
@@ -946,13 +946,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // Note that this pattern still holds even when we `use` a variant or `use` an enum type to rename it, or chain `use` expressions
                     // together; this resolution is handled automatically by `qpath_res`.
 
-                    // NOTE: type alias handling could be improved here.
+                    // FIXME: Deal with type aliases?
                     if in_ty_adt.did() == self.tcx.parent(self.tcx.parent(expr_ctor_def_id)) {
                         // The constructor definition refers to the "constructor" of the variant:
                         // For example, `Some(5)` triggers this case.
                         self.tcx.parent(expr_ctor_def_id)
                     } else {
-                        // NOTE: type alias handling could be improved here.
+                        // FIXME: Deal with type aliases?
                         return Err(expr);
                     }
                 }

@@ -138,7 +138,7 @@ fn layout_of<'tcx>(tcx: TyCtxt<'tcx>, cycle: Cycle<'tcx>) -> &'tcx ty::layout::L
                 && matches!(def_kind, DefKind::Closure)
                 && let Some(coroutine_kind) = tcx.coroutine_kind(def_id)
             {
-                // tRust: known issue — `def_span` for an fn-like coroutine will point to the fn's body
+                // FIXME: `def_span` for an fn-like coroutine will point to the fn's body
                 // due to interactions between the desugaring into a closure expr and the
                 // def_span code. I'm not motivated to fix it, because I tried and it was
                 // not working, so just hack around it by grabbing the parent fn's span.
@@ -186,7 +186,7 @@ fn layout_of<'tcx>(tcx: TyCtxt<'tcx>, cycle: Cycle<'tcx>) -> &'tcx ty::layout::L
                         );
                     }
                 }
-                // tRust: known issue — We could report a structured suggestion if we had
+                // FIXME: We could report a structured suggestion if we had
                 // enough info here... Maybe we can use a hacky HIR walker.
                 if matches!(
                     coroutine_kind,
@@ -221,7 +221,7 @@ fn recursive_type_error(
         .iter()
         .enumerate()
         .min_by_key(|&(_, &(id, _))| tcx.def_span(id))
-        .expect("invariant: item_and_field_ids is non-empty for recursive type error") // tRust: unwrap -> expect
+        .unwrap()
         .0;
     item_and_field_ids.rotate_left(start_index);
 
@@ -253,7 +253,7 @@ fn recursive_type_error(
 
         for span in found {
             err_span.push_span_label(span, "recursive without indirection");
-            // tRust: known issue (compiler-errors) — This suggestion might be erroneous if Box is shadowed
+            // FIXME(compiler-errors): This suggestion might be erroneous if Box is shadowed
             suggestion.push((span.shrink_to_lo(), "Box<".to_string()));
             suggestion.push((span.shrink_to_hi(), ">".to_string()));
         }
@@ -262,9 +262,9 @@ fn recursive_type_error(
         let mut s = String::new();
         for (i, &(item_id, _)) in item_and_field_ids.iter().enumerate() {
             let path = tcx.def_path_str(item_id);
-            write!(&mut s, "`{path}`").expect("invariant: write! to String never fails"); // tRust: unwrap -> expect
+            write!(&mut s, "`{path}`").unwrap();
             if i == (ITEM_LIMIT - 1) && cycle_len > ITEM_LIMIT {
-                write!(&mut s, " and {} more", cycle_len - 5).expect("invariant: write! to String never fails"); // tRust: unwrap -> expect
+                write!(&mut s, " and {} more", cycle_len - 5).unwrap();
                 break;
             }
             if cycle_len > 1 && i < cycle_len - 2 {
@@ -310,7 +310,7 @@ fn find_item_ty_spans(
                     }
                     seen_representable.contains(&def_id)
                 });
-                if check_params && let Some(args) = path.segments.last().expect("invariant: resolved path always has at least one segment").args { // tRust: unwrap -> expect
+                if check_params && let Some(args) = path.segments.last().unwrap().args {
                     let params_in_repr = tcx.params_in_repr(def_id);
                     // the domain size check is needed because the HIR may not be well-formed at this point
                     for (i, arg) in args.args.iter().enumerate().take(params_in_repr.domain_size())

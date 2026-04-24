@@ -18,13 +18,13 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::fx::FxHashMap;
 use std::path::{Path, PathBuf};
+use trust_types::fx::FxHashMap;
 
 use trust_types::{
-    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula,
-    LocalDecl, Operand, Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty,
-    VerifiableBody, VerifiableFunction, VerificationCondition, VerificationResult,
+    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula, LocalDecl, Operand,
+    Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, VerifiableBody,
+    VerifiableFunction, VerificationCondition, VerificationResult,
 };
 
 // ===========================================================================
@@ -71,11 +71,17 @@ fn generate_real_crate_source() -> String {
     src.push_str("// --- Module: Generics ---\n\n");
     src.push_str("pub fn identity<T>(x: T) -> T { x }\n\n");
     src.push_str("pub fn first<T>(a: T, _b: T) -> T { a }\n\n");
-    src.push_str("pub fn max_generic<T: PartialOrd>(a: T, b: T) -> T { if a > b { a } else { b } }\n\n");
-    src.push_str("pub fn min_generic<T: PartialOrd>(a: T, b: T) -> T { if a < b { a } else { b } }\n\n");
+    src.push_str(
+        "pub fn max_generic<T: PartialOrd>(a: T, b: T) -> T { if a > b { a } else { b } }\n\n",
+    );
+    src.push_str(
+        "pub fn min_generic<T: PartialOrd>(a: T, b: T) -> T { if a < b { a } else { b } }\n\n",
+    );
     src.push_str("pub fn swap<T>(pair: (T, T)) -> (T, T) { (pair.1, pair.0) }\n\n");
     src.push_str("pub fn is_some_and_positive<T: PartialOrd + Default>(val: Option<T>) -> bool { matches!(val, Some(v) if v > T::default()) }\n\n");
-    src.push_str("pub fn unwrap_or_default<T: Default>(val: Option<T>) -> T { val.unwrap_or_default() }\n\n");
+    src.push_str(
+        "pub fn unwrap_or_default<T: Default>(val: Option<T>) -> T { val.unwrap_or_default() }\n\n",
+    );
     src.push_str("pub fn pair_map<T, U>(pair: (T, T), f: impl Fn(T) -> U) -> (U, U) { (f(pair.0), f(pair.1)) }\n\n");
     src.push_str("pub fn contains<T: PartialEq>(slice: &[T], item: &T) -> bool { slice.iter().any(|x| x == item) }\n\n");
     src.push_str("pub fn count_if<T>(slice: &[T], pred: impl Fn(&T) -> bool) -> usize { slice.iter().filter(|x| pred(x)).count() }\n\n");
@@ -89,7 +95,9 @@ fn generate_real_crate_source() -> String {
     src.push_str("// --- Module: Closures and Iterators ---\n\n");
     src.push_str("pub fn sum_vec(v: &[i64]) -> i64 { v.iter().sum() }\n\n");
     src.push_str("pub fn product_vec(v: &[i64]) -> i64 { v.iter().product() }\n\n");
-    src.push_str("pub fn map_double(v: &[i32]) -> Vec<i32> { v.iter().map(|x| x * 2).collect() }\n\n");
+    src.push_str(
+        "pub fn map_double(v: &[i32]) -> Vec<i32> { v.iter().map(|x| x * 2).collect() }\n\n",
+    );
     src.push_str("pub fn filter_positive(v: &[i32]) -> Vec<i32> { v.iter().copied().filter(|x| *x > 0).collect() }\n\n");
     src.push_str("pub fn find_max(v: &[i32]) -> Option<i32> { v.iter().copied().max() }\n\n");
     src.push_str("pub fn find_min(v: &[i32]) -> Option<i32> { v.iter().copied().min() }\n\n");
@@ -143,11 +151,15 @@ fn generate_real_crate_source() -> String {
     src.push_str("// --- Module: Unsafe ---\n\n");
     src.push_str("pub unsafe fn read_byte(ptr: *const u8) -> u8 { *ptr }\n\n");
     src.push_str("pub unsafe fn write_byte(ptr: *mut u8, val: u8) { *ptr = val; }\n\n");
-    src.push_str("pub unsafe fn swap_raw(a: *mut u32, b: *mut u32) { let tmp = *a; *a = *b; *b = tmp; }\n\n");
+    src.push_str(
+        "pub unsafe fn swap_raw(a: *mut u32, b: *mut u32) { let tmp = *a; *a = *b; *b = tmp; }\n\n",
+    );
     src.push_str("pub unsafe fn offset_read(base: *const u32, offset: isize) -> u32 { *base.offset(offset) }\n\n");
     src.push_str("pub fn safe_read(data: &[u8], index: usize) -> Option<u8> { data.get(index).copied() }\n\n");
     src.push_str("pub fn bytes_to_u32(bytes: &[u8; 4]) -> u32 { u32::from_le_bytes(*bytes) }\n\n");
-    src.push_str("pub unsafe fn transmute_u32_to_f32(x: u32) -> f32 { std::mem::transmute(x) }\n\n");
+    src.push_str(
+        "pub unsafe fn transmute_u32_to_f32(x: u32) -> f32 { std::mem::transmute(x) }\n\n",
+    );
     src.push_str("pub unsafe fn slice_from_raw(ptr: *const u8, len: usize) -> &'static [u8] { std::slice::from_raw_parts(ptr, len) }\n\n");
 
     // ---- Module 8: Pattern matching / enums (12 functions) ----
@@ -157,7 +169,9 @@ fn generate_real_crate_source() -> String {
     src.push_str("pub fn option_to_result(opt: Option<i32>) -> Result<i32, &'static str> { opt.ok_or(\"none\") }\n\n");
     src.push_str("pub fn result_to_option(res: Result<i32, ()>) -> Option<i32> { res.ok() }\n\n");
     src.push_str("pub fn unwrap_or_zero(opt: Option<i32>) -> i32 { opt.unwrap_or(0) }\n\n");
-    src.push_str("pub fn map_result(res: Result<i32, ()>) -> Result<i32, ()> { res.map(|x| x + 1) }\n\n");
+    src.push_str(
+        "pub fn map_result(res: Result<i32, ()>) -> Result<i32, ()> { res.map(|x| x + 1) }\n\n",
+    );
     src.push_str("pub fn and_then_result(res: Result<i32, ()>) -> Result<i32, ()> { res.and_then(|x| if x > 0 { Ok(x) } else { Err(()) }) }\n\n");
     src.push_str("pub fn or_else_result(res: Result<i32, ()>) -> Result<i32, ()> { res.or_else(|_| Ok(0)) }\n\n");
     src.push_str("pub fn is_even(n: i32) -> bool { n % 2 == 0 }\n\n");
@@ -187,13 +201,17 @@ fn generate_real_crate_source() -> String {
     src.push_str("    pub fn distance_to(&self, other: &Point) -> f64 { ((self.x - other.x).powi(2) + (self.y - other.y).powi(2)).sqrt() }\n");
     src.push_str("    pub fn translate(&self, dx: f64, dy: f64) -> Point { Point { x: self.x + dx, y: self.y + dy } }\n");
     src.push_str("    pub fn scale(&self, factor: f64) -> Point { Point { x: self.x * factor, y: self.y * factor } }\n");
-    src.push_str("    pub fn magnitude(&self) -> f64 { (self.x * self.x + self.y * self.y).sqrt() }\n");
+    src.push_str(
+        "    pub fn magnitude(&self) -> f64 { (self.x * self.x + self.y * self.y).sqrt() }\n",
+    );
     src.push_str("}\n\n");
     src.push_str("pub struct Counter { pub count: u64 }\n\n");
     src.push_str("impl Counter {\n");
     src.push_str("    pub fn new() -> Self { Counter { count: 0 } }\n");
     src.push_str("    pub fn increment(&mut self) { self.count += 1; }\n");
-    src.push_str("    pub fn decrement(&mut self) { self.count = self.count.saturating_sub(1); }\n");
+    src.push_str(
+        "    pub fn decrement(&mut self) { self.count = self.count.saturating_sub(1); }\n",
+    );
     src.push_str("    pub fn reset(&mut self) { self.count = 0; }\n");
     src.push_str("    pub fn get(&self) -> u64 { self.count }\n");
     src.push_str("    pub fn is_zero(&self) -> bool { self.count == 0 }\n");
@@ -210,12 +228,16 @@ fn generate_real_crate_source() -> String {
     src.push_str("pub fn reverse(v: &mut [i32]) { v.reverse(); }\n\n");
     src.push_str("pub fn rotate_left(v: &mut [i32], n: usize) { if !v.is_empty() { let n = n % v.len(); v.rotate_left(n); } }\n\n");
     src.push_str("pub fn linear_search(v: &[i32], target: i32) -> Option<usize> { v.iter().position(|&x| x == target) }\n\n");
-    src.push_str("pub fn count_zeros(v: &[i32]) -> usize { v.iter().filter(|&&x| x == 0).count() }\n\n");
+    src.push_str(
+        "pub fn count_zeros(v: &[i32]) -> usize { v.iter().filter(|&&x| x == 0).count() }\n\n",
+    );
 
     // ---- Module 12: Spec-rich functions (10 functions) ----
     src.push_str("// --- Module: Specifications ---\n\n");
     src.push_str("#[requires(lo <= hi)]\n#[ensures(result >= lo)]\n#[ensures(result <= hi)]\npub fn clamp(val: i32, lo: i32, hi: i32) -> i32 { if val < lo { lo } else if val > hi { hi } else { val } }\n\n");
-    src.push_str("#[ensures(result >= 0)]\npub fn abs(x: i32) -> i32 { if x < 0 { -x } else { x } }\n\n");
+    src.push_str(
+        "#[ensures(result >= 0)]\npub fn abs(x: i32) -> i32 { if x < 0 { -x } else { x } }\n\n",
+    );
     src.push_str("#[ensures(result >= a)]\n#[ensures(result >= b)]\npub fn max_i32(a: i32, b: i32) -> i32 { if a > b { a } else { b } }\n\n");
     src.push_str("#[ensures(result <= a)]\n#[ensures(result <= b)]\npub fn min_i32(a: i32, b: i32) -> i32 { if a < b { a } else { b } }\n\n");
     src.push_str("#[requires(n <= 20)]\npub fn factorial(n: u64) -> u64 { if n == 0 { 1 } else { n * factorial(n - 1) } }\n\n");
@@ -250,13 +272,11 @@ struct TempCrate {
 
 impl TempCrate {
     fn new(name: &str, lib_rs: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("trust_scale_{name}_{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("trust_scale_{name}_{}", std::process::id()));
         let src_dir = root.join("src");
         std::fs::create_dir_all(&src_dir).expect("create temp crate src dir");
-        let cargo_toml = format!(
-            "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
-        );
+        let cargo_toml =
+            format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
         std::fs::write(root.join("Cargo.toml"), cargo_toml).expect("write Cargo.toml");
         std::fs::write(src_dir.join("lib.rs"), lib_rs).expect("write lib.rs");
         Self { root }
@@ -339,9 +359,7 @@ fn analyze_source(source: &str) -> SourceStats {
 
             if let Some(fn_pos) = trimmed.find("fn ") {
                 let after_fn = &trimmed[fn_pos + 3..];
-                let end = after_fn
-                    .find(['(', '<'])
-                    .unwrap_or(after_fn.len());
+                let end = after_fn.find(['(', '<']).unwrap_or(after_fn.len());
                 let name = after_fn[..end].trim();
                 if !name.is_empty() {
                     function_names.push(name.to_string());
@@ -408,11 +426,7 @@ fn checked_add_fn(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u64(), name: None },
                 LocalDecl { index: 1, ty: Ty::u64(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u64(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -674,11 +688,7 @@ fn checked_sub_fn(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u64(), name: None },
                 LocalDecl { index: 1, ty: Ty::u64(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u64(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -731,11 +741,7 @@ fn checked_mul_fn(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u64(), name: None },
                 LocalDecl { index: 1, ty: Ty::u64(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u64(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -970,7 +976,8 @@ fn test_scale_full_pipeline_120_functions() {
             continue;
         }
         let results = router.verify_all(&vcs);
-        let all_proved = results.iter().all(|(_, r)| matches!(r, VerificationResult::Proved { .. }));
+        let all_proved =
+            results.iter().all(|(_, r)| matches!(r, VerificationResult::Proved { .. }));
         per_function_proved.insert(func.name.clone(), all_proved);
     }
     let total_proved_functions = per_function_proved.values().filter(|v| **v).count();
@@ -1035,7 +1042,9 @@ fn test_scale_full_pipeline_120_functions() {
     eprintln!("  Failed VCs: {failed}");
     eprintln!("  Unknown VCs: {unknown}");
     eprintln!("  VC kinds: {vc_kind_counts:?}");
-    eprintln!("  Functions fully proved: {total_proved_functions}/{total_functions} ({proved_pct:.1}%)");
+    eprintln!(
+        "  Functions fully proved: {total_proved_functions}/{total_functions} ({proved_pct:.1}%)"
+    );
     eprintln!("  Report obligations: {}", report.summary.total_obligations);
     eprintln!("  JSON size: {} bytes", json.len());
     eprintln!("=======================================");
@@ -1118,9 +1127,8 @@ fn test_scale_per_function_report() {
 fn test_scale_no_false_positives_on_safe_code() {
     // Provably-safe functions: identity/noop (no operations that can fail).
     // These should produce 0 VCs and thus 0 failures.
-    let safe_functions: Vec<VerifiableFunction> = (0..50)
-        .map(|i| noop_fn(&format!("safe_fn_{i:03}")))
-        .collect();
+    let safe_functions: Vec<VerifiableFunction> =
+        (0..50).map(|i| noop_fn(&format!("safe_fn_{i:03}"))).collect();
 
     let router = trust_router::Router::new();
 
@@ -1138,9 +1146,8 @@ fn test_scale_no_false_positives_on_safe_code() {
     // Guarded division functions should not produce false positives either.
     // The precondition y != 0 should prevent the division-by-zero VC from
     // being flagged as "failed".
-    let guarded_fns: Vec<VerifiableFunction> = (0..10)
-        .map(|i| guarded_division_fn(&format!("guarded_{i:03}")))
-        .collect();
+    let guarded_fns: Vec<VerifiableFunction> =
+        (0..10).map(|i| guarded_division_fn(&format!("guarded_{i:03}"))).collect();
 
     for func in &guarded_fns {
         let vcs = trust_vcgen::generate_vcs(func);
@@ -1208,10 +1215,20 @@ fn test_scale_document_unhandled_patterns() {
         .function_names
         .iter()
         .filter(|n| {
-            ["sum_vec", "product_vec", "map_double", "filter_positive",
-             "find_max", "find_min", "any_negative", "all_positive",
-             "contains", "count_if", "find_first"]
-                .contains(&n.as_str())
+            [
+                "sum_vec",
+                "product_vec",
+                "map_double",
+                "filter_positive",
+                "find_max",
+                "find_min",
+                "any_negative",
+                "all_positive",
+                "contains",
+                "count_if",
+                "find_first",
+            ]
+            .contains(&n.as_str())
         })
         .count();
     eprintln!("  Closures/iterators (separate MIR items): {closure_fns} functions");
@@ -1220,9 +1237,17 @@ fn test_scale_document_unhandled_patterns() {
         .function_names
         .iter()
         .filter(|n| {
-            ["describe_item", "describe_all", "total_area", "largest_area",
-             "validate_all", "validate_any", "apply_fn", "apply_twice"]
-                .contains(&n.as_str())
+            [
+                "describe_item",
+                "describe_all",
+                "total_area",
+                "largest_area",
+                "validate_all",
+                "validate_any",
+                "apply_fn",
+                "apply_twice",
+            ]
+            .contains(&n.as_str())
         })
         .count();
     eprintln!("  Trait objects (vtable dispatch): {trait_obj_fns} functions");
@@ -1231,28 +1256,38 @@ fn test_scale_document_unhandled_patterns() {
         .function_names
         .iter()
         .filter(|n| {
-            ["new", "origin", "distance_to", "translate", "scale", "magnitude",
-             "increment", "decrement", "reset", "get", "is_zero"]
-                .contains(&n.as_str())
+            [
+                "new",
+                "origin",
+                "distance_to",
+                "translate",
+                "scale",
+                "magnitude",
+                "increment",
+                "decrement",
+                "reset",
+                "get",
+                "is_zero",
+            ]
+            .contains(&n.as_str())
         })
         .count();
     eprintln!("  Struct methods (&self): {struct_method_fns} functions");
 
     eprintln!();
-    eprintln!("  Total documented unhandled: {} (of {} total functions)",
+    eprintln!(
+        "  Total documented unhandled: {} (of {} total functions)",
         total_unhandled + closure_fns + trait_obj_fns + struct_method_fns,
         stats.total_functions
     );
-    let handled = stats.total_functions - total_unhandled - closure_fns - trait_obj_fns - struct_method_fns;
+    let handled =
+        stats.total_functions - total_unhandled - closure_fns - trait_obj_fns - struct_method_fns;
     eprintln!("  Handled at MIR level: {handled}");
     eprintln!("============================================");
 
     // This test always passes -- it documents patterns, not asserts correctness.
     // The real verification is in the pipeline tests above.
-    assert!(
-        stats.total_functions >= 130,
-        "should have enough functions to document patterns"
-    );
+    assert!(stats.total_functions >= 130, "should have enough functions to document patterns");
 }
 
 // ===========================================================================
@@ -1280,20 +1315,18 @@ fn test_scale_report_artifacts() {
     // Validate summary counts are consistent
     assert_eq!(
         report.summary.total_obligations,
-        report.summary.total_proved + report.summary.total_failed
-            + report.summary.total_unknown + report.summary.total_runtime_checked,
+        report.summary.total_proved
+            + report.summary.total_failed
+            + report.summary.total_unknown
+            + report.summary.total_runtime_checked,
         "obligation counts should sum correctly"
     );
 
     // JSON is well-formed
     let json = serde_json::to_string_pretty(&report).expect("serialize");
-    let roundtrip: trust_types::JsonProofReport =
-        serde_json::from_str(&json).expect("deserialize");
+    let roundtrip: trust_types::JsonProofReport = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(roundtrip.crate_name, "scale-artifacts");
-    assert_eq!(
-        roundtrip.summary.total_obligations,
-        report.summary.total_obligations
-    );
+    assert_eq!(roundtrip.summary.total_obligations, report.summary.total_obligations);
 
     // HTML is well-formed
     let html = trust_report::html_report::generate_html_report(&report);

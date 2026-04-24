@@ -8,8 +8,7 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
-use trust_types::fx::FxHashSet;
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 /// A counterexample produced by a failed verification attempt.
 ///
@@ -65,9 +64,7 @@ impl CexAnalyzer {
     /// Create a new analyzer with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            precondition_bias: 0.6,
-        }
+        Self { precondition_bias: 0.6 }
     }
 
     /// Analyze a single counterexample against a spec and produce refinement suggestions.
@@ -306,18 +303,20 @@ impl CexAnalyzer {
 
             // Check if values suggest an upper bound
             if let (Some(&min), Some(&max)) = (values.iter().min(), values.iter().max())
-                && min == max && values.len() > 1 {
-                    suggestions.push(RefinementSuggestion {
-                        original_spec: String::new(),
-                        suggested_spec: format!("#[requires({var} != {min})]"),
-                        confidence: 0.75,
-                        rationale: format!(
-                            "All {} counterexamples have {var} == {min}; suggest excluding this value",
-                            cexs.len(),
-                        ),
-                        strategy: RefinementStrategy::StrengthenPrecondition,
-                    });
-                }
+                && min == max
+                && values.len() > 1
+            {
+                suggestions.push(RefinementSuggestion {
+                    original_spec: String::new(),
+                    suggested_spec: format!("#[requires({var} != {min})]"),
+                    confidence: 0.75,
+                    rationale: format!(
+                        "All {} counterexamples have {var} == {min}; suggest excluding this value",
+                        cexs.len(),
+                    ),
+                    strategy: RefinementStrategy::StrengthenPrecondition,
+                });
+            }
         }
 
         // Check if counterexamples share path prefixes -- suggests case split
@@ -364,11 +363,8 @@ impl CexAnalyzer {
         let mut var_counts: FxHashMap<String, usize> = FxHashMap::default();
         for cex in cexs {
             // Deduplicate within a single cex
-            let vars: FxHashSet<&str> = cex
-                .variable_assignments
-                .iter()
-                .map(|(v, _)| v.as_str())
-                .collect();
+            let vars: FxHashSet<&str> =
+                cex.variable_assignments.iter().map(|(v, _)| v.as_str()).collect();
             for var in vars {
                 *var_counts.entry(var.to_owned()).or_default() += 1;
             }
@@ -414,9 +410,7 @@ impl Default for CexAnalyzer {
 /// Rank suggestions by confidence (descending).
 pub fn rank_suggestions(suggestions: &mut [RefinementSuggestion]) {
     suggestions.sort_by(|a, b| {
-        b.confidence
-            .partial_cmp(&a.confidence)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
     });
 }
 
@@ -494,9 +488,8 @@ mod tests {
         let cex = make_cex(&[("x", "-5")], &["bb0", "bb1"], "x + y < 100");
         let suggestions = analyzer.analyze_counterexample(&cex, "ensures(x + y < 100)");
         assert!(!suggestions.is_empty());
-        let precond = suggestions
-            .iter()
-            .find(|s| s.strategy == RefinementStrategy::StrengthenPrecondition);
+        let precond =
+            suggestions.iter().find(|s| s.strategy == RefinementStrategy::StrengthenPrecondition);
         assert!(precond.is_some());
         assert!(precond.unwrap().suggested_spec.contains("x >= 0"));
     }
@@ -506,9 +499,8 @@ mod tests {
         let analyzer = CexAnalyzer::new();
         let cex = make_cex(&[("divisor", "0")], &["bb0"], "result == x / divisor");
         let suggestions = analyzer.analyze_counterexample(&cex, "ensures(result == x / divisor)");
-        let precond = suggestions
-            .iter()
-            .find(|s| s.strategy == RefinementStrategy::StrengthenPrecondition);
+        let precond =
+            suggestions.iter().find(|s| s.strategy == RefinementStrategy::StrengthenPrecondition);
         assert!(precond.is_some());
         assert!(precond.unwrap().suggested_spec.contains("divisor != 0"));
     }
@@ -518,9 +510,7 @@ mod tests {
         let analyzer = CexAnalyzer::new();
         let cex = make_cex(&[("x", "42")], &["bb0", "bb1"], "prop");
         let suggestions = analyzer.analyze_counterexample(&cex, "ensures(prop)");
-        let guard = suggestions
-            .iter()
-            .find(|s| s.strategy == RefinementStrategy::AddGuard);
+        let guard = suggestions.iter().find(|s| s.strategy == RefinementStrategy::AddGuard);
         assert!(guard.is_some());
     }
 
@@ -566,8 +556,7 @@ mod tests {
     fn test_suggest_postcondition_weakening_matching_property() {
         let analyzer = CexAnalyzer::new();
         let cex = make_cex(&[("x", "5")], &[], "result > 0");
-        let suggestion =
-            analyzer.suggest_postcondition_weakening(&cex, "ensures(result > 0)");
+        let suggestion = analyzer.suggest_postcondition_weakening(&cex, "ensures(result > 0)");
         assert!(suggestion.is_some());
         let s = suggestion.unwrap();
         assert!(s.suggested_spec.contains("relaxed_condition"));
@@ -578,9 +567,7 @@ mod tests {
     fn test_suggest_postcondition_weakening_empty_spec_returns_none() {
         let analyzer = CexAnalyzer::new();
         let cex = make_cex(&[("x", "5")], &[], "result > 0");
-        assert!(analyzer
-            .suggest_postcondition_weakening(&cex, "")
-            .is_none());
+        assert!(analyzer.suggest_postcondition_weakening(&cex, "").is_none());
     }
 
     #[test]
@@ -600,9 +587,7 @@ mod tests {
             make_cex(&[("x", "-100")], &["bb0"], "x >= 0"),
         ];
         let suggestions = analyzer.generalize_from_counterexamples(&cexs);
-        let strong = suggestions
-            .iter()
-            .find(|s| s.suggested_spec.contains("x >= 0"));
+        let strong = suggestions.iter().find(|s| s.suggested_spec.contains("x >= 0"));
         assert!(strong.is_some());
         assert!(strong.unwrap().confidence >= 0.8);
     }
@@ -615,9 +600,7 @@ mod tests {
             make_cex(&[("d", "0")], &["bb0", "bb1"], "d != 0"),
         ];
         let suggestions = analyzer.generalize_from_counterexamples(&cexs);
-        let nonzero = suggestions
-            .iter()
-            .find(|s| s.suggested_spec.contains("d != 0"));
+        let nonzero = suggestions.iter().find(|s| s.suggested_spec.contains("d != 0"));
         assert!(nonzero.is_some());
         assert!(nonzero.unwrap().confidence >= 0.85);
     }
@@ -730,13 +713,8 @@ mod tests {
             make_cex(&[("x", "-2")], &["entry", "check", "branch_b"], "prop"),
         ];
         let suggestions = analyzer.generalize_from_counterexamples(&cexs);
-        let split = suggestions
-            .iter()
-            .find(|s| s.strategy == RefinementStrategy::SplitCases);
+        let split = suggestions.iter().find(|s| s.strategy == RefinementStrategy::SplitCases);
         assert!(split.is_some());
-        assert!(split
-            .unwrap()
-            .suggested_spec
-            .contains("entry -> check"));
+        assert!(split.unwrap().suggested_spec.contains("entry -> check"));
     }
 }

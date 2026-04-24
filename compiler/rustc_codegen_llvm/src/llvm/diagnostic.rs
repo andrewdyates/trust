@@ -40,7 +40,6 @@ impl<'ll> OptimizationDiagnostic<'ll> {
         let mut filename = None;
         let pass_name = super::build_string(|pass_name| {
             message = super::build_string(|message| {
-                // SAFETY: The output function pointer is valid, and the LLVM value/type being printed is a valid reference.
                 filename = super::build_string(|filename| unsafe {
                     super::LLVMRustUnpackOptimizationDiagnostic(
                         di,
@@ -66,7 +65,7 @@ impl<'ll> OptimizationDiagnostic<'ll> {
         OptimizationDiagnostic {
             kind,
             pass_name: pass_name.expect("got a non-UTF8 pass name from LLVM"),
-            function: function.expect("invariant: optimization remark has function"),
+            function: function.unwrap(),
             line,
             column,
             filename,
@@ -92,7 +91,6 @@ impl SrcMgrDiagnostic {
         let mut ranges = [0; 8];
         let mut num_ranges = ranges.len() / 2;
         let message = super::build_string(|message| {
-            // SAFETY: The output function pointer is valid, and the LLVM value/type being printed is a valid reference.
             buffer = super::build_string(|buffer| unsafe {
                 have_source = super::LLVMRustUnpackSMDiagnostic(
                     diag,
@@ -136,7 +134,6 @@ impl InlineAsmDiagnostic {
         let mut message = None;
         let mut level = super::DiagnosticLevel::Error;
 
-        // SAFETY: The diagnostic reference is valid, and the output struct fields will be populated with valid data.
         unsafe {
             super::LLVMRustUnpackInlineAsmDiagnostic(di, &mut level, &mut cookie, &mut message);
         }
@@ -144,7 +141,7 @@ impl InlineAsmDiagnostic {
         InlineAsmDiagnostic {
             level,
             cookie,
-            message: super::twine_to_string(message.expect("invariant: diagnostic has message")),
+            message: super::twine_to_string(message.unwrap()),
             source: None,
         }
     }
@@ -152,7 +149,6 @@ impl InlineAsmDiagnostic {
     unsafe fn unpackSrcMgr(di: &DiagnosticInfo) -> Self {
         let mut cookie = 0;
         let smdiag =
-            // SAFETY: The diagnostic reference is valid, and the output struct fields will be populated with valid data.
             unsafe { SrcMgrDiagnostic::unpack(super::LLVMRustGetSMDiagnostic(di, &mut cookie)) };
         InlineAsmDiagnostic {
             level: smdiag.level,
@@ -179,7 +175,6 @@ impl<'ll> Diagnostic<'ll> {
     pub(crate) unsafe fn unpack(di: &'ll DiagnosticInfo) -> Self {
         use super::DiagnosticKind as Dk;
 
-        // SAFETY: The diagnostic info pointer is a valid reference provided by LLVM.
         unsafe {
             let kind = super::LLVMRustGetDiagInfoKind(di);
             match kind {

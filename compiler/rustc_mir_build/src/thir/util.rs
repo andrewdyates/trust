@@ -42,7 +42,6 @@ pub(crate) fn user_args_applied_to_ty_of_hir_id<'tcx>(
             Some(user_ty)
         }
         ty::FnDef(..) => Some(user_ty),
-        // tRust: invariant — user-provided types looked up here are only recorded for ADT/ctor paths or function definitions.
         _ => bug!("ty: {:?} should not have user provided type {:?} recorded ", ty, user_ty),
     }
 }

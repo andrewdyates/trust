@@ -51,7 +51,6 @@ pub(crate) type Builder<'a, 'll, 'tcx> = GenericBuilder<'a, 'll, FullCx<'ll, 'tc
 
 impl<'a, 'll, CX: Borrow<SCx<'ll>>> Drop for GenericBuilder<'a, 'll, CX> {
     fn drop(&mut self) {
-        // SAFETY: The builder was allocated by `LLVMCreateBuilderInContext` in `with_cx` and is exclusively owned by this `GenericBuilder`. Disposing it on drop is sound because no other references to this builder exist.
         unsafe {
             llvm::LLVMDisposeBuilder(&mut *(self.llbuilder as *mut _));
         }
@@ -75,7 +74,6 @@ impl<'a, 'll> SBuilder<'a, 'll> {
             bundles.push(funclet_bundle);
         }
 
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `llfn` is a valid function pointer matching `llty`, all arguments are valid LLVM values with types matching the callee signature, and operand bundles (if any) are valid.
         let call = unsafe {
             llvm::LLVMBuildCallWithOperandBundles(
                 self.llbuilder,
@@ -95,7 +93,6 @@ impl<'a, 'll> SBuilder<'a, 'll> {
 impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     fn with_cx(scx: &'a GenericCx<'ll, CX>) -> Self {
         // Create a fresh builder from the simple context.
-        // SAFETY: `llcx` is a valid LLVM context reference owned by the enclosing `SCx`, guaranteed live for `'ll`.
         let llbuilder = unsafe { llvm::LLVMCreateBuilderInContext(scx.deref().borrow().llcx) };
         GenericBuilder { llbuilder, cx: scx }
     }
@@ -105,7 +102,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
         llfn: &'ll Value,
         name: &str,
     ) -> &'ll BasicBlock {
-        // SAFETY: `llcx` is a valid LLVM context, `llfn` is a valid function value in that context, and the name is a valid C string.
         unsafe {
             let name = SmallCStr::new(name);
             llvm::LLVMAppendBasicBlockInContext(cx.llcx(), llfn, name.as_ptr())
@@ -113,12 +109,10 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     }
 
     pub(crate) fn trunc(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid LLVM integer value, and `dest_ty` is a valid narrower integer type. The builder and operands share the same LLVM context.
         unsafe { llvm::LLVMBuildTrunc(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     pub(crate) fn bitcast(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both `val` and `dest_ty` are valid LLVM references in the same context. Caller is responsible for type compatibility.
         unsafe { llvm::LLVMBuildBitCast(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
@@ -127,7 +121,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     }
 
     pub(crate) fn ret(&mut self, v: &'ll Value) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `v` is a valid LLVM value whose type matches the enclosing function's return type.
         unsafe {
             llvm::LLVMBuildRet(self.llbuilder, v);
         }
@@ -135,7 +128,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
 
     pub(crate) fn build(cx: &'a GenericCx<'ll, CX>, llbb: &'ll BasicBlock) -> Self {
         let bx = Self::with_cx(cx);
-        // SAFETY: Both `llbuilder` and `llbb` are valid references — the builder is owned by `self` and the basic block belongs to the same LLVM module.
         unsafe {
             llvm::LLVMPositionBuilderAtEnd(bx.llbuilder, llbb);
         }
@@ -144,10 +136,9 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
 
     // The generic builder has less functionality and thus (unlike the other alloca) we can not
     // easily jump to the beginning of the function to place our allocas there. We trust the user
-    // to manually do that. tRust: known issue — (offload): improve the genericCx and add more llvm wrappers to
+    // to manually do that. FIXME(offload): improve the genericCx and add more llvm wrappers to
     // handle this.
     pub(crate) fn direct_alloca(&mut self, ty: &'ll Type, align: Align, name: &str) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `ty` is a valid LLVM type. The alloca is inserted in the current function's entry block.
         let val = unsafe {
             let alloca = llvm::LLVMBuildAlloca(self.llbuilder, ty, UNNAMED);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
@@ -155,7 +146,7 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
             llvm::LLVMBuildPointerCast(self.llbuilder, alloca, self.cx.type_ptr(), UNNAMED)
         };
         if name != "" {
-            let name = std::ffi::CString::new(name).expect("invariant: CString::new failed - input contains null byte");
+            let name = std::ffi::CString::new(name).unwrap();
             llvm::set_value_name(val, &name.as_bytes());
         }
         val
@@ -167,7 +158,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
         ptr: &'ll Value,
         indices: &[&'ll Value],
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid pointer value, `ty` is the pointee type, and all index values are valid LLVM integers.
         unsafe {
             llvm::LLVMBuildGEPWithNoWrapFlags(
                 self.llbuilder,
@@ -184,7 +174,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     pub(crate) fn store(&mut self, val: &'ll Value, ptr: &'ll Value, align: Align) -> &'ll Value {
         debug!("Store {:?} -> {:?}", val, ptr);
         assert_eq!(self.cx.type_kind(self.cx.val_ty(ptr)), TypeKind::Pointer);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid LLVM value, and `ptr` is a valid LLVM pointer value. The assertion above confirms `ptr` has pointer type.
         unsafe {
             let store = llvm::LLVMBuildStore(self.llbuilder, val, ptr);
             llvm::LLVMSetAlignment(store, align.bytes() as c_uint);
@@ -193,7 +182,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     }
 
     pub(crate) fn load(&mut self, ty: &'ll Type, ptr: &'ll Value, align: Align) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid LLVM pointer value, and `ty` specifies the expected pointee type for the typed load.
         unsafe {
             let load = llvm::LLVMBuildLoad2(self.llbuilder, ty, ptr, UNNAMED);
             llvm::LLVMSetAlignment(load, align.bytes() as c_uint);
@@ -204,7 +192,7 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
 
 /// Empty string, to be used where LLVM expects an instruction name, indicating
 /// that the instruction is to be left unnamed (i.e. numbered, in textual IR).
-// tRust: known issue — (eddyb) pass `&CStr` directly to FFI once it's a thin pointer.
+// FIXME(eddyb) pass `&CStr` directly to FFI once it's a thin pointer.
 pub(crate) const UNNAMED: *const c_char = c"".as_ptr();
 
 impl<'ll, CX: Borrow<SCx<'ll>>> BackendTypes for GenericBuilder<'_, 'll, CX> {
@@ -278,7 +266,6 @@ impl<'ll, 'tcx> Deref for Builder<'_, 'll, 'tcx> {
 macro_rules! math_builder_methods {
     ($($name:ident($($arg:ident),*) => $llvm_capi:ident),+ $(,)?) => {
         $(fn $name(&mut self, $($arg: &'ll Value),*) -> &'ll Value {
-            // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and all operand values are valid LLVM references of the correct types.
             unsafe {
                 llvm::$llvm_capi(self.llbuilder, $($arg,)* UNNAMED)
             }
@@ -289,7 +276,6 @@ macro_rules! math_builder_methods {
 macro_rules! set_math_builder_methods {
     ($($name:ident($($arg:ident),*) => ($llvm_capi:ident, $llvm_set_math:ident)),+ $(,)?) => {
         $(fn $name(&mut self, $($arg: &'ll Value),*) -> &'ll Value {
-            // SAFETY: Both `llbuilder` and the basic block are valid references in the same LLVM context.
             unsafe {
                 let instr = llvm::$llvm_capi(self.llbuilder, $($arg,)* UNNAMED);
                 llvm::$llvm_set_math(instr);
@@ -304,7 +290,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     fn build(cx: &'a CodegenCx<'ll, 'tcx>, llbb: &'ll BasicBlock) -> Self {
         let bx = Builder::with_cx(cx);
-        // SAFETY: Both `llbuilder` and `llbb` are valid references — the builder is owned by `self` and the basic block belongs to the same LLVM module.
         unsafe {
             llvm::LLVMPositionBuilderAtEnd(bx.llbuilder, llbb);
         }
@@ -316,14 +301,12 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn llbb(&self) -> &'ll BasicBlock {
-        // SAFETY: `self.llbuilder` is a valid LLVM builder that has been positioned at an insertion point.
         unsafe { llvm::LLVMGetInsertBlock(self.llbuilder) }
     }
 
     fn set_span(&mut self, _span: Span) {}
 
     fn append_block(cx: &'a CodegenCx<'ll, 'tcx>, llfn: &'ll Value, name: &str) -> &'ll BasicBlock {
-        // SAFETY: `llcx` is a valid LLVM context, `llfn` is a valid function value in that context, and the name is a valid C string.
         unsafe {
             let name = SmallCStr::new(name);
             llvm::LLVMAppendBasicBlockInContext(cx.llcx, llfn, name.as_ptr())
@@ -343,14 +326,12 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn ret(&mut self, v: &'ll Value) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `v` is a valid LLVM value whose type matches the enclosing function's return type.
         unsafe {
             llvm::LLVMBuildRet(self.llbuilder, v);
         }
     }
 
     fn br(&mut self, dest: &'ll BasicBlock) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `dest` is a valid basic block in the same function.
         unsafe {
             llvm::LLVMBuildBr(self.llbuilder, dest);
         }
@@ -362,7 +343,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         then_llbb: &'ll BasicBlock,
         else_llbb: &'ll BasicBlock,
     ) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, the condition is an i1 value, and both branch targets are valid basic blocks in the same function.
         unsafe {
             llvm::LLVMBuildCondBr(self.llbuilder, cond, then_llbb, else_llbb);
         }
@@ -375,11 +355,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         cases: impl ExactSizeIterator<Item = (u128, &'ll BasicBlock)>,
     ) {
         let switch =
-            // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `v` is a valid integer value, and `else_llbb` is a valid basic block in the same function.
             unsafe { llvm::LLVMBuildSwitch(self.llbuilder, v, else_llbb, cases.len() as c_uint) };
         for (on_val, dest) in cases {
             let on_val = self.const_uint_big(self.val_ty(v), on_val);
-            // SAFETY: `s` is a valid switch instruction, `on_val` is a valid constant matching the switch operand's type, and `dest` is a valid basic block.
             unsafe { llvm::LLVMAddCase(switch, on_val, dest) }
         }
     }
@@ -412,11 +390,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         md.push(weight(else_is_cold));
 
         let switch =
-            // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `v` is a valid integer value, and `else_llbb` is a valid basic block in the same function.
             unsafe { llvm::LLVMBuildSwitch(self.llbuilder, v, else_llbb, cases.len() as c_uint) };
         for (on_val, dest, is_cold) in cases {
             let on_val = self.const_uint_big(self.val_ty(v), on_val);
-            // SAFETY: `s` is a valid switch instruction, `on_val` is a valid constant matching the switch operand's type, and `dest` is a valid basic block.
             unsafe { llvm::LLVMAddCase(switch, on_val, dest) }
             md.push(weight(is_cold));
         }
@@ -454,7 +430,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             bundles.push(kcfi_bundle);
         }
 
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, the function, arguments, and basic block destinations are all valid LLVM references.
         let invoke = unsafe {
             llvm::LLVMBuildInvokeWithOperandBundles(
                 self.llbuilder,
@@ -476,7 +451,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn unreachable(&mut self) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point.
         unsafe {
             llvm::LLVMBuildUnreachable(self.llbuilder);
         }
@@ -515,7 +489,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn unchecked_suadd(&mut self, a: &'ll Value, b: &'ll Value) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM integer values of the same type.
         unsafe {
             let add = llvm::LLVMBuildAdd(self.llbuilder, a, b, UNNAMED);
             if llvm::LLVMIsAInstruction(add).is_some() {
@@ -526,7 +499,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         }
     }
     fn unchecked_susub(&mut self, a: &'ll Value, b: &'ll Value) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM integer values of the same type.
         unsafe {
             let sub = llvm::LLVMBuildSub(self.llbuilder, a, b, UNNAMED);
             if llvm::LLVMIsAInstruction(sub).is_some() {
@@ -537,7 +509,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         }
     }
     fn unchecked_sumul(&mut self, a: &'ll Value, b: &'ll Value) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM integer values of the same type.
         unsafe {
             let mul = llvm::LLVMBuildMul(self.llbuilder, a, b, UNNAMED);
             if llvm::LLVMIsAInstruction(mul).is_some() {
@@ -549,7 +520,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn or_disjoint(&mut self, a: &'ll Value, b: &'ll Value) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM integer values of the same type.
         unsafe {
             let or = llvm::LLVMBuildOr(self.llbuilder, a, b, UNNAMED);
 
@@ -636,12 +606,8 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     fn alloca(&mut self, size: Size, align: Align) -> &'ll Value {
         let mut bx = Builder::with_cx(self.cx);
-        // SAFETY: `llfn` is a valid LLVM function value.
         bx.position_at_start(unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) });
         let ty = self.cx().type_array(self.cx().type_i8(), size.bytes());
-        // SAFETY: The LLVM value/type references are valid for the
-        // duration of this call, and the operation is well-defined
-        // for the given inputs per LLVM API documentation.
         unsafe {
             let alloca = llvm::LLVMBuildAlloca(bx.llbuilder, ty, UNNAMED);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
@@ -652,7 +618,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     fn scalable_alloca(&mut self, elt: u64, align: Align, element_ty: Ty<'_>) -> Self::Value {
         let mut bx = Builder::with_cx(self.cx);
-        // SAFETY: `llfn` is a valid LLVM function value.
         bx.position_at_start(unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) });
         let llvm_ty = match element_ty.kind() {
             ty::Bool => bx.type_i1(),
@@ -662,9 +627,8 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             _ => unreachable!("scalable vectors can only contain a bool, int, uint or float"),
         };
 
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `ty` is a valid LLVM type. The alloca is inserted in the current function's entry block.
         unsafe {
-            let ty = llvm::LLVMScalableVectorType(llvm_ty, elt.try_into().expect("invariant: value fits in target type"));
+            let ty = llvm::LLVMScalableVectorType(llvm_ty, elt.try_into().unwrap());
             let alloca = llvm::LLVMBuildAlloca(&bx.llbuilder, ty, UNNAMED);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
             alloca
@@ -672,7 +636,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn load(&mut self, ty: &'ll Type, ptr: &'ll Value, align: Align) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid LLVM pointer value, and `ty` specifies the expected pointee type for the typed load.
         unsafe {
             let load = llvm::LLVMBuildLoad2(self.llbuilder, ty, ptr, UNNAMED);
             let align = align.min(self.cx().tcx.sess.target.max_reliable_alignment());
@@ -682,7 +645,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn volatile_load(&mut self, ty: &'ll Type, ptr: &'ll Value) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid LLVM pointer value, and `ty` specifies the expected pointee type for the typed load.
         unsafe {
             let load = llvm::LLVMBuildLoad2(self.llbuilder, ty, ptr, UNNAMED);
             llvm::LLVMSetVolatile(load, llvm::TRUE);
@@ -697,7 +659,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         order: rustc_middle::ty::AtomicOrdering,
         size: Size,
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid LLVM pointer value, and `ty` specifies the expected pointee type for the typed load.
         unsafe {
             let load = llvm::LLVMBuildLoad2(self.llbuilder, ty, ptr, UNNAMED);
             // Set atomic ordering
@@ -764,7 +725,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         }
 
         let val = if let Some(_) = place.val.llextra {
-            // tRust: known issue — Merge with the `else` below?
+            // FIXME: Merge with the `else` below?
             OperandValue::Ref(place.val)
         } else if place.layout.is_llvm_immediate() {
             let mut const_llval = None;
@@ -866,7 +827,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     ) -> &'ll Value {
         debug!("Store {:?} -> {:?} ({:?})", val, ptr, flags);
         assert_eq!(self.cx.type_kind(self.cx.val_ty(ptr)), TypeKind::Pointer);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid LLVM value, and `ptr` is a valid LLVM pointer value. The assertion above confirms `ptr` has pointer type.
         unsafe {
             let store = llvm::LLVMBuildStore(self.llbuilder, val, ptr);
             let align = align.min(self.cx().tcx.sess.target.max_reliable_alignment());
@@ -915,7 +875,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     ) {
         debug!("Store {:?} -> {:?}", val, ptr);
         assert_eq!(self.cx.type_kind(self.cx.val_ty(ptr)), TypeKind::Pointer);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid LLVM value, and `ptr` is a valid LLVM pointer value. The assertion above confirms `ptr` has pointer type.
         unsafe {
             let store = llvm::LLVMBuildStore(self.llbuilder, val, ptr);
             // Set atomic ordering
@@ -926,7 +885,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn gep(&mut self, ty: &'ll Type, ptr: &'ll Value, indices: &[&'ll Value]) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid pointer value, `ty` is the pointee type, and all index values are valid LLVM integers.
         unsafe {
             llvm::LLVMBuildGEPWithNoWrapFlags(
                 self.llbuilder,
@@ -946,7 +904,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         ptr: &'ll Value,
         indices: &[&'ll Value],
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid pointer value, `ty` is the pointee type, and all index values are valid LLVM integers.
         unsafe {
             llvm::LLVMBuildGEPWithNoWrapFlags(
                 self.llbuilder,
@@ -966,7 +923,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         ptr: &'ll Value,
         indices: &[&'ll Value],
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ptr` is a valid pointer value, `ty` is the pointee type, and all index values are valid LLVM integers.
         unsafe {
             llvm::LLVMBuildGEPWithNoWrapFlags(
                 self.llbuilder,
@@ -982,7 +938,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     /* Casts */
     fn trunc(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid LLVM integer value, and `dest_ty` is a valid narrower integer type. The builder and operands share the same LLVM context.
         unsafe { llvm::LLVMBuildTrunc(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
@@ -990,7 +945,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         debug_assert_ne!(self.val_ty(val), dest_ty);
 
         let trunc = self.trunc(val, dest_ty);
-        // SAFETY: The value is a valid LLVM reference. `LLVMIsAInstruction` returns null if the value is not an instruction, which is handled by the caller.
         unsafe {
             if llvm::LLVMIsAInstruction(trunc).is_some() {
                 llvm::LLVMSetNUW(trunc, TRUE);
@@ -1003,7 +957,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         debug_assert_ne!(self.val_ty(val), dest_ty);
 
         let trunc = self.trunc(val, dest_ty);
-        // SAFETY: The value is a valid LLVM reference. `LLVMIsAInstruction` returns null if the value is not an instruction, which is handled by the caller.
         unsafe {
             if llvm::LLVMIsAInstruction(trunc).is_some() {
                 llvm::LLVMSetNSW(trunc, TRUE);
@@ -1013,7 +966,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn sext(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid integer value, and `dest_ty` is a wider integer type.
         unsafe { llvm::LLVMBuildSExt(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
@@ -1054,7 +1006,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
                 }
             }
         }
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid floating-point value, and `dest_ty` is a valid integer type.
         unsafe { llvm::LLVMBuildFPToUI(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
@@ -1074,67 +1025,55 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
                 }
             }
         }
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid floating-point value, and `dest_ty` is a valid integer type.
         unsafe { llvm::LLVMBuildFPToSI(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn uitofp(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid unsigned integer value, and `dest_ty` is a valid floating-point type.
         unsafe { llvm::LLVMBuildUIToFP(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn sitofp(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid signed integer value, and `dest_ty` is a valid floating-point type.
         unsafe { llvm::LLVMBuildSIToFP(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn fptrunc(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid floating-point value, and `dest_ty` is a narrower floating-point type.
         unsafe { llvm::LLVMBuildFPTrunc(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn fpext(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid floating-point value, and `dest_ty` is a wider floating-point type.
         unsafe { llvm::LLVMBuildFPExt(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn ptrtoint(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid pointer value, and `dest_ty` is a valid integer type.
         unsafe { llvm::LLVMBuildPtrToInt(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn inttoptr(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid integer value, and `dest_ty` is a valid pointer type.
         unsafe { llvm::LLVMBuildIntToPtr(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn bitcast(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both `val` and `dest_ty` are valid LLVM references in the same context. Caller is responsible for type compatibility.
         unsafe { llvm::LLVMBuildBitCast(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn intcast(&mut self, val: &'ll Value, dest_ty: &'ll Type, is_signed: bool) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid integer value, and `dest_ty` is a valid integer type.
         unsafe {
             llvm::LLVMBuildIntCast2(self.llbuilder, val, dest_ty, is_signed.to_llvm_bool(), UNNAMED)
         }
     }
 
     fn pointercast(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid pointer value, and `dest_ty` is a valid pointer type.
         unsafe { llvm::LLVMBuildPointerCast(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     /* Comparisons */
     fn icmp(&mut self, op: IntPredicate, lhs: &'ll Value, rhs: &'ll Value) -> &'ll Value {
         let op = llvm::IntPredicate::from_generic(op);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM integer or pointer values of compatible types.
         unsafe { llvm::LLVMBuildICmp(self.llbuilder, op as c_uint, lhs, rhs, UNNAMED) }
     }
 
     fn fcmp(&mut self, op: RealPredicate, lhs: &'ll Value, rhs: &'ll Value) -> &'ll Value {
         let op = llvm::RealPredicate::from_generic(op);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM floating-point values of the same type.
         unsafe { llvm::LLVMBuildFCmp(self.llbuilder, op as c_uint, lhs, rhs, UNNAMED) }
     }
 
@@ -1164,7 +1103,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         assert!(!flags.contains(MemFlags::NONTEMPORAL), "non-temporal memcpy not supported");
         let size = self.intcast(size, self.type_isize(), false);
         let is_volatile = flags.contains(MemFlags::VOLATILE);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, both destination and source pointers are valid, and size and alignment values are correct.
         let memcpy = unsafe {
             llvm::LLVMRustBuildMemCpy(
                 self.llbuilder,
@@ -1199,7 +1137,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         assert!(!flags.contains(MemFlags::NONTEMPORAL), "non-temporal memmove not supported");
         let size = self.intcast(size, self.type_isize(), false);
         let is_volatile = flags.contains(MemFlags::VOLATILE);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, both destination and source pointers are valid, and size and alignment values are correct.
         unsafe {
             llvm::LLVMRustBuildMemMove(
                 self.llbuilder,
@@ -1223,7 +1160,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     ) {
         assert!(!flags.contains(MemFlags::NONTEMPORAL), "non-temporal memset not supported");
         let is_volatile = flags.contains(MemFlags::VOLATILE);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, the pointer, fill byte, size, and alignment values are valid.
         unsafe {
             llvm::LLVMRustBuildMemSet(
                 self.llbuilder,
@@ -1242,22 +1178,18 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         then_val: &'ll Value,
         else_val: &'ll Value,
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `cond` is a valid i1 value, and both `then_val` and `else_val` are valid LLVM values of the same type.
         unsafe { llvm::LLVMBuildSelect(self.llbuilder, cond, then_val, else_val, UNNAMED) }
     }
 
     fn va_arg(&mut self, list: &'ll Value, ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `list` is a valid va_list pointer, and `ty` is the expected argument type.
         unsafe { llvm::LLVMBuildVAArg(self.llbuilder, list, ty, UNNAMED) }
     }
 
     fn extract_element(&mut self, vec: &'ll Value, idx: &'ll Value) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `vec` is a valid vector value, and `idx` is a valid index.
         unsafe { llvm::LLVMBuildExtractElement(self.llbuilder, vec, idx, UNNAMED) }
     }
 
     fn vector_splat(&mut self, num_elts: usize, elt: &'ll Value) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM type.
         unsafe {
             let elt_ty = self.cx.val_ty(elt);
             let undef = llvm::LLVMGetUndef(self.type_vector(elt_ty, num_elts as u64));
@@ -1269,18 +1201,15 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     fn extract_value(&mut self, agg_val: &'ll Value, idx: u64) -> &'ll Value {
         assert_eq!(idx as c_uint as u64, idx);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `agg_val` is a valid aggregate value, and `idx` is within the aggregate's field count.
         unsafe { llvm::LLVMBuildExtractValue(self.llbuilder, agg_val, idx as c_uint, UNNAMED) }
     }
 
     fn insert_value(&mut self, agg_val: &'ll Value, elt: &'ll Value, idx: u64) -> &'ll Value {
         assert_eq!(idx as c_uint as u64, idx);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `agg_val` is a valid aggregate, `elt` matches the field type at `idx`, and `idx` is within bounds.
         unsafe { llvm::LLVMBuildInsertValue(self.llbuilder, agg_val, elt, idx as c_uint, UNNAMED) }
     }
 
     fn set_personality_fn(&mut self, personality: &'ll Value) {
-        // SAFETY: The function and personality function are valid LLVM references.
         unsafe {
             llvm::LLVMSetPersonalityFn(self.llfn(), personality);
         }
@@ -1289,7 +1218,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     fn cleanup_landing_pad(&mut self, pers_fn: &'ll Value) -> (&'ll Value, &'ll Value) {
         let ty = self.type_struct(&[self.type_ptr(), self.type_i32()], false);
         let landing_pad = self.landing_pad(ty, pers_fn, 0);
-        // SAFETY: The landing pad instruction is a valid LLVM reference.
         unsafe {
             llvm::LLVMSetCleanup(landing_pad, llvm::TRUE);
         }
@@ -1307,14 +1235,12 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         let mut exn = self.const_poison(ty);
         exn = self.insert_value(exn, exn0, 0);
         exn = self.insert_value(exn, exn1, 1);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `exn` is a valid exception value from a landing pad.
         unsafe {
             llvm::LLVMBuildResume(self.llbuilder, exn);
         }
     }
 
     fn cleanup_pad(&mut self, parent: Option<&'ll Value>, args: &[&'ll Value]) -> Funclet<'ll> {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `parent` is a valid parent pad (or null for top-level).
         let ret = unsafe {
             llvm::LLVMBuildCleanupPad(
                 self.llbuilder,
@@ -1328,7 +1254,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn cleanup_ret(&mut self, funclet: &Funclet<'ll>, unwind: Option<&'ll BasicBlock>) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `funclet` is a valid cleanup pad, and `unwind` is a valid unwind destination (or null).
         unsafe {
             llvm::LLVMBuildCleanupRet(self.llbuilder, funclet.cleanuppad(), unwind)
                 .expect("LLVM does not have support for cleanupret");
@@ -1336,7 +1261,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn catch_pad(&mut self, parent: &'ll Value, args: &[&'ll Value]) -> Funclet<'ll> {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `parent` is a valid catch-switch, and args are valid LLVM values.
         let ret = unsafe {
             llvm::LLVMBuildCatchPad(
                 self.llbuilder,
@@ -1355,7 +1279,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         unwind: Option<&'ll BasicBlock>,
         handlers: &[&'ll BasicBlock],
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `parent` is a valid parent pad (or null for top-level), and `unwind` is a valid unwind destination (or null).
         let ret = unsafe {
             llvm::LLVMBuildCatchSwitch(
                 self.llbuilder,
@@ -1367,7 +1290,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         };
         let ret = ret.expect("LLVM does not have support for catchswitch");
         for handler in handlers {
-            // SAFETY: The catch-switch instruction and handler basic block are valid LLVM references in the same function.
             unsafe {
                 llvm::LLVMAddHandler(ret, handler);
             }
@@ -1389,7 +1311,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         failure_order: rustc_middle::ty::AtomicOrdering,
         weak: bool,
     ) -> (&'ll Value, &'ll Value) {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `dst` is a valid pointer to an atomic-capable type, `cmp` and `src` match the pointee type, and both orderings are valid atomic memory orderings.
         unsafe {
             let value = llvm::LLVMBuildAtomicCmpXchg(
                 self.llbuilder,
@@ -1415,10 +1336,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         order: rustc_middle::ty::AtomicOrdering,
         ret_ptr: bool,
     ) -> &'ll Value {
-        // tRust: known issue — If `ret_ptr` is true and `src` is not a pointer, we *should* tell LLVM that the
+        // FIXME: If `ret_ptr` is true and `src` is not a pointer, we *should* tell LLVM that the
         // LHS is a pointer and the operation should be provenance-preserving, but LLVM does not
         // currently support that (https://github.com/llvm/llvm-project/issues/120837).
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, the pointer and value operands are valid, and the ordering is a valid atomic memory ordering.
         let mut res = unsafe {
             llvm::LLVMBuildAtomicRMW(
                 self.llbuilder,
@@ -1444,7 +1364,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             SynchronizationScope::SingleThread => true,
             SynchronizationScope::CrossThread => false,
         };
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and the ordering is a valid atomic memory ordering.
         unsafe {
             llvm::LLVMBuildFence(
                 self.llbuilder,
@@ -1495,7 +1414,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             bundles.push(kcfi_bundle);
         }
 
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `llfn` is a valid function pointer matching `llty`, all arguments are valid LLVM values with types matching the callee signature, and operand bundles (if any) are valid.
         let call = unsafe {
             llvm::LLVMBuildCallWithOperandBundles(
                 self.llbuilder,
@@ -1562,7 +1480,6 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn zext(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `val` is a valid integer value, and `dest_ty` is a wider integer type.
         unsafe { llvm::LLVMBuildZExt(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
@@ -1591,14 +1508,12 @@ impl<'ll> StaticBuilderMethods for Builder<'_, 'll, '_> {
 
 impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
     pub(crate) fn llfn(&self) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is a valid builder, and the basic block is a valid reference in the same function.
         unsafe { llvm::LLVMGetBasicBlockParent(self.llbb()) }
     }
 }
 
 impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     fn position_at_start(&mut self, llbb: &'ll BasicBlock) {
-        // SAFETY: `self.llbuilder` is a valid builder, and the basic block is a valid reference in the same function.
         unsafe {
             llvm::LLVMRustPositionBuilderAtStart(self.llbuilder, llbb);
         }
@@ -1704,7 +1619,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         elt: &'ll Value,
         idx: &'ll Value,
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `vec` is a valid vector value, `elt` matches the vector element type, and `idx` is a valid index.
         unsafe { llvm::LLVMBuildInsertElement(self.llbuilder, vec, elt, idx, UNNAMED) }
     }
 
@@ -1714,7 +1628,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         v2: &'ll Value,
         mask: &'ll Value,
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, both vectors have compatible types, and the mask specifies valid element indices.
         unsafe { llvm::LLVMBuildShuffleVector(self.llbuilder, v1, v2, mask, UNNAMED) }
     }
 
@@ -1729,7 +1642,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         acc: &'ll Value,
         src: &'ll Value,
     ) -> &'ll Value {
-        // SAFETY: The instruction is a valid LLVM floating-point arithmetic instruction that supports fast-math flags.
         unsafe {
             let instr =
                 self.call_intrinsic("llvm.vector.reduce.fadd", &[self.val_ty(src)], &[acc, src]);
@@ -1742,7 +1654,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         acc: &'ll Value,
         src: &'ll Value,
     ) -> &'ll Value {
-        // SAFETY: The instruction is a valid LLVM floating-point arithmetic instruction that supports fast-math flags.
         unsafe {
             let instr =
                 self.call_intrinsic("llvm.vector.reduce.fmul", &[self.val_ty(src)], &[acc, src]);
@@ -1788,7 +1699,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
 }
 impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     pub(crate) fn add_clause(&mut self, landing_pad: &'ll Value, clause: &'ll Value) {
-        // SAFETY: The landing pad instruction and clause value are valid LLVM references in the same module.
         unsafe {
             llvm::LLVMAddClause(landing_pad, clause);
         }
@@ -1799,7 +1709,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
         funclet: &Funclet<'ll>,
         unwind: &'ll BasicBlock,
     ) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `pad` is a valid catch pad, and `unwind` is a valid basic block.
         let ret = unsafe { llvm::LLVMBuildCatchRet(self.llbuilder, funclet.cleanuppad(), unwind) };
         ret.expect("LLVM does not have support for catchret")
     }
@@ -1846,7 +1755,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     }
 
     pub(crate) fn va_arg(&mut self, list: &'ll Value, ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `list` is a valid va_list pointer, and `ty` is the expected argument type.
         unsafe { llvm::LLVMBuildVAArg(self.llbuilder, list, ty, UNNAMED) }
     }
 }
@@ -1875,7 +1783,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         if crate::llvm_util::get_version() >= (22, 0, 0) {
             // LLVM 22 requires the lifetime intrinsic to act directly on the alloca,
             // there can't be an addrspacecast in between.
-            // SAFETY: The value is a valid LLVM pointer value.
             let ptr = unsafe { llvm::LLVMRustStripPointerCasts(ptr) };
             self.call_intrinsic(intrinsic, &[self.val_ty(ptr)], &[ptr]);
         } else {
@@ -1891,11 +1798,7 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
         bbs: &[&'ll BasicBlock],
     ) -> &'ll Value {
         assert_eq!(vals.len(), bbs.len());
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and `ty` is a valid LLVM type for the PHI node.
         let phi = unsafe { llvm::LLVMBuildPhi(self.llbuilder, ty, UNNAMED) };
-        // SAFETY: The LLVM value/type references are valid for the
-        // duration of this call, and the operation is well-defined
-        // for the given inputs per LLVM API documentation.
         unsafe {
             llvm::LLVMAddIncoming(phi, vals.as_ptr(), bbs.as_ptr(), vals.len() as c_uint);
             phi
@@ -1903,7 +1806,6 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
     }
 
     fn add_incoming_to_phi(&mut self, phi: &'ll Value, val: &'ll Value, bb: &'ll BasicBlock) {
-        // SAFETY: The PHI node, incoming values, and basic blocks are all valid LLVM references in the same function. The count matches the array lengths.
         unsafe {
             llvm::LLVMAddIncoming(phi, &val, &bb, 1 as c_uint);
         }
@@ -1920,7 +1822,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         // LLVMBuildLandingPad requires the argument to be a Function (as of LLVM 12). The
         // personality lives on the parent function anyway.
         self.set_personality_fn(pers_fn);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `ty` is the landing pad's result type, and `pers_fn` is a valid personality function.
         unsafe {
             llvm::LLVMBuildLandingPad(self.llbuilder, ty, None, num_clauses as c_uint, UNNAMED)
         }
@@ -1956,7 +1857,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
             bundles.push(kcfi_bundle);
         }
 
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, the function, arguments, and branch destinations are all valid LLVM references.
         let callbr = unsafe {
             llvm::LLVMBuildCallBr(
                 self.llbuilder,
@@ -1986,7 +1886,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         instance: Option<Instance<'tcx>>,
         llfn: &'ll Value,
     ) {
-        // SAFETY: The value is a valid LLVM reference.
         let is_indirect_call = unsafe { llvm::LLVMRustIsNonGVFunctionPointerTy(llfn) };
         if self.tcx.sess.is_sanitizer_cfi_enabled()
             && let Some(fn_abi) = fn_abi
@@ -2045,7 +1944,6 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         instance: Option<Instance<'tcx>>,
         llfn: &'ll Value,
     ) -> Option<llvm::OperandBundleBox<'ll>> {
-        // SAFETY: The value is a valid LLVM reference.
         let is_indirect_call = unsafe { llvm::LLVMRustIsNonGVFunctionPointerTy(llfn) };
         let kcfi_bundle = if self.tcx.sess.is_sanitizer_kcfi_enabled()
             && let Some(fn_abi) = fn_abi

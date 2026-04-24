@@ -375,7 +375,7 @@ impl DepGraphData {
     /// in untracked dependencies which may lead to ICEs as nodes are
     /// incorrectly marked green.
     ///
-    /// tRust: known issue — This could perhaps return a `WithDepNode` to ensure that the
+    /// FIXME: This could perhaps return a `WithDepNode` to ensure that the
     /// user of this function actually performs the read.
     fn with_anon_task_inner<'tcx, OP, R>(
         &self,
@@ -569,7 +569,7 @@ impl DepGraph {
     /// So the unchanged replay will mark the caller query before trying to mark this one.
     /// If there is a change to report, the caller query will be re-executed before this one.
     ///
-    /// tRust: known issue — If the code is changed enough for this node to be marked before requiring the
+    /// FIXME: If the code is changed enough for this node to be marked before requiring the
     /// caller's node, we suppose that those changes will be enough to mark this node red and
     /// force a recomputation using the "normal" way.
     pub fn with_feed_task<'tcx, R>(
@@ -722,9 +722,9 @@ impl DepGraphData {
                 .query_system
                 .on_disk_cache
                 .as_ref()
-                .expect("invariant: dep node exists in graph")
+                .unwrap()
                 .load_side_effect(tcx, prev_index)
-                .expect("invariant: dep node exists in graph");
+                .unwrap();
 
             // Use `send_and_color` as `promote_node_and_deps_to_current` expects all
             // green dependencies. `send_and_color` will also prevent multiple nodes
@@ -831,11 +831,11 @@ impl DepGraph {
     /// Access the map of work-products created during the cached run. Only
     /// used during saving of the dep-graph.
     pub fn previous_work_products(&self) -> &WorkProductMap {
-        &self.data.as_ref().expect("invariant: value is Some").previous_work_products
+        &self.data.as_ref().unwrap().previous_work_products
     }
 
     pub fn debug_was_loaded_from_disk(&self, dep_node: DepNode) -> bool {
-        self.data.as_ref().expect("invariant: value is Some").debug_loaded_from_disk.lock().contains(&dep_node)
+        self.data.as_ref().unwrap().debug_loaded_from_disk.lock().contains(&dep_node)
     }
 
     pub fn debug_dep_kind_was_loaded_from_disk(&self, dep_kind: DepKind) -> bool {
@@ -843,7 +843,7 @@ impl DepGraph {
         #[allow(rustc::potential_query_instability)]
         self.data
             .as_ref()
-            .expect("invariant: dep node exists in graph")
+            .unwrap()
             .debug_loaded_from_disk
             .lock()
             .iter()
@@ -1038,7 +1038,7 @@ impl DepGraph {
     pub fn exec_cache_promotions<'tcx>(&self, tcx: TyCtxt<'tcx>) {
         let _prof_timer = tcx.prof.generic_activity("incr_comp_query_cache_promotion");
 
-        let data = self.data.as_ref().expect("invariant: value is Some");
+        let data = self.data.as_ref().unwrap();
         for prev_index in data.colors.values.indices() {
             match data.colors.get(prev_index) {
                 DepNodeColor::Green(_) => {
@@ -1208,7 +1208,7 @@ impl CurrentDepGraph {
         CurrentDepGraph {
             encoder: GraphEncoder::new(session, encoder, prev_graph_node_count, previous),
             anon_node_to_index: ShardedHashMap::with_capacity(
-                // tRust: known issue — The count estimate is off as anon nodes are only a portion of the nodes.
+                // FIXME: The count estimate is off as anon nodes are only a portion of the nodes.
                 new_node_count_estimate / sharded::shards(),
             ),
             anon_id_seed,
@@ -1438,7 +1438,7 @@ pub(super) enum TrySetColorResult {
 #[inline(never)]
 #[cold]
 pub(crate) fn print_markframe_trace(graph: &DepGraph, frame: &MarkFrame<'_>) {
-    let data = graph.data.as_ref().expect("invariant: value is Some");
+    let data = graph.data.as_ref().unwrap();
 
     eprintln!("there was a panic while trying to force a dep node");
     eprintln!("try_mark_green dep node stack:");

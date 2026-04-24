@@ -38,12 +38,7 @@ enum Inserted<'tcx> {
 impl<'tcx> Children {
     /// Insert an impl into this set of children without comparing to any existing impls.
     fn insert_blindly(&mut self, tcx: TyCtxt<'tcx>, impl_def_id: DefId) {
-        // tRust: guard against inherent impls reaching specialization graph (rust-lang#155369)
-        let Some(trait_ref) = tcx.impl_opt_trait_ref(impl_def_id) else {
-            debug!("insert_blindly: impl_def_id={:?} is not a trait impl, skipping", impl_def_id);
-            return;
-        };
-        let trait_ref = trait_ref.skip_binder();
+        let trait_ref = tcx.impl_trait_ref(impl_def_id).skip_binder();
         if let Some(st) =
             fast_reject::simplify_type(tcx, trait_ref.self_ty(), TreatParams::InstantiateWithInfer)
         {
@@ -65,13 +60,13 @@ impl<'tcx> Children {
             fast_reject::simplify_type(tcx, trait_ref.self_ty(), TreatParams::InstantiateWithInfer)
         {
             debug!("remove_existing: impl_def_id={:?} st={:?}", impl_def_id, st);
-            vec = self.non_blanket_impls.get_mut(&st).expect("invariant: index/key is valid");
+            vec = self.non_blanket_impls.get_mut(&st).unwrap();
         } else {
             debug!("remove_existing: impl_def_id={:?} st=None", impl_def_id);
             vec = &mut self.blanket_impls;
         }
 
-        let index = vec.iter().position(|d| *d == impl_def_id).expect("invariant: element exists in collection");
+        let index = vec.iter().position(|d| *d == impl_def_id).unwrap();
         vec.remove(index);
     }
 
@@ -97,7 +92,7 @@ impl<'tcx> Children {
             debug!(?possible_sibling);
 
             let create_overlap_error = |overlap: traits::coherence::OverlapResult<'tcx>| {
-                let trait_ref = overlap.impl_header.trait_ref.expect("invariant: value is present");
+                let trait_ref = overlap.impl_header.trait_ref.unwrap();
                 let self_ty = trait_ref.self_ty();
 
                 OverlapError {
@@ -246,7 +241,7 @@ impl<'tcx> Graph {
     ) -> Result<Option<FutureCompatOverlapError<'tcx>>, OverlapError<'tcx>> {
         assert!(impl_def_id.is_local());
 
-        // tRust: known issue — use `EarlyBinder` in `self.children`
+        // FIXME: use `EarlyBinder` in `self.children`
         let trait_ref = tcx.impl_trait_ref(impl_def_id).skip_binder();
         let trait_def_id = trait_ref.def_id;
 
@@ -307,7 +302,7 @@ impl<'tcx> Graph {
 
                     // Adjust P's list of children: remove G and then add N.
                     {
-                        let siblings = self.children.get_mut(&parent).expect("invariant: index/key is valid");
+                        let siblings = self.children.get_mut(&parent).unwrap();
                         for &grand_child_to_be in &grand_children_to_be {
                             siblings.remove_existing(tcx, grand_child_to_be);
                         }
@@ -342,7 +337,6 @@ impl<'tcx> Graph {
     /// Insert cached metadata mapping from a child impl back to its parent.
     fn record_impl_from_cstore(&mut self, tcx: TyCtxt<'tcx>, parent: DefId, child: DefId) {
         if self.parent.insert(child, parent).is_some() {
-            // tRust: invariant — When recording an impl from the crate store, information about its parent \ was already present
             bug!(
                 "When recording an impl from the crate store, information about its parent \
                  was already present."
@@ -407,7 +401,6 @@ pub(crate) fn assoc_def(
         // could only arise through a compiler bug --
         // if the user wrote a bad item name, it
         // should have failed during HIR ty lowering.
-        // tRust: invariant — No associated type `` for
         bug!(
             "No associated type `{}` for {}",
             tcx.item_name(assoc_def_id),

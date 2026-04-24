@@ -16,11 +16,7 @@ pub enum CompositionError {
     /// The two certificates have incompatible assumptions
     /// (e.g., contradictory preconditions on shared variables).
     #[error("incompatible assumptions between {cert_a} and {cert_b}: {detail}")]
-    IncompatibleAssumptions {
-        cert_a: String,
-        cert_b: String,
-        detail: String,
-    },
+    IncompatibleAssumptions { cert_a: String, cert_b: String, detail: String },
 
     /// Composing these certificates would create a circular dependency.
     #[error("circular dependency detected: {cycle}")]
@@ -36,10 +32,7 @@ pub enum CompositionError {
 
     /// Cannot strengthen: the certificate does not prove the stronger property.
     #[error("strengthening check failed: `{target_property}` is not proved by {cert_id}")]
-    StrengtheningFailed {
-        cert_id: String,
-        target_property: String,
-    },
+    StrengtheningFailed { cert_id: String, target_property: String },
 
     /// Generic composition failure.
     #[error("composition failed: {reason}")]
@@ -91,9 +84,7 @@ pub struct FunctionStrength {
 
 impl From<CompositionError> for CertError {
     fn from(e: CompositionError) -> Self {
-        CertError::VerificationFailed {
-            reason: e.to_string(),
-        }
+        CertError::VerificationFailed { reason: e.to_string() }
     }
 }
 

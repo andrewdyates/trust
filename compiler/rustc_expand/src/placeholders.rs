@@ -235,7 +235,7 @@ impl PlaceholderExpander {
     }
 
     fn remove(&mut self, id: ast::NodeId) -> AstFragment {
-        self.expanded_fragments.remove(&id).expect("invariant: expanded_fragments contains id, inserted during expansion") // tRust:
+        self.expanded_fragments.remove(&id).unwrap()
     }
 }
 
@@ -392,7 +392,7 @@ impl MutVisitor for PlaceholderExpander {
             // If it does have a semicolon, then 'parse' the trailing semicolon
             // from the invocation as a new StmtKind::Empty
 
-            // tRust: known issue —: We will need to preserve the original semicolon token and
+            // FIXME: We will need to preserve the original semicolon token and
             // span as part of #15701
             let empty_stmt =
                 ast::Stmt { id: ast::DUMMY_NODE_ID, kind: ast::StmtKind::Empty, span: DUMMY_SP };

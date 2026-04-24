@@ -265,7 +265,7 @@ fn parse_cgu_fields<S: Stage>(
         };
 
         if res.is_some() {
-            cx.duplicate_key(arg.span(), arg.ident().expect("invariant: arg has an ident because we matched on it above").name); // tRust: unwrap -> expect
+            cx.duplicate_key(arg.span(), arg.ident().unwrap().name);
             continue;
         }
 
@@ -342,7 +342,7 @@ impl<S: Stage> AttributeParser<S> for RustcCguTestAttributeParser {
             |this, cx, args| {
                 this.items.extend(parse_cgu_fields(cx, args, true).map(|(cfg, module, kind)| {
                     // unwrap ok because if not given, we return None in `parse_cgu_fields`.
-                    (cx.attr_span, CguFields::ExpectedCguReuse { cfg, module, kind: kind.expect("invariant: parse_cgu_fields returns None if kind is missing when accepts_kind is true") }) // tRust: unwrap -> expect
+                    (cx.attr_span, CguFields::ExpectedCguReuse { cfg, module, kind: kind.unwrap() })
                 }));
             },
         ),
@@ -478,7 +478,7 @@ impl<S: Stage> SingleAttributeParser<S> for RustcNeverTypeOptionsParser {
             };
 
             if res.is_some() {
-                cx.duplicate_key(meta.span(), meta.ident().expect("invariant: meta has an ident because we matched on it above").name); // tRust: unwrap -> expect
+                cx.duplicate_key(meta.span(), meta.ident().unwrap().name);
                 continue;
             }
 

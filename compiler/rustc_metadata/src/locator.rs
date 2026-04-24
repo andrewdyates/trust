@@ -501,18 +501,18 @@ impl<'a> CrateLocator<'a> {
         // libraries or not.
         match libraries.len() {
             0 => Ok(None),
-            1 => Ok(Some(libraries.into_iter().next().expect("invariant: libraries.len() == 1").1)), // tRust: unwrap→expect
+            1 => Ok(Some(libraries.into_iter().next().unwrap().1)),
             _ => {
                 let mut candidates: Vec<PathBuf> = libraries
                     .into_values()
-                    .map(|lib| lib.source.paths().next().expect("invariant: library source has at least one path").clone()) // tRust: unwrap→expect
+                    .map(|lib| lib.source.paths().next().unwrap().clone())
                     .collect();
                 candidates.sort();
 
                 Err(CrateError::MultipleCandidates(
                     self.crate_name,
                     // these are the same for all candidates
-                    get_flavor_from_path(candidates.first().expect("invariant: candidates is non-empty in multi-candidate branch")), // tRust: unwrap→expect
+                    get_flavor_from_path(candidates.first().unwrap()),
                     candidates,
                 ))
             }
@@ -661,7 +661,7 @@ impl<'a> CrateLocator<'a> {
                         candidates,
                     ));
                 }
-                err_data = Some(vec![slot.take().expect("invariant: slot contains a value when err_data is None").2]); // tRust: unwrap→expect
+                err_data = Some(vec![slot.take().unwrap().2]);
             }
             if let Some(candidates) = &mut err_data {
                 candidates.push(lib);
@@ -845,9 +845,9 @@ fn get_metadata_section<'p>(
                 }
             };
 
-            let crate_name = crate_name.expect("invariant: crate_name was extracted from filename"); // tRust: unwrap→expect
+            let crate_name = crate_name.unwrap();
             debug!("compiling {}", filename.display());
-            // tRust: known issue — This will need to be done either within the current compiler session or
+            // FIXME: This will need to be done either within the current compiler session or
             // as a separate compiler session in the same process.
             let res = std::process::Command::new(compiler)
                 .arg(&filename)
@@ -939,8 +939,6 @@ fn get_rmeta_metadata_section<'a, 'p>(filename: &'p Path) -> Result<OwnedSlice, 
             filename.display()
         ))
     })?;
-    // SAFETY: The file is valid and remains open for the duration of
-    // the mapping. The mapped memory is only used for reading.
     let mmap = unsafe { Mmap::map(file) };
     let mmap = mmap.map_err(|_| {
         MetadataError::LoadFailure(format!(
@@ -969,7 +967,7 @@ pub fn list_file_metadata(
 }
 
 fn get_flavor_from_path(path: &Path) -> CrateFlavor {
-    let filename = path.file_name().expect("invariant: crate path has a filename").to_str().expect("invariant: crate filename is valid UTF-8"); // tRust: unwrap→expect
+    let filename = path.file_name().unwrap().to_str().unwrap();
 
     if filename.ends_with(".rlib") {
         CrateFlavor::Rlib

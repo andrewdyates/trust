@@ -1,7 +1,7 @@
 //! This is in essence an (improved) duplicate of `rustc_ast/attr/mod.rs`.
 //! That module is intended to be deleted in its entirety.
 //!
-//! tRust: known issue — (jdonszelmann) delete `rustc_ast/attr/mod.rs`
+//! FIXME(jdonszelmann): delete `rustc_ast/attr/mod.rs`
 
 use std::borrow::Borrow;
 use std::fmt::{Debug, Display};
@@ -58,7 +58,7 @@ impl<P: Borrow<Path>> PathParser<P> {
     }
 
     pub fn word(&self) -> Option<Ident> {
-        (self.len() == 1).then(|| **self.segments().next().as_ref().expect("invariant: len==1 guarantees at least one segment")) // tRust: unwrap -> expect
+        (self.len() == 1).then(|| **self.segments().next().as_ref().unwrap())
     }
 
     pub fn word_sym(&self) -> Option<Symbol> {
@@ -496,7 +496,7 @@ impl<'a, 'sess> MetaItemListParserContext<'a, 'sess> {
                                 }
                                 .parse_meta_item()
                             })
-                            .expect("invariant: has_meta_form is true so eat_metavar_seq must succeed"); // tRust: unwrap -> expect
+                            .unwrap();
                         Ok(attr_item)
                     } else {
                         self.parser.unexpected_any()

@@ -51,7 +51,7 @@ impl<'tcx> InferCtxt<'tcx> {
             param_env,
             query_state,
             |tcx, param_env, query_state| {
-                // tRust: known issue —(#118965): We don't canonicalize the static lifetimes that appear in the
+                // FIXME(#118965): We don't canonicalize the static lifetimes that appear in the
                 // `param_env` because they are treated differently by trait selection.
                 Canonicalizer::canonicalize(
                     param_env,
@@ -157,7 +157,7 @@ impl CanonicalizeMode for CanonicalizeQueryResponse {
         canonicalizer: &mut Canonicalizer<'_, 'tcx>,
         mut r: ty::Region<'tcx>,
     ) -> ty::Region<'tcx> {
-        let infcx = canonicalizer.infcx.expect("invariant: infcx must be set when canonicalizing query response"); // tRust:
+        let infcx = canonicalizer.infcx.unwrap();
 
         if let ty::ReVar(vid) = r.kind() {
             r = infcx
@@ -231,7 +231,6 @@ impl CanonicalizeMode for CanonicalizeUserTypeAnnotation {
             ty::ReVar(_) => canonicalizer.canonical_var_for_region_in_root_universe(r),
             ty::RePlaceholder(..) | ty::ReBound(..) => {
                 // We only expect region names that the user can type.
-                // tRust: invariant — placeholder and bound regions must not appear in query responses
                 bug!("unexpected region in query response: `{:?}`", r)
             }
         }
@@ -316,7 +315,6 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
             ty::ReBound(ty::BoundVarIndexKind::Bound(_), ..) => r,
 
             ty::ReBound(ty::BoundVarIndexKind::Canonical, _) => {
-                // tRust: invariant — already-canonicalized bound vars must not re-enter canonicalization
                 bug!("canonicalized bound var found during canonicalization");
             }
 
@@ -336,14 +334,14 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
                 // We need to canonicalize the *root* of our ty var.
                 // This is so that our canonical response correctly reflects
                 // any equated inference vars correctly!
-                let root_vid = self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.root_var(vid);
+                let root_vid = self.infcx.unwrap().root_var(vid);
                 if root_vid != vid {
                     t = Ty::new_var(self.tcx, root_vid);
                     vid = root_vid;
                 }
 
                 debug!("canonical: type var found with vid {:?}", vid);
-                match self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.probe_ty_var(vid) {
+                match self.infcx.unwrap().probe_ty_var(vid) {
                     // `t` could be a float / int variable; canonicalize that instead.
                     Ok(t) => {
                         debug!("(resolved to {:?})", t);
@@ -354,7 +352,7 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
                     // result.
                     Err(mut ui) => {
                         if !self.canonicalize_mode.preserve_universes() {
-                            // tRust: known issue —: perf problem described in #55921.
+                            // FIXME: perf problem described in #55921.
                             ui = ty::UniverseIndex::ROOT;
                         }
                         let sub_root = self.get_or_insert_sub_root(vid);
@@ -364,7 +362,7 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
             }
 
             ty::Infer(ty::IntVar(vid)) => {
-                let nt = self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.opportunistic_resolve_int_var(vid);
+                let nt = self.infcx.unwrap().opportunistic_resolve_int_var(vid);
                 if nt != t {
                     return self.fold_ty(nt);
                 } else {
@@ -372,7 +370,7 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
                 }
             }
             ty::Infer(ty::FloatVar(vid)) => {
-                let nt = self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.opportunistic_resolve_float_var(vid);
+                let nt = self.infcx.unwrap().opportunistic_resolve_float_var(vid);
                 if nt != t {
                     return self.fold_ty(nt);
                 } else {
@@ -381,7 +379,6 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
             }
 
             ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant — fresh inference types must be resolved before canonicalization
                 bug!("encountered a fresh type during canonicalization")
             }
 
@@ -395,7 +392,6 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
             ty::Bound(ty::BoundVarIndexKind::Bound(_), _) => t,
 
             ty::Bound(ty::BoundVarIndexKind::Canonical, _) => {
-                // tRust: invariant — already-canonicalized bound vars must not re-enter canonicalization
                 bug!("canonicalized bound var found during canonicalization");
             }
 
@@ -440,14 +436,14 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
                 // We need to canonicalize the *root* of our const var.
                 // This is so that our canonical response correctly reflects
                 // any equated inference vars correctly!
-                let root_vid = self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.root_const_var(vid);
+                let root_vid = self.infcx.unwrap().root_const_var(vid);
                 if root_vid != vid {
                     ct = ty::Const::new_var(self.tcx, root_vid);
                     vid = root_vid;
                 }
 
                 debug!("canonical: const var found with vid {:?}", vid);
-                match self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.probe_const_var(vid) {
+                match self.infcx.unwrap().probe_const_var(vid) {
                     Ok(c) => {
                         debug!("(resolved to {:?})", c);
                         return self.fold_const(c);
@@ -457,7 +453,7 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
                     // canonicalized result
                     Err(mut ui) => {
                         if !self.canonicalize_mode.preserve_universes() {
-                            // tRust: known issue —: perf problem described in #55921.
+                            // FIXME: perf problem described in #55921.
                             ui = ty::UniverseIndex::ROOT;
                         }
                         return self.canonicalize_const_var(CanonicalVarKind::Const(ui), ct);
@@ -465,14 +461,12 @@ impl<'cx, 'tcx> TypeFolder<TyCtxt<'tcx>> for Canonicalizer<'cx, 'tcx> {
                 }
             }
             ty::ConstKind::Infer(InferConst::Fresh(_)) => {
-                // tRust: invariant — fresh inference consts must be resolved before canonicalization
                 bug!("encountered a fresh const during canonicalization")
             }
             ty::ConstKind::Bound(ty::BoundVarIndexKind::Bound(_), _) => {
                 return ct;
             }
             ty::ConstKind::Bound(ty::BoundVarIndexKind::Canonical, _) => {
-                // tRust: invariant — already-canonicalized bound vars must not re-enter canonicalization
                 bug!("canonicalized bound var found during canonicalization");
             }
             ty::ConstKind::Placeholder(placeholder) => {
@@ -656,7 +650,7 @@ impl<'cx, 'tcx> Canonicalizer<'cx, 'tcx> {
     }
 
     fn get_or_insert_sub_root(&mut self, vid: ty::TyVid) -> ty::BoundVar {
-        let root_vid = self.infcx.expect("invariant: infcx must be set during canonicalization") /* tRust: */.sub_unification_table_root_var(vid);
+        let root_vid = self.infcx.unwrap().sub_unification_table_root_var(vid);
         let idx =
             *self.sub_root_lookup_table.entry(root_vid).or_insert_with(|| self.var_kinds.len());
         ty::BoundVar::from(idx)

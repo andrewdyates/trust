@@ -808,7 +808,7 @@ pub(in crate::solve) fn const_conditions_for_destruct<I: Interner>(
             Err(NoSolution)
         }
 
-        // tRust: known issue (unsafe_binders) — Unsafe binders could implement `[const] Drop`
+        // FIXME(unsafe_binders): Unsafe binders could implement `[const] Drop`
         // if their inner type implements it.
         ty::UnsafeBinder(_) => Err(NoSolution),
 
@@ -874,7 +874,7 @@ where
     // be reachable when proving the former. However, since we elaborate all supertrait
     // outlives obligations when confirming impls, we would end up with a different set
     // of outlives obligations here if we didn't do the same, leading to ambiguity.
-    // tRust: known issue (-Znext-solver=coinductive) — Adding supertraits here can be removed once we
+    // FIXME(-Znext-solver=coinductive): Adding supertraits here can be removed once we
     // make impls coinductive always, since they'll always need to prove their supertraits.
     requirements.extend(elaborate::elaborate(
         cx,
@@ -883,7 +883,7 @@ where
             .map(|(pred, _)| pred),
     ));
 
-    // tRust: known issue (mgca) — Also add associated consts to
+    // FIXME(mgca): Also add associated consts to
     // the requirements here.
     for associated_type_def_id in cx.associated_type_def_ids(trait_ref.def_id) {
         // associated types that require `Self: Sized` do not show up in the built-in
@@ -899,7 +899,7 @@ where
     let mut replace_projection_with: HashMap<_, Vec<_>> = HashMap::default();
     for bound in object_bounds.iter() {
         if let ty::ExistentialPredicate::Projection(proj) = bound.skip_binder() {
-            // tRust: known issue — We *probably* should replace this with a dummy placeholder,
+            // FIXME: We *probably* should replace this with a dummy placeholder,
             // b/c don't want to replace literal instances of this dyn type that
             // show up in the bounds, but just ones that come from substituting
             // `Self` with the dyn type.
@@ -980,7 +980,7 @@ where
             // This shouldn't happen.
             panic!("could not replace {alias_term:?} with term from from {:?}", self.self_ty);
         };
-        // tRust: known issue — This *may* have issues with duplicated projections.
+        // FIXME: This *may* have issues with duplicated projections.
         if matching_projections.next().is_some() {
             // If there's more than one projection that we can unify here, then we
             // need to stall until inference constrains things so that there's only

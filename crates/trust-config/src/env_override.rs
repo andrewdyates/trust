@@ -124,6 +124,17 @@ pub fn apply_env_overrides(config: &mut TrustConfig) {
             );
         }
     }
+
+    // tRust #882: Solver memory limit override.
+    if let Some(val) = env_var("TRUST_SOLVER_MEMORY_LIMIT_MB") {
+        match val.parse::<u64>() {
+            Ok(mb) => config.solver_memory_limit_mb = Some(mb),
+            Err(_) => eprintln!(
+                "warning: ignoring TRUST_SOLVER_MEMORY_LIMIT_MB='{}'; expected integer",
+                val
+            ),
+        }
+    }
 }
 
 /// tRust: Read an environment variable, returning None for absent or empty.
@@ -281,6 +292,24 @@ mod tests {
         assert_eq!(parse_bool("no"), Some(false));
         assert_eq!(parse_bool("off"), Some(false));
         assert_eq!(parse_bool("maybe"), None);
+    }
+
+    #[test]
+    fn test_apply_env_solver_memory_limit_mb() {
+        with_env_vars(&[("TRUST_SOLVER_MEMORY_LIMIT_MB", "4096")], || {
+            let mut config = TrustConfig::default();
+            apply_env_overrides(&mut config);
+            assert_eq!(config.solver_memory_limit_mb, Some(4096));
+        });
+    }
+
+    #[test]
+    fn test_apply_env_solver_memory_limit_mb_invalid_ignored() {
+        with_env_vars(&[("TRUST_SOLVER_MEMORY_LIMIT_MB", "not_a_number")], || {
+            let mut config = TrustConfig::default();
+            apply_env_overrides(&mut config);
+            assert!(config.solver_memory_limit_mb.is_none());
+        });
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
+use std::collections::BTreeMap; // tRust: BTreeMap for deterministic output (#827)
 use std::path::Path;
 
 use trust_types::*;
@@ -19,11 +19,11 @@ pub fn build_report(
     crate_name: &str,
     results: &[(VerificationCondition, VerificationResult)],
 ) -> ProofReport {
-    let mut by_function: FxHashMap<String, Vec<(&VerificationCondition, &VerificationResult)>> =
-        FxHashMap::default();
+    let mut by_function: BTreeMap<String, Vec<(&VerificationCondition, &VerificationResult)>> =
+        BTreeMap::new();
 
     for (vc, result) in results {
-        by_function.entry(vc.function.clone()).or_default().push((vc, result));
+        by_function.entry(vc.function.as_str().to_string()).or_default().push((vc, result));
     }
 
     let mut functions = Vec::new();
@@ -41,7 +41,7 @@ pub fn build_report(
                 VerificationResult::Proved { solver, time_ms, strength, .. } => {
                     proved.push(ProvedProperty {
                         description: vc.kind.description(),
-                        solver: solver.clone(),
+                        solver: solver.to_string(),
                         time_ms: *time_ms,
                         strength: strength.clone(),
                         // tRust #382: Wire ProofEvidence into legacy report.
@@ -52,7 +52,7 @@ pub fn build_report(
                 VerificationResult::Failed { solver, counterexample, .. } => {
                     failed.push(FailedProperty {
                         description: vc.kind.description(),
-                        solver: solver.clone(),
+                        solver: solver.to_string(),
                         counterexample: counterexample.clone(),
                     });
                     total_failed += 1;
@@ -60,7 +60,7 @@ pub fn build_report(
                 VerificationResult::Unknown { solver, reason, .. } => {
                     unknown.push(UnknownProperty {
                         description: vc.kind.description(),
-                        solver: solver.clone(),
+                        solver: solver.to_string(),
                         reason: reason.clone(),
                     });
                     total_unknown += 1;
@@ -68,7 +68,7 @@ pub fn build_report(
                 VerificationResult::Timeout { solver, timeout_ms, .. } => {
                     unknown.push(UnknownProperty {
                         description: vc.kind.description(),
-                        solver: solver.clone(),
+                        solver: solver.to_string(),
                         reason: format!("timeout after {timeout_ms}ms"),
                     });
                     total_unknown += 1;

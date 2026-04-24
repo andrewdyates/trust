@@ -106,20 +106,13 @@ pub fn compose_certificates(
     hasher.update(format!("method:{method}|").as_bytes());
     for component in &components {
         hasher.update(
-            format!(
-                "{}:{}:{}|",
-                component.solver, component.strategy, component.proof_hash,
-            )
-            .as_bytes(),
+            format!("{}:{}:{}|", component.solver, component.strategy, component.proof_hash,)
+                .as_bytes(),
         );
     }
     let composed_hash = format!("{:x}", hasher.finalize());
 
-    ComposedCertificate {
-        components,
-        composition_method: method,
-        composed_hash,
-    }
+    ComposedCertificate { components, composition_method: method, composed_hash }
 }
 
 /// Create a `CertificateComponent` from raw proof certificate bytes and metadata.
@@ -184,28 +177,17 @@ mod tests {
     fn test_compose_deterministic_hash() {
         let c1 = make_component("zani-lib", "BoundedModelCheck", &[1, 2, 3], 30);
         let c2 = make_component("sunder-lib", "ContractVerification", &[4, 5, 6], 50);
-        let cert_a = compose_certificates(
-            vec![c1.clone(), c2.clone()],
-            CompositionMethod::Conjunction,
-        );
-        let cert_b = compose_certificates(
-            vec![c1, c2],
-            CompositionMethod::Conjunction,
-        );
+        let cert_a =
+            compose_certificates(vec![c1.clone(), c2.clone()], CompositionMethod::Conjunction);
+        let cert_b = compose_certificates(vec![c1, c2], CompositionMethod::Conjunction);
         assert_eq!(cert_a.composed_hash, cert_b.composed_hash);
     }
 
     #[test]
     fn test_different_methods_produce_different_hashes() {
         let c1 = make_component("zani-lib", "BoundedModelCheck", &[1, 2, 3], 30);
-        let cert_conj = compose_certificates(
-            vec![c1.clone()],
-            CompositionMethod::Conjunction,
-        );
-        let cert_disj = compose_certificates(
-            vec![c1],
-            CompositionMethod::Disjunction,
-        );
+        let cert_conj = compose_certificates(vec![c1.clone()], CompositionMethod::Conjunction);
+        let cert_disj = compose_certificates(vec![c1], CompositionMethod::Disjunction);
         assert_ne!(cert_conj.composed_hash, cert_disj.composed_hash);
     }
 

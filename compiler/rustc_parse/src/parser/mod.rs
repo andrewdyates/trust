@@ -495,7 +495,7 @@ impl<'a> Parser<'a> {
     // Primarily used when `self.token` matches `OpenInvisible(_))`, to look
     // ahead through the current metavar expansion.
     fn check_noexpect_past_close_delim(&self, tok: &TokenKind) -> bool {
-        let mut tree_cursor = self.token_cursor.stack.last().expect("invariant: collection is non-empty").clone(); // tRust: unwrap -> expect
+        let mut tree_cursor = self.token_cursor.stack.last().unwrap().clone();
         tree_cursor.bump();
         matches!(
             tree_cursor.curr(),
@@ -1209,7 +1209,7 @@ impl<'a> Parser<'a> {
     fn parse_coroutine_kind(&mut self, case: Case) -> Option<CoroutineKind> {
         let span = self.token_uninterpolated_span();
         if self.eat_keyword_case(exp!(Async), case) {
-            // tRust: known issue —(gen_blocks): Do we want to unconditionally parse `gen` and then
+            // FIXME(gen_blocks): Do we want to unconditionally parse `gen` and then
             // error if edition <= 2024, like we do with async and edition <= 2018?
             if self.token_uninterpolated_span().at_least_rust_2024()
                 && self.eat_keyword_case(exp!(Gen), case)
@@ -1382,7 +1382,7 @@ impl<'a> Parser<'a> {
         if self.token.kind.open_delim().is_some() {
             // Clone the `TokenTree::Delimited` that we are currently
             // within. That's what we are going to return.
-            let tree = self.token_cursor.stack.last().expect("invariant: collection is non-empty").curr().expect("invariant: collection is non-empty").clone(); // tRust: unwrap -> expect
+            let tree = self.token_cursor.stack.last().unwrap().curr().unwrap().clone();
             debug_assert_matches!(tree, TokenTree::Delimited(..));
 
             // Advance the token cursor through the entire delimited

@@ -8,10 +8,10 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::VecDeque;
-use trust_types::fx::FxHashSet;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use trust_types::fx::FxHashSet;
 
 use crate::engine::ExecutionFork;
 use crate::path::PathConstraint;
@@ -169,9 +169,7 @@ impl SearchStrategy for CoverageGuidedStrategy {
                 self.fallback.push(fork);
             }
         }
-        self.uncovered_forks
-            .pop_front()
-            .or_else(|| self.fallback.pop())
+        self.uncovered_forks.pop_front().or_else(|| self.fallback.pop())
     }
 
     fn notify_coverage(&mut self, block_id: usize) {
@@ -196,10 +194,7 @@ impl RandomPathStrategy {
     pub fn new(seed: u64) -> Self {
         // Avoid zero seed (xorshift degenerate case).
         let rng_state = if seed == 0 { 1 } else { seed };
-        Self {
-            pool: Vec::new(),
-            rng_state,
-        }
+        Self { pool: Vec::new(), rng_state }
     }
 
     /// xorshift64 step.
@@ -280,26 +275,6 @@ impl SearchStrategy for HeuristicStrategy {
 // PathPrioritizer implementations
 // ---------------------------------------------------------------------------
 
-/// Prioritize paths by preferring shallower (shorter) paths first.
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct ShallowFirstPrioritizer;
-
-impl PathPrioritizer for ShallowFirstPrioritizer {
-    fn prioritize(&self, paths: &mut [SymbolicPath]) {
-        paths.sort_by_key(|p| p.depth);
-    }
-}
-
-/// Prioritize paths by coverage count (higher coverage first).
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct CoveragePrioritizer;
-
-impl PathPrioritizer for CoveragePrioritizer {
-    fn prioritize(&self, paths: &mut [SymbolicPath]) {
-        paths.sort_by(|a, b| b.coverage_count.cmp(&a.coverage_count));
-    }
-}
-
 /// Construct the appropriate `SearchStrategy` from a `SearchStrategyKind`.
 #[must_use]
 pub fn make_strategy(kind: SearchStrategyKind) -> Box<dyn SearchStrategy> {
@@ -320,26 +295,15 @@ mod tests {
     use super::*;
 
     fn make_fork(next_block: usize) -> ExecutionFork {
-        ExecutionFork {
-            state: SymbolicState::new(),
-            path: PathConstraint::new(),
-            next_block,
-        }
+        ExecutionFork { state: SymbolicState::new(), path: PathConstraint::new(), next_block }
     }
 
     fn make_fork_with_depth(next_block: usize, depth: usize) -> ExecutionFork {
         let mut path = PathConstraint::new();
         for _ in 0..depth {
-            path.add_constraint(
-                crate::state::SymbolicValue::Concrete(1),
-                true,
-            );
+            path.add_constraint(crate::state::SymbolicValue::Concrete(1), true);
         }
-        ExecutionFork {
-            state: SymbolicState::new(),
-            path,
-            next_block,
-        }
+        ExecutionFork { state: SymbolicState::new(), path, next_block }
     }
 
     // --- DFS ---
@@ -448,10 +412,7 @@ mod tests {
     fn test_search_heuristic_penalises_depth() {
         let mut h = HeuristicStrategy::new();
         // Both uncovered but different depths.
-        let forks = vec![
-            make_fork_with_depth(1, 10),
-            make_fork_with_depth(2, 1),
-        ];
+        let forks = vec![make_fork_with_depth(1, 10), make_fork_with_depth(2, 1)];
         let first = h.next(forks).expect("should pick shallower");
         assert_eq!(first.next_block, 2);
     }
@@ -471,34 +432,6 @@ mod tests {
         assert_eq!(cfg.max_paths, 4096);
         assert_eq!(cfg.timeout, Duration::from_secs(60));
         assert_eq!(cfg.strategy, SearchStrategyKind::CoverageGuided);
-    }
-
-    // --- PathPrioritizer ---
-
-    #[test]
-    fn test_search_shallow_first_prioritizer() {
-        let mut paths = vec![
-            SymbolicPath { constraints: PathConstraint::new(), next_block: 1, depth: 5, coverage_count: 0 },
-            SymbolicPath { constraints: PathConstraint::new(), next_block: 2, depth: 1, coverage_count: 0 },
-            SymbolicPath { constraints: PathConstraint::new(), next_block: 3, depth: 3, coverage_count: 0 },
-        ];
-        ShallowFirstPrioritizer.prioritize(&mut paths);
-        assert_eq!(paths[0].depth, 1);
-        assert_eq!(paths[1].depth, 3);
-        assert_eq!(paths[2].depth, 5);
-    }
-
-    #[test]
-    fn test_search_coverage_prioritizer() {
-        let mut paths = vec![
-            SymbolicPath { constraints: PathConstraint::new(), next_block: 1, depth: 0, coverage_count: 2 },
-            SymbolicPath { constraints: PathConstraint::new(), next_block: 2, depth: 0, coverage_count: 10 },
-            SymbolicPath { constraints: PathConstraint::new(), next_block: 3, depth: 0, coverage_count: 5 },
-        ];
-        CoveragePrioritizer.prioritize(&mut paths);
-        assert_eq!(paths[0].coverage_count, 10);
-        assert_eq!(paths[1].coverage_count, 5);
-        assert_eq!(paths[2].coverage_count, 2);
     }
 
     // --- make_strategy factory ---

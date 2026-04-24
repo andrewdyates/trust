@@ -27,7 +27,7 @@ impl<'tcx> ty::ValTreeKind<TyCtxt<'tcx>> {
 /// [dev guide]: https://rustc-dev-guide.rust-lang.org/mir/index.html#valtrees
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
 #[derive(HashStable)]
-// tRust: known issue (mgca) — Try not interning here. We already intern `ty::Const` which `ValTreeKind`
+// FIXME(mgca): Try not interning here. We already intern `ty::Const` which `ValTreeKind`
 // recurses through
 pub struct ValTree<'tcx>(pub(crate) Interned<'tcx, ty::ValTreeKind<TyCtxt<'tcx>>>);
 
@@ -170,7 +170,6 @@ impl<'tcx> Value<'tcx> {
     pub fn to_leaf(self) -> ScalarInt {
         match &**self.valtree {
             ValTreeKind::Leaf(s) => *s,
-            // tRust: invariant: expected leaf, got <...>
             ValTreeKind::Branch(..) => bug!("expected leaf, got {:?}", self),
         }
     }
@@ -181,7 +180,6 @@ impl<'tcx> Value<'tcx> {
     pub fn to_branch(self) -> &'tcx [ty::Const<'tcx>] {
         match &**self.valtree {
             ValTreeKind::Branch(branch) => &**branch,
-            // tRust: invariant: expected branch, got <...>
             ValTreeKind::Leaf(..) => bug!("expected branch, got {:?}", self),
         }
     }
@@ -213,15 +211,13 @@ impl<'tcx> Value<'tcx> {
 
         let (variant, fields) = match self.ty.kind() {
             ty::Adt(def, _) if def.variants().is_empty() => {
-                // tRust: invariant: unreachable
                 bug!("unreachable")
             }
             ty::Adt(def, _) if def.is_enum() => {
-                let (head, rest) = fields.split_first().expect("invariant: split_first returned a valid value");
+                let (head, rest) = fields.split_first().unwrap();
                 (VariantIdx::from_u32(head.to_leaf().to_u32()), rest)
             }
             ty::Adt(_, _) => (FIRST_VARIANT, fields),
-            // tRust: invariant: type must be ADT when calling destructure_adt_const
             _ => bug!("destructure_adt_const called on non-ADT type: {:?}", self.ty),
         };
 
@@ -242,7 +238,7 @@ impl<'tcx> rustc_type_ir::inherent::ValueConst<TyCtxt<'tcx>> for Value<'tcx> {
 impl<'tcx> fmt::Display for Value<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         ty::tls::with(move |tcx| {
-            let cv = tcx.lift(*self).expect("invariant: lift returned a valid value");
+            let cv = tcx.lift(*self).unwrap();
             let mut p = FmtPrinter::new(tcx, Namespace::ValueNS);
             p.pretty_print_const_valtree(cv, /*print_ty*/ true)?;
             f.write_str(&p.into_buffer())

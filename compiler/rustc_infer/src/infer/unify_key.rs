@@ -59,7 +59,6 @@ impl<'tcx> UnifyValue for RegionVariableValue<'tcx> {
                     | ty::ReEarlyParam(..)
                     | ty::ReError(_) => ty::UniverseIndex::ROOT,
                     ty::RePlaceholder(placeholder) => placeholder.universe,
-                    // tRust: invariant — ReVar and ReBound are not universal regions; must be resolved first
                     ty::ReVar(..) | ty::ReBound(..) => bug!("not a universal region"),
                 };
 
@@ -149,7 +148,6 @@ impl<'tcx> UnifyValue for ConstVariableValue<'tcx> {
     fn unify_values(&value1: &Self, &value2: &Self) -> Result<Self, Self::Error> {
         match (value1, value2) {
             (ConstVariableValue::Known { .. }, ConstVariableValue::Known { .. }) => {
-                // tRust: invariant — const unification must resolve one side before equating values
                 bug!("equating two const variables, both of which have known values")
             }
 

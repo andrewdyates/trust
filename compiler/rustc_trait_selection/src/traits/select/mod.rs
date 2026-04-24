@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 use std::{assert_matches, cmp};
 
 use hir::def::DefKind;
-use rustc_data_structures::fx::{FxIndexMap, FxIndexSet};
+use rustc_data_structures::fx::{FxHashMap, FxIndexMap, FxIndexSet};
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_errors::{Diag, EmissionGuarantee};
 use rustc_hir::def_id::DefId;
@@ -32,7 +32,7 @@ use rustc_middle::ty::{
 };
 use rustc_next_trait_solver::solve::AliasBoundKind;
 use rustc_span::Symbol;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, warn};
 
 use self::EvaluationResult::*;
 use self::SelectionCandidate::*;
@@ -99,6 +99,19 @@ impl<'tcx> IntercrateAmbiguityCause<'tcx> {
     }
 }
 
+// tRust: Cap where-clause evaluation chain length to prevent exponential blowup
+// from deeply nested predicate obligations (rust-lang#95819, rust-lang#108714).
+const MAX_PREDICATE_EVALUATION_CHAIN: usize = 2048;
+
+// tRust: Tighter depth limit for non-trait predicate evaluation (#865,
+// rust-lang#77173). Recursive data structures with associated types cause
+// exponential evaluation: each level of recursion doubles the projection
+// obligations. The global recursion_limit (default 128) is too generous —
+// by depth 64 the work is already enormous. Returning EvaluatedToAmbig at
+// this depth prevents exponential blowup while being generous enough for
+// legitimate deep evaluation chains.
+const MAX_NON_TRAIT_PREDICATE_DEPTH: usize = 64;
+
 pub struct SelectionContext<'cx, 'tcx> {
     pub infcx: &'cx InferCtxt<'tcx>,
 
@@ -121,6 +134,31 @@ pub struct SelectionContext<'cx, 'tcx> {
     /// policy. In essence, canonicalized queries need their errors propagated
     /// rather than immediately reported because we do not have accurate spans.
     query_mode: TraitQueryMode,
+
+    // tRust: Cross-call evaluation cache for non-trait predicates (#865,
+    // rust-lang#119503, rust-lang#100886). Trait predicates have their own
+    // evaluation cache (check_evaluation_cache/insert_evaluation_cache), but
+    // non-trait predicates (projection, WF, subtype, etc.) lack cross-call
+    // memoization. Without this, nested `impl Trait` chains cause O(2^N)
+    // re-evaluation of identical global predicate obligations at each level.
+    // Only global predicates without inference variables are cached, as their
+    // evaluation result is independent of local inference state.
+    predicate_evaluation_cache:
+        FxHashMap<ty::ParamEnvAnd<'tcx, ty::Predicate<'tcx>>, EvaluationResult>,
+
+    // tRust: Cache for HRTB projection equality bound matching (rust-lang#99188).
+    // When assemble_candidates_from_param_env iterates over bounds, each call to
+    // match_projection_projections instantiates fresh bound variables, evaluates
+    // nested obligations, and checks subtyping. For HRTB bounds like
+    // `for<'a> <T as Trait<'a>>::Item == U`, the same (projection, bound) pair
+    // is re-evaluated at every nesting level without caching, causing O(2^N)
+    // blowup. We cache results keyed on (projection_term, bound_predicate) for
+    // global projections (no inference variables) since their match result is
+    // independent of local inference state.
+    projection_match_cache: FxHashMap<
+        (ty::AliasTerm<'tcx>, PolyProjectionPredicate<'tcx>),
+        ProjectionMatchesProjection,
+    >,
 }
 
 // A stack that walks back up the stack frame.
@@ -196,6 +234,10 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             freshener: TypeFreshener::new(infcx),
             intercrate_ambiguity_causes: None,
             query_mode: TraitQueryMode::Standard,
+            // tRust: Initialize cross-call predicate evaluation cache (#865).
+            predicate_evaluation_cache: FxHashMap::default(),
+            // tRust: Initialize HRTB projection match cache (rust-lang#99188).
+            projection_match_cache: FxHashMap::default(),
         }
     }
 
@@ -336,7 +378,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         // If no match, compute result and insert into cache.
         //
-        // tRust: known issue (nikomatsakis) — -- this cache is not taking into
+        // FIXME(nikomatsakis) -- this cache is not taking into
         // account cycles that may have occurred in forming the
         // candidate. I don't know of any specific problems that
         // result but it seems awfully suspicious.
@@ -385,7 +427,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                                 IntercrateAmbiguityCause::DownstreamCrate { trait_ref, self_ty }
                             };
                             debug!(?cause, "evaluate_stack: pushing cause");
-                            self.intercrate_ambiguity_causes.as_mut().expect("invariant: value is present").insert(cause);
+                            self.intercrate_ambiguity_causes.as_mut().unwrap().insert(cause);
                         }
                     }
                 }
@@ -430,7 +472,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         // Instead, we select the right impl now but report "`Bar` does
         // not implement `Clone`".
         if candidates.len() == 1 {
-            return self.filter_reservation_impls(candidates.pop().expect("invariant: non-empty collection"));
+            return self.filter_reservation_impls(candidates.pop().unwrap());
         }
 
         // Winnow, but record the exact outcome of evaluation, which
@@ -567,7 +609,18 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         I: IntoIterator<Item = PredicateObligation<'tcx>> + std::fmt::Debug,
     {
         let mut result = EvaluatedToOk;
+        // tRust: Cap where-clause evaluation chain to prevent hangs on deeply
+        // nested or recursive predicate obligations (rust-lang#95819, rust-lang#108714).
+        let mut chain_iterations = 0usize;
         for mut obligation in predicates {
+            chain_iterations += 1;
+            if chain_iterations > MAX_PREDICATE_EVALUATION_CHAIN {
+                warn!(
+                    "evaluate_predicates_recursively exceeded {} iterations, bailing out",
+                    MAX_PREDICATE_EVALUATION_CHAIN
+                );
+                return Ok(EvaluatedToAmbig);
+            }
             obligation.set_depth_from_parent(stack.depth());
             let eval = self.evaluate_predicate_recursively(stack, obligation.clone())?;
             if let EvaluatedToErr = eval {
@@ -606,7 +659,54 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             return Ok(EvaluatedToOk);
         }
 
-        ensure_sufficient_stack(|| {
+        // tRust: Cross-call cache for non-trait predicate evaluation (#865,
+        // rust-lang#119503, rust-lang#100886). Trait predicates already have
+        // check_evaluation_cache/insert_evaluation_cache. For non-trait
+        // predicates (projection, WF, subtype, etc.) we cache globally-resolved
+        // predicates here to avoid O(2^N) re-evaluation in nested `impl Trait`
+        // chains where the same obligations appear at every nesting level.
+        let resolved_pred = self.infcx.resolve_vars_if_possible(obligation.predicate);
+        let is_non_trait_global = resolved_pred.is_global()
+            && !resolved_pred.has_non_region_infer()
+            && !matches!(
+                resolved_pred.kind().skip_binder(),
+                ty::PredicateKind::Clause(ty::ClauseKind::Trait(_))
+            );
+        let cache_key = if is_non_trait_global {
+            let key = obligation.param_env.and(resolved_pred);
+            if let Some(&cached) = self.predicate_evaluation_cache.get(&key) {
+                debug!(
+                    "evaluate_predicate_recursively: non-trait cache hit for {:?}",
+                    resolved_pred
+                );
+                return Ok(cached);
+            }
+            Some(key)
+        } else {
+            None
+        };
+
+        // tRust: Depth throttle for non-trait predicates (#865, rust-lang#77173).
+        // Recursive data structures with associated types cause exponential
+        // evaluation: each recursion level doubles the projection obligations.
+        // The global recursion_limit (default 128) allows too much work before
+        // triggering. For non-trait predicates (projection, WF, subtype, coerce,
+        // const-evaluatable), we apply a tighter depth limit. This does NOT affect
+        // trait predicate evaluation, which has its own cycle detection via the
+        // TraitObligationStack.
+        if !matches!(
+            resolved_pred.kind().skip_binder(),
+            ty::PredicateKind::Clause(ty::ClauseKind::Trait(_))
+        ) && obligation.recursion_depth > MAX_NON_TRAIT_PREDICATE_DEPTH
+        {
+            debug!(
+                "evaluate_predicate_recursively: non-trait depth {} exceeds limit {} for {:?}",
+                obligation.recursion_depth, MAX_NON_TRAIT_PREDICATE_DEPTH, resolved_pred
+            );
+            return Ok(EvaluatedToAmbig);
+        }
+
+        let result = ensure_sufficient_stack(|| {
             let bound_predicate = obligation.predicate.kind();
             match bound_predicate.skip_binder() {
                 ty::PredicateKind::Clause(ty::ClauseKind::Trait(t)) => {
@@ -774,6 +874,29 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 ty::PredicateKind::Clause(ty::ClauseKind::Projection(data)) => {
                     let data = bound_predicate.rebind(data);
                     let project_obligation = obligation.with(self.tcx(), data);
+
+                    // tRust: Projection cycle detection (#865, rust-lang#133354).
+                    // Check if this projection term is already being evaluated on
+                    // the stack. If so, we have a cycle (gordian knot of trait
+                    // bounds where projections reference each other). Without this,
+                    // such cycles cause the solver to hang indefinitely — the trait
+                    // obligation stack only catches trait predicate cycles.
+                    let proj_term = data.skip_binder().projection_term;
+                    let cache = previous_stack.cache;
+                    for stack_proj in cache.projection_args.borrow().iter().rev() {
+                        if stack_proj.0 == proj_term {
+                            debug!(
+                                "evaluate_predicate_recursively: projection cycle \
+                                 detected for {:?}",
+                                proj_term
+                            );
+                            if let Some(stack) = previous_stack.head {
+                                stack.update_reached_depth(stack_proj.1);
+                            }
+                            return Ok(EvaluatedToAmbigStackDependent);
+                        }
+                    }
+
                     match project::poly_project_and_unify_term(self, &project_obligation) {
                         ProjectAndUnifyResult::Holds(mut subobligations) => {
                             'compute_res: {
@@ -804,10 +927,17 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                                 for subobligation in subobligations.iter_mut() {
                                     subobligation.set_depth_from_parent(obligation.recursion_depth);
                                 }
+
+                                // tRust: Push projection onto cycle detection stack (#865).
+                                cache
+                                    .projection_args
+                                    .borrow_mut()
+                                    .push((proj_term, previous_stack.depth()));
                                 let res = self.evaluate_predicates_recursively(
                                     previous_stack,
                                     subobligations,
                                 );
+                                cache.projection_args.borrow_mut().pop();
                                 if let Ok(eval_rslt) = res
                                     && (eval_rslt == EvaluatedToOk
                                         || eval_rslt == EvaluatedToOkModuloRegions)
@@ -965,11 +1095,9 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                     }
                 }
                 ty::PredicateKind::NormalizesTo(..) => {
-                    // tRust: invariant — (evaluate(c1), evaluate(c2)) should not be ty::PredicateKind::NormalizesTo(..) at this point in processing
                     bug!("NormalizesTo is only used by the new solver")
                 }
                 ty::PredicateKind::AliasRelate(..) => {
-                    // tRust: invariant — (evaluate(c1), evaluate(c2)) should not be ty::PredicateKind::AliasRelate(..) at this point in processing
                     bug!("AliasRelate is only used by the new solver")
                 }
                 ty::PredicateKind::Ambiguous => Ok(EvaluatedToAmbig),
@@ -984,13 +1112,11 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                         ty::ConstKind::Unevaluated(uv) => {
                             self.tcx().type_of(uv.def).instantiate(self.tcx(), uv.args)
                         }
-                        // tRust: known issue (generic_const_exprs) — See comment in `fulfill.rs`
+                        // FIXME(generic_const_exprs): See comment in `fulfill.rs`
                         ty::ConstKind::Expr(_) => return Ok(EvaluatedToOk),
                         ty::ConstKind::Placeholder(_) => {
-                            // tRust: invariant — Placeholder const in old solver
                             bug!("placeholder const {:?} in old solver", ct)
                         }
-                        // tRust: invariant — Escaping bound vars in
                         ty::ConstKind::Bound(_, _) => bug!("escaping bound vars in {:?}", ct),
                         ty::ConstKind::Param(param_ct) => {
                             param_ct.find_const_ty_from_env(obligation.param_env)
@@ -1011,7 +1137,16 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                     }
                 }
             }
-        })
+        });
+
+        // tRust: Insert successful evaluation into cross-call cache (#865).
+        // Only cache non-trait global predicates (trait predicates already have
+        // their own cache via check_evaluation_cache/insert_evaluation_cache).
+        if let (Some(key), Ok(eval_result)) = (cache_key, &result) {
+            self.predicate_evaluation_cache.insert(key, *eval_result);
+        }
+
+        result
     }
 
     #[instrument(skip(self, previous_stack), level = "debug", ret)]
@@ -1260,7 +1395,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 self.infcx.tcx.trait_is_coinductive(data.def_id())
             }
             ty::PredicateKind::Clause(ty::ClauseKind::WellFormed(_)) => {
-                // tRust: known issue (generic_const_exprs) — GCE needs well-formedness predicates to be
+                // FIXME(generic_const_exprs): GCE needs well-formedness predicates to be
                 // coinductive, but GCE is on the way out anyways, so this should eventually
                 // be replaced with `false`.
                 self.infcx.tcx.features().generic_const_exprs()
@@ -1489,6 +1624,30 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         coherence::trait_ref_is_knowable(self.infcx, trait_ref, |ty| Ok::<_, !>(ty)).into_ok()
     }
 
+    // tRust: Check if a trait predicate is for a built-in coroutine trait impl
+    // (Future, Iterator, Coroutine, AsyncIterator, FusedIterator) where the
+    // self-type is a coroutine. These impls are compiler-generated and their
+    // results never depend on opaque type definitions, so they are safe to
+    // cache globally even during analysis of async functions. This avoids
+    // O(2^N) compile time with nested async (rust-lang#83031, #865).
+    fn is_builtin_coroutine_trait_predicate(&self, pred: ty::PolyTraitPredicate<'tcx>) -> bool {
+        let self_ty = pred.skip_binder().self_ty();
+        if !matches!(self_ty.kind(), ty::Coroutine(..)) {
+            return false;
+        }
+        let trait_def_id = pred.def_id();
+        matches!(
+            self.tcx().as_lang_item(trait_def_id.into()),
+            Some(
+                LangItem::Future
+                    | LangItem::Iterator
+                    | LangItem::Coroutine
+                    | LangItem::AsyncIterator
+                    | LangItem::FusedIterator
+            )
+        )
+    }
+
     /// Returns `true` if the global caches can be used.
     fn can_use_global_caches(
         &self,
@@ -1513,7 +1672,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             // Avoid using the global cache when we're defining opaque types
             // as their hidden type may impact the result of candidate selection.
             //
-            // tRust: accepted tradeoff — This is still theoretically unsound. Goals can indirectly rely
+            // HACK: This is still theoretically unsound. Goals can indirectly rely
             // on opaques in the defining scope, and it's easier to do so with TAIT.
             // However, if we disqualify *all* goals from being cached, perf suffers.
             // This is likely fixed by better caching in general in the new solver.
@@ -1524,6 +1683,14 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             | TypingMode::Borrowck { defining_opaque_types } => {
                 defining_opaque_types.is_empty()
                     || (!pred.has_opaque_types() && !pred.has_coroutines())
+                    // tRust: Allow global caching for built-in coroutine trait impls
+                    // (Future, Iterator, Coroutine, AsyncIterator, FusedIterator)
+                    // even when defining_opaque_types is non-empty. These impls are
+                    // compiler-generated and their results never depend on opaque type
+                    // definitions. Without this, nested async functions cause O(2^N)
+                    // compile time because each coroutine nesting level creates a distinct
+                    // type that misses the global cache (rust-lang#83031, #865).
+                    || self.is_builtin_coroutine_trait_predicate(pred)
             }
             // The hidden types of `defined_opaque_types` is not local to the current
             // inference context, so we can freely move this to the global cache.
@@ -1531,7 +1698,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             // The global cache is only used if there are no opaque types in
             // the defining scope or we're outside of analysis.
             //
-            // tRust: known issue (#132279) — This is still incorrect as we treat opaque types
+            // FIXME(#132279): This is still incorrect as we treat opaque types
             // and default associated items differently between these two modes.
             TypingMode::PostAnalysis => true,
         }
@@ -1552,7 +1719,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             } else if cfg!(debug_assertions) {
                 match infcx.selection_cache.get(&(param_env, pred), tcx) {
                     None | Some(Err(SelectionError::Overflow(OverflowError::Canonical))) => {}
-                    // tRust: invariant — Unexpected local cache result
                     res => bug!("unexpected local cache result: {res:?}"),
                 }
             }
@@ -1657,7 +1823,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 _ => return ControlFlow::Continue(()),
             };
 
-            // tRust: accepted tradeoff — On subsequent recursions, we only care about bounds that don't
+            // HACK: On subsequent recursions, we only care about bounds that don't
             // share the same type as `self_ty`. This is because for truly rigid
             // projections, we will never be able to equate, e.g. `<T as Tr>::A`
             // with `<<T as Tr>::A as Tr>::A`.
@@ -1794,7 +1960,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         if is_match {
             let generics = self.tcx().generics_of(obligation.predicate.def_id);
-            // tRust: known issue (generic_associated_types) — Addresses aggressive inference in #92917.
+            // FIXME(generic_associated_types): Addresses aggressive inference in #92917.
             // If this type is a GAT, and of the GAT args resolve to something new,
             // that means that we must have newly inferred something about the GAT.
             // We should give up in that case.
@@ -1843,7 +2009,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
         mut candidates: Vec<EvaluatedCandidate<'tcx>>,
     ) -> Option<SelectionCandidate<'tcx>> {
         if candidates.len() == 1 {
-            return Some(candidates.pop().expect("invariant: non-empty collection").candidate);
+            return Some(candidates.pop().unwrap().candidate);
         }
 
         // We prefer `Sized` candidates over everything.
@@ -2056,7 +2222,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
         }
 
         if candidates.len() == 1 {
-            Some(candidates.pop().expect("invariant: non-empty collection").candidate)
+            Some(candidates.pop().unwrap().candidate)
         } else {
             // Also try ignoring all global where-bounds and check whether we end
             // with a unique candidate in this case.
@@ -2195,7 +2361,6 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
             | ty::Placeholder(..)
             | ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_))
             | ty::Bound(..) => {
-                // tRust: invariant — Asked to assemble `Sized` of unexpected type
                 bug!("asked to assemble `Sized` of unexpected type: {:?}", self_ty);
             }
         }
@@ -2218,7 +2383,7 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                 unreachable!("tried to assemble `Sized` for type with libcore-provided impl")
             }
 
-            // tRust: known issue (unsafe_binder) — Should we conditionally
+            // FIXME(unsafe_binder): Should we conditionally
             // (i.e. universally) implement copy/clone?
             ty::UnsafeBinder(_) => unreachable!("tried to assemble `Sized` for unsafe binder"),
 
@@ -2274,7 +2439,6 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
             | ty::Bound(..)
             | ty::Ref(_, _, ty::Mutability::Mut)
             | ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant — Asked to assemble builtin bounds of unexpected type
                 bug!("asked to assemble builtin bounds of unexpected type: {:?}", self_ty);
             }
         }
@@ -2338,7 +2502,6 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
             | ty::Alias(ty::Projection | ty::Inherent | ty::Free, ..)
             | ty::Bound(..)
             | ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant — Asked to assemble constituent types of unexpected type
                 bug!("asked to assemble constituent types of unexpected type: {:?}", t);
             }
 
@@ -2498,7 +2661,6 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
             Ok(args) => args,
             Err(()) => {
                 let predicate = self.infcx.resolve_vars_if_possible(obligation.predicate);
-                // tRust: invariant — Impl was matchable against but now is not
                 bug!("impl {impl_def_id:?} was matchable against {predicate:?} but now is not")
             }
         }
@@ -2783,7 +2945,6 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
         fn_trait_def_id: DefId,
     ) -> ty::PolyTraitRef<'tcx> {
         let ty::Closure(_, args) = *self_ty.kind() else {
-            // tRust: invariant — Expected closure, found
             bug!("expected closure, found {self_ty}");
         };
         let closure_sig = args.as_closure().sig();
@@ -2925,7 +3086,7 @@ impl<'o, 'tcx> TraitObligationStack<'o, 'tcx> {
         while reached_depth < p.depth {
             debug!(?p.fresh_trait_pred, "update_reached_depth: marking as cycle participant");
             p.reached_depth.set(p.reached_depth.get().min(reached_depth));
-            p = p.previous.head.expect("invariant: value is present");
+            p = p.previous.head.unwrap();
         }
     }
 }
@@ -3012,6 +3173,15 @@ struct ProvisionalEvaluationCache<'tcx> {
     /// will have a perf effect. The value here is the well-formed `GenericArg`
     /// and the depth of the trait predicate *above* that well-formed predicate.
     wf_args: RefCell<Vec<(ty::Term<'tcx>, usize)>>,
+
+    // tRust: Projection cycle detection stack (#865, rust-lang#133354).
+    // Tracks projection predicates currently being evaluated, parallel to `wf_args`.
+    // When the trait solver encounters a projection predicate already on this stack,
+    // it means we have a cycle (e.g., `<T as Trait>::Assoc` requires evaluating
+    // `<T as Trait>::Assoc` again). Without this, such cycles cause the solver to
+    // hang indefinitely — the trait obligation stack only catches trait cycles, not
+    // projection cycles. The value is (projection_predicate, stack_depth).
+    projection_args: RefCell<Vec<(ty::AliasTerm<'tcx>, usize)>>,
 }
 
 /// A cache value for the provisional cache: contains the depth-first
@@ -3025,7 +3195,12 @@ struct ProvisionalEvaluation {
 
 impl<'tcx> Default for ProvisionalEvaluationCache<'tcx> {
     fn default() -> Self {
-        Self { dfn: Cell::new(0), map: Default::default(), wf_args: Default::default() }
+        Self {
+            dfn: Cell::new(0),
+            map: Default::default(),
+            wf_args: Default::default(),
+            projection_args: Default::default(), // tRust: #865
+        }
     }
 }
 
@@ -3200,6 +3375,8 @@ impl<'o, 'tcx> fmt::Debug for TraitObligationStack<'o, 'tcx> {
     }
 }
 
+// tRust: Added Clone, Copy for projection match caching (rust-lang#99188).
+#[derive(Clone, Copy)]
 pub(crate) enum ProjectionMatchesProjection {
     Yes,
     Ambiguous,

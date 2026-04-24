@@ -98,7 +98,7 @@ impl<'tcx> CoverageInfoBuilderMethods<'tcx> for Builder<'_, '_, 'tcx> {
         // can end up in a crate that isn't doing coverage instrumentation.
         // When that happens, we currently just discard those statements, so
         // the corresponding code will be undercounted.
-        // tRust: known issue — Find a better solution for mixed-coverage builds.
+        // FIXME(Zalathar): Find a better solution for mixed-coverage builds.
         let Some(_coverage_cx) = &bx.cx.coverage_cx else { return };
 
         let Some(function_coverage_info) =

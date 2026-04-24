@@ -155,12 +155,7 @@ impl ValidationResult {
 #[non_exhaustive]
 pub enum AstNode {
     /// A function definition.
-    Function {
-        name: String,
-        params: Vec<String>,
-        return_type: Option<String>,
-        body: Vec<AstNode>,
-    },
+    Function { name: String, params: Vec<String>, return_type: Option<String>, body: Vec<AstNode> },
     /// An attribute (e.g., `#[requires(...)]`).
     Attribute { text: String },
     /// A statement (simplified: just the text).
@@ -168,11 +163,7 @@ pub enum AstNode {
     /// A block expression `{ ... }`.
     Block { children: Vec<AstNode> },
     /// An if expression.
-    If {
-        condition: String,
-        then_branch: Box<AstNode>,
-        else_branch: Option<Box<AstNode>>,
-    },
+    If { condition: String, then_branch: Box<AstNode>, else_branch: Option<Box<AstNode>> },
     /// A loop/while/for expression.
     Loop { body: Box<AstNode> },
     /// A return expression.

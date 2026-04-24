@@ -156,7 +156,6 @@ fn check_fn(tcx: TyCtxt<'_>, parent_def_id: LocalDefId) {
 
     for bound_var in sig.bound_vars() {
         let ty::BoundVariableKind::Region(ty::BoundRegionKind::Named(def_id)) = bound_var else {
-            // tRust: invariant — fn sig bound variables must all be named lifetime binders
             span_bug!(tcx.def_span(parent_def_id), "unexpected non-lifetime binder on fn sig");
         };
 
@@ -180,7 +179,7 @@ fn check_fn(tcx: TyCtxt<'_>, parent_def_id: LocalDefId) {
                 ambient_variance: ty::Covariant,
                 generics: tcx.generics_of(parent_def_id),
             };
-            functional_variances.relate(sig, sig).expect("invariant: relate on well-formed types succeeds"); // tRust: unwrap -> expect
+            functional_variances.relate(sig, sig).unwrap();
             functional_variances.variances
         }),
         outlives_env: LazyCell::new(|| {
@@ -488,14 +487,12 @@ fn extract_def_id_from_arg<'tcx>(
         },
         ty::GenericArgKind::Type(ty) => {
             let ty::Param(param_ty) = *ty.kind() else {
-                // tRust: invariant — type generic arg must be a Param type to resolve its def_id
                 bug!();
             };
             generics.type_param(param_ty, tcx).def_id
         }
         ty::GenericArgKind::Const(ct) => {
             let ty::ConstKind::Param(param_ct) = ct.kind() else {
-                // tRust: invariant — const generic arg must be a Param const to resolve its def_id
                 bug!();
             };
             generics.const_param(param_ct, tcx).def_id
@@ -544,13 +541,13 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for FunctionalVariances<'tcx> {
     ) -> RelateResult<'tcx, T> {
         let old_variance = self.ambient_variance;
         self.ambient_variance = self.ambient_variance.xform(variance);
-        self.relate(a, b).expect("invariant: relate on well-formed types succeeds"); // tRust: unwrap -> expect
+        self.relate(a, b).unwrap();
         self.ambient_variance = old_variance;
         Ok(a)
     }
 
     fn tys(&mut self, a: Ty<'tcx>, b: Ty<'tcx>) -> RelateResult<'tcx, Ty<'tcx>> {
-        structurally_relate_tys(self, a, b).expect("invariant: structural relate on well-formed types succeeds"); // tRust: unwrap -> expect
+        structurally_relate_tys(self, a, b).unwrap();
         Ok(a)
     }
 
@@ -585,7 +582,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for FunctionalVariances<'tcx> {
         a: ty::Const<'tcx>,
         b: ty::Const<'tcx>,
     ) -> RelateResult<'tcx, ty::Const<'tcx>> {
-        structurally_relate_consts(self, a, b).expect("invariant: structural relate on well-formed consts succeeds"); // tRust: unwrap -> expect
+        structurally_relate_consts(self, a, b).unwrap();
         Ok(a)
     }
 
@@ -597,7 +594,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for FunctionalVariances<'tcx> {
     where
         T: Relate<TyCtxt<'tcx>>,
     {
-        self.relate(a.skip_binder(), b.skip_binder()).expect("invariant: relate on well-formed binder contents succeeds"); // tRust: unwrap -> expect
+        self.relate(a.skip_binder(), b.skip_binder()).unwrap();
         Ok(a)
     }
 }

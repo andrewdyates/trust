@@ -363,7 +363,7 @@ impl AnnotateSnippetEmitter {
                     let lo = substitutions
                         .iter()
                         .find_map(|sub| sub.parts.first().map(|p| p.span.lo()))
-                        .expect("invariant: non-empty substitutions must have at least one part"); // tRust: unwrap -> expect
+                        .unwrap();
                     let file = sm.lookup_source_file(lo);
 
                     let filename =
@@ -418,7 +418,7 @@ impl AnnotateSnippetEmitter {
                                     && let b = b.rsplit_once('\n').unwrap_or_else(|| ("", &b)).1
                                     && b.trim().is_empty()
                                 {
-                                    // tRust: known issue — This is a hack:
+                                    // FIXME: This is a hack:
                                     // The span for attribute suggestions often times points to the
                                     // beginning of an item, disregarding leading whitespace. This
                                     // causes the attribute to be properly indented, but leaves original

@@ -48,10 +48,7 @@ impl ChcPredicate {
     /// Create a predicate application with the given argument formulas.
     #[must_use]
     pub fn apply(&self, args: &[Formula]) -> ChcAtom {
-        ChcAtom {
-            predicate: self.name.clone(),
-            args: args.to_vec(),
-        }
+        ChcAtom { predicate: self.name.clone(), args: args.to_vec() }
     }
 
     /// Create a predicate application using primed variable names (post-state).
@@ -62,10 +59,7 @@ impl ChcPredicate {
             .iter()
             .map(|(name, sort)| Formula::Var(format!("{name}'"), sort.clone()))
             .collect();
-        ChcAtom {
-            predicate: self.name.clone(),
-            args,
-        }
+        ChcAtom { predicate: self.name.clone(), args }
     }
 
     /// Create a predicate application using unprimed variable names (pre-state).
@@ -76,10 +70,7 @@ impl ChcPredicate {
             .iter()
             .map(|(name, sort)| Formula::Var(name.clone(), sort.clone()))
             .collect();
-        ChcAtom {
-            predicate: self.name.clone(),
-            args,
-        }
+        ChcAtom { predicate: self.name.clone(), args }
     }
 }
 
@@ -205,12 +196,7 @@ pub fn encode_function_loops(func: &VerifiableFunction) -> Result<ChcSystem, Chc
         roles.extend(loop_roles);
     }
 
-    Ok(ChcSystem {
-        predicates,
-        clauses,
-        roles,
-        function_name: func.name.clone(),
-    })
+    Ok(ChcSystem { predicates, clauses, roles, function_name: func.name.clone() })
 }
 
 /// Encode a single loop as CHC clauses.
@@ -228,10 +214,7 @@ fn encode_single_loop(
 
     // Create invariant predicate
     let pred_name = format!("inv_bb{}", loop_info.header.0);
-    let predicate = ChcPredicate {
-        name: pred_name,
-        params: modified_vars.clone(),
-    };
+    let predicate = ChcPredicate { name: pred_name, params: modified_vars.clone() };
 
     let mut clauses = Vec::new();
     let mut roles = Vec::new();
@@ -297,8 +280,7 @@ pub(crate) fn collect_modified_variables(
 ) -> Vec<(String, Sort)> {
     let mut modified = Vec::new();
     let mut seen_locals = FxHashSet::default();
-    let body_set: FxHashSet<usize> =
-        loop_info.body_blocks.iter().map(|b| b.0).collect();
+    let body_set: FxHashSet<usize> = loop_info.body_blocks.iter().map(|b| b.0).collect();
 
     for &body_id in &body_set {
         let Some(block) = func.body.blocks.get(body_id) else {
@@ -306,17 +288,16 @@ pub(crate) fn collect_modified_variables(
         };
         for stmt in &block.stmts {
             if let Statement::Assign { place, .. } = stmt
-                && place.projections.is_empty() && !seen_locals.contains(&place.local) {
-                    seen_locals.insert(place.local);
-                    if let Some(decl) = func.body.locals.get(place.local) {
-                        let name = decl
-                            .name
-                            .clone()
-                            .unwrap_or_else(|| format!("_{}", place.local));
-                        let sort = Sort::from_ty(&decl.ty);
-                        modified.push((name, sort));
-                    }
+                && place.projections.is_empty()
+                && !seen_locals.contains(&place.local)
+            {
+                seen_locals.insert(place.local);
+                if let Some(decl) = func.body.locals.get(place.local) {
+                    let name = decl.name.clone().unwrap_or_else(|| format!("_{}", place.local));
+                    let sort = Sort::from_ty(&decl.ty);
+                    modified.push((name, sort));
                 }
+            }
         }
     }
 
@@ -346,10 +327,10 @@ fn build_init_args(
                     .and_then(|d| d.name.clone())
                     .unwrap_or_else(|| format!("_{}", iv.local_idx));
                 iv_name == *name
-            })
-                && let Some(init) = &ivar.init {
-                    return init.clone();
-                }
+            }) && let Some(init) = &ivar.init
+            {
+                return init.clone();
+            }
             // Fallback: use an initial-state variable
             Formula::Var(format!("{name}_init"), sort.clone())
         })
@@ -369,18 +350,14 @@ pub(crate) fn extract_loop_condition(func: &VerifiableFunction, loop_info: &Loop
         Terminator::SwitchInt { discr, targets, .. } => {
             // The loop body is entered when the discriminant matches a target
             // that leads to a body block
-            let body_set: FxHashSet<usize> =
-                loop_info.body_blocks.iter().map(|b| b.0).collect();
+            let body_set: FxHashSet<usize> = loop_info.body_blocks.iter().map(|b| b.0).collect();
 
             let discr_formula = crate::operand_to_formula(func, discr);
 
             for (value, target) in targets {
                 if body_set.contains(&target.0) && *target != loop_info.header {
                     // This target enters the loop body
-                    return Formula::Eq(
-                        Box::new(discr_formula),
-                        Box::new(u128_to_formula(*value)),
-                    );
+                    return Formula::Eq(Box::new(discr_formula), Box::new(u128_to_formula(*value)));
                 }
             }
             Formula::Bool(true)
@@ -390,10 +367,7 @@ pub(crate) fn extract_loop_condition(func: &VerifiableFunction, loop_info: &Loop
 }
 
 /// Extract the loop exit condition (negation of the continuation condition).
-pub(crate) fn extract_exit_condition(
-    func: &VerifiableFunction,
-    loop_info: &LoopInfo,
-) -> Formula {
+pub(crate) fn extract_exit_condition(func: &VerifiableFunction, loop_info: &LoopInfo) -> Formula {
     let cond = extract_loop_condition(func, loop_info);
     Formula::Not(Box::new(cond))
 }
@@ -407,8 +381,7 @@ fn build_body_transition(
     params: &[(String, Sort)],
 ) -> Formula {
     let mut constraints = Vec::new();
-    let body_set: FxHashSet<usize> =
-        loop_info.body_blocks.iter().map(|b| b.0).collect();
+    let body_set: FxHashSet<usize> = loop_info.body_blocks.iter().map(|b| b.0).collect();
 
     for (name, sort) in params {
         let primed = Formula::Var(format!("{name}'"), sort.clone());
@@ -432,7 +405,9 @@ fn build_body_transition(
         Formula::Bool(true)
     } else if constraints.len() == 1 {
         // SAFETY: len == 1 arm of the match guarantees .next() returns Some.
-        constraints.into_iter().next()
+        constraints
+            .into_iter()
+            .next()
             .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
     } else {
         Formula::And(constraints)
@@ -452,15 +427,13 @@ fn find_variable_update(
         for stmt in &block.stmts {
             if let Statement::Assign { place, rvalue, .. } = stmt
                 && place.projections.is_empty()
-                    && let Some(decl) = func.body.locals.get(place.local) {
-                        let name = decl
-                            .name
-                            .clone()
-                            .unwrap_or_else(|| format!("_{}", place.local));
-                        if name == var_name {
-                            return Some(rvalue_to_formula(func, rvalue));
-                        }
-                    }
+                && let Some(decl) = func.body.locals.get(place.local)
+            {
+                let name = decl.name.clone().unwrap_or_else(|| format!("_{}", place.local));
+                if name == var_name {
+                    return Some(rvalue_to_formula(func, rvalue));
+                }
+            }
         }
     }
     None
@@ -536,7 +509,7 @@ pub(crate) fn rvalue_to_formula(func: &VerifiableFunction, rvalue: &Rvalue) -> F
             let place_name = crate::place_to_var_name(func, place);
             Formula::Var(place_name, Sort::Int)
         }
-        _ => Formula::Var("__unknown".to_string(), Sort::Int),
+        _ => Formula::Var("__unknown".into(), Sort::Int),
     }
 }
 
@@ -548,7 +521,13 @@ pub(crate) fn rvalue_to_formula(func: &VerifiableFunction, rvalue: &Rvalue) -> F
 /// with IntToBv/BvToInt bridges. When `None`, defaults to 64 bits.
 // tRust #390: Emit proper bitvector formulas instead of uninterpreted approximations.
 // tRust #458: Promoted to `pub` for use by trust-transval vc_core.
-pub fn binop_to_formula(op: BinOp, lhs: Formula, rhs: Formula, width: Option<u32>, signed: bool) -> Formula {
+pub fn binop_to_formula(
+    op: BinOp,
+    lhs: Formula,
+    rhs: Formula,
+    width: Option<u32>,
+    signed: bool,
+) -> Formula {
     match op {
         BinOp::Add => Formula::Add(Box::new(lhs), Box::new(rhs)),
         BinOp::Sub => Formula::Sub(Box::new(lhs), Box::new(rhs)),
@@ -595,7 +574,7 @@ pub fn binop_to_formula(op: BinOp, lhs: Formula, rhs: Formula, width: Option<u32
             // Bridge back to integer domain for compatibility with overflow/range checks.
             Formula::BvToInt(Box::new(bv_result), w, false)
         }
-        _ => Formula::Var("__unknown_binop".to_string(), Sort::Int),
+        _ => Formula::Var("__unknown_binop".into(), Sort::Int),
     }
 }
 
@@ -683,11 +662,7 @@ mod tests {
                         terminator: Terminator::Goto(BlockId(1)),
                     },
                     // bb3 (exit): return
-                    BasicBlock {
-                        id: BlockId(3),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 1,
                 return_ty: Ty::Unit,
@@ -913,7 +888,8 @@ mod tests {
     fn test_sum_loop_has_multiple_modified_vars() {
         let func = sum_loop_function();
         let system = encode_function_loops(&func).expect("should encode sum loop");
-        let param_names: Vec<&str> = system.predicates[0].params.iter().map(|(n, _)| n.as_str()).collect();
+        let param_names: Vec<&str> =
+            system.predicates[0].params.iter().map(|(n, _)| n.as_str()).collect();
         assert!(param_names.contains(&"i"));
         assert!(param_names.contains(&"sum"));
     }
@@ -922,7 +898,7 @@ mod tests {
     fn test_predicate_apply_creates_correct_atom() {
         let pred = ChcPredicate {
             name: "inv".to_string(),
-            params: vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Int)],
+            params: vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)],
         };
         let atom = pred.apply(&[Formula::Int(0), Formula::Int(1)]);
         assert_eq!(atom.predicate, "inv");
@@ -933,7 +909,7 @@ mod tests {
     fn test_predicate_apply_primed() {
         let pred = ChcPredicate {
             name: "inv".to_string(),
-            params: vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Bool)],
+            params: vec![("x".into(), Sort::Int), ("y".into(), Sort::Bool)],
         };
         let atom = pred.apply_primed();
         assert_eq!(atom.args.len(), 2);
@@ -943,10 +919,7 @@ mod tests {
 
     #[test]
     fn test_predicate_apply_unprimed() {
-        let pred = ChcPredicate {
-            name: "inv".to_string(),
-            params: vec![("x".to_string(), Sort::Int)],
-        };
+        let pred = ChcPredicate { name: "inv".to_string(), params: vec![("x".into(), Sort::Int)] };
         let atom = pred.apply_unprimed();
         assert!(matches!(&atom.args[0], Formula::Var(name, Sort::Int) if name == "x"));
     }
@@ -1023,7 +996,7 @@ mod tests {
 
     #[test]
     fn test_chc_error_display() {
-        let e = ChcError::NoLoops { function: "foo".to_string() };
+        let e = ChcError::NoLoops { function: "foo".into() };
         assert_eq!(e.to_string(), "no loops found in function `foo`");
         let e = ChcError::NoInductionVars { header: 3 };
         assert_eq!(e.to_string(), "loop at block 3 has no induction variables");
@@ -1045,8 +1018,14 @@ mod tests {
     fn test_binop_to_formula_arithmetic() {
         let x = Formula::Var("x".into(), Sort::Int);
         let y = Formula::Var("y".into(), Sort::Int);
-        assert!(matches!(binop_to_formula(BinOp::Add, x.clone(), y.clone(), None, false), Formula::Add(_, _)));
-        assert!(matches!(binop_to_formula(BinOp::Sub, x.clone(), y.clone(), None, false), Formula::Sub(_, _)));
+        assert!(matches!(
+            binop_to_formula(BinOp::Add, x.clone(), y.clone(), None, false),
+            Formula::Add(_, _)
+        ));
+        assert!(matches!(
+            binop_to_formula(BinOp::Sub, x.clone(), y.clone(), None, false),
+            Formula::Sub(_, _)
+        ));
         assert!(matches!(binop_to_formula(BinOp::Mul, x, y, None, false), Formula::Mul(_, _)));
     }
 
@@ -1054,8 +1033,14 @@ mod tests {
     fn test_binop_to_formula_comparison() {
         let x = Formula::Var("x".into(), Sort::Int);
         let y = Formula::Var("y".into(), Sort::Int);
-        assert!(matches!(binop_to_formula(BinOp::Lt, x.clone(), y.clone(), None, false), Formula::Lt(_, _)));
-        assert!(matches!(binop_to_formula(BinOp::Eq, x.clone(), y.clone(), None, false), Formula::Eq(_, _)));
+        assert!(matches!(
+            binop_to_formula(BinOp::Lt, x.clone(), y.clone(), None, false),
+            Formula::Lt(_, _)
+        ));
+        assert!(matches!(
+            binop_to_formula(BinOp::Eq, x.clone(), y.clone(), None, false),
+            Formula::Eq(_, _)
+        ));
         assert!(matches!(binop_to_formula(BinOp::Ne, x, y, None, false), Formula::Not(_)));
     }
 

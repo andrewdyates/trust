@@ -25,7 +25,7 @@ pub(crate) fn check_unreachable(func: &VerifiableFunction, vcs: &mut Vec<Verific
 
         vcs.push(VerificationCondition {
             kind: VcKind::Unreachable,
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             location: block_span(block).unwrap_or_else(|| func.span.clone()),
             formula: guards_to_assumption(func, &entry.guards),
             contract_metadata: None,

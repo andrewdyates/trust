@@ -246,4 +246,3 @@ pub fn interval_bitor(a: &Interval, b: &Interval) -> Interval {
     }
     Interval::TOP
 }
-

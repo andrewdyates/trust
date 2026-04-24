@@ -215,7 +215,7 @@ impl<'tcx, 'a> ExportableItemsChecker<'tcx, 'a> {
             .unwrap_or(sig);
 
         let hir_id = self.tcx.local_def_id_to_hir_id(def_id);
-        let decl = self.tcx.hir_fn_decl_by_hir_id(hir_id).expect("invariant: exported fn has HIR fn decl"); // tRust: unwrap -> expect
+        let decl = self.tcx.hir_fn_decl_by_hir_id(hir_id).unwrap();
 
         for (input_ty, input_hir) in iter::zip(sig.inputs(), decl.inputs) {
             self.check_nested_types_are_exportable(*input_ty, input_hir.span);
@@ -235,7 +235,7 @@ impl<'tcx, 'a> ExportableItemsChecker<'tcx, 'a> {
                     .emit_err(UnexportableItem::TypeRepr(self.tcx.def_span(self.item_id)));
             }
 
-            // tRust: known issue — support `#[export(unsafe_stable_abi = "hash")]` syntax
+            // FIXME: support `#[export(unsafe_stable_abi = "hash")]` syntax
             for variant in adt_def.variants() {
                 for field in &variant.fields {
                     if !field.vis.is_public() {

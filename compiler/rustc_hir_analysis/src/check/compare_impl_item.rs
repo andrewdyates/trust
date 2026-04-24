@@ -179,7 +179,7 @@ fn compare_method_predicate_entailment<'tcx>(
     // This node-id should be used for the `body_id` field on each
     // `ObligationCause` (and the `FnCtxt`).
     //
-    // tRust: known issue — (@lcnr): remove that after removing `cause.body_id` from
+    // FIXME(@lcnr): remove that after removing `cause.body_id` from
     // obligations.
     let impl_m_def_id = impl_m.def_id.expect_local();
     let impl_m_span = tcx.def_span(impl_m_def_id);
@@ -212,7 +212,7 @@ fn compare_method_predicate_entailment<'tcx>(
     //
     // We then register the obligations from the impl_m and check to see
     // if all constraints hold.
-    let impl_predicates = tcx.predicates_of(impl_m_predicates.parent.expect("invariant: has parent def_id"));
+    let impl_predicates = tcx.predicates_of(impl_m_predicates.parent.unwrap());
     let mut hybrid_preds = impl_predicates.instantiate_identity(tcx).predicates;
     hybrid_preds.extend(
         trait_m_predicates.instantiate_own(tcx, trait_to_impl_args).map(|(predicate, _)| predicate),
@@ -237,7 +237,7 @@ fn compare_method_predicate_entailment<'tcx>(
 
     let normalize_cause = traits::ObligationCause::misc(impl_m_span, impl_m_def_id);
     let param_env = ty::ParamEnv::new(tcx.mk_clauses(&hybrid_preds));
-    // tRust: known issue — (-Zhigher-ranked-assumptions): The `hybrid_preds`
+    // FIXME(-Zhigher-ranked-assumptions): The `hybrid_preds`
     // should be well-formed. However, using them may result in
     // region errors as we currently don't track placeholder
     // assumptions.
@@ -318,7 +318,7 @@ fn compare_method_predicate_entailment<'tcx>(
     // compatible with that of the trait method. We do this by
     // checking that `impl_fty <: trait_fty`.
     //
-    // tRust: known issue — We manually instantiate the trait method here as we need
+    // FIXME: We manually instantiate the trait method here as we need
     // to manually compute its implied bounds. Otherwise this could just
     // be `ocx.sub(impl_sig, trait_sig)`.
 
@@ -347,7 +347,7 @@ fn compare_method_predicate_entailment<'tcx>(
     wf_tys.extend(trait_sig.inputs_and_output.iter());
     debug!(?trait_sig);
 
-    // tRust: known issue — We'd want to keep more accurate spans than "the method signature" when
+    // FIXME: We'd want to keep more accurate spans than "the method signature" when
     // processing the comparison between the trait and impl fn, but we sadly lose them
     // and point at the whole signature when a trait bound or specific input or output
     // type would be more appropriate. In other places we have a `Vec<Span>`
@@ -470,7 +470,7 @@ pub(super) fn collect_return_position_impl_trait_in_trait_tys<'tcx>(
     check_method_is_structurally_compatible(tcx, impl_m, trait_m, impl_trait_ref, true)?;
 
     let impl_m_hir_id = tcx.local_def_id_to_hir_id(impl_m_def_id);
-    let return_span = tcx.hir_fn_decl_by_hir_id(impl_m_hir_id).expect("invariant: value is present").output.span();
+    let return_span = tcx.hir_fn_decl_by_hir_id(impl_m_hir_id).unwrap().output.span();
     let cause = ObligationCause::new(
         return_span,
         impl_m_def_id,
@@ -674,7 +674,7 @@ pub(super) fn collect_return_position_impl_trait_in_trait_tys<'tcx>(
         );
     }
 
-    // tRust: known issue — This has the same issue as #108544, but since this isn't breaking
+    // FIXME: This has the same issue as #108544, but since this isn't breaking
     // existing code, I'm not particularly inclined to do the same hack as above
     // where we process wf obligations manually. This can be fixed in a forward-
     // compatible way later.
@@ -826,10 +826,9 @@ where
             if let Some((ty, _)) = self.types.get(&proj.def_id) {
                 return *ty;
             }
-            //tRust: known issue — (RPITIT): Deny nested RPITIT in args too
+            //FIXME(RPITIT): Deny nested RPITIT in args too
             if proj.args.has_escaping_bound_vars() {
-                // tRust: invariant — RPITIT comparison should not fail at this point (known limitation)
-                bug!("tRust: known issue — (RPITIT): error here");
+                bug!("FIXME(RPITIT): error here");
             }
             // Replace with infer var
             let infer_ty = self.ocx.infcx.next_ty_var(self.span);
@@ -916,7 +915,6 @@ impl<'tcx> ty::FallibleTypeFolder<TyCtxt<'tcx>> for RemapHiddenTyRegions<'tcx> {
             if let ty::ReEarlyParam(e) = id_region.kind() {
                 e
             } else {
-                // tRust: invariant — RPITIT synthesis should not produce opaque types with mismatched item bounds
                 bug!(
                     "expected to map region {region} to early-bound identity region, but got {id_region}"
                 );
@@ -1174,7 +1172,7 @@ pub(super) fn check_number_of_early_bound_regions<'tcx>(
         && let Some(trait_generics) = trait_node.generics()
     {
         generics_span = trait_generics.span;
-        // tRust: known issue — we could potentially look at the impl's bounds to not point at bounds that
+        // FIXME: we could potentially look at the impl's bounds to not point at bounds that
         // *are* present in the impl.
         for p in trait_generics.predicates {
             match p.kind {
@@ -1477,7 +1475,7 @@ fn extract_spans_for_error_reporting<'tcx>(
 
     match terr {
         TypeError::ArgumentMutability(i) | TypeError::ArgumentSorts(ExpectedFound { .. }, i) => {
-            (impl_args.nth(i).expect("invariant: value is present"), trait_args.and_then(|mut args| args.nth(i)))
+            (impl_args.nth(i).unwrap(), trait_args.and_then(|mut args| args.nth(i)))
         }
         _ => (cause.span, tcx.hir_span_if_local(trait_m.def_id)),
     }
@@ -1606,7 +1604,7 @@ fn compare_number_of_generics<'tcx>(
     // inheriting the generics from will also have mismatched arguments, and
     // we'll report an error for that instead. Delay a bug for safety, though.
     if trait_.is_impl_trait_in_trait() {
-        // tRust: known issue — no tests trigger this. If you find example code that does
+        // FIXME: no tests trigger this. If you find example code that does
         // trigger this, please add it to the test suite.
         tcx.dcx()
             .bug("errors comparing numbers of generics of trait/impl functions were not emitted");
@@ -1822,7 +1820,7 @@ fn compare_number_of_method_arguments<'tcx>(
                 // We have no inputs; construct the span to the left of the last parenthesis
                 // fn foo( ) {}
                 //        ^
-                // tRust: known issue — Keep spans for function parentheses around to make this more robust.
+                // FIXME: Keep spans for function parentheses around to make this more robust.
                 sm.span_to_snippet(impl_m_sig.span).ok().and_then(|s| {
                     let right_paren = s.as_bytes().iter().rposition(|&b| b == b')')?;
                     let pos = impl_m_sig.span.lo() + BytePos(right_paren as u32);
@@ -1909,7 +1907,7 @@ fn compare_synthetic_generics<'tcx>(
     trait_m: ty::AssocItem,
     delay: bool,
 ) -> Result<(), ErrorGuaranteed> {
-    // tRust: known issue — (chrisvittal) Clean up this function, list of tRust: known issue — items:
+    // FIXME(chrisvittal) Clean up this function, list of FIXME items:
     //     1. Better messages for the span labels
     //     2. Explanation as to what is going on
     // If we get here, we already have the same number of generics, so the zip will
@@ -1948,7 +1946,7 @@ fn compare_synthetic_generics<'tcx>(
                 err.span_label(impl_span, "expected generic parameter, found `impl Trait`");
                 try {
                     // try taking the name from the trait impl
-                    // tRust: known issue — this is obviously suboptimal since the name can already be used
+                    // FIXME: this is obviously suboptimal since the name can already be used
                     // as another generic argument
                     let new_name = tcx.opt_item_name(trait_def_id)?;
                     let trait_m = trait_m.def_id.as_local()?;
@@ -2087,7 +2085,6 @@ fn compare_generic_param_kinds<'tcx>(
             // to make sure this error is reported for them.
             (Const { .. }, Const { .. }) | (Type { .. }, Type { .. }) => false,
             (Lifetime { .. }, _) | (_, Lifetime { .. }) => {
-                // tRust: invariant — lifetime params are filtered out by ty_const_params_of before this point
                 bug!("lifetime params are expected to be filtered by `ty_const_params_of`")
             }
         } {
@@ -2113,14 +2110,13 @@ fn compare_generic_param_kinds<'tcx>(
                     )
                 }
                 Type { .. } => format!("{prefix} type parameter"),
-                // tRust: invariant — lifetime params should not appear in type/const param comparison
                 Lifetime { .. } => span_bug!(
                     tcx.def_span(param.def_id),
                     "lifetime params are expected to be filtered by `ty_const_params_of`"
                 ),
             };
 
-            let trait_header_span = tcx.def_ident_span(tcx.parent(trait_item.def_id)).expect("invariant: value is present");
+            let trait_header_span = tcx.def_ident_span(tcx.parent(trait_item.def_id)).unwrap();
             err.span_label(trait_header_span, "");
             err.span_label(param_trait_span, make_param_message("expected", param_trait));
 
@@ -2180,7 +2176,7 @@ fn compare_type_const<'tcx>(
 
 /// The equivalent of [compare_method_predicate_entailment], but for associated constants
 /// instead of associated functions.
-// tRust: known issue — (generic_const_items): If possible extract the common parts of `compare_{type,const}_predicate_entailment`.
+// FIXME(generic_const_items): If possible extract the common parts of `compare_{type,const}_predicate_entailment`.
 #[instrument(level = "debug", skip(tcx))]
 fn compare_const_predicate_entailment<'tcx>(
     tcx: TyCtxt<'tcx>,
@@ -2219,7 +2215,7 @@ fn compare_const_predicate_entailment<'tcx>(
 
     // The predicates declared by the impl definition, the trait and the
     // associated const in the trait are assumed.
-    let impl_predicates = tcx.predicates_of(impl_ct_predicates.parent.expect("invariant: has parent def_id"));
+    let impl_predicates = tcx.predicates_of(impl_ct_predicates.parent.unwrap());
     let mut hybrid_preds = impl_predicates.instantiate_identity(tcx).predicates;
     hybrid_preds.extend(
         trait_ct_predicates
@@ -2349,7 +2345,7 @@ fn compare_type_predicate_entailment<'tcx>(
 
     // The predicates declared by the impl definition, the trait and the
     // associated type in the trait are assumed.
-    let impl_predicates = tcx.predicates_of(impl_ty_predicates.parent.expect("invariant: has parent def_id"));
+    let impl_predicates = tcx.predicates_of(impl_ty_predicates.parent.unwrap());
     let mut hybrid_preds = impl_predicates.instantiate_identity(tcx).predicates;
     hybrid_preds.extend(
         trait_ty_predicates
@@ -2366,7 +2362,7 @@ fn compare_type_predicate_entailment<'tcx>(
         // Augment the hybrid param-env with the const conditions
         // of the impl header and the trait assoc type.
         hybrid_preds.extend(
-            tcx.const_conditions(impl_ty_predicates.parent.expect("invariant: has parent def_id"))
+            tcx.const_conditions(impl_ty_predicates.parent.unwrap())
                 .instantiate_identity(tcx)
                 .into_iter()
                 .chain(
@@ -2487,7 +2483,6 @@ pub(super) fn check_type_bounds<'tcx>(
                 ..
             }) => ty.span,
             hir::Node::ImplItem(hir::ImplItem { kind: hir::ImplItemKind::Type(ty), .. }) => ty.span,
-            // tRust: invariant — compare_impl_item is only called on valid associated item kinds
             item => span_bug!(
                 tcx.def_span(impl_ty_def_id),
                 "cannot call `check_type_bounds` on item: {item:?}",
@@ -2643,7 +2638,6 @@ fn param_env_with_gat_bounds<'tcx>(
 
     for impl_ty in impl_tys_to_install {
         let trait_ty = match impl_ty.container {
-            // tRust: invariant — this code path is only for trait impls, not inherent impls
             ty::AssocContainer::InherentImpl => bug!(),
             ty::AssocContainer::Trait => impl_ty,
             ty::AssocContainer::TraitImpl(Err(_)) => continue,
@@ -2755,7 +2749,6 @@ fn try_report_async_mismatch<'tcx>(
     let ty::Alias(ty::Projection, ty::AliasTy { def_id: async_future_def_id, .. }) =
         *tcx.fn_sig(trait_m.def_id).skip_binder().skip_binder().output().kind()
     else {
-        // tRust: invariant — async fn must return an RPITIT (return-position impl Trait in trait)
         bug!("expected `async fn` to return an RPITIT");
     };
 
@@ -2770,7 +2763,7 @@ fn try_report_async_mismatch<'tcx>(
                 impl_sig.output(),
             )
         {
-            // tRust: known issue — We should suggest making the fn `async`, but extracting
+            // FIXME: We should suggest making the fn `async`, but extracting
             // the right span is a bit difficult.
             return Err(tcx.sess.dcx().emit_err(MethodShouldReturnFuture {
                 span: tcx.def_span(impl_m.def_id),

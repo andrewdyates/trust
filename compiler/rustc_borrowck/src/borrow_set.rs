@@ -120,7 +120,7 @@ impl<'tcx> fmt::Display for BorrowData<'tcx> {
             mir::BorrowKind::Fake(mir::FakeBorrowKind::Deep) => "fake ",
             mir::BorrowKind::Fake(mir::FakeBorrowKind::Shallow) => "fake shallow ",
             mir::BorrowKind::Mut { kind: mir::MutBorrowKind::ClosureCapture } => "uniq ",
-            // // NOTE: differentiating `TwoPhaseBorrow` could improve diagnostics.
+            // FIXME: differentiate `TwoPhaseBorrow`
             mir::BorrowKind::Mut {
                 kind: mir::MutBorrowKind::Default | mir::MutBorrowKind::TwoPhaseBorrow,
             } => "mut ",
@@ -276,7 +276,6 @@ impl<'a, 'tcx> Visitor<'tcx> for GatherBorrows<'a, 'tcx> {
                 //
                 // so extract `temp`.
                 let Some(temp) = assigned_place.as_local() else {
-                    // tRust: invariant: structural invariant — shallow borrow must have a local Place (no projections)
                     span_bug!(
                         self.body.source_info(location).span,
                         "expected 2-phase borrow to assign to a local, not `{:?}`",
@@ -329,7 +328,6 @@ impl<'a, 'tcx> Visitor<'tcx> for GatherBorrows<'a, 'tcx> {
 
             if let TwoPhaseActivation::ActivatedAt(other_location) = borrow_data.activation_location
             {
-                // tRust: invariant: structural invariant — TwoPhaseActivation::NotActivated should be resolved before use
                 span_bug!(
                     self.body.source_info(location).span,
                     "found two uses for 2-phase borrow temporary {:?}: \

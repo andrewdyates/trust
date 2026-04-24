@@ -314,8 +314,6 @@ impl<'gcc, 'tcx> CodegenCx<'gcc, 'tcx> {
     }
 
     pub fn rvalue_as_function(&self, value: RValue<'gcc>) -> Function<'gcc> {
-        // SAFETY: The source and target types have the same size and
-        // compatible memory layouts, so the transmute is well-defined.
         let function: Function<'gcc> = unsafe { std::mem::transmute(value) };
         debug_assert!(
             self.functions.borrow().values().any(|value| *value == function),

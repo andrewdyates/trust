@@ -11,8 +11,7 @@ use crate::error::DisasmError;
 use crate::instruction::{ControlFlow, Instruction};
 use crate::opcode::Opcode;
 use crate::operand::{
-    BarrierDomain, BarrierType, Condition, ExtendType, MemoryOperand, Operand, Register,
-    ShiftType,
+    BarrierDomain, BarrierType, Condition, ExtendType, MemoryOperand, Operand, Register, ShiftType,
 };
 
 // === Bit extraction helpers ===
@@ -45,21 +44,13 @@ fn is_64bit(encoding: u32) -> bool {
 /// Make a GPR or ZR depending on context. Index 31 => ZR.
 #[inline]
 fn gpr_or_zr(index: u8, is_64: bool) -> Register {
-    if index == 31 {
-        Register::zr(is_64)
-    } else {
-        Register::gpr(index, is_64)
-    }
+    if index == 31 { Register::zr(is_64) } else { Register::gpr(index, is_64) }
 }
 
 /// Make a GPR or SP depending on context. Index 31 => SP.
 #[inline]
 fn gpr_or_sp(index: u8, is_64: bool) -> Register {
-    if index == 31 {
-        Register::sp(is_64)
-    } else {
-        Register::gpr(index, is_64)
-    }
+    if index == 31 { Register::sp(is_64) } else { Register::gpr(index, is_64) }
 }
 
 // === Top-level decoder ===
@@ -70,10 +61,7 @@ pub(crate) fn decode_instruction(enc: u32, addr: u64) -> Result<Instruction, Dis
 
     match op0 {
         // 0b0000: Reserved / unallocated (some are constant-generation)
-        0b0000 => Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        }),
+        0b0000 => Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
 
         // 0b100x: Data processing — immediate
         0b1000 | 0b1001 => decode_dp_imm(enc, addr),
@@ -91,10 +79,7 @@ pub(crate) fn decode_instruction(enc: u32, addr: u64) -> Result<Instruction, Dis
         0b0111 | 0b1111 => decode_simd_fp(enc, addr),
 
         // Everything else
-        _ => Err(DisasmError::UnknownEncoding {
-            encoding: enc,
-            address: addr,
-        }),
+        _ => Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     }
 }
 
@@ -117,10 +102,7 @@ fn decode_dp_imm(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         0b110 => decode_bitfield(enc, addr),
         // Extract
         0b111 => decode_extract(enc, addr),
-        _ => Err(DisasmError::UnknownEncoding {
-            encoding: enc,
-            address: addr,
-        }),
+        _ => Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     }
 }
 
@@ -166,18 +148,10 @@ fn decode_add_sub_imm(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         _ => unreachable!("(op, s) are single-bit fields: all 4 values handled"),
     };
 
-    let imm_val = if sh == 1 {
-        (imm12 as u64) << 12
-    } else {
-        imm12 as u64
-    };
+    let imm_val = if sh == 1 { (imm12 as u64) << 12 } else { imm12 as u64 };
 
     // Rd can be SP for ADD/SUB (not ADDS/SUBS), Rn can be SP always
-    let rd_reg = if s == 0 {
-        gpr_or_sp(rd, sf)
-    } else {
-        gpr_or_zr(rd, sf)
-    };
+    let rd_reg = if s == 0 { gpr_or_sp(rd, sf) } else { gpr_or_zr(rd, sf) };
     let rn_reg = gpr_or_sp(rn, sf);
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -198,10 +172,7 @@ fn decode_logical_imm(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
 
     // 32-bit form requires N=0
     if !sf && n == 1 {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode = match opc {
@@ -215,11 +186,7 @@ fn decode_logical_imm(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     let imm_val = decode_bitmask_immediate(n, imms, immr, sf);
 
     // Rd is SP for AND/ORR/EOR, ZR for ANDS
-    let rd_reg = if opc == 0b11 {
-        gpr_or_zr(rd, sf)
-    } else {
-        gpr_or_sp(rd, sf)
-    };
+    let rd_reg = if opc == 0b11 { gpr_or_zr(rd, sf) } else { gpr_or_sp(rd, sf) };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
     insn.push_operand(Operand::Reg(rd_reg));
@@ -276,11 +243,7 @@ fn replicate(pattern: u64, esize: u32, reg_size: u32) -> u64 {
         result |= pattern << pos;
         pos += esize;
     }
-    if reg_size < 64 {
-        result & ((1u64 << reg_size) - 1)
-    } else {
-        result
-    }
+    if reg_size < 64 { result & ((1u64 << reg_size) - 1) } else { result }
 }
 
 fn decode_move_wide(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
@@ -292,22 +255,14 @@ fn decode_move_wide(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
 
     // 32-bit form: hw must be 0 or 1
     if !sf && hw >= 2 {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode = match opc {
         0b00 => Opcode::Movn,
         0b10 => Opcode::Movz,
         0b11 => Opcode::Movk,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let shift = hw * 16;
@@ -332,22 +287,14 @@ fn decode_bitfield(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
 
     // sf must equal N
     if sf != (n == 1) {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode = match opc {
         0b00 => Opcode::Sbfm,
         0b01 => Opcode::Bfm,
         0b10 => Opcode::Ubfm,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -367,10 +314,7 @@ fn decode_extract(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     let rd = bits(enc, 4, 0) as u8;
 
     if sf != (n == 1) {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let mut insn = Instruction::new(addr, enc, Opcode::Extr, ControlFlow::Fallthrough);
@@ -427,10 +371,7 @@ fn decode_branch_sys(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         return decode_system(enc, addr);
     }
 
-    Err(DisasmError::UnknownEncoding {
-        encoding: enc,
-        address: addr,
-    })
+    Err(DisasmError::UnknownEncoding { encoding: enc, address: addr })
 }
 
 fn decode_b(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
@@ -510,12 +451,7 @@ fn decode_br_reg(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         0b0000 => (Opcode::Br, ControlFlow::Branch),
         0b0001 => (Opcode::Blr, ControlFlow::Call),
         0b0010 => (Opcode::Ret, ControlFlow::Return),
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, flow);
@@ -534,12 +470,7 @@ fn decode_exception(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         (0b000, 0b11) => Opcode::Smc,
         (0b001, 0b00) => Opcode::Brk,
         (0b010, 0b00) => Opcode::Hlt,
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Exception);
@@ -589,10 +520,7 @@ fn decode_system(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         }
     }
 
-    Err(DisasmError::UnknownEncoding {
-        encoding: enc,
-        address: addr,
-    })
+    Err(DisasmError::UnknownEncoding { encoding: enc, address: addr })
 }
 
 fn decode_hint(enc: u32, addr: u64, crm: u32, op2: u32) -> Result<Instruction, DisasmError> {
@@ -622,12 +550,7 @@ fn decode_barrier(enc: u32, addr: u64, crm: u32, op2: u32) -> Result<Instruction
         }
         0b100 => Opcode::Dmb,
         0b110 => Opcode::Isb,
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let domain = match crm >> 2 {
@@ -687,16 +610,10 @@ fn decode_load_store(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     // SIMD/FP load/store: op1=1
     if op1 == 1 {
         // For now, treat as unknown -- SIMD loads/stores are complex
-        return Err(DisasmError::UnknownEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr });
     }
 
-    Err(DisasmError::UnknownEncoding {
-        encoding: enc,
-        address: addr,
-    })
+    Err(DisasmError::UnknownEncoding { encoding: enc, address: addr })
 }
 
 fn decode_load_store_exclusive(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
@@ -717,12 +634,7 @@ fn decode_load_store_exclusive(enc: u32, addr: u64) -> Result<Instruction, Disas
         (0, 0, 0) => Opcode::Stxr,
         (1, 1, _) => Opcode::Ldaxr,
         (0, 1, _) => Opcode::Stlxr,
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let base = gpr_or_sp(rn, true);
@@ -764,9 +676,7 @@ fn decode_load_literal(enc: u32, addr: u64) -> Result<Instruction, DisasmError> 
     } else {
         insn.push_operand(Operand::Reg(gpr_or_zr(rt, is_64)));
     }
-    insn.push_operand(Operand::Mem(MemoryOperand::PcRelative {
-        offset: offset as i64,
-    }));
+    insn.push_operand(Operand::Mem(MemoryOperand::PcRelative { offset }));
     Ok(insn)
 }
 
@@ -787,24 +697,10 @@ fn decode_load_store_pair(enc: u32, addr: u64) -> Result<Instruction, DisasmErro
     let base = gpr_or_sp(rn, true);
 
     let mem = match mode {
-        0b01 => MemoryOperand::PostIndex {
-            base,
-            offset: offset as i64,
-        },
-        0b10 => MemoryOperand::BaseOffset {
-            base,
-            offset: offset as i64,
-        },
-        0b11 => MemoryOperand::PreIndex {
-            base,
-            offset: offset as i64,
-        },
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        0b01 => MemoryOperand::PostIndex { base, offset },
+        0b10 => MemoryOperand::BaseOffset { base, offset },
+        0b11 => MemoryOperand::PreIndex { base, offset },
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -823,34 +719,26 @@ fn decode_load_store_reg(enc: u32, addr: u64) -> Result<Instruction, DisasmError
 
     // Skip SIMD/FP loads for now
     if v == 1 {
-        return Err(DisasmError::UnknownEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr });
     }
 
     // Determine opcode from size and opc
     let (opcode, is_64) = match (size, opc_field) {
         (0b00, 0b00) => (Opcode::Strb, false),
         (0b00, 0b01) => (Opcode::Ldrb, false),
-        (0b00, 0b10) => (Opcode::Ldrsb, true),  // 64-bit target
-        (0b00, 0b11) => (Opcode::Ldrsb, false),  // 32-bit target
+        (0b00, 0b10) => (Opcode::Ldrsb, true), // 64-bit target
+        (0b00, 0b11) => (Opcode::Ldrsb, false), // 32-bit target
         (0b01, 0b00) => (Opcode::Strh, false),
         (0b01, 0b01) => (Opcode::Ldrh, false),
-        (0b01, 0b10) => (Opcode::Ldrsh, true),   // 64-bit target
-        (0b01, 0b11) => (Opcode::Ldrsh, false),  // 32-bit target
-        (0b10, 0b00) => (Opcode::Str, false),     // 32-bit
-        (0b10, 0b01) => (Opcode::Ldr, false),     // 32-bit
+        (0b01, 0b10) => (Opcode::Ldrsh, true), // 64-bit target
+        (0b01, 0b11) => (Opcode::Ldrsh, false), // 32-bit target
+        (0b10, 0b00) => (Opcode::Str, false),  // 32-bit
+        (0b10, 0b01) => (Opcode::Ldr, false),  // 32-bit
         (0b10, 0b10) => (Opcode::Ldrsw, true),
-        (0b11, 0b00) => (Opcode::Str, true),      // 64-bit
-        (0b11, 0b01) => (Opcode::Ldr, true),      // 64-bit
+        (0b11, 0b00) => (Opcode::Str, true), // 64-bit
+        (0b11, 0b01) => (Opcode::Ldr, true), // 64-bit
         (0b11, 0b10) => (Opcode::Prfm, true),
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     // Determine addressing mode from bit 24 and bits [11:10]
@@ -895,12 +783,7 @@ fn decode_load_store_reg(enc: u32, addr: u64) -> Result<Instruction, DisasmError
             Register::gpr(rm, option & 1 == 1)
         };
 
-        let mem = MemoryOperand::BaseRegister {
-            base,
-            index,
-            extend,
-            shift,
-        };
+        let mem = MemoryOperand::BaseRegister { base, index, extend, shift };
 
         let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
         if opcode == Opcode::Prfm {
@@ -914,7 +797,7 @@ fn decode_load_store_reg(enc: u32, addr: u64) -> Result<Instruction, DisasmError
         // Unscaled immediate / pre-index / post-index
         let imm9 = bits(enc, 20, 12);
         let op2 = bits(enc, 11, 10);
-        let offset = sign_extend(imm9, 9) as i64;
+        let offset = sign_extend(imm9, 9);
 
         let mem = match op2 {
             0b00 => {
@@ -989,10 +872,7 @@ fn decode_dp_reg(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         }
     }
 
-    Err(DisasmError::UnknownEncoding {
-        encoding: enc,
-        address: addr,
-    })
+    Err(DisasmError::UnknownEncoding { encoding: enc, address: addr })
 }
 
 fn decode_logical_shifted_reg(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
@@ -1025,11 +905,7 @@ fn decode_logical_shifted_reg(enc: u32, addr: u64) -> Result<Instruction, Disasm
     if imm6 == 0 {
         insn.push_operand(Operand::Reg(gpr_or_zr(rm, sf)));
     } else {
-        insn.push_operand(Operand::ShiftedReg {
-            reg: gpr_or_zr(rm, sf),
-            shift,
-            amount: imm6,
-        });
+        insn.push_operand(Operand::ShiftedReg { reg: gpr_or_zr(rm, sf), shift, amount: imm6 });
     }
     Ok(insn)
 }
@@ -1046,10 +922,7 @@ fn decode_add_sub_shifted_reg(enc: u32, addr: u64) -> Result<Instruction, Disasm
 
     // ROR (shift_type=11) is reserved for add/sub
     if shift_type == 0b11 {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode = match (op, s) {
@@ -1068,11 +941,7 @@ fn decode_add_sub_shifted_reg(enc: u32, addr: u64) -> Result<Instruction, Disasm
     if imm6 == 0 {
         insn.push_operand(Operand::Reg(gpr_or_zr(rm, sf)));
     } else {
-        insn.push_operand(Operand::ShiftedReg {
-            reg: gpr_or_zr(rm, sf),
-            shift,
-            amount: imm6,
-        });
+        insn.push_operand(Operand::ShiftedReg { reg: gpr_or_zr(rm, sf), shift, amount: imm6 });
     }
     Ok(insn)
 }
@@ -1098,20 +967,12 @@ fn decode_add_sub_extended_reg(enc: u32, addr: u64) -> Result<Instruction, Disas
     let extend = decode_extend_type(option);
     let rm_is_64 = option >= 0b100; // SXTB..SXTX operate on 64-bit view
 
-    let rd_reg = if s == 0 {
-        gpr_or_sp(rd, sf)
-    } else {
-        gpr_or_zr(rd, sf)
-    };
+    let rd_reg = if s == 0 { gpr_or_sp(rd, sf) } else { gpr_or_zr(rd, sf) };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
     insn.push_operand(Operand::Reg(rd_reg));
     insn.push_operand(Operand::Reg(gpr_or_sp(rn, sf)));
-    insn.push_operand(Operand::ExtendedReg {
-        reg: gpr_or_zr(rm, rm_is_64),
-        extend,
-        shift: imm3,
-    });
+    insn.push_operand(Operand::ExtendedReg { reg: gpr_or_zr(rm, rm_is_64), extend, shift: imm3 });
     Ok(insn)
 }
 
@@ -1149,10 +1010,7 @@ fn decode_cond_compare(enc: u32, addr: u64) -> Result<Instruction, DisasmError> 
     let nzcv = bits(enc, 3, 0) as u64;
 
     if o2 != 0 || o3 != 0 {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode = if op == 0 { Opcode::Ccmn } else { Opcode::Ccmp };
@@ -1182,10 +1040,7 @@ fn decode_cond_select(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     let rd = bits(enc, 4, 0) as u8;
 
     if s != 0 {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode = match (op, op2) {
@@ -1193,12 +1048,7 @@ fn decode_cond_select(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         (0, 0b01) => Opcode::Csinc,
         (1, 0b00) => Opcode::Csinv,
         (1, 0b01) => Opcode::Csneg,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -1219,10 +1069,7 @@ fn decode_dp_2source(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     }
 
     if s != 0 {
-        return Err(DisasmError::UnallocatedEncoding {
-            encoding: enc,
-            address: addr,
-        });
+        return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr });
     }
 
     let opcode_field = bits(enc, 15, 10);
@@ -1237,12 +1084,7 @@ fn decode_dp_2source(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         0b001001 => Opcode::Lsrv,
         0b001010 => Opcode::Asrv,
         0b001011 => Opcode::Rorv,
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -1271,12 +1113,7 @@ fn decode_dp_1source(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         0b000011 => Opcode::Rev,
         0b000100 => Opcode::Clz,
         0b000101 => Opcode::Cls,
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -1303,12 +1140,7 @@ fn decode_dp_3source(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         (true, 0b101, 0) => Opcode::Umaddl,
         (true, 0b101, 1) => Opcode::Umsubl,
         (true, 0b110, 0) => Opcode::Umulh,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     // For SMADDL/etc., Rn and Rm are 32-bit, Rd and Ra are 64-bit
@@ -1387,10 +1219,7 @@ fn decode_simd_fp(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         return decode_fp_int_conv(enc, addr);
     }
 
-    Err(DisasmError::UnknownEncoding {
-        encoding: enc,
-        address: addr,
-    })
+    Err(DisasmError::UnknownEncoding { encoding: enc, address: addr })
 }
 
 fn decode_fp_int_conv(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
@@ -1405,18 +1234,13 @@ fn decode_fp_int_conv(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         0b00 => 32,
         0b01 => 64,
         0b11 => 16,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let (opcode, dst_is_fp, src_is_fp) = match (rmode, opcode_field) {
         // FMOV: integer <-> FP (rmode=00, opcode=110 or 111)
-        (0b00, 0b110) => (Opcode::FmovReg, false, true),  // Rd=GPR, Rn=FP
-        (0b00, 0b111) => (Opcode::FmovReg, true, false),   // Rd=FP, Rn=GPR
+        (0b00, 0b110) => (Opcode::FmovReg, false, true), // Rd=GPR, Rn=FP
+        (0b00, 0b111) => (Opcode::FmovReg, true, false), // Rd=FP, Rn=GPR
         // FCVTZS: FP -> signed int (rmode=11, opcode=000)
         (0b11, 0b000) => (Opcode::Fcvtzs, false, true),
         // FCVTZU: FP -> unsigned int (rmode=11, opcode=001)
@@ -1425,24 +1249,11 @@ fn decode_fp_int_conv(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
         (0b00, 0b010) => (Opcode::Scvtf, true, false),
         // UCVTF: unsigned int -> FP (rmode=00, opcode=011)
         (0b00, 0b011) => (Opcode::Ucvtf, true, false),
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
-    let dst = if dst_is_fp {
-        Register::simd(rd, fp_width)
-    } else {
-        gpr_or_zr(rd, sf)
-    };
-    let src = if src_is_fp {
-        Register::simd(rn, fp_width)
-    } else {
-        gpr_or_zr(rn, sf)
-    };
+    let dst = if dst_is_fp { Register::simd(rd, fp_width) } else { gpr_or_zr(rd, sf) };
+    let src = if src_is_fp { Register::simd(rn, fp_width) } else { gpr_or_zr(rn, sf) };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
     insn.push_operand(Operand::Reg(dst));
@@ -1460,12 +1271,7 @@ fn decode_fp_dp_2source(enc: u32, addr: u64) -> Result<Instruction, DisasmError>
     let fp_width: u16 = match ftype {
         0b00 => 32,
         0b01 => 64,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let opcode = match opcode_field {
@@ -1473,12 +1279,7 @@ fn decode_fp_dp_2source(enc: u32, addr: u64) -> Result<Instruction, DisasmError>
         0b0001 => Opcode::Fdiv,
         0b0010 => Opcode::Fadd,
         0b0011 => Opcode::Fsub,
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, opcode, ControlFlow::Fallthrough);
@@ -1497,12 +1298,7 @@ fn decode_fp_dp_1source(enc: u32, addr: u64) -> Result<Instruction, DisasmError>
     let fp_width: u16 = match ftype {
         0b00 => 32,
         0b01 => 64,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let opcode = match opcode_field {
@@ -1511,12 +1307,7 @@ fn decode_fp_dp_1source(enc: u32, addr: u64) -> Result<Instruction, DisasmError>
         0b000010 => Opcode::Fneg,
         0b000011 => Opcode::Fsqrt,
         0b000100 | 0b000101 => Opcode::Fcvt, // convert between precisions
-        _ => {
-            return Err(DisasmError::UnknownEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnknownEncoding { encoding: enc, address: addr }),
     };
 
     // For FCVT, destination width differs from source
@@ -1545,12 +1336,7 @@ fn decode_fp_compare(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     let fp_width: u16 = match ftype {
         0b00 => 32,
         0b01 => 64,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, Opcode::Fcmp, ControlFlow::Fallthrough);
@@ -1574,12 +1360,7 @@ fn decode_fp_csel(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     let fp_width: u16 = match ftype {
         0b00 => 32,
         0b01 => 64,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, Opcode::Fcsel, ControlFlow::Fallthrough);
@@ -1598,12 +1379,7 @@ fn decode_fp_imm(enc: u32, addr: u64) -> Result<Instruction, DisasmError> {
     let fp_width: u16 = match ftype {
         0b00 => 32,
         0b01 => 64,
-        _ => {
-            return Err(DisasmError::UnallocatedEncoding {
-                encoding: enc,
-                address: addr,
-            })
-        }
+        _ => return Err(DisasmError::UnallocatedEncoding { encoding: enc, address: addr }),
     };
 
     let mut insn = Instruction::new(addr, enc, Opcode::FmovImm, ControlFlow::Fallthrough);

@@ -85,7 +85,7 @@ impl InferenceDiagnosticsData {
         if in_type.is_ty_or_numeric_infer() {
             ""
         } else if self.name == "_" {
-            // tRust: known issue — Consider specializing this message if there is a single `_`
+            // FIXME: Consider specializing this message if there is a single `_`
             // in the type.
             "underscore"
         } else {
@@ -268,7 +268,7 @@ fn fmt_printer<'a, 'tcx>(infcx: &'a InferCtxt<'tcx>, ns: Namespace) -> FmtPrinte
             && !var_origin.span.from_expansion()
         {
             let generics = infcx.tcx.generics_of(infcx.tcx.parent(def_id));
-            let idx = generics.param_def_id_to_index(infcx.tcx, def_id).expect("invariant: value is present");
+            let idx = generics.param_def_id_to_index(infcx.tcx, def_id).unwrap();
             let generic_param_def = generics.param_at(idx as usize, infcx.tcx);
             if let ty::GenericParamDefKind::Type { synthetic: true, .. } = generic_param_def.kind {
                 None
@@ -301,7 +301,7 @@ fn ty_to_string<'tcx>(
         // We don't want the regular output for `fn`s because it includes its path in
         // invalid pseudo-syntax, we want the `fn`-pointer output instead.
         (ty::FnDef(..), _) => {
-            ty.fn_sig(infcx.tcx).print(&mut p).expect("invariant: type printing succeeds");
+            ty.fn_sig(infcx.tcx).print(&mut p).unwrap();
             p.into_buffer()
         }
         (_, Some(def_id))
@@ -312,7 +312,7 @@ fn ty_to_string<'tcx>(
         }
         _ if ty.is_ty_or_numeric_infer() => "/* Type */".to_string(),
         _ => {
-            ty.print(&mut p).expect("invariant: type printing succeeds");
+            ty.print(&mut p).unwrap();
             p.into_buffer()
         }
     }
@@ -323,7 +323,6 @@ fn ty_to_string<'tcx>(
 /// doesn't work as they actually use the "rust-call" API.
 fn closure_as_fn_str<'tcx>(infcx: &InferCtxt<'tcx>, ty: Ty<'tcx>) -> String {
     let ty::Closure(_, args) = ty.kind() else {
-        // tRust: invariant — `closure_as_fn_str` must only be called on closure types
         bug!("cannot convert non-closure to fn str in `closure_as_fn_str`")
     };
     let fn_sig = args.as_closure().sig();
@@ -408,7 +407,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     // If we end up here the `FindInferSourceVisitor`
                     // won't work, as its expected argument isn't an inference variable.
                     //
-                    // tRust: known issue — Ideally we should look into the generic constant
+                    // FIXME: Ideally we should look into the generic constant
                     // to figure out which inference var is actually unresolved so that
                     // this path is unreachable.
                     InferenceDiagnosticsData {
@@ -639,13 +638,12 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         }
 
                         match arg.kind() {
-                            // tRust: invariant — lifetime generic arguments should not appear in this type inference context
                             GenericArgKind::Lifetime(_) => bug!("unexpected lifetime"),
                             GenericArgKind::Type(_) => self.next_ty_var(DUMMY_SP).into(),
                             GenericArgKind::Const(_) => self.next_const_var(DUMMY_SP).into(),
                         }
                     }))
-                    .expect("invariant: value is present");
+                    .unwrap();
                     p.into_buffer()
                 };
 
@@ -661,7 +659,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 let placeholder = Some(self.next_ty_var(DUMMY_SP));
                 if let Some(args) = args.make_suggestable(self.infcx.tcx, true, placeholder) {
                     let mut p = fmt_printer(self, Namespace::ValueNS);
-                    p.print_def_path(def_id, args).expect("invariant: value is present");
+                    p.print_def_path(def_id, args).unwrap();
                     let def_path = p.into_buffer();
 
                     // We only care about whether we have to add `&` or `&mut ` for now.
@@ -823,7 +821,7 @@ impl<'tcx> InferSourceKind<'tcx> {
                     ("normal", infcx.tcx.short_string(ty, &mut long_ty_path), long_ty_path)
                 }
             }
-            // tRust: known issue — We should be able to add some additional info here.
+            // FIXME: We should be able to add some additional info here.
             InferSourceKind::GenericArg { .. }
             | InferSourceKind::FullyQualifiedMethodCall { .. } => {
                 ("other", String::new(), long_ty_path)
@@ -1035,7 +1033,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
                         // signature in case it has no captures, as that can be represented
                         // using `fn(T) -> R`.
 
-                        // tRust: known issue (type_alias_impl_trait) — These opaque types
+                        // FIXME(type_alias_impl_trait): These opaque types
                         // can actually be named, so it would make sense to
                         // adjust this case and add a test for it.
                         walker.skip_current_subtree();
@@ -1064,7 +1062,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
                     return self.path_inferred_arg_iter(expr.hir_id, args, path);
                 }
             }
-            // tRust: known issue (#98711) — Ideally we would also deal with type relative
+            // FIXME(#98711): Ideally we would also deal with type relative
             // paths here, even if that is quite rare.
             //
             // See the `need_type_info/expr-struct-type-relative-gat.rs` test
@@ -1075,7 +1073,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
             // which makes this somewhat difficult and prevents us from just
             // using `self.path_inferred_arg_iter` here.
             hir::ExprKind::Struct(&hir::QPath::Resolved(_self_ty, path), _, _)
-            // tRust: known issue (TaKO8Ki) — Ideally we should support other kinds,
+            // FIXME(TaKO8Ki): Ideally we should support other kinds,
             // such as `TyAlias` or `AssocTy`. For that we have to map
             // back from the self type to the type alias though. That's difficult.
             //
@@ -1130,7 +1128,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
         // The last segment of a path often has `Res::Err` and the
         // correct `Res` is the one of the whole path.
         //
-        // tRust: known issue — We deal with that one separately for now,
+        // FIXME: We deal with that one separately for now,
         // would be good to remove this special case.
         let last_segment_using_path_data = try {
             let generics_def_id = tcx.res_generics_def_id(path.res)?;
@@ -1139,7 +1137,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
                 do yeet ();
             }
             let insert_span =
-                path.segments.last().expect("invariant: non-empty collection").ident.span.shrink_to_hi().with_hi(path.span.hi());
+                path.segments.last().unwrap().ident.span.shrink_to_hi().with_hi(path.span.hi());
             InsertableGenericArgs {
                 insert_span,
                 args,
@@ -1202,7 +1200,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
                     })
                 };
 
-                let parent_def_id = generics.parent.expect("invariant: has parent def_id");
+                let parent_def_id = generics.parent.unwrap();
                 if let DefKind::Impl { .. } = tcx.def_kind(parent_def_id) {
                     let parent_ty = tcx.type_of(parent_def_id).instantiate(tcx, args);
                     match (parent_ty.kind(), &ty.kind) {
@@ -1213,7 +1211,7 @@ impl<'a, 'tcx> FindInferSourceVisitor<'a, 'tcx> {
                             if tcx.res_generics_def_id(path.res) != Some(def.did()) {
                                 match path.res {
                                     Res::Def(DefKind::TyAlias, _) => {
-                                        // tRust: known issue — Ideally we should support this. For that
+                                        // FIXME: Ideally we should support this. For that
                                         // we have to map back from the self type to the
                                         // type alias though. That's difficult.
                                         //
@@ -1438,7 +1436,7 @@ impl<'a, 'tcx> Visitor<'tcx> for FindInferSourceVisitor<'a, 'tcx> {
             && let Some(def_id) = self.typeck_results.type_dependent_def_id(expr.hir_id)
             && self.tecx.tcx.trait_of_assoc(def_id).is_some()
             && !has_impl_trait(def_id)
-            // tRust: known issue (fn_delegation) — In delegation item argument spans are equal to last path
+            // FIXME(fn_delegation): In delegation item argument spans are equal to last path
             // segment. This leads to ICE's when emitting `multipart_suggestion`.
             && tcx.hir_opt_delegation_sig_id(expr.hir_id.owner.def_id).is_none()
         {

@@ -75,11 +75,7 @@ impl CounterexampleChecker {
     /// 3. **Satisfiability check**: determine if the path formula is SAT.
     ///    If UNSAT, extract the infeasibility point and proof data.
     #[must_use]
-    pub fn check(
-        &self,
-        cex: &Counterexample,
-        blocks: &[BasicBlock],
-    ) -> CexCheckResult {
+    pub fn check(&self, cex: &Counterexample, blocks: &[BasicBlock]) -> CexCheckResult {
         // Phase 1: Fast pre-filter via abstract state contradiction.
         if let Some(infeasibility_point) = self.find_contradiction(cex) {
             let (path_a, path_b) = self.build_split_formulas(cex, blocks, infeasibility_point);

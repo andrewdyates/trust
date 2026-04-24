@@ -84,11 +84,7 @@ pub fn cert_to_lemma_signature(cert: &ProofCertificate) -> Option<LemmaSignature
         other => (vec![], other),
     };
 
-    Some(LemmaSignature {
-        name: cert.function.clone(),
-        hypotheses,
-        conclusion,
-    })
+    Some(LemmaSignature { name: cert.function.clone(), hypotheses, conclusion })
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +95,7 @@ pub fn cert_to_lemma_signature(cert: &ProofCertificate) -> Option<LemmaSignature
 ///
 /// Kept in sync with `proof_transfer::TRANSFER_THRESHOLD`. Raised from
 /// 0.3 to 0.5 per audit finding F17 (#767).
+#[cfg(test)]
 const TRANSFER_THRESHOLD: f64 = 0.5;
 
 /// Search the composition DAG for proofs that may transfer to a new obligation.
@@ -154,10 +151,8 @@ pub fn find_transfer_candidates_from_certs(
         conclusion: target_formula.clone(),
     };
 
-    let library: Vec<LemmaSignature> = certs
-        .iter()
-        .filter_map(|cert| cert_to_lemma_signature(cert))
-        .collect();
+    let library: Vec<LemmaSignature> =
+        certs.iter().filter_map(|cert| cert_to_lemma_signature(cert)).collect();
 
     find_transferable(&library, &target)
 }
@@ -235,7 +230,7 @@ pub fn build_transfer_provenance(
 ) -> TransferProvenance {
     TransferProvenance {
         source_cert_id: adapted.source_cert_id.clone(),
-        source_function: source_function.to_string(),
+        source_function: source_function.into(),
         similarity_millionths: (adapted.similarity * 1_000_000.0) as u64,
         adaptations: adapted.adaptations_applied.clone(),
     }
@@ -248,9 +243,7 @@ pub fn build_transfer_provenance(
 #[cfg(test)]
 mod tests {
     use trust_proof_cert::{FunctionHash, SolverInfo, VcSnapshot};
-    use trust_types::{
-        Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition,
-    };
+    use trust_types::{Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition};
 
     use super::*;
     use crate::proof_transfer::Adaptation;
@@ -275,10 +268,8 @@ mod tests {
 
     fn sample_vc_with_formula(function: &str, formula: &Formula) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "must hold".to_string(),
-            },
-            function: function.to_string(),
+            kind: VcKind::Assertion { message: "must hold".to_string() },
+            function: function.into(),
             location: SourceSpan {
                 file: "src/lib.rs".to_string(),
                 line_start: 10,
@@ -386,8 +377,7 @@ mod tests {
         // Target: y == 0 (same shape, different variable name)
         let target_formula = Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0)));
 
-        let candidates =
-            find_transfer_candidates(&comp, "crate::target", &target_formula, &[]);
+        let candidates = find_transfer_candidates(&comp, "crate::target", &target_formula, &[]);
         assert!(!candidates.is_empty(), "should find similar proof");
         assert!(
             candidates[0].score >= TRANSFER_THRESHOLD,
@@ -412,8 +402,7 @@ mod tests {
             Box::new(Formula::Int(999)),
         );
 
-        let candidates =
-            find_transfer_candidates(&comp, "crate::target", &target_formula, &[]);
+        let candidates = find_transfer_candidates(&comp, "crate::target", &target_formula, &[]);
         // All candidates (if any) should be above threshold
         for c in &candidates {
             assert!(
@@ -431,8 +420,7 @@ mod tests {
 
         // Close match: x == 0
         let close = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)));
-        let close_cert =
-            make_cert_with_formula("crate::close", &close, "2026-04-12T00:00:00Z");
+        let close_cert = make_cert_with_formula("crate::close", &close, "2026-04-12T00:00:00Z");
         comp.add_certificate(close_cert, vec![]);
 
         // Distant match: a < b
@@ -466,11 +454,7 @@ mod tests {
             hypotheses: vec![],
             conclusion: Formula::Bool(true),
         };
-        let candidate = TransferCandidate {
-            source: sig,
-            score: 1.0,
-            required_adaptations: vec![],
-        };
+        let candidate = TransferCandidate { source: sig, score: 1.0, required_adaptations: vec![] };
         let target = Formula::Bool(true);
 
         let adapted = apply_transfer(&candidate, &target, "cert-123");
@@ -503,10 +487,7 @@ mod tests {
         assert!(adapted.is_some());
         let adapted = adapted.unwrap();
         assert!(
-            adapted
-                .adaptations_applied
-                .iter()
-                .any(|a| a.contains("rename")),
+            adapted.adaptations_applied.iter().any(|a| a.contains("rename")),
             "should contain rename adaptation: {:?}",
             adapted.adaptations_applied
         );
@@ -555,14 +536,13 @@ mod tests {
     fn test_transfer_provenance_serialization_roundtrip() {
         let provenance = TransferProvenance {
             source_cert_id: "cert-abc".to_string(),
-            source_function: "crate::helper".to_string(),
+            source_function: "crate::helper".into(),
             similarity_millionths: 870_000,
             adaptations: vec!["rename(x -> y)".to_string(), "add_hypothesis".to_string()],
         };
 
         let json = serde_json::to_string(&provenance).expect("should serialize");
-        let restored: TransferProvenance =
-            serde_json::from_str(&json).expect("should deserialize");
+        let restored: TransferProvenance = serde_json::from_str(&json).expect("should deserialize");
         assert_eq!(restored, provenance);
     }
 
@@ -608,18 +588,12 @@ mod tests {
         let candidates = find_transfer_candidates(&comp, "crate::new_fn", &target, &[]);
 
         // Should find at least one candidate (crate::init has x == 0)
-        assert!(
-            !candidates.is_empty(),
-            "should find transfer candidates from composition"
-        );
+        assert!(!candidates.is_empty(), "should find transfer candidates from composition");
 
         // Apply best candidate
         let best = &candidates[0];
         let adapted = apply_transfer(best, &target, "test-cert-id");
-        assert!(
-            adapted.is_some(),
-            "best candidate should produce an adapted obligation"
-        );
+        assert!(adapted.is_some(), "best candidate should produce an adapted obligation");
 
         let adapted = adapted.unwrap();
         // Build provenance
@@ -639,9 +613,6 @@ mod tests {
         // Searching for the same function should return empty
         // (find_transferable excludes same-name lemmas)
         let candidates = find_transfer_candidates(&comp, "crate::self_fn", &formula, &[]);
-        assert!(
-            candidates.is_empty(),
-            "should not find self as transfer candidate"
-        );
+        assert!(candidates.is_empty(), "should not find self as transfer candidate");
     }
 }

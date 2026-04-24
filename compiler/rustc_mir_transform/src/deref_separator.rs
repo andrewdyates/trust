@@ -1,6 +1,3 @@
-//! tRust: MIR pass that splits multi-deref projections into separate
-//! tRust: temporaries for each dereference step.
-
 use rustc_middle::mir::visit::NonUseContext::VarDebugInfo;
 use rustc_middle::mir::visit::{MutVisitor, PlaceContext};
 use rustc_middle::mir::*;

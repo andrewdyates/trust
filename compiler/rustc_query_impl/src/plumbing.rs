@@ -42,7 +42,7 @@ fn depth_limit_error<'tcx>(tcx: TyCtxt<'tcx>, job: QueryJobId) {
 pub(crate) fn next_job_id<'tcx>(tcx: TyCtxt<'tcx>) -> QueryJobId {
     QueryJobId(
         NonZero::new(tcx.query_system.jobs.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
-            .expect("invariant: job counter starts at 1 and never wraps to zero"), // tRust: unwrap -> expect
+            .unwrap(),
     )
 }
 
@@ -165,7 +165,7 @@ pub(crate) fn promote_from_disk_inner<'tcx, C: QueryCache>(
         // We know that the key is cache-on-disk and its node is green,
         // so there _must_ be a value on disk to load.
         //
-        // tRust: known issue (Zalathar) — Is there a reasonable way to skip more of the
+        // FIXME(Zalathar): Is there a reasonable way to skip more of the
         // query bookkeeping when doing this?
         None => {
             (query.execute_query_fn)(tcx, DUMMY_SP, key, QueryMode::Get);

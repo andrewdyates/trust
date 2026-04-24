@@ -59,9 +59,7 @@ pub(crate) fn cex_value_to_formula(name: &str, value: &CounterexampleValue) -> O
     let var = Formula::Var(name.to_string(), trust_types::Sort::Int);
     let val_formula = match value {
         CounterexampleValue::Int(n) => Formula::Int(*n),
-        CounterexampleValue::Uint(n) => {
-            i128::try_from(*n).ok().map(Formula::Int)?
-        }
+        CounterexampleValue::Uint(n) => i128::try_from(*n).ok().map(Formula::Int)?,
         CounterexampleValue::Bool(b) => Formula::Bool(*b),
         _ => return None,
     };
@@ -71,14 +69,12 @@ pub(crate) fn cex_value_to_formula(name: &str, value: &CounterexampleValue) -> O
 /// Extract a constraint formula from a block's terminator.
 pub(crate) fn block_constraint_formula(block: &BasicBlock) -> Option<Formula> {
     if let trust_types::Terminator::Assert { cond, expected, .. } = &block.terminator
-        && let Some(cond_formula) = operand_to_formula(cond) {
-            let constraint = if *expected {
-                cond_formula
-            } else {
-                Formula::Not(Box::new(cond_formula))
-            };
-            return Some(constraint);
-        }
+        && let Some(cond_formula) = operand_to_formula(cond)
+    {
+        let constraint =
+            if *expected { cond_formula } else { Formula::Not(Box::new(cond_formula)) };
+        return Some(constraint);
+    }
     None
 }
 
@@ -87,10 +83,7 @@ fn operand_to_formula(operand: &trust_types::Operand) -> Option<Formula> {
     match operand {
         trust_types::Operand::Copy(place) | trust_types::Operand::Move(place) => {
             if place.projections.is_empty() {
-                Some(Formula::Var(
-                    format!("_local{}", place.local),
-                    trust_types::Sort::Int,
-                ))
+                Some(Formula::Var(format!("_local{}", place.local), trust_types::Sort::Int))
             } else {
                 None
             }
@@ -98,9 +91,7 @@ fn operand_to_formula(operand: &trust_types::Operand) -> Option<Formula> {
         trust_types::Operand::Constant(cv) => match cv {
             trust_types::ConstValue::Bool(b) => Some(Formula::Bool(*b)),
             trust_types::ConstValue::Int(n) => Some(Formula::Int(*n)),
-            trust_types::ConstValue::Uint(n, _) => {
-                i128::try_from(*n).ok().map(Formula::Int)
-            }
+            trust_types::ConstValue::Uint(n, _) => i128::try_from(*n).ok().map(Formula::Int),
             _ => None,
         },
         _ => None,
@@ -145,9 +136,10 @@ pub(crate) fn is_trivially_unsat(formula: &Formula) -> bool {
             // Check for p /\ !p.
             for c in conjuncts {
                 if let Formula::Not(inner) = c
-                    && conjuncts.contains(inner) {
-                        return true;
-                    }
+                    && conjuncts.contains(inner)
+                {
+                    return true;
+                }
             }
             false
         }
@@ -160,9 +152,10 @@ pub(crate) fn is_trivially_unsat(formula: &Formula) -> bool {
 pub(crate) fn find_unsat_block(cex: &Counterexample, blocks: &[BasicBlock]) -> usize {
     for (i, block) in blocks.iter().enumerate() {
         if let Some(f) = block_constraint_formula(block)
-            && is_trivially_unsat(&f) {
-                return i;
-            }
+            && is_trivially_unsat(&f)
+        {
+            return i;
+        }
     }
     // Default: split at the midpoint of assignments.
     cex.assignments.len() / 2
@@ -173,9 +166,5 @@ pub(crate) fn collect_core_labels(
     path_a: &[(String, Formula)],
     path_b: &[(String, Formula)],
 ) -> Vec<String> {
-    path_a
-        .iter()
-        .chain(path_b.iter())
-        .map(|(label, _)| label.clone())
-        .collect()
+    path_a.iter().chain(path_b.iter()).map(|(label, _)| label.clone()).collect()
 }

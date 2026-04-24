@@ -141,9 +141,7 @@ pub fn analyze_counterexample(
 ///
 /// Suggestions are returned in priority order (most targeted first).
 #[must_use]
-pub fn suggest_refinement(
-    analysis: &CounterexampleAnalysis,
-) -> Vec<CexRefinementSuggestion> {
+pub fn suggest_refinement(analysis: &CounterexampleAnalysis) -> Vec<CexRefinementSuggestion> {
     let mut suggestions = Vec::new();
 
     match &analysis.identified_weakness {
@@ -151,7 +149,8 @@ pub fn suggest_refinement(
             // tRust: Build precondition constraints from witness values
             for var in variables {
                 if let Some(value) = find_witness_value(&analysis.witness_values, var) {
-                    let constraint = build_exclusion_constraint(var, value, &analysis.failing_vc.kind);
+                    let constraint =
+                        build_exclusion_constraint(var, value, &analysis.failing_vc.kind);
                     suggestions.push(CexRefinementSuggestion::StrengthenPrecondition(constraint));
                 }
             }
@@ -163,10 +162,7 @@ pub fn suggest_refinement(
         }
         SpecWeakness::StrongPostcondition { violated_clause } => {
             // tRust: Weaken by adding a guard to the postcondition
-            let guard = build_postcondition_guard(
-                &analysis.witness_values,
-                violated_clause,
-            );
+            let guard = build_postcondition_guard(&analysis.witness_values, violated_clause);
             suggestions.push(CexRefinementSuggestion::WeakenPostcondition(guard));
         }
         SpecWeakness::MissingInvariant { description: _ } => {
@@ -324,16 +320,11 @@ impl RefinementLoop {
             match verifier.verify_with_preconditions(vc, &self.accumulated_preconditions) {
                 Ok(None) => {
                     // Verification succeeded
-                    return IterationResult::Converged {
-                        iterations: self.iterations_completed,
-                    };
+                    return IterationResult::Converged { iterations: self.iterations_completed };
                 }
                 Ok(Some(new_witness)) => {
                     // New counterexample -- continue the loop
-                    let result = IterationResult::Refined {
-                        analysis,
-                        suggestions,
-                    };
+                    let result = IterationResult::Refined { analysis, suggestions };
                     current_witness = new_witness;
                     // tRust: Continue to next iteration (result is for logging)
                     let _ = result;
@@ -372,8 +363,7 @@ impl RefinementLoop {
     // tRust: Cycle detection -- check if this witness has been seen before.
     fn is_cycle(&self, witness: &[(String, i128)]) -> bool {
         self.witness_history.iter().any(|prev| {
-            prev.len() == witness.len()
-                && prev.iter().zip(witness.iter()).all(|(a, b)| a == b)
+            prev.len() == witness.len() && prev.iter().zip(witness.iter()).all(|(a, b)| a == b)
         })
     }
 }
@@ -440,36 +430,23 @@ fn identify_weakness(
     match vc_kind {
         VcKind::ArithmeticOverflow { .. } => {
             // tRust: Overflow means inputs are too large -- weak precondition
-            SpecWeakness::WeakPrecondition {
-                variables: input_vars.to_vec(),
-            }
+            SpecWeakness::WeakPrecondition { variables: input_vars.to_vec() }
         }
         VcKind::DivisionByZero | VcKind::RemainderByZero => {
             // tRust: Division by zero means divisor needs a guard
-            let divisor_var = witness
-                .iter()
-                .find(|(_, v)| *v == 0)
-                .map(|(name, _)| name.clone());
+            let divisor_var = witness.iter().find(|(_, v)| *v == 0).map(|(name, _)| name.clone());
             if let Some(var) = divisor_var {
-                SpecWeakness::MissingGuard {
-                    operation: format!("division by {var}"),
-                }
+                SpecWeakness::MissingGuard { operation: format!("division by {var}") }
             } else {
-                SpecWeakness::WeakPrecondition {
-                    variables: input_vars.to_vec(),
-                }
+                SpecWeakness::WeakPrecondition { variables: input_vars.to_vec() }
             }
         }
         VcKind::IndexOutOfBounds | VcKind::SliceBoundsCheck => {
             // tRust: OOB means index needs bounds constraint
-            SpecWeakness::WeakPrecondition {
-                variables: input_vars.to_vec(),
-            }
+            SpecWeakness::WeakPrecondition { variables: input_vars.to_vec() }
         }
         VcKind::Postcondition => {
-            SpecWeakness::StrongPostcondition {
-                violated_clause: "postcondition".to_string(),
-            }
+            SpecWeakness::StrongPostcondition { violated_clause: "postcondition".to_string() }
         }
         // tRust: Assertions with "invariant" in the message suggest loop invariant issues
         VcKind::Assertion { message } if message.contains("invariant") => {
@@ -479,9 +456,7 @@ fn identify_weakness(
         }
         _ => {
             if !input_vars.is_empty() {
-                SpecWeakness::WeakPrecondition {
-                    variables: input_vars.to_vec(),
-                }
+                SpecWeakness::WeakPrecondition { variables: input_vars.to_vec() }
             } else {
                 SpecWeakness::Unknown
             }
@@ -497,17 +472,11 @@ fn build_exclusion_constraint(var: &str, value: i128, vc_kind: &VcKind) -> Formu
         VcKind::ArithmeticOverflow { .. } => {
             // tRust: Constrain the variable to be less than the overflow boundary
             // If the witness is at or near MAX, constrain < MAX
-            Formula::Lt(
-                Box::new(var_formula),
-                Box::new(Formula::Int(value)),
-            )
+            Formula::Lt(Box::new(var_formula), Box::new(Formula::Int(value)))
         }
         VcKind::DivisionByZero | VcKind::RemainderByZero => {
             // tRust: The divisor must be non-zero
-            Formula::Not(Box::new(Formula::Eq(
-                Box::new(var_formula),
-                Box::new(Formula::Int(0)),
-            )))
+            Formula::Not(Box::new(Formula::Eq(Box::new(var_formula), Box::new(Formula::Int(0)))))
         }
         VcKind::IndexOutOfBounds | VcKind::SliceBoundsCheck => {
             // tRust: Index must be non-negative and less than length
@@ -554,10 +523,7 @@ fn build_generic_precondition(witness: &[(String, i128)]) -> Formula {
 }
 
 /// Build a guard that conditions the postcondition.
-fn build_postcondition_guard(
-    witness: &[(String, i128)],
-    _violated_clause: &str,
-) -> Formula {
+fn build_postcondition_guard(witness: &[(String, i128)], _violated_clause: &str) -> Formula {
     // tRust: Guard the postcondition by excluding the witness region
     // The weakened postcondition is: (NOT witness_condition) => original_post
     let witness_condition = build_witness_condition(witness);
@@ -580,11 +546,7 @@ fn build_invariant_candidate(witness: &[(String, i128)]) -> Formula {
             ));
         }
     }
-    if bounds.is_empty() {
-        Formula::Bool(true)
-    } else {
-        Formula::And(bounds)
-    }
+    if bounds.is_empty() { Formula::Bool(true) } else { Formula::And(bounds) }
 }
 
 /// Build a guard formula from the VC kind and witness.
@@ -632,8 +594,9 @@ fn build_witness_condition(witness: &[(String, i128)]) -> Formula {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{BinOp, Formula, SourceSpan, Ty, VcKind, VerificationCondition};
+
+    use super::*;
 
     /// Helper to build a test VC.
     fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
@@ -660,17 +623,11 @@ mod tests {
             },
             "math::get_midpoint",
         );
-        let witness = vec![
-            ("a".to_string(), i64::MAX as i128),
-            ("b".to_string(), 1),
-        ];
+        let witness = vec![("a".to_string(), i64::MAX as i128), ("b".to_string(), 1)];
 
         let analysis = analyze_counterexample(&vc, &witness);
 
-        assert!(matches!(
-            analysis.identified_weakness,
-            SpecWeakness::WeakPrecondition { .. }
-        ));
+        assert!(matches!(analysis.identified_weakness, SpecWeakness::WeakPrecondition { .. }));
         assert!(!analysis.input_variables.is_empty());
         assert_eq!(analysis.witness_values.len(), 2);
     }
@@ -680,17 +637,11 @@ mod tests {
     #[test]
     fn test_analyze_div_zero_identifies_missing_guard() {
         let vc = make_vc(VcKind::DivisionByZero, "math::safe_divide");
-        let witness = vec![
-            ("x".to_string(), 42),
-            ("divisor".to_string(), 0),
-        ];
+        let witness = vec![("x".to_string(), 42), ("divisor".to_string(), 0)];
 
         let analysis = analyze_counterexample(&vc, &witness);
 
-        assert!(matches!(
-            analysis.identified_weakness,
-            SpecWeakness::MissingGuard { .. }
-        ));
+        assert!(matches!(analysis.identified_weakness, SpecWeakness::MissingGuard { .. }));
     }
 
     // --- Test 3: suggest_refinement produces precondition for overflow ---
@@ -707,19 +658,13 @@ mod tests {
             },
             "math::get_midpoint",
         );
-        let witness = vec![
-            ("a".to_string(), i64::MAX as i128),
-            ("b".to_string(), 1),
-        ];
+        let witness = vec![("a".to_string(), i64::MAX as i128), ("b".to_string(), 1)];
 
         let analysis = analyze_counterexample(&vc, &witness);
         let suggestions = suggest_refinement(&analysis);
 
         assert!(!suggestions.is_empty());
-        assert!(matches!(
-            &suggestions[0],
-            CexRefinementSuggestion::StrengthenPrecondition(_)
-        ));
+        assert!(matches!(&suggestions[0], CexRefinementSuggestion::StrengthenPrecondition(_)));
         assert_eq!(suggestions[0].kind_name(), "StrengthenPrecondition");
     }
 
@@ -728,19 +673,13 @@ mod tests {
     #[test]
     fn test_suggest_refinement_div_zero_produces_guard() {
         let vc = make_vc(VcKind::DivisionByZero, "math::safe_divide");
-        let witness = vec![
-            ("x".to_string(), 42),
-            ("divisor".to_string(), 0),
-        ];
+        let witness = vec![("x".to_string(), 42), ("divisor".to_string(), 0)];
 
         let analysis = analyze_counterexample(&vc, &witness);
         let suggestions = suggest_refinement(&analysis);
 
         assert!(!suggestions.is_empty());
-        assert!(matches!(
-            &suggestions[0],
-            CexRefinementSuggestion::AddGuard(_)
-        ));
+        assert!(matches!(&suggestions[0], CexRefinementSuggestion::AddGuard(_)));
 
         // tRust: The guard formula should be `divisor != 0`
         let formula = suggestions[0].formula();
@@ -758,10 +697,7 @@ mod tests {
         let suggestions = suggest_refinement(&analysis);
 
         assert!(!suggestions.is_empty());
-        assert!(matches!(
-            &suggestions[0],
-            CexRefinementSuggestion::WeakenPostcondition(_)
-        ));
+        assert!(matches!(&suggestions[0], CexRefinementSuggestion::WeakenPostcondition(_)));
     }
 
     // --- Test 6: RefinementLoop converges on first try ---
@@ -816,9 +752,7 @@ mod tests {
         let vc = make_vc(VcKind::DivisionByZero, "f");
         let witness = vec![("d".to_string(), 0)];
 
-        let verifier = FailThenPassVerifier {
-            call_count: std::sync::atomic::AtomicUsize::new(0),
-        };
+        let verifier = FailThenPassVerifier { call_count: std::sync::atomic::AtomicUsize::new(0) };
 
         let mut refinement_loop = RefinementLoop::new(5);
         let result = refinement_loop.run(&vc, &witness, &verifier);
@@ -858,17 +792,12 @@ mod tests {
         );
         let witness = vec![("x".to_string(), 100)];
 
-        let verifier = AlwaysFailVerifier {
-            call_count: std::sync::atomic::AtomicUsize::new(0),
-        };
+        let verifier = AlwaysFailVerifier { call_count: std::sync::atomic::AtomicUsize::new(0) };
 
         let mut refinement_loop = RefinementLoop::new(3);
         let result = refinement_loop.run(&vc, &witness, &verifier);
 
-        assert!(matches!(
-            result,
-            IterationResult::MaxIterationsReached { iterations: 3, .. }
-        ));
+        assert!(matches!(result, IterationResult::MaxIterationsReached { iterations: 3, .. }));
     }
 
     // --- Test 9: RefinementLoop detects cycles ---
@@ -895,10 +824,7 @@ mod tests {
 
         // tRust: The first witness is added to history, then the verifier
         // returns the same witness, which triggers cycle detection on iteration 2.
-        assert!(matches!(
-            result,
-            IterationResult::MaxIterationsReached { .. }
-        ));
+        assert!(matches!(result, IterationResult::MaxIterationsReached { .. }));
         // Should stop early due to cycle, not reach max_iterations
         assert!(refinement_loop.iterations_completed() < 10);
     }
@@ -1006,11 +932,7 @@ mod tests {
 
     #[test]
     fn test_build_exclusion_constraint_div_zero() {
-        let constraint = build_exclusion_constraint(
-            "divisor",
-            0,
-            &VcKind::DivisionByZero,
-        );
+        let constraint = build_exclusion_constraint("divisor", 0, &VcKind::DivisionByZero);
 
         // Should produce NOT(divisor == 0)
         assert!(matches!(constraint, Formula::Not(_)));
@@ -1020,10 +942,7 @@ mod tests {
 
     #[test]
     fn test_postcondition_guard_produces_implies() {
-        let guard = build_postcondition_guard(
-            &[("result".to_string(), -1)],
-            "result > 0",
-        );
+        let guard = build_postcondition_guard(&[("result".to_string(), -1)], "result > 0");
 
         assert!(matches!(guard, Formula::Implies(_, _)));
     }

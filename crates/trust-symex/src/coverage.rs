@@ -31,12 +31,7 @@ impl BranchPoint {
     /// Create a new unexplored branch point.
     #[must_use]
     pub fn new(location: usize, condition: impl Into<String>) -> Self {
-        Self {
-            location,
-            condition: condition.into(),
-            true_explored: false,
-            false_explored: false,
-        }
+        Self { location, condition: condition.into(), true_explored: false, false_explored: false }
     }
 
     /// Returns `true` if both directions have been explored.
@@ -175,12 +170,8 @@ pub fn coverage_percentage(map: &CoverageMap) -> f64 {
 /// Return all branch points that have at least one unexplored direction.
 #[must_use]
 pub fn uncovered_branches(map: &CoverageMap) -> Vec<BranchPoint> {
-    let mut result: Vec<BranchPoint> = map
-        .branches
-        .values()
-        .filter(|bp| !bp.is_fully_covered())
-        .cloned()
-        .collect();
+    let mut result: Vec<BranchPoint> =
+        map.branches.values().filter(|bp| !bp.is_fully_covered()).cloned().collect();
     // Sort by location for deterministic output.
     result.sort_by_key(|bp| bp.location);
     result

@@ -23,7 +23,6 @@ pub(crate) fn type_implements_dyn_trait<'tcx, M: Machine<'tcx>>(
     ensure_monomorphic_enough(ecx.tcx.tcx, trait_ty)?;
 
     let ty::Dynamic(preds, _) = trait_ty.kind() else {
-        // tRust: invariant — type_implements_predicates requires a trait object (dyn Trait) type
         span_bug!(
             ecx.find_closest_untracked_caller_location(),
             "Invalid type provided to type_implements_predicates. U must be dyn Trait, got {trait_ty}."
@@ -67,8 +66,8 @@ impl<'tcx> InterpretationResult<'tcx> for mir::interpret::ConstAllocation<'tcx> 
         mplace: MPlaceTy<'tcx>,
         ecx: &mut InterpCx<'tcx, CompileTimeMachine<'tcx>>,
     ) -> Self {
-        let alloc_id = mplace.ptr().provenance.expect("invariant: allocated mplace must have provenance for alloc_id extraction").alloc_id();
-        let alloc = ecx.memory.alloc_map.swap_remove(&alloc_id).expect("invariant: alloc_id from allocated mplace must exist in alloc_map").1;
+        let alloc_id = mplace.ptr().provenance.unwrap().alloc_id();
+        let alloc = ecx.memory.alloc_map.swap_remove(&alloc_id).unwrap().1;
         ecx.tcx.mk_const_alloc(alloc)
     }
 }

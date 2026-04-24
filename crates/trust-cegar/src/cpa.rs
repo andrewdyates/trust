@@ -153,10 +153,7 @@ pub struct CpaConfig {
 
 impl Default for CpaConfig {
     fn default() -> Self {
-        Self {
-            max_iterations: 10_000,
-            max_reached: 100_000,
-        }
+        Self { max_iterations: 10_000, max_reached: 100_000 }
     }
 }
 
@@ -235,9 +232,7 @@ pub fn cpa_analyze(
     let n = cpa.num_components();
 
     // Initial state: top for all components at entry block
-    let init_state = CompositeState::new(
-        cpa.components.iter().map(|c| c.domain().top()).collect(),
-    );
+    let init_state = CompositeState::new(cpa.components.iter().map(|c| c.domain().top()).collect());
 
     let mut reached = ReachedSet::default();
     let entry_block = BlockId(0);
@@ -250,25 +245,17 @@ pub fn cpa_analyze(
     while let Some((block, state)) = worklist.pop() {
         iterations += 1;
         if iterations > config.max_iterations {
-            return CpaResult::Timeout {
-                states_explored: reached.total(),
-                iterations,
-            };
+            return CpaResult::Timeout { states_explored: reached.total(), iterations };
         }
 
         // Check if this is an error block
         if error_blocks.contains(&block) {
-            return CpaResult::Unsafe {
-                error_state: state,
-                error_block: block,
-                iterations,
-            };
+            return CpaResult::Unsafe { error_state: state, error_block: block, iterations };
         }
 
         // Apply transfer function for each component
-        let successor_states: Vec<AbstractState> = (0..n)
-            .map(|i| cpa.components[i].transfer(&state.states[i], block, body))
-            .collect();
+        let successor_states: Vec<AbstractState> =
+            (0..n).map(|i| cpa.components[i].transfer(&state.states[i], block, body)).collect();
 
         let succ = CompositeState::new(successor_states);
 
@@ -283,11 +270,8 @@ pub fn cpa_analyze(
             for target in targets {
                 // Check stop operator for each component
                 let covered = (0..n).all(|i| {
-                    let reached_states: Vec<AbstractState> = reached
-                        .at_block(target)
-                        .iter()
-                        .map(|cs| cs.states[i].clone())
-                        .collect();
+                    let reached_states: Vec<AbstractState> =
+                        reached.at_block(target).iter().map(|cs| cs.states[i].clone()).collect();
                     cpa.components[i].stop(&succ.states[i], &reached_states)
                 });
 
@@ -299,10 +283,7 @@ pub fn cpa_analyze(
         }
     }
 
-    CpaResult::Safe {
-        states_explored: reached.total(),
-        iterations,
-    }
+    CpaResult::Safe { states_explored: reached.total(), iterations }
 }
 
 /// Extract successor block IDs from a terminator.
@@ -334,10 +315,7 @@ mod tests {
 
     #[test]
     fn test_composite_state_new() {
-        let s = CompositeState::new(vec![
-            AbstractState::top(),
-            AbstractState::top(),
-        ]);
+        let s = CompositeState::new(vec![AbstractState::top(), AbstractState::top()]);
         assert_eq!(s.states.len(), 2);
         assert!(!s.is_bottom());
     }
@@ -383,11 +361,7 @@ mod tests {
         assert!(matches!(timeout, CpaResult::Timeout { .. }));
 
         let cs = CompositeState::new(vec![]);
-        let err = CpaResult::Unsafe {
-            error_state: cs,
-            error_block: BlockId(3),
-            iterations: 42,
-        };
+        let err = CpaResult::Unsafe { error_state: cs, error_block: BlockId(3), iterations: 42 };
         assert!(matches!(err, CpaResult::Unsafe { .. }));
     }
 

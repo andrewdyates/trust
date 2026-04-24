@@ -219,10 +219,8 @@ impl<'tcx> TransformVisitor<'tcx> {
 
         let none_value = match self.coroutine_kind {
             CoroutineKind::Desugared(CoroutineDesugaring::Async, _) => {
-                // tRust: invariant: structural invariant — coroutine fusing property is determined by the coroutine kind
                 span_bug!(body.span, "`Future`s are not fused inherently")
             }
-            // tRust: invariant: structural invariant — coroutine fusing property is determined by the coroutine kind
             CoroutineKind::Coroutine(_) => span_bug!(body.span, "`Coroutine`s cannot be fused"),
             // `gen` continues return `None`
             CoroutineKind::Desugared(CoroutineDesugaring::Gen, _) => {
@@ -236,9 +234,7 @@ impl<'tcx> TransformVisitor<'tcx> {
             }
             // `async gen` continues to return `Poll::Ready(None)`
             CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _) => {
-                // tRust: invariant: type system guarantee — coroutine yield/return types are ADTs enforced by type checking
                 let ty::Adt(_poll_adt, args) = *self.old_yield_ty.kind() else { bug!() };
-                // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                 let ty::Adt(_option_adt, args) = *args.type_at(0).kind() else { bug!() };
                 let yield_ty = args.type_at(0);
                 Rvalue::Use(Operand::Constant(Box::new(ConstOperand {
@@ -307,9 +303,7 @@ impl<'tcx> TransformVisitor<'tcx> {
             }
             CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _) => {
                 if is_return {
-                    // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
                     let ty::Adt(_poll_adt, args) = *self.old_yield_ty.kind() else { bug!() };
-                    // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                     let ty::Adt(_option_adt, args) = *args.type_at(0).kind() else { bug!() };
                     let yield_ty = args.type_at(0);
                     Rvalue::Use(Operand::Constant(Box::new(ConstOperand {
@@ -474,7 +468,7 @@ impl<'tcx> MutVisitor<'tcx> for TransformVisitor<'tcx> {
                 }
 
                 let storage_liveness: GrowableBitSet<Local> =
-                    self.storage_liveness[block].clone().expect("invariant: storage liveness must be computed for yielding block").into(); // tRust: unwrap elimination
+                    self.storage_liveness[block].clone().unwrap().into();
 
                 for i in 0..self.always_live_locals.domain_size() {
                     let l = Local::new(i);
@@ -625,13 +619,12 @@ fn transform_async_context<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) -> Ty
 }
 
 fn eliminate_get_context_call<'tcx>(bb_data: &mut BasicBlockData<'tcx>) -> Local {
-    let terminator = bb_data.terminator.take().expect("invariant: basic block must have a terminator"); // tRust: unwrap elimination
+    let terminator = bb_data.terminator.take().unwrap();
     let TerminatorKind::Call { args, destination, target, .. } = terminator.kind else {
-        // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
         bug!();
     };
-    let [arg] = *Box::try_from(args).expect("invariant: get_context call must have exactly one argument"); // tRust: unwrap elimination
-    let local = arg.node.place().expect("invariant: get_context argument must be a place").local; // tRust: unwrap elimination
+    let [arg] = *Box::try_from(args).unwrap();
+    let local = arg.node.place().unwrap().local;
 
     let arg = Rvalue::Use(arg.node);
     let assign =
@@ -639,7 +632,7 @@ fn eliminate_get_context_call<'tcx>(bb_data: &mut BasicBlockData<'tcx>) -> Local
     bb_data.statements.push(assign);
     bb_data.terminator = Some(Terminator {
         source_info: terminator.source_info,
-        kind: TerminatorKind::Goto { target: target.expect("invariant: get_context call must have a target") }, // tRust: unwrap elimination
+        kind: TerminatorKind::Goto { target: target.unwrap() },
     });
     local
 }
@@ -919,8 +912,8 @@ fn compute_storage_conflicts<'mir, 'tcx>(
 struct StorageConflictVisitor<'a, 'tcx> {
     body: &'a Body<'tcx>,
     saved_locals: &'a CoroutineSavedLocals,
-    // NOTE: Dense bitsets used for local conflicts; sparse bitsets may be more
-    // efficient but need benchmarking.
+    // FIXME(tmandry): Consider using sparse bitsets here once we have good
+    // benchmarks for coroutines.
     local_conflicts: BitMatrix<Local, Local>,
     // We keep this bitset as a buffer to avoid reallocating memory.
     eligible_storage_live: DenseBitSet<Local>,
@@ -1409,7 +1402,6 @@ pub(crate) fn mir_coroutine_witnesses<'tcx>(
     let movable = match *coroutine_ty.kind() {
         ty::Coroutine(def_id, _) => tcx.coroutine_movability(def_id) == hir::Movability::Movable,
         ty::Error(_) => return None,
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         _ => span_bug!(body.span, "unexpected coroutine type {}", coroutine_ty),
     };
 
@@ -1440,9 +1432,10 @@ fn check_field_tys_sized<'tcx>(
         return;
     }
 
-    // NOTE(#132279): May need to support coroutines whose Sized-ness relies
-    // on hidden types of opaques defined by the parent function. Would require
-    // revealing only these opaques here.
+    // FIXME(#132279): @lcnr believes that we may want to support coroutines
+    // whose `Sized`-ness relies on the hidden types of opaques defined by the
+    // parent function. In this case we'd have to be able to reveal only these
+    // opaques here.
     let infcx = tcx.infer_ctxt().ignoring_regions().build(TypingMode::non_body_analysis());
     let param_env = tcx.param_env(def_id);
 
@@ -1488,7 +1481,7 @@ impl<'tcx> crate::MirPass<'tcx> for StateTransform {
 
         // The first argument is the coroutine type passed by value
         let coroutine_ty = body.local_decls.raw[1].ty;
-        let coroutine_kind = body.coroutine_kind().expect("invariant: body must be a coroutine"); // tRust: unwrap elimination
+        let coroutine_kind = body.coroutine_kind().unwrap();
 
         // Get the discriminant type and args which typeck computed
         let ty::Coroutine(_, args) = coroutine_ty.kind() else {
@@ -1628,12 +1621,13 @@ impl<'tcx> crate::MirPass<'tcx> for StateTransform {
             var.argument_index = None;
         }
 
-        body.coroutine.as_mut().expect("invariant: body must have coroutine data").yield_ty = None; // tRust: unwrap elimination
-        body.coroutine.as_mut().expect("invariant: body must have coroutine data").resume_ty = None; // tRust: unwrap elimination
-        body.coroutine.as_mut().expect("invariant: body must have coroutine data").coroutine_layout = Some(layout); // tRust: unwrap elimination
+        body.coroutine.as_mut().unwrap().yield_ty = None;
+        body.coroutine.as_mut().unwrap().resume_ty = None;
+        body.coroutine.as_mut().unwrap().coroutine_layout = Some(layout);
 
-        // NOTE: Drops from insert_clean_drop + elaborate_coroutine_drops are sync only.
-        // Async support requires reordering before expand_async_drops.
+        // FIXME: Drops, produced by insert_clean_drop + elaborate_coroutine_drops,
+        // are currently sync only. To allow async for them, we need to move those calls
+        // before expand_async_drops, and fix the related problems.
         //
         // Insert `drop(coroutine_struct)` which is used to drop upvars for coroutines in
         // the unresumed state.
@@ -1662,19 +1656,19 @@ impl<'tcx> crate::MirPass<'tcx> for StateTransform {
                 create_coroutine_drop_shim_async(tcx, &transform, body, drop_clean, can_unwind);
             // Run derefer to fix Derefs that are not in the first place
             deref_finder(tcx, &mut drop_shim, false);
-            body.coroutine.as_mut().expect("invariant: body must have coroutine data").coroutine_drop_async = Some(drop_shim); // tRust: unwrap elimination
+            body.coroutine.as_mut().unwrap().coroutine_drop_async = Some(drop_shim);
         } else {
             // If coroutine has no async drops, generating sync drop shim
             let mut drop_shim =
                 create_coroutine_drop_shim(tcx, &transform, coroutine_ty, body, drop_clean);
             // Run derefer to fix Derefs that are not in the first place
             deref_finder(tcx, &mut drop_shim, false);
-            body.coroutine.as_mut().expect("invariant: body must have coroutine data").coroutine_drop = Some(drop_shim); // tRust: unwrap elimination
+            body.coroutine.as_mut().unwrap().coroutine_drop = Some(drop_shim);
 
             // For coroutine with sync drop, generating async proxy for `future_drop_poll` call
             let mut proxy_shim = create_coroutine_drop_shim_proxy_async(tcx, body);
             deref_finder(tcx, &mut proxy_shim, false);
-            body.coroutine.as_mut().expect("invariant: body must have coroutine data").coroutine_drop_proxy_async = Some(proxy_shim); // tRust: unwrap elimination
+            body.coroutine.as_mut().unwrap().coroutine_drop_proxy_async = Some(proxy_shim);
         }
 
         // Create the Coroutine::resume / Future::poll function
@@ -1741,7 +1735,6 @@ impl<'tcx> Visitor<'tcx> for EnsureCoroutineFieldAssignmentsNeverAlias<'_> {
         let Some(rhs) = self.saved_local_for_direct_place(*place) else { return };
 
         if !self.storage_conflicts.contains(lhs, rhs) {
-            // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
             bug!(
                 "Assignment between coroutine saved locals whose storage is not \
                     marked as conflicting: {:?}: {:?} = {:?}",
@@ -1798,7 +1791,7 @@ impl<'tcx> Visitor<'tcx> for EnsureCoroutineFieldAssignmentsNeverAlias<'_> {
                 self.check_assigned_place(*resume_arg, |this| this.visit_operand(value, location));
             }
 
-            // NOTE: No known aliasing requirements for inline asm in coroutines.
+            // FIXME: Does `asm!` have any aliasing requirements?
             TerminatorKind::InlineAsm { .. } => {}
 
             TerminatorKind::Call { .. }
@@ -1895,18 +1888,18 @@ fn check_must_not_suspend_ty<'tcx>(
                 SuspendCheckData { descr_pre: &format!("{}allocator ", data.descr_pre), ..data },
             )
         }
-        // tRust: Upstream TODO -- tracked by rust-lang sized_hierarchy feature gate.
-        // TODO(sized_hierarchy): Replace with `const Sized` requirement once feature is
-        // fully implemented. Scalable vectors are temporarily Sized but have unknown
-        // compile-time size; layout computation would be incorrect.
+        // FIXME(sized_hierarchy): This should be replaced with a requirement that types in
+        // coroutines implement `const Sized`. Scalable vectors are temporarily `Sized` while
+        // `feature(sized_hierarchy)` is not fully implemented, but in practice are
+        // non-`const Sized` and so do not have a known size at compilation time. Layout computation
+        // for a coroutine containing scalable vectors would be incorrect.
         ty::Adt(def, _) if def.repr().scalable() => {
             tcx.dcx()
                 .span_err(data.source_span, "scalable vectors cannot be held over await points");
             true
         }
         ty::Adt(def, _) => check_must_not_suspend_def(tcx, def.did(), hir_id, data),
-        // tRust: Upstream TODO -- requires TAIT must_not_suspend support.
-        // TODO: Support adding #[must_not_suspend] attribute to TAITs.
+        // FIXME: support adding the attribute to TAITs
         ty::Alias(ty::Opaque, ty::AliasTy { def_id: def, .. }) => {
             let mut has_emitted = false;
             for &(predicate, _) in tcx.explicit_item_bounds(def).skip_binder() {
@@ -1971,8 +1964,7 @@ fn check_must_not_suspend_ty<'tcx>(
                 hir_id,
                 SuspendCheckData {
                     descr_pre,
-                    // NOTE(must_not_suspend): Unevaluated const printing not supported;
-                    // falls back to target_usize conversion.
+                    // FIXME(must_not_suspend): This is wrong. We should handle printing unevaluated consts.
                     plural_len: len.try_to_target_usize(tcx).unwrap_or(0) as usize + 1,
                     ..data
                 },

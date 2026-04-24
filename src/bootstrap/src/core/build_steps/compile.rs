@@ -56,6 +56,7 @@ pub struct Std {
     force_recompile: bool,
     extra_rust_args: &'static [&'static str],
     is_for_mir_opt_tests: bool,
+    link_into_sysroot: bool,
 }
 
 impl Std {
@@ -67,6 +68,7 @@ impl Std {
             force_recompile: false,
             extra_rust_args: &[],
             is_for_mir_opt_tests: false,
+            link_into_sysroot: true,
         }
     }
 
@@ -83,6 +85,11 @@ impl Std {
 
     pub fn extra_rust_args(mut self, extra_rust_args: &'static [&'static str]) -> Self {
         self.extra_rust_args = extra_rust_args;
+        self
+    }
+
+    pub fn without_sysroot_link(mut self) -> Self {
+        self.link_into_sysroot = false;
         self
     }
 
@@ -145,6 +152,7 @@ impl Step for Std {
             force_recompile,
             extra_rust_args: &[],
             is_for_mir_opt_tests: false,
+            link_into_sysroot: true,
         });
     }
 
@@ -164,7 +172,9 @@ impl Step for Std {
             && !(builder.local_rebuild && target != builder.host_target)
         {
             let compiler = self.build_compiler;
-            builder.ensure(StdLink::from_std(self, compiler));
+            if self.link_into_sysroot {
+                builder.ensure(StdLink::from_std(self, compiler));
+            }
 
             return None;
         }
@@ -206,7 +216,9 @@ impl Step for Std {
 
             self.copy_extra_objects(builder, &build_compiler, target);
 
-            builder.ensure(StdLink::from_std(self, build_compiler));
+            if self.link_into_sysroot {
+                builder.ensure(StdLink::from_std(self, build_compiler));
+            }
             return Some(build_stamp::libstd_stamp(builder, build_compiler, target));
         }
 
@@ -237,7 +249,9 @@ impl Step for Std {
             // still contain the third party objects needed by various targets.
             self.copy_extra_objects(builder, &build_compiler, target);
 
-            builder.ensure(StdLink::from_std(self, build_compiler_for_std_to_uplift));
+            if self.link_into_sysroot {
+                builder.ensure(StdLink::from_std(self, build_compiler_for_std_to_uplift));
+            }
             return stage_1_stamp;
         }
 
@@ -304,10 +318,12 @@ impl Step for Std {
             },
         );
 
-        builder.ensure(StdLink::from_std(
-            self,
-            builder.compiler(build_compiler.stage, builder.config.host_target),
-        ));
+        if self.link_into_sysroot {
+            builder.ensure(StdLink::from_std(
+                self,
+                builder.compiler(build_compiler.stage, builder.config.host_target),
+            ));
+        }
         Some(stamp)
     }
 
@@ -629,13 +645,13 @@ pub fn std_cargo(
         CompilerBuiltins::BuildRustOnly => "",
     };
 
-    for krate in crates {
-        cargo.args(["-p", krate]);
-    }
-
     let mut features = String::new();
 
     if builder.no_std(target) == Some(true) {
+        for krate in crates {
+            cargo.args(["-p", krate]);
+        }
+
         features += " compiler-builtins-mem";
         if !target.starts_with("bpf") {
             features.push_str(compiler_builtins_c_feature);
@@ -651,6 +667,18 @@ pub fn std_cargo(
             .arg("--features")
             .arg(features);
     } else {
+        if crates.is_empty() {
+            // The sysroot manifest's dummy crate is empty, so cargo may skip
+            // building proc_macro unless we request it explicitly. That leaves
+            // linked stage toolchains unable to compile proc-macro crates.
+            cargo.args(["-p", "sysroot"]);
+            cargo.args(["-p", "proc_macro"]);
+        } else {
+            for krate in crates {
+                cargo.args(["-p", krate]);
+            }
+        }
+
         features += &builder.std_features(target);
         features.push_str(compiler_builtins_c_feature);
 
@@ -1817,6 +1845,78 @@ impl Step for CraneliftCodegenBackend {
     }
 }
 
+// tRust: LLVM2 verified codegen backend build step (#956).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Llvm2CodegenBackend {
+    pub compilers: RustcPrivateCompilers,
+}
+
+impl Step for Llvm2CodegenBackend {
+    type Output = BuildStamp;
+    const IS_HOST: bool = true;
+
+    fn should_run(run: ShouldRun<'_>) -> ShouldRun<'_> {
+        run.alias("rustc_codegen_llvm2").alias("cg_llvm2")
+    }
+
+    fn make_run(run: RunConfig<'_>) {
+        run.builder.ensure(Llvm2CodegenBackend {
+            compilers: RustcPrivateCompilers::new(run.builder, run.builder.top_stage, run.target),
+        });
+    }
+
+    fn run(self, builder: &Builder<'_>) -> Self::Output {
+        let target = self.compilers.target();
+        let build_compiler = self.compilers.build_compiler();
+
+        let stamp = build_stamp::codegen_backend_stamp(
+            builder,
+            build_compiler,
+            target,
+            &CodegenBackendKind::Llvm2,
+        );
+
+        if builder.config.keep_stage.contains(&build_compiler.stage) {
+            trace!("`keep-stage` requested");
+            builder.info(
+                "WARNING: Using a potentially old codegen backend. \
+                This may not behave well.",
+            );
+            return stamp;
+        }
+
+        let mut cargo = builder::Cargo::new(
+            builder,
+            build_compiler,
+            Mode::Codegen,
+            SourceType::InTree,
+            target,
+            Kind::Build,
+        );
+        cargo
+            .arg("--manifest-path")
+            .arg(builder.src.join("compiler/rustc_codegen_llvm2/Cargo.toml"));
+        rustc_cargo_env(builder, &mut cargo, target);
+
+        let _guard = builder.msg(
+            Kind::Build,
+            "codegen backend llvm2",
+            Mode::Codegen,
+            build_compiler,
+            target,
+        );
+        let files = run_cargo(builder, cargo, vec![], &stamp, vec![], ArtifactKeepMode::OnlyRlib);
+        write_codegen_backend_stamp(stamp, files, builder.config.dry_run())
+    }
+
+    fn metadata(&self) -> Option<StepMetadata> {
+        Some(
+            StepMetadata::build("rustc_codegen_llvm2", self.compilers.target())
+                .built_by(self.compilers.build_compiler()),
+        )
+    }
+}
+
 /// Write filtered `files` into the passed build stamp and returns it.
 fn write_codegen_backend_stamp(
     mut stamp: BuildStamp,
@@ -2030,6 +2130,8 @@ impl Step for Sysroot {
             });
         }
 
+        restore_user_facing_tools(builder, compiler, &sysroot);
+
         // Symlink the source root into the same location inside the sysroot,
         // where `rust-src` component would go (`$sysroot/lib/rustlib/src/rust`),
         // so that any tools relying on `rust-src` also work for local builds,
@@ -2078,6 +2180,54 @@ impl Step for Sysroot {
 
         sysroot
     }
+}
+
+fn restore_user_facing_tools(builder: &Builder<'_>, compiler: Compiler, sysroot: &Path) {
+    if compiler.stage == 0 {
+        return;
+    }
+
+    let tools_dir = builder.tools_dir(compiler, compiler.host);
+
+    let bindir = sysroot.join("bin");
+    t!(fs::create_dir_all(&bindir));
+    for (src_name, dst_name) in crate::core::build_steps::tool::restored_sysroot_bins(builder) {
+        let src_exe = exe(src_name, compiler.host);
+        let src = tools_dir.join(&src_exe);
+        if src.exists() {
+            builder.copy_link(
+                &src,
+                &bindir.join(exe(dst_name, compiler.host)),
+                FileType::Executable,
+            );
+        }
+    }
+
+    let ra_proc_macro_srv = tools_dir.join(exe("rust-analyzer-proc-macro-srv", compiler.host));
+    if crate::core::build_steps::tool::restore_rust_analyzer_proc_macro_srv(builder)
+        && ra_proc_macro_srv.exists()
+    {
+        let libexec = sysroot.join("libexec");
+        t!(fs::create_dir_all(&libexec));
+        builder.copy_link(
+            &ra_proc_macro_srv,
+            &libexec.join(ra_proc_macro_srv.file_name().unwrap()),
+            FileType::Executable,
+        );
+    }
+}
+
+fn assembled_sysroot_std_stamp(
+    builder: &Builder<'_>,
+    target_compiler: Compiler,
+    target: TargetSelection,
+) -> BuildStamp {
+    let std_compiler = if Std::should_be_uplifted_from_stage_1(builder, target_compiler.stage) {
+        builder.compiler(1, builder.host_target)
+    } else {
+        target_compiler
+    };
+    build_stamp::libstd_stamp(builder, std_compiler, target)
 }
 
 /// Prepare a compiler sysroot.
@@ -2365,6 +2515,7 @@ impl Step for Assemble {
             let can_be_rustc_dynamic_dep = if builder
                 .link_std_into_rustc_driver(target_compiler.host)
                 && !target_compiler.host.is_windows()
+                && !target_compiler.host.contains("apple-darwin")
             {
                 let is_std = filename.starts_with("std-") || filename.starts_with("libstd-");
                 !is_std
@@ -2485,6 +2636,12 @@ impl Step for Assemble {
                         // library sysroots, so that they are available for cg_gcc.
                         dylib_set.install_to(builder, target_compiler);
                     }
+                    // tRust: LLVM2 verified codegen backend (#956).
+                    CodegenBackendKind::Llvm2 => {
+                        let stamp =
+                            builder.ensure(Llvm2CodegenBackend { compilers: prepare_compilers() });
+                        copy_codegen_backends_to_sysroot(builder, stamp, target_compiler);
+                    }
                     CodegenBackendKind::Llvm | CodegenBackendKind::Custom(_) => continue,
                 }
             }
@@ -2552,10 +2709,29 @@ impl Step for Assemble {
         let out_dir = builder.cargo_out(build_compiler, Mode::Rustc, host);
         let rustc = out_dir.join(exe("rustc-main", host));
         let bindir = sysroot.join("bin");
-        t!(fs::create_dir_all(bindir));
+        t!(fs::create_dir_all(&bindir));
         let compiler = builder.rustc(target_compiler);
         debug!(src = ?rustc, dst = ?compiler, "linking compiler binary itself");
         builder.copy_link(&rustc, &compiler, FileType::Executable);
+        let trustc = bindir.join(exe("trustc", host));
+        debug!(src = ?rustc, dst = ?trustc, "linking trustc compiler alias");
+        builder.copy_link(&rustc, &trustc, FileType::Executable);
+
+        let std_stamp = builder
+            .ensure(Std::new(target_compiler, host).without_sysroot_link())
+            .unwrap_or_else(|| assembled_sysroot_std_stamp(builder, target_compiler, host));
+        if std_stamp.path().exists() {
+            let host_libdir = builder.sysroot_target_libdir(target_compiler, host);
+            add_to_sysroot(builder, &host_libdir, &host_libdir, &std_stamp);
+        }
+
+        if target_compiler.stage == 1 && builder.config.extended {
+            crate::core::build_steps::tool::ensure_user_facing_tools(
+                builder,
+                target_compiler,
+                &sysroot,
+            );
+        }
 
         target_compiler
     }

@@ -9,10 +9,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use crate::LlmBackend;
 use crate::analyzer::FailureAnalysis;
 use crate::llm_inference::{InferenceConfig, LlmSpecInference, ThreeViewContext};
 use crate::spec_proposal::{SpecProposal, format_suggestions};
-use crate::LlmBackend;
 
 /// Outcome of verifying a set of inferred specs.
 #[derive(Debug, Clone)]
@@ -42,11 +42,7 @@ pub trait VerificationOracle: Send + Sync {
     ///
     /// Returns `AllPassed` if the specs make all VCs provable,
     /// `Failed` with a counterexample if not, or `Error` on infrastructure failure.
-    fn verify_specs(
-        &self,
-        function_path: &str,
-        specs: &[SpecProposal],
-    ) -> VerifyOutcome;
+    fn verify_specs(&self, function_path: &str, specs: &[SpecProposal]) -> VerifyOutcome;
 }
 
 /// A mock verifier that always passes (for testing).
@@ -78,14 +74,8 @@ impl FailThenPassVerifier {
 }
 
 impl VerificationOracle for FailThenPassVerifier {
-    fn verify_specs(
-        &self,
-        _function_path: &str,
-        specs: &[SpecProposal],
-    ) -> VerifyOutcome {
-        let remaining = self
-            .fail_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    fn verify_specs(&self, _function_path: &str, specs: &[SpecProposal]) -> VerifyOutcome {
+        let remaining = self.fail_count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
         if remaining > 0 {
             VerifyOutcome::Failed {
                 counterexample: self.counterexample.clone(),
@@ -178,11 +168,7 @@ impl<'a> SpecFeedbackLoop<'a> {
         verifier: &'a dyn VerificationOracle,
         config: FeedbackLoopConfig,
     ) -> Self {
-        Self {
-            llm,
-            verifier,
-            config,
-        }
+        Self { llm, verifier, config }
     }
 
     /// Run the feedback loop for a single function.
@@ -199,8 +185,7 @@ impl<'a> SpecFeedbackLoop<'a> {
         context: &ThreeViewContext,
         failures: &[FailureAnalysis],
     ) -> SpecFeedbackResult {
-        let engine =
-            LlmSpecInference::new(self.llm, self.config.inference_config.clone());
+        let engine = LlmSpecInference::new(self.llm, self.config.inference_config.clone());
         let mut iterations: Vec<IterationRecord> = Vec::new();
         let mut prior_specs: Vec<SpecProposal> = Vec::new();
         let mut last_counterexample: Option<String> = None;
@@ -261,10 +246,7 @@ impl<'a> SpecFeedbackLoop<'a> {
                         suggestion_text,
                     };
                 }
-                VerifyOutcome::Failed {
-                    counterexample,
-                    failed_specs: _,
-                } => {
+                VerifyOutcome::Failed { counterexample, failed_specs: _ } => {
                     iterations.push(IterationRecord {
                         iteration: iter_num,
                         inferred_specs: inference_result.proposals.clone(),
@@ -283,9 +265,7 @@ impl<'a> SpecFeedbackLoop<'a> {
                     iterations.push(IterationRecord {
                         iteration: iter_num,
                         inferred_specs: inference_result.proposals.clone(),
-                        outcome: IterationOutcome::Error {
-                            message: message.clone(),
-                        },
+                        outcome: IterationOutcome::Error { message: message.clone() },
                         inference_raw_count: inference_result.raw_count,
                         inference_validation_rejected: inference_result.validation_rejected,
                     });
@@ -309,12 +289,13 @@ impl<'a> SpecFeedbackLoop<'a> {
 
 #[cfg(test)]
 mod tests {
+    use trust_types::{BinOp, Ty, VcKind};
+
     use super::*;
     use crate::analyzer::{FailureAnalysis, FailurePattern};
     use crate::llm_inference::ThreeViewContext;
     use crate::source_reader::extract_function;
     use crate::{LlmError, LlmRequest, LlmResponse};
-    use trust_types::{BinOp, Ty, VcKind};
 
     /// Mock LLM that returns progressively better specs on each call.
     struct ProgressiveMockLlm {
@@ -324,10 +305,7 @@ mod tests {
 
     impl ProgressiveMockLlm {
         fn new(responses: Vec<String>) -> Self {
-            Self {
-                responses,
-                call_count: std::sync::atomic::AtomicUsize::new(0),
-            }
+            Self { responses, call_count: std::sync::atomic::AtomicUsize::new(0) }
         }
 
         fn single(json: &str) -> Self {
@@ -337,9 +315,7 @@ mod tests {
 
     impl LlmBackend for ProgressiveMockLlm {
         fn send(&self, _request: &LlmRequest) -> Result<LlmResponse, LlmError> {
-            let idx = self
-                .call_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let idx = self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let empty = String::new();
             let json = if idx < self.responses.len() {
                 &self.responses[idx]
@@ -359,9 +335,7 @@ mod tests {
 
     impl VerificationOracle for ErrorVerifier {
         fn verify_specs(&self, _: &str, _: &[SpecProposal]) -> VerifyOutcome {
-            VerifyOutcome::Error {
-                message: "solver timeout".into(),
-            }
+            VerifyOutcome::Error { message: "solver timeout".into() }
         }
     }
 
@@ -370,14 +344,8 @@ mod tests {
             vc_kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
                 operand_tys: (
-                    Ty::Int {
-                        width: 64,
-                        signed: false,
-                    },
-                    Ty::Int {
-                        width: 64,
-                        signed: false,
-                    },
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
                 ),
             },
             function: "get_midpoint".into(),
@@ -413,20 +381,11 @@ mod tests {
         let v = FailThenPassVerifier::new(2, "a = MAX");
 
         // First two calls fail
-        assert!(matches!(
-            v.verify_specs("f", &[]),
-            VerifyOutcome::Failed { .. }
-        ));
-        assert!(matches!(
-            v.verify_specs("f", &[]),
-            VerifyOutcome::Failed { .. }
-        ));
+        assert!(matches!(v.verify_specs("f", &[]), VerifyOutcome::Failed { .. }));
+        assert!(matches!(v.verify_specs("f", &[]), VerifyOutcome::Failed { .. }));
 
         // Third call passes
-        assert!(matches!(
-            v.verify_specs("f", &[]),
-            VerifyOutcome::AllPassed
-        ));
+        assert!(matches!(v.verify_specs("f", &[]), VerifyOutcome::AllPassed));
     }
 
     // --- SpecFeedbackLoop: immediate success ---
@@ -481,16 +440,10 @@ mod tests {
         assert_eq!(result.iterations.len(), 2);
 
         // First iteration failed
-        assert!(matches!(
-            result.iterations[0].outcome,
-            IterationOutcome::Failed { .. }
-        ));
+        assert!(matches!(result.iterations[0].outcome, IterationOutcome::Failed { .. }));
 
         // Second iteration passed
-        assert!(matches!(
-            result.iterations[1].outcome,
-            IterationOutcome::Passed
-        ));
+        assert!(matches!(result.iterations[1].outcome, IterationOutcome::Passed));
 
         assert_eq!(result.accepted_specs[0].spec_body, "a <= usize::MAX - b");
     }
@@ -504,10 +457,7 @@ mod tests {
         );
         // Always fails
         let verifier = FailThenPassVerifier::new(100, "counterexample: always fails");
-        let config = FeedbackLoopConfig {
-            max_iterations: 3,
-            ..Default::default()
-        };
+        let config = FeedbackLoopConfig { max_iterations: 3, ..Default::default() };
 
         let fl = SpecFeedbackLoop::new(&llm, &verifier, config);
         let result = fl.run(
@@ -542,10 +492,7 @@ mod tests {
         assert!(!result.converged);
         assert!(result.accepted_specs.is_empty());
         // Should have at least one iteration with NoSpecs
-        assert!(result
-            .iterations
-            .iter()
-            .any(|i| matches!(i.outcome, IterationOutcome::NoSpecs)));
+        assert!(result.iterations.iter().any(|i| matches!(i.outcome, IterationOutcome::NoSpecs)));
     }
 
     // --- SpecFeedbackLoop: error breaks loop ---
@@ -556,10 +503,7 @@ mod tests {
             r#"[{"kind": "precondition", "spec_body": "a > 0", "confidence": 0.7, "rationale": "test"}]"#,
         );
         let verifier = ErrorVerifier;
-        let config = FeedbackLoopConfig {
-            max_iterations: 5,
-            ..Default::default()
-        };
+        let config = FeedbackLoopConfig { max_iterations: 5, ..Default::default() };
 
         let fl = SpecFeedbackLoop::new(&llm, &verifier, config);
         let result = fl.run(
@@ -571,10 +515,7 @@ mod tests {
 
         assert!(!result.converged);
         assert_eq!(result.total_iterations, 1);
-        assert!(matches!(
-            result.iterations[0].outcome,
-            IterationOutcome::Error { .. }
-        ));
+        assert!(matches!(result.iterations[0].outcome, IterationOutcome::Error { .. }));
     }
 
     // --- IterationRecord ---
@@ -655,18 +596,10 @@ mod tests {
             r#"[{"kind": "precondition", "spec_body": "a > 0", "confidence": 0.7, "rationale": "test"}]"#,
         );
         let verifier = FailThenPassVerifier::new(100, "cex");
-        let config = FeedbackLoopConfig {
-            max_iterations: 2,
-            ..Default::default()
-        };
+        let config = FeedbackLoopConfig { max_iterations: 2, ..Default::default() };
 
         let fl = SpecFeedbackLoop::new(&llm, &verifier, config);
-        let result = fl.run(
-            "f",
-            "test::f",
-            &midpoint_context(),
-            &[overflow_failure()],
-        );
+        let result = fl.run("f", "test::f", &midpoint_context(), &[overflow_failure()]);
 
         assert!(!result.converged);
         assert!(result.total_iterations <= 2);

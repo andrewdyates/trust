@@ -230,11 +230,8 @@ mod tests {
         let mut blocks = Vec::new();
 
         for (i, callee) in calls.iter().enumerate() {
-            let target = if i + 1 < calls.len() {
-                Some(BlockId(i + 1))
-            } else {
-                Some(BlockId(calls.len()))
-            };
+            let target =
+                if i + 1 < calls.len() { Some(BlockId(i + 1)) } else { Some(BlockId(calls.len())) };
             blocks.push(BasicBlock {
                 id: BlockId(i),
                 stmts: vec![],
@@ -293,13 +290,7 @@ mod tests {
             Box::new(Formula::Int(0)),
         );
 
-        let func = make_func_with_spec(
-            "leaf",
-            "crate::leaf",
-            &[],
-            vec![],
-            vec![post.clone()],
-        );
+        let func = make_func_with_spec("leaf", "crate::leaf", &[], vec![], vec![post.clone()]);
 
         let store = SummaryStore::new();
         let summary = compute_summary(&func, &store, false);
@@ -313,10 +304,8 @@ mod tests {
     #[test]
     fn test_compute_summary_with_callee() {
         // Callee has precondition x >= 0
-        let callee_pre = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let callee_pre =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let callee_post = Formula::Ge(
             Box::new(Formula::Var("result".into(), Sort::Int)),
             Box::new(Formula::Int(1)),
@@ -328,13 +317,8 @@ mod tests {
         callee_summary.postconditions.push(callee_post);
         store.insert(callee_summary);
 
-        let func = make_func_with_spec(
-            "caller",
-            "crate::caller",
-            &["crate::helper"],
-            vec![],
-            vec![],
-        );
+        let func =
+            make_func_with_spec("caller", "crate::caller", &["crate::helper"], vec![], vec![]);
 
         let summary = compute_summary(&func, &store, false);
 
@@ -345,13 +329,8 @@ mod tests {
 
     #[test]
     fn test_compute_summary_unknown_callee() {
-        let func = make_func_with_spec(
-            "caller",
-            "crate::caller",
-            &["external::unknown"],
-            vec![],
-            vec![],
-        );
+        let func =
+            make_func_with_spec("caller", "crate::caller", &["external::unknown"], vec![], vec![]);
 
         let store = SummaryStore::new();
         let summary = compute_summary(&func, &store, false);
@@ -390,7 +369,7 @@ mod tests {
     fn test_substitute_callee_summary_with_postconditions() {
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: Formula::Eq(
                 Box::new(Formula::Var("y".into(), Sort::Int)),
@@ -399,10 +378,8 @@ mod tests {
             contract_metadata: None,
         };
 
-        let post = Formula::Ge(
-            Box::new(Formula::Var("y".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let post =
+            Formula::Ge(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(1)));
 
         let mut summary = FunctionSummary::new("callee", "crate::callee");
         summary.postconditions.push(post.clone());
@@ -422,7 +399,7 @@ mod tests {
         let original = Formula::Bool(true);
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: original.clone(),
             contract_metadata: None,
@@ -441,20 +418,16 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
 
-        let post1 = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
-        let post2 = Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        );
+        let post1 =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
+        let post2 =
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100)));
 
         let mut summary = FunctionSummary::new("callee", "crate::callee");
         summary.postconditions.push(post1.clone());

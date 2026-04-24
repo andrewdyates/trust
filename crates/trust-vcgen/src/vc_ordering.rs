@@ -193,7 +193,7 @@ mod tests {
     fn make_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -245,9 +245,7 @@ mod tests {
         // a = (x == 0)
         // b = (x == 0) AND (y == 1)
         // a is weaker because b has more conjuncts
-        let a = Formula::And(vec![
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        ]);
+        let a = Formula::And(vec![Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)))]);
         let b = Formula::And(vec![
             Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
             Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(1))),
@@ -280,8 +278,14 @@ mod tests {
 
     #[test]
     fn test_compare_formulas_bool_literals() {
-        assert_eq!(compare_formulas(&Formula::Bool(true), &Formula::Bool(true)), VcStrength::Equivalent);
-        assert_eq!(compare_formulas(&Formula::Bool(true), &Formula::Bool(false)), VcStrength::Incomparable);
+        assert_eq!(
+            compare_formulas(&Formula::Bool(true), &Formula::Bool(true)),
+            VcStrength::Equivalent
+        );
+        assert_eq!(
+            compare_formulas(&Formula::Bool(true), &Formula::Bool(false)),
+            VcStrength::Incomparable
+        );
     }
 
     #[test]
@@ -292,10 +296,7 @@ mod tests {
         let x_eq_0 = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)));
         let y_eq_1 = Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(1)));
         let z_eq_2 = Formula::Eq(Box::new(var("z")), Box::new(Formula::Int(2)));
-        let a = Formula::And(vec![
-            Formula::And(vec![x_eq_0.clone(), y_eq_1.clone()]),
-            z_eq_2,
-        ]);
+        let a = Formula::And(vec![Formula::And(vec![x_eq_0.clone(), y_eq_1.clone()]), z_eq_2]);
         let b = Formula::And(vec![x_eq_0, y_eq_1]);
         assert_eq!(compare_formulas(&a, &b), VcStrength::Stronger);
     }
@@ -380,10 +381,7 @@ mod tests {
 
     #[test]
     fn test_discharge_subsumed_empty_graph() {
-        let graph = SubsumptionGraph {
-            vc_count: 1,
-            subsumes: FxHashMap::default(),
-        };
+        let graph = SubsumptionGraph { vc_count: 1, subsumes: FxHashMap::default() };
         let discharged = discharge_subsumed(&graph, 0);
         assert!(discharged.is_empty());
     }

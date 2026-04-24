@@ -11,11 +11,11 @@
 //! e.g. [i32; N]. `{0:-1:-1 float}` then means one pointer at offset 0, if you dereference it there
 //! will be only pointers, if you dereference these new pointers they will point to array of floats.
 //! Generally, it allows byte-specific descriptions.
-//! tRust: known issue — This description might be partly inaccurate and should be extended, along with
+//! FIXME: This description might be partly inaccurate and should be extended, along with
 //! adding documentation to the corresponding Enzyme core code.
-//! tRust: known issue — Rewrite the TypeTree logic in Enzyme core to reduce the need for the rustc frontend to
+//! FIXME: Rewrite the TypeTree logic in Enzyme core to reduce the need for the rustc frontend to
 //! provide typetree information.
-//! tRust: known issue — We should also re-evaluate where we create TypeTrees from Rust types, since MIR
+//! FIXME: We should also re-evaluate where we create TypeTrees from Rust types, since MIR
 //! representations of some types might not be accurate. For example a vector of floats might be
 //! represented as a vector of u8s in MIR in some cases.
 

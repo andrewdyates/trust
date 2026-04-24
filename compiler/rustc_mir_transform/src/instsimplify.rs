@@ -52,7 +52,7 @@ impl<'tcx> crate::MirPass<'tcx> for InstSimplify {
                 ctx.simplify_repeat_once(rvalue);
             }
 
-            let terminator = block.terminator.as_mut().expect("invariant: basic block must have a terminator"); // tRust: unwrap elimination
+            let terminator = block.terminator.as_mut().unwrap();
             ctx.simplify_primitive_clone(terminator, &mut block.statements);
             ctx.simplify_size_or_align_of_val(terminator, &mut block.statements);
             ctx.simplify_intrinsic_assert(terminator);
@@ -83,7 +83,7 @@ impl<'tcx> InstSimplifyContext<'_, 'tcx> {
         if fields.len() < 5 {
             return;
         }
-        let (first, rest) = fields[..].split_first().expect("invariant: fields must be non-empty after length check"); // tRust: unwrap elimination
+        let (first, rest) = fields[..].split_first().unwrap();
         let Operand::Constant(first) = first else {
             return;
         };
@@ -97,7 +97,7 @@ impl<'tcx> InstSimplifyContext<'_, 'tcx> {
             let field = field.const_.eval(self.tcx, self.typing_env, field.span);
             field == Ok(first_val)
         }) {
-            let len = ty::Const::from_target_usize(self.tcx, fields.len().try_into().expect("invariant: field count must fit in target usize")); // tRust: unwrap elimination
+            let len = ty::Const::from_target_usize(self.tcx, fields.len().try_into().unwrap());
             *rvalue = Rvalue::Repeat(Operand::Constant(first.clone()), len);
         }
     }
@@ -160,8 +160,8 @@ impl<'tcx> InstSimplifyContext<'_, 'tcx> {
         {
             // The mutable borrows we're holding prevent printing `rvalue` here
             let mut fields = std::mem::take(fields);
-            let _meta = fields.pop().expect("invariant: raw pointer aggregate must have metadata field"); // tRust: unwrap elimination
-            let data = fields.pop().expect("invariant: raw pointer aggregate must have data field"); // tRust: unwrap elimination
+            let _meta = fields.pop().unwrap();
+            let data = fields.pop().unwrap();
             let ptr_ty = Ty::new_ptr(self.tcx, *pointee_ty, *mutability);
             *rvalue = Rvalue::Cast(CastKind::PtrToPtr, data, ptr_ty);
         }
@@ -314,7 +314,6 @@ impl<'tcx> InstSimplifyContext<'_, 'tcx> {
             ty::FnDef(..) => body_ty.fn_sig(self.tcx).abi(),
             ty::Closure(..) => ExternAbi::RustCall,
             ty::Coroutine(..) => ExternAbi::Rust,
-            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
             _ => bug!("unexpected body ty: {body_ty:?}"),
         };
 

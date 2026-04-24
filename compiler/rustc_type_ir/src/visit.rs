@@ -381,7 +381,7 @@ impl<I: Interner, T: TypeVisitable<I>> TypeVisitableExt<I> for T {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 struct FoundFlags;
 
-// tRust: known issue -- Optimize for checking for infer flags
+// FIXME: Optimize for checking for infer flags
 struct HasTypeFlagsVisitor {
     flags: ty::TypeFlags,
 }

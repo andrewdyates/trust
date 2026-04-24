@@ -161,11 +161,11 @@ pub(crate) fn query_cache_path(sess: &Session) -> PathBuf {
 
 /// Locks a given session directory.
 fn lock_file_path(session_dir: &Path) -> PathBuf {
-    let crate_dir = session_dir.parent().expect("invariant: session dir must have a parent directory"); // tRust: unwrap -> expect
+    let crate_dir = session_dir.parent().unwrap();
 
     let directory_name = session_dir
         .file_name()
-        .expect("invariant: session dir path must have a filename component") // tRust: unwrap -> expect
+        .unwrap()
         .to_str()
         .expect("malformed session dir name: contains non-Unicode characters");
 
@@ -311,7 +311,7 @@ pub fn finalize_session_directory(sess: &Session, svh: Option<Svh>) {
         return;
     }
     // The svh is always produced when incr. comp. is enabled.
-    let svh = svh.expect("invariant: SVH is always produced when incremental compilation is enabled"); // tRust: unwrap -> expect
+    let svh = svh.unwrap();
 
     let _timer = sess.timer("incr_comp_finalize_session_directory");
 
@@ -339,7 +339,7 @@ pub fn finalize_session_directory(sess: &Session, svh: Option<Svh>) {
 
     let mut sub_dir_name = incr_comp_session_dir
         .file_name()
-        .expect("invariant: session dir path has a file name component") // tRust: unwrap -> expect
+        .unwrap()
         .to_str()
         .expect("malformed session dir name: contains non-Unicode characters")
         .to_string();
@@ -354,7 +354,7 @@ pub fn finalize_session_directory(sess: &Session, svh: Option<Svh>) {
     sub_dir_name.push_str(&svh.as_u128().to_base_fixed_len(CASE_INSENSITIVE));
 
     // Create the full path
-    let new_path = incr_comp_session_dir.parent().expect("invariant: session dir is not filesystem root").join(&*sub_dir_name); // tRust: unwrap -> expect
+    let new_path = incr_comp_session_dir.parent().unwrap().join(&*sub_dir_name);
     debug!("finalize_session_directory() - new path: {}", new_path.display());
 
     match rename_path_with_retry(&*incr_comp_session_dir, &new_path, 3) {
@@ -509,7 +509,7 @@ fn find_source_directory(
 ) -> Option<PathBuf> {
     let iter = crate_dir
         .read_dir()
-        .expect("invariant: crate directory must be readable") // tRust: unwrap -> expect
+        .unwrap() // FIXME
         .filter_map(|e| e.ok().map(|e| e.path()));
 
     find_source_directory_in_iter(iter, source_directories_already_tried)
@@ -527,7 +527,7 @@ where
     for session_dir in iter {
         debug!("find_source_directory_in_iter - inspecting `{}`", session_dir.display());
 
-        let Some(directory_name) = session_dir.file_name().expect("invariant: session dir entry has a file name").to_str() else { // tRust: unwrap -> expect
+        let Some(directory_name) = session_dir.file_name().unwrap().to_str() else {
             debug!("find_source_directory_in_iter - ignoring");
             continue;
         };
@@ -582,8 +582,8 @@ fn extract_timestamp_from_session_dir(directory_name: &str) -> Result<SystemTime
 }
 
 fn timestamp_to_string(timestamp: SystemTime) -> BaseNString {
-    let duration = timestamp.duration_since(UNIX_EPOCH).expect("invariant: timestamp is after UNIX_EPOCH"); // tRust: unwrap -> expect
-    let micros: u64 = duration.as_micros().try_into().expect("invariant: timestamp micros fits in u64"); // tRust: unwrap -> expect
+    let duration = timestamp.duration_since(UNIX_EPOCH).unwrap();
+    let micros: u64 = duration.as_micros().try_into().unwrap();
     micros.to_base_fixed_len(CASE_INSENSITIVE)
 }
 
@@ -598,7 +598,7 @@ fn string_to_timestamp(s: &str) -> Result<SystemTime, &'static str> {
 }
 
 fn crate_path(sess: &Session, crate_name: Symbol, stable_crate_id: StableCrateId) -> PathBuf {
-    let incr_dir = sess.opts.incremental.as_ref().expect("invariant: incremental compilation dir is set when crate_path is called").clone(); // tRust: unwrap -> expect
+    let incr_dir = sess.opts.incremental.as_ref().unwrap().clone();
 
     let crate_name =
         format!("{crate_name}-{}", stable_crate_id.as_u64().to_base_fixed_len(CASE_INSENSITIVE));
@@ -619,7 +619,7 @@ pub(crate) fn garbage_collect_session_directories(sess: &Session) -> io::Result<
         session_directory.display()
     );
 
-    let crate_directory = session_directory.parent().expect("invariant: session directory is not filesystem root"); // tRust: unwrap -> expect
+    let crate_directory = session_directory.parent().unwrap();
     debug!(
         "garbage_collect_session_directories() - crate directory: {}",
         crate_directory.display()

@@ -354,7 +354,7 @@ pub fn strip_generics_from_path(path_str: &str) -> Result<Box<str>, MalformedGen
 /// Returns whether the first doc-comment is an inner attribute.
 ///
 /// If there are no doc-comments, return true.
-/// NOTE(#78591): Support both inner and outer attributes on the same item.
+/// FIXME(#78591): Support both inner and outer attributes on the same item.
 pub fn inner_docs(attrs: &[impl AttributeExt]) -> bool {
     for attr in attrs {
         if let Some(attr_style) = attr.doc_resolution_scope() {
@@ -381,7 +381,7 @@ fn preprocess_link(link: &str) -> Box<str> {
     // this function *MUST* return a link that's equal to `PreprocessingInfo.path_str`!
 
     let link = link.replace('`', "");
-    let link = link.split('#').next().expect("invariant: iterator is non-empty");
+    let link = link.split('#').next().unwrap();
     let link = link.trim();
     let link = link.split_once('@').map_or(link, |(_, rhs)| rhs);
     let link = link.trim_suffix("()");

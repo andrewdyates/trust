@@ -43,7 +43,7 @@ impl SparcInlineAsmRegClass {
                 if arch == InlineAsmArch::Sparc {
                     types! {
                         _: I8, I16, I32;
-                        // tRust: known issue — i64 is ok for g*/o* registers on SPARC-V8+ ("h" constraint in GCC),
+                        // FIXME: i64 is ok for g*/o* registers on SPARC-V8+ ("h" constraint in GCC),
                         //        but not yet supported in LLVM.
                         // v8plus: I64;
                     }
@@ -64,7 +64,7 @@ fn reserved_g5(
     _is_clobber: bool,
 ) -> Result<(), &'static str> {
     if arch == InlineAsmArch::Sparc {
-        // tRust: known issue — Section 2.1.5 "Function Registers with Unassigned Roles" of the V8+ Technical
+        // FIXME: Section 2.1.5 "Function Registers with Unassigned Roles" of the V8+ Technical
         // Specification says "%g5; no longer reserved for system software" [1], but LLVM always
         // reserves it on SPARC32 [2].
         // [1]: https://temlib.org/pub/SparcStation/Standards/V8plus.pdf
@@ -77,7 +77,7 @@ fn reserved_g5(
 
 def_regs! {
     Sparc SparcInlineAsmReg SparcInlineAsmRegClass {
-        // tRust: known issue —
+        // FIXME:
         // - LLVM has reserve-{g,o,l,i}N feature to reserve each general-purpose registers.
         // - g2-g4 are reserved for application (optional in both LLVM and GCC, and GCC has -mno-app-regs option to reserve them).
         // There are currently no builtin targets that use them, but in the future they may need to
@@ -110,9 +110,9 @@ def_regs! {
         y: yreg = ["y"],
         #error = ["r0", "g0"] =>
             "g0 is always zero and cannot be used as an operand for inline asm",
-        // tRust: known issue — %g1 is volatile in ABI, but used internally by LLVM.
+        // FIXME: %g1 is volatile in ABI, but used internally by LLVM.
         // https://github.com/llvm/llvm-project/blob/llvmorg-19.1.0/llvm/lib/Target/Sparc/SparcRegisterInfo.cpp#L55-L56
-        // > tRust: known issue — G1 reserved for now for large imm generation by frame code.
+        // > FIXME: G1 reserved for now for large imm generation by frame code.
         #error = ["r1", "g1"] =>
             "reserved by LLVM and cannot be used as an operand for inline asm",
         #error = ["r6", "g6", "r7", "g7"] =>

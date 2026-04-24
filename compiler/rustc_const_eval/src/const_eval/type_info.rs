@@ -23,7 +23,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         place: &(impl Writeable<'tcx, CtfeProvenance> + 'a),
         name: Symbol,
     ) -> InterpResult<'tcx, (VariantIdx, impl Writeable<'tcx, CtfeProvenance> + 'a)> {
-        let variants = place.layout().ty.ty_adt_def().expect("invariant: type_info place type is an ADT with variants").variants();
+        let variants = place.layout().ty.ty_adt_def().unwrap().variants();
         let variant_idx = variants
             .iter_enumerated()
             .find(|(_idx, var)| var.name == name)
@@ -45,7 +45,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
             .layout()
             .ty
             .builtin_deref(false)
-            .expect("invariant: variant name lookup succeeds for known ADT variant")
+            .unwrap()
             .sequence_element_type(self.tcx.tcx);
 
         // Allocate an array
@@ -71,9 +71,9 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         dest: &impl Writeable<'tcx, CtfeProvenance>,
     ) -> InterpResult<'tcx> {
         let ty_struct = self.tcx.require_lang_item(LangItem::Type, self.tcx.span);
-        let ty_struct = self.tcx.type_of(ty_struct).no_bound_vars().expect("invariant: TypeInfo struct type has no bound vars in monomorphized context");
+        let ty_struct = self.tcx.type_of(ty_struct).no_bound_vars().unwrap();
         assert_eq!(ty_struct, dest.layout().ty);
-        let ty_struct = ty_struct.ty_adt_def().expect("invariant: TypeInfo struct type is an ADT (non-enum with fields)").non_enum_variant();
+        let ty_struct = ty_struct.ty_adt_def().unwrap().non_enum_variant();
         // Fill all fields of the `TypeInfo` struct.
         for (idx, field) in ty_struct.fields.iter_enumerated() {
             let field_dest = self.project_field(dest, idx)?;
@@ -92,7 +92,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                                     .layout()
                                     .ty
                                     .ty_adt_def()
-                                    .expect("invariant: field name lookup succeeds for known ADT field")
+                                    .unwrap()
                                     .non_enum_variant()
                                     .fields
                                     .len()
@@ -194,7 +194,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                             let fn_ptr_place =
                                 self.project_field(&variant_place, FieldIdx::ZERO)?;
 
-                            // tRust: known issue — handle lifetime bounds
+                            // FIXME: handle lifetime bounds
                             let sig = sig.skip_binder();
 
                             self.write_fn_ptr_type_info(fn_ptr_place, &sig, fn_header)?;
@@ -226,7 +226,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                             self.project_field(&variant_place, FieldIdx::ZERO)?;
                         self.write_scalar(
                             ScalarInt::try_from_target_usize(layout.size.bytes(), self.tcx.tcx)
-                                .expect("invariant: field name lookup succeeds for known ADT field"),
+                                .unwrap(),
                             &size_field_place,
                         )?;
                         variant
@@ -235,7 +235,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     };
                     self.write_discriminant(variant_index, &field_dest)?;
                 }
-                // tRust: invariant — match covers all known fields for this Type struct
                 other => span_bug!(self.tcx.span, "unknown `Type` field {other}"),
             }
         }
@@ -252,7 +251,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         idx: u64,
     ) -> InterpResult<'tcx> {
         for (field_idx, field_ty_field) in
-            place.layout.ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout.ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
             match field_ty_field.name {
@@ -272,12 +271,11 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                 sym::offset => {
                     let offset = layout.fields.offset(idx as usize);
                     self.write_scalar(
-                        ScalarInt::try_from_target_usize(offset.bytes(), self.tcx.tcx).expect("invariant: field offset fits in target usize"),
+                        ScalarInt::try_from_target_usize(offset.bytes(), self.tcx.tcx).unwrap(),
                         &field_place,
                     )?;
                 }
                 other => {
-                    // tRust: invariant — match covers all implemented fields for this type info struct
                     span_bug!(self.tcx.def_span(field_ty_field.did), "unimplemented field {other}")
                 }
             }
@@ -311,7 +309,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
     ) -> InterpResult<'tcx> {
         // Iterate over all fields of `type_info::Array`.
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -320,7 +318,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                 sym::element_ty => self.write_type_id(ty, &field_place)?,
                 // Write the length of the array to the `len` field.
                 sym::len => self.write_scalar(len.to_leaf(), &field_place)?,
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -335,14 +332,13 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
     ) -> InterpResult<'tcx> {
         // Iterate over all fields of `type_info::Slice`.
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
             match field.name {
                 // Write the `TypeId` of the slice's elements to the `element_ty` field.
                 sym::element_ty => self.write_type_id(ty, &field_place)?,
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -357,7 +353,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         signed: bool,
     ) -> InterpResult<'tcx> {
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
             match field.name {
@@ -366,7 +362,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     &field_place,
                 )?,
                 sym::signed => self.write_scalar(Scalar::from_bool(signed), &field_place)?,
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -379,7 +374,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         bit_width: u64,
     ) -> InterpResult<'tcx> {
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
             match field.name {
@@ -387,7 +382,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     Scalar::from_u32(bit_width.try_into().expect("bit_width overflowed")),
                     &field_place,
                 )?,
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -402,7 +396,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
     ) -> InterpResult<'tcx> {
         // Iterate over all fields of `type_info::Reference`.
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -413,7 +407,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                 sym::mutable => {
                     self.write_scalar(Scalar::from_bool(mutability.is_mut()), &field_place)?
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -429,7 +422,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         let FnHeader { safety, c_variadic, abi } = fn_header;
 
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -472,7 +465,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                 sym::variadic => {
                     self.write_scalar(Scalar::from_bool(*c_variadic), &field_place)?;
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -488,7 +480,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
     ) -> InterpResult<'tcx> {
         // Iterate over all fields of `type_info::Pointer`.
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -499,7 +491,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                 sym::mutable => {
                     self.write_scalar(Scalar::from_bool(mutability.is_mut()), &field_place)?
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }

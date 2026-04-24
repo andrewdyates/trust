@@ -7,9 +7,9 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use trust_types::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -21,17 +21,10 @@ use thiserror::Error;
 pub enum RollbackError {
     /// An I/O error reading or writing a file during checkpoint/rollback.
     #[error("I/O error on `{path}`: {source}")]
-    Io {
-        path: String,
-        source: std::io::Error,
-    },
+    Io { path: String, source: std::io::Error },
     /// The file hash after rollback does not match the checkpoint.
     #[error("rollback verification failed for `{path}`: expected hash {expected}, got {actual}")]
-    VerificationFailed {
-        path: String,
-        expected: String,
-        actual: String,
-    },
+    VerificationFailed { path: String, expected: String, actual: String },
     /// The checkpoint file could not be deserialized.
     #[error("checkpoint deserialization failed: {0}")]
     Deserialize(String),
@@ -99,10 +92,8 @@ impl CheckpointStore {
     /// Returns `RollbackError::Io` if the directory cannot be created.
     pub fn new(store_dir: impl AsRef<Path>) -> Result<Self, RollbackError> {
         let dir = store_dir.as_ref().to_path_buf();
-        std::fs::create_dir_all(&dir).map_err(|e| RollbackError::Io {
-            path: dir.display().to_string(),
-            source: e,
-        })?;
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| RollbackError::Io { path: dir.display().to_string(), source: e })?;
         Ok(Self { store_dir: dir })
     }
 
@@ -119,25 +110,16 @@ impl CheckpointStore {
             .map_err(|e| RollbackError::Serialize(e.to_string()))?;
         let file_path = self.store_dir.join(format!("{}.json", checkpoint.id));
 
-        let mut tmp =
-            tempfile::NamedTempFile::new_in(&self.store_dir).map_err(|e| RollbackError::Io {
-                path: file_path.display().to_string(),
-                source: e,
-            })?;
+        let mut tmp = tempfile::NamedTempFile::new_in(&self.store_dir)
+            .map_err(|e| RollbackError::Io { path: file_path.display().to_string(), source: e })?;
         tmp.write_all(json.as_bytes())
-            .map_err(|e| RollbackError::Io {
-                path: file_path.display().to_string(),
-                source: e,
-            })?;
-        tmp.flush().map_err(|e| RollbackError::Io {
+            .map_err(|e| RollbackError::Io { path: file_path.display().to_string(), source: e })?;
+        tmp.flush()
+            .map_err(|e| RollbackError::Io { path: file_path.display().to_string(), source: e })?;
+        tmp.persist(&file_path).map_err(|e| RollbackError::Io {
             path: file_path.display().to_string(),
-            source: e,
+            source: e.error,
         })?;
-        tmp.persist(&file_path)
-            .map_err(|e| RollbackError::Io {
-                path: file_path.display().to_string(),
-                source: e.error,
-            })?;
 
         Ok(file_path)
     }
@@ -150,10 +132,8 @@ impl CheckpointStore {
     /// `RollbackError::Deserialize` if it cannot be parsed.
     pub fn load(&self, id: &str) -> Result<RewriteCheckpoint, RollbackError> {
         let file_path = self.store_dir.join(format!("{id}.json"));
-        let json = std::fs::read_to_string(&file_path).map_err(|e| RollbackError::Io {
-            path: file_path.display().to_string(),
-            source: e,
-        })?;
+        let json = std::fs::read_to_string(&file_path)
+            .map_err(|e| RollbackError::Io { path: file_path.display().to_string(), source: e })?;
         serde_json::from_str(&json).map_err(|e| RollbackError::Deserialize(e.to_string()))
     }
 
@@ -174,9 +154,10 @@ impl CheckpointStore {
                 source: e,
             })?;
             if let Some(name) = entry.path().file_stem()
-                && entry.path().extension().is_some_and(|ext| ext == "json") {
-                    ids.push(name.to_string_lossy().into_owned());
-                }
+                && entry.path().extension().is_some_and(|ext| ext == "json")
+            {
+                ids.push(name.to_string_lossy().into_owned());
+            }
         }
         ids.sort();
         Ok(ids)
@@ -189,10 +170,8 @@ impl CheckpointStore {
     /// Returns `RollbackError::Io` if the file cannot be removed.
     pub fn delete(&self, id: &str) -> Result<(), RollbackError> {
         let file_path = self.store_dir.join(format!("{id}.json"));
-        std::fs::remove_file(&file_path).map_err(|e| RollbackError::Io {
-            path: file_path.display().to_string(),
-            source: e,
-        })
+        std::fs::remove_file(&file_path)
+            .map_err(|e| RollbackError::Io { path: file_path.display().to_string(), source: e })
     }
 }
 
@@ -216,16 +195,10 @@ pub fn create_checkpoint(files: &[PathBuf]) -> Result<RewriteCheckpoint, Rollbac
     let mut snapshots = Vec::with_capacity(files.len());
 
     for path in files {
-        let contents = std::fs::read_to_string(path).map_err(|e| RollbackError::Io {
-            path: path.display().to_string(),
-            source: e,
-        })?;
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| RollbackError::Io { path: path.display().to_string(), source: e })?;
         let hash = sha256_hex(&contents);
-        snapshots.push(FileSnapshot {
-            path: path.clone(),
-            contents,
-            hash,
-        });
+        snapshots.push(FileSnapshot { path: path.clone(), contents, hash });
     }
 
     // Generate a unique ID from hash of all file paths + a counter.
@@ -233,10 +206,13 @@ pub fn create_checkpoint(files: &[PathBuf]) -> Result<RewriteCheckpoint, Rollbac
 
     Ok(RewriteCheckpoint {
         id,
-        created_at: format!("{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()),
+        created_at: format!(
+            "{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        ),
         snapshots,
     })
 }
@@ -253,38 +229,30 @@ pub fn create_checkpoint(files: &[PathBuf]) -> Result<RewriteCheckpoint, Rollbac
 pub fn rollback(checkpoint: &RewriteCheckpoint) -> Result<(), RollbackError> {
     // Phase 1: Write all files atomically (tempfile + rename)
     for snapshot in &checkpoint.snapshots {
-        let parent = snapshot
-            .path
-            .parent()
-            .unwrap_or(Path::new("."));
-        let mut tmp =
-            tempfile::NamedTempFile::new_in(parent).map_err(|e| RollbackError::Io {
-                path: snapshot.path.display().to_string(),
-                source: e,
-            })?;
-        tmp.write_all(snapshot.contents.as_bytes())
-            .map_err(|e| RollbackError::Io {
-                path: snapshot.path.display().to_string(),
-                source: e,
-            })?;
+        let parent = snapshot.path.parent().unwrap_or(Path::new("."));
+        let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| RollbackError::Io {
+            path: snapshot.path.display().to_string(),
+            source: e,
+        })?;
+        tmp.write_all(snapshot.contents.as_bytes()).map_err(|e| RollbackError::Io {
+            path: snapshot.path.display().to_string(),
+            source: e,
+        })?;
         tmp.flush().map_err(|e| RollbackError::Io {
             path: snapshot.path.display().to_string(),
             source: e,
         })?;
-        tmp.persist(&snapshot.path)
-            .map_err(|e| RollbackError::Io {
-                path: snapshot.path.display().to_string(),
-                source: e.error,
-            })?;
+        tmp.persist(&snapshot.path).map_err(|e| RollbackError::Io {
+            path: snapshot.path.display().to_string(),
+            source: e.error,
+        })?;
     }
 
     // Phase 2: Verify all files
     for snapshot in &checkpoint.snapshots {
-        let actual_contents =
-            std::fs::read_to_string(&snapshot.path).map_err(|e| RollbackError::Io {
-                path: snapshot.path.display().to_string(),
-                source: e,
-            })?;
+        let actual_contents = std::fs::read_to_string(&snapshot.path).map_err(|e| {
+            RollbackError::Io { path: snapshot.path.display().to_string(), source: e }
+        })?;
         let actual_hash = sha256_hex(&actual_contents);
         if actual_hash != snapshot.hash {
             return Err(RollbackError::VerificationFailed {
@@ -337,21 +305,16 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn setup_temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("trust_backprop_rollback_{name}"));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
+    /// Create a unique, isolated temp directory for a test.
+    /// Returns a `TempDir` that auto-cleans on drop -- no manual cleanup needed.
+    fn isolated_temp_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("failed to create isolated temp dir")
     }
 
     fn write_test_file(dir: &Path, name: &str, content: &str) -> PathBuf {
         let path = dir.join(name);
         fs::write(&path, content).unwrap();
         path
-    }
-
-    fn cleanup(dir: &Path) {
-        let _ = fs::remove_dir_all(dir);
     }
 
     // --- sha256_hex tests ---
@@ -374,38 +337,31 @@ mod tests {
     fn test_sha256_hex_known_value() {
         // SHA-256 of empty string is well-known
         let hash = sha256_hex("");
-        assert_eq!(
-            hash,
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
+        assert_eq!(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     }
 
     // --- create_checkpoint tests ---
 
     #[test]
     fn test_create_checkpoint_single_file() {
-        let dir = setup_temp_dir("ckpt_single");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt = create_checkpoint(&[f1]).unwrap();
         assert_eq!(ckpt.file_count(), 1);
         assert!(!ckpt.is_empty());
         assert_eq!(ckpt.snapshots[0].contents, "fn a() {}\n");
         assert_eq!(ckpt.snapshots[0].hash, sha256_hex("fn a() {}\n"));
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_create_checkpoint_multiple_files() {
-        let dir = setup_temp_dir("ckpt_multi");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
-        let f2 = write_test_file(&dir, "b.rs", "fn b() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
+        let f2 = write_test_file(dir.path(), "b.rs", "fn b() {}\n");
 
         let ckpt = create_checkpoint(&[f1, f2]).unwrap();
         assert_eq!(ckpt.file_count(), 2);
-
-        cleanup(&dir);
     }
 
     #[test]
@@ -424,8 +380,8 @@ mod tests {
 
     #[test]
     fn test_checkpoint_get_snapshot() {
-        let dir = setup_temp_dir("ckpt_get_snap");
-        let f1 = write_test_file(&dir, "x.rs", "fn x() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "x.rs", "fn x() {}\n");
 
         let ckpt = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
         let snap = ckpt.get_snapshot(&f1);
@@ -433,16 +389,14 @@ mod tests {
         assert_eq!(snap.unwrap().contents, "fn x() {}\n");
 
         assert!(ckpt.get_snapshot(Path::new("/no/such/file")).is_none());
-
-        cleanup(&dir);
     }
 
     // --- rollback tests ---
 
     #[test]
     fn test_rollback_restores_original_content() {
-        let dir = setup_temp_dir("rb_restore");
-        let f1 = write_test_file(&dir, "a.rs", "fn original() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn original() {}\n");
 
         let ckpt = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
 
@@ -453,15 +407,13 @@ mod tests {
         // Rollback
         rollback(&ckpt).unwrap();
         assert_eq!(fs::read_to_string(&f1).unwrap(), "fn original() {}\n");
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_rollback_multiple_files() {
-        let dir = setup_temp_dir("rb_multi");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
-        let f2 = write_test_file(&dir, "b.rs", "fn b() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
+        let f2 = write_test_file(dir.path(), "b.rs", "fn b() {}\n");
 
         let ckpt = create_checkpoint(&[f1.clone(), f2.clone()]).unwrap();
 
@@ -473,14 +425,12 @@ mod tests {
 
         assert_eq!(fs::read_to_string(&f1).unwrap(), "fn a() {}\n");
         assert_eq!(fs::read_to_string(&f2).unwrap(), "fn b() {}\n");
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_rollback_idempotent() {
-        let dir = setup_temp_dir("rb_idempotent");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
 
@@ -488,28 +438,24 @@ mod tests {
         rollback(&ckpt).unwrap();
         rollback(&ckpt).unwrap();
         assert_eq!(fs::read_to_string(&f1).unwrap(), "fn a() {}\n");
-
-        cleanup(&dir);
     }
 
     // --- changed_since_checkpoint tests ---
 
     #[test]
     fn test_changed_since_no_changes() {
-        let dir = setup_temp_dir("changed_none");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt = create_checkpoint(&[f1]).unwrap();
         let changed = changed_since_checkpoint(&ckpt);
         assert!(changed.is_empty());
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_changed_since_with_modification() {
-        let dir = setup_temp_dir("changed_mod");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
 
@@ -517,14 +463,12 @@ mod tests {
         let changed = changed_since_checkpoint(&ckpt);
         assert_eq!(changed.len(), 1);
         assert!(changed.contains_key(&f1));
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_changed_since_file_deleted() {
-        let dir = setup_temp_dir("changed_del");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
 
@@ -532,19 +476,17 @@ mod tests {
         let changed = changed_since_checkpoint(&ckpt);
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[&f1], "<unreadable>");
-
-        cleanup(&dir);
     }
 
     // --- CheckpointStore tests ---
 
     #[test]
     fn test_store_save_and_load() {
-        let dir = setup_temp_dir("store_save_load");
-        let store_dir = dir.join("checkpoints");
+        let dir = isolated_temp_dir();
+        let store_dir = dir.path().join("checkpoints");
         let store = CheckpointStore::new(&store_dir).unwrap();
 
-        let src_dir = dir.join("src");
+        let src_dir = dir.path().join("src");
         fs::create_dir_all(&src_dir).unwrap();
         let f1 = write_test_file(&src_dir, "a.rs", "fn a() {}\n");
 
@@ -555,18 +497,16 @@ mod tests {
         let loaded = store.load(&ckpt.id).unwrap();
         assert_eq!(loaded.file_count(), 1);
         assert_eq!(loaded.snapshots[0].contents, "fn a() {}\n");
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_store_list() {
-        let dir = setup_temp_dir("store_list");
-        let store_dir = dir.join("checkpoints");
+        let dir = isolated_temp_dir();
+        let store_dir = dir.path().join("checkpoints");
         let store = CheckpointStore::new(&store_dir).unwrap();
 
         // Create and save two checkpoints
-        let src_dir = dir.join("src");
+        let src_dir = dir.path().join("src");
         fs::create_dir_all(&src_dir).unwrap();
         let f1 = write_test_file(&src_dir, "a.rs", "fn a() {}\n");
         let f2 = write_test_file(&src_dir, "b.rs", "fn b() {}\n");
@@ -578,17 +518,15 @@ mod tests {
 
         let ids = store.list().unwrap();
         assert_eq!(ids.len(), 2);
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_store_delete() {
-        let dir = setup_temp_dir("store_delete");
-        let store_dir = dir.join("checkpoints");
+        let dir = isolated_temp_dir();
+        let store_dir = dir.path().join("checkpoints");
         let store = CheckpointStore::new(&store_dir).unwrap();
 
-        let src_dir = dir.join("src");
+        let src_dir = dir.path().join("src");
         fs::create_dir_all(&src_dir).unwrap();
         let f1 = write_test_file(&src_dir, "a.rs", "fn a() {}\n");
 
@@ -598,55 +536,51 @@ mod tests {
         store.delete(&ckpt.id).unwrap();
         let ids = store.list().unwrap();
         assert!(ids.is_empty());
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_store_load_nonexistent() {
-        let dir = setup_temp_dir("store_nonexist");
-        let store = CheckpointStore::new(&dir).unwrap();
+        let dir = isolated_temp_dir();
+        let store = CheckpointStore::new(dir.path()).unwrap();
         let result = store.load("nonexistent-id");
         assert!(result.is_err());
-
-        cleanup(&dir);
     }
 
     // --- RewriteCheckpoint tests ---
 
     #[test]
     fn test_checkpoint_id_deterministic_for_same_input() {
-        let dir = setup_temp_dir("ckpt_deterministic");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt1 = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
         let ckpt2 = create_checkpoint(&[f1]).unwrap();
         assert_eq!(ckpt1.id, ckpt2.id);
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_checkpoint_serialization_roundtrip() {
-        let dir = setup_temp_dir("ckpt_serde");
-        let f1 = write_test_file(&dir, "a.rs", "fn a() {}\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(dir.path(), "a.rs", "fn a() {}\n");
 
         let ckpt = create_checkpoint(&[f1]).unwrap();
         let json = serde_json::to_string(&ckpt).unwrap();
         let deserialized: RewriteCheckpoint = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, ckpt.id);
         assert_eq!(deserialized.file_count(), ckpt.file_count());
-
-        cleanup(&dir);
     }
 
     // --- Integration: checkpoint + modify + rollback ---
 
     #[test]
     fn test_full_checkpoint_modify_rollback_cycle() {
-        let dir = setup_temp_dir("full_cycle");
-        let f1 = write_test_file(&dir, "lib.rs", "pub fn get_midpoint(a: u64, b: u64) -> u64 {\n    (a + b) / 2\n}\n");
-        let f2 = write_test_file(&dir, "util.rs", "fn helper() -> bool { true }\n");
+        let dir = isolated_temp_dir();
+        let f1 = write_test_file(
+            dir.path(),
+            "lib.rs",
+            "pub fn get_midpoint(a: u64, b: u64) -> u64 {\n    (a + b) / 2\n}\n",
+        );
+        let f2 = write_test_file(dir.path(), "util.rs", "fn helper() -> bool { true }\n");
 
         // Step 1: Checkpoint
         let ckpt = create_checkpoint(&[f1.clone(), f2.clone()]).unwrap();
@@ -669,22 +603,17 @@ mod tests {
             fs::read_to_string(&f1).unwrap(),
             "pub fn get_midpoint(a: u64, b: u64) -> u64 {\n    (a + b) / 2\n}\n"
         );
-        assert_eq!(
-            fs::read_to_string(&f2).unwrap(),
-            "fn helper() -> bool { true }\n"
-        );
+        assert_eq!(fs::read_to_string(&f2).unwrap(), "fn helper() -> bool { true }\n");
         assert!(changed_since_checkpoint(&ckpt).is_empty());
-
-        cleanup(&dir);
     }
 
     #[test]
     fn test_store_full_workflow() {
-        let dir = setup_temp_dir("store_workflow");
-        let store_dir = dir.join(".trust-checkpoints");
+        let dir = isolated_temp_dir();
+        let store_dir = dir.path().join(".trust-checkpoints");
         let store = CheckpointStore::new(&store_dir).unwrap();
 
-        let f1 = write_test_file(&dir, "main.rs", "fn main() {}\n");
+        let f1 = write_test_file(dir.path(), "main.rs", "fn main() {}\n");
 
         // Save checkpoint
         let ckpt = create_checkpoint(std::slice::from_ref(&f1)).unwrap();
@@ -703,7 +632,5 @@ mod tests {
         // Clean up checkpoint
         store.delete(&ids[0]).unwrap();
         assert!(store.list().unwrap().is_empty());
-
-        cleanup(&dir);
     }
 }

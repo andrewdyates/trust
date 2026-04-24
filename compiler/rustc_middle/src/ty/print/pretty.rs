@@ -220,7 +220,6 @@ impl<'tcx> RegionHighlightMode<'tcx> {
         let num_slots = self.highlight_regions.len();
         let first_avail_slot =
             self.highlight_regions.iter_mut().find(|s| s.is_none()).unwrap_or_else(|| {
-                // tRust: invariant: expected value must exist: can only highlight {} placeholders at a time
                 bug!("can only highlight {} placeholders at a time", num_slots,)
             });
         *first_avail_slot = Some((region, number));
@@ -386,7 +385,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 && Some(*visible_parent) != actual_parent
             {
                 this.tcx()
-                    // tRust: known issue (typed_def_id) — Further propagate ModDefId
+                    // FIXME(typed_def_id): Further propagate ModDefId
                     .module_children(ModDefId::new_unchecked(*visible_parent))
                     .iter()
                     .filter(|child| child.res.opt_def_id() == Some(def_id))
@@ -505,7 +504,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                         // NOTE(eddyb) the only reason `span` might be dummy,
                         // that we're aware of, is that it's the `std`/`core`
                         // `extern crate` injected by default.
-                        // tRust: known issue (eddyb) — find something better to key this on,
+                        // FIXME(eddyb) find something better to key this on,
                         // or avoid ending up with `ExternCrateSource::Extern`,
                         // for the injected `std`/`core`.
                         if span.is_dummy() {
@@ -613,7 +612,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 // that's public and whose identifier isn't `_`.
                 let reexport = self
                     .tcx()
-                    // tRust: known issue (typed_def_id) — Further propagate ModDefId
+                    // FIXME(typed_def_id): Further propagate ModDefId
                     .module_children(ModDefId::new_unchecked(visible_parent))
                     .iter()
                     .filter(|child| child.res.opt_def_id() == Some(def_id))
@@ -639,7 +638,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             return Ok(false);
         }
         callers.push(visible_parent);
-        // tRust: accepted tradeoff (eddyb) — this bypasses `print_path_with_simple`'s prefix printing to avoid
+        // HACK(eddyb) this bypasses `print_path_with_simple`'s prefix printing to avoid
         // knowing ahead of time whether the entire path will succeed or not.
         // To support printers that do not implement `PrettyPrinter`, a `Vec` or
         // linked list on the stack would need to be built, before any printing.
@@ -831,7 +830,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 // `tests/ui/nll/ty-outlives/impl-trait-captures.rs`, for
                 // example.]
                 if self.should_print_verbose() {
-                    // tRust: known issue (eddyb) — print this with `print_def_path`.
+                    // FIXME(eddyb) print this with `print_def_path`.
                     write!(self, "Opaque({:?}, {})", def_id, args.print_as_list())?;
                     return Ok(());
                 }
@@ -868,7 +867,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             ty::Str => write!(self, "str")?,
             ty::Coroutine(did, args) => {
                 write!(self, "{{")?;
-                let coroutine_kind = self.tcx().coroutine_kind(did).expect("invariant: coroutine_kind returned a valid value");
+                let coroutine_kind = self.tcx().coroutine_kind(did).unwrap();
                 let should_print_movability = self.should_print_verbose()
                     || matches!(coroutine_kind, hir::CoroutineKind::Coroutine(_));
 
@@ -992,7 +991,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             ty::CoroutineClosure(did, args) => {
                 write!(self, "{{")?;
                 if !self.should_print_verbose() {
-                    match self.tcx().coroutine_kind(self.tcx().coroutine_for_closure(did)).expect("invariant: closure has coroutine kind")
+                    match self.tcx().coroutine_kind(self.tcx().coroutine_for_closure(did)).unwrap()
                     {
                         hir::CoroutineKind::Desugared(
                             hir::CoroutineDesugaring::Async,
@@ -1101,7 +1100,6 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                             continue;
                         }
                         Some(LangItem::PointeeSized) => {
-                            // tRust: invariant: PointeeSized is removed during lowering
                             bug!("`PointeeSized` is removed during lowering");
                         }
                         _ => (),
@@ -1360,7 +1358,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 self.tcx().fn_sig(fn_def_id).skip_binder().output().skip_binder().kind()
             && alias_ty.def_id == def_id
             && let generics = self.tcx().generics_of(fn_def_id)
-            // tRust: known issue (return_type_notation) — We only support lifetime params for now.
+            // FIXME(return_type_notation): We only support lifetime params for now.
             && generics.own_params.iter().all(|param| matches!(param.kind, ty::GenericParamDefKind::Lifetime))
         {
             let num_args = generics.count();
@@ -1425,7 +1423,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                     }
                 }
 
-                // tRust: accepted tradeoff (eddyb) — this duplicates `FmtPrinter`'s `print_path_with_generic_args`,
+                // HACK(eddyb) this duplicates `FmtPrinter`'s `print_path_with_generic_args`,
                 // in order to place the projections inside the `<...>`.
                 if !resugared {
                     let principal_with_self =
@@ -1492,7 +1490,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
         }
 
         // Builtin bounds.
-        // tRust: known issue (eddyb) — avoid printing twice (needed to ensure
+        // FIXME(eddyb) avoid printing twice (needed to ensure
         // that the auto traits are sorted *and* printed via p).
         let mut auto_traits: Vec<_> = predicates.auto_traits().collect();
 
@@ -1578,7 +1576,6 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                             )?;
                         }
                     }
-                    // tRust: invariant: <...> has unexpected defkind <...>
                     defkind => bug!("`{:?}` has unexpected defkind {:?}", ct, defkind),
                 }
             }
@@ -1597,7 +1594,8 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 rustc_type_ir::debug_bound_var(self, debruijn, bound_var)?
             }
             ty::ConstKind::Placeholder(placeholder) => write!(self, "{placeholder:?}")?,
-            // tRust: known issue (generic_const_exprs) — // write out some legible representation of an abstract const?
+            // FIXME(generic_const_exprs):
+            // write out some legible representation of an abstract const?
             ty::ConstKind::Expr(expr) => self.pretty_print_const_expr(expr, print_ty)?,
             ty::ConstKind::Error(_) => write!(self, "{{const error}}")?,
         };
@@ -1752,7 +1750,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                                 write!(self, "<too short allocation>")?;
                             }
                         }
-                        // tRust: known issue — for statics, vtables, and functions, we could in principle print more detail.
+                        // FIXME: for statics, vtables, and functions, we could in principle print more detail.
                         Some(GlobalAlloc::Static(def_id)) => {
                             write!(self, "<static({def_id:?})>")?;
                         }
@@ -1765,7 +1763,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 }
             }
             ty::FnPtr(..) => {
-                // tRust: known issue — We should probably have a helper method to share code with the "Byte strings"
+                // FIXME: We should probably have a helper method to share code with the "Byte strings"
                 // printing above (which also has to handle pointers to all sorts of things).
                 if let Some(GlobalAlloc::Function { instance, .. }) =
                     self.tcx().try_get_global_alloc(prov.alloc_id())
@@ -1798,19 +1796,19 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             // Float
             ty::Float(fty) => match fty {
                 ty::FloatTy::F16 => {
-                    let val = Half::try_from(int).expect("invariant: value fits in target type");
+                    let val = Half::try_from(int).unwrap();
                     write!(self, "{}{}f16", val, if val.is_finite() { "" } else { "_" })?;
                 }
                 ty::FloatTy::F32 => {
-                    let val = Single::try_from(int).expect("invariant: value fits in target type");
+                    let val = Single::try_from(int).unwrap();
                     write!(self, "{}{}f32", val, if val.is_finite() { "" } else { "_" })?;
                 }
                 ty::FloatTy::F64 => {
-                    let val = Double::try_from(int).expect("invariant: value fits in target type");
+                    let val = Double::try_from(int).unwrap();
                     write!(self, "{}{}f64", val, if val.is_finite() { "" } else { "_" })?;
                 }
                 ty::FloatTy::F128 => {
-                    let val = Quad::try_from(int).expect("invariant: value fits in target type");
+                    let val = Quad::try_from(int).unwrap();
                     write!(self, "{}{}f128", val, if val.is_finite() { "" } else { "_" })?;
                 }
             },
@@ -1822,7 +1820,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             }
             // Char
             ty::Char if char::try_from(int).is_ok() => {
-                write!(self, "{:?}", char::try_from(int).expect("invariant: value fits in target type"))?;
+                write!(self, "{:?}", char::try_from(int).unwrap())?;
             }
             // Pointer types
             ty::Ref(..) | ty::RawPtr(_, _) | ty::FnPtr(..) => {
@@ -1899,7 +1897,6 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             (ty::ValTreeKind::Branch(_), ty::Ref(_, inner_ty, _)) => match inner_ty.kind() {
                 ty::Slice(t) if *t == u8_type => {
                     let bytes = cv.try_to_raw_bytes(self.tcx()).unwrap_or_else(|| {
-                        // tRust: invariant: expected value must exist in pretty_print_const_valtree
                         bug!(
                             "expected to convert valtree {:?} to raw bytes for type {:?}",
                             cv.valtree,
@@ -1910,7 +1907,6 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 }
                 ty::Str => {
                     let bytes = cv.try_to_raw_bytes(self.tcx()).unwrap_or_else(|| {
-                        // tRust: invariant: expected value must exist: expected to convert valtree to raw bytes for type 
                         bug!("expected to convert valtree to raw bytes for type {:?}", cv.ty)
                     });
                     write!(self, "{:?}", String::from_utf8_lossy(bytes))?;
@@ -2007,7 +2003,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 self.pretty_print_value_path(def_id, args)?;
                 return Ok(());
             }
-            // tRust: known issue (oli-obk) — also pretty print arrays and other aggregate constants by reading
+            // FIXME(oli-obk): also pretty print arrays and other aggregate constants by reading
             // their fields instead of just dumping the memory.
             _ => {}
         }
@@ -2074,7 +2070,7 @@ pub(crate) fn pretty_print_const<'tcx>(
     print_types: bool,
 ) -> fmt::Result {
     ty::tls::with(|tcx| {
-        let literal = tcx.lift(c).expect("invariant: lift returned a valid value");
+        let literal = tcx.lift(c).unwrap();
         let mut p = FmtPrinter::new(tcx, Namespace::ValueNS);
         p.print_alloc_ids = true;
         p.pretty_print_const(literal, print_types)?;
@@ -2083,7 +2079,7 @@ pub(crate) fn pretty_print_const<'tcx>(
     })
 }
 
-// tRust: accepted tradeoff (eddyb) — boxed to avoid moving around a large struct by-value.
+// HACK(eddyb) boxed to avoid moving around a large struct by-value.
 pub struct FmtPrinter<'a, 'tcx>(Box<FmtPrinterData<'a, 'tcx>>);
 
 pub struct FmtPrinterData<'a, 'tcx> {
@@ -2199,7 +2195,7 @@ impl<'t> TyCtxt<'t> {
         let ns = guess_def_namespace(self, def_id);
         debug!("def_path_str: def_id={:?}, ns={:?}", def_id, ns);
 
-        FmtPrinter::print_string(self, ns, |p| p.print_def_path(def_id, args)).expect("invariant: def path is printable")
+        FmtPrinter::print_string(self, ns, |p| p.print_def_path(def_id, args)).unwrap()
     }
 
     /// For this one we always use value namespace.
@@ -2212,7 +2208,7 @@ impl<'t> TyCtxt<'t> {
         let ns = Namespace::ValueNS;
         debug!("value_path_str: def_id={:?}, ns={:?}", def_id, ns);
 
-        FmtPrinter::print_string(self, ns, |p| p.print_def_path(def_id, args)).expect("invariant: def path is printable")
+        FmtPrinter::print_string(self, ns, |p| p.print_def_path(def_id, args)).unwrap()
     }
 }
 
@@ -2259,12 +2255,12 @@ impl<'tcx> Printer<'tcx> for FmtPrinter<'_, 'tcx> {
                 // If no type info is available, fall back to
                 // pretty printing some span information. This should
                 // only occur very early in the compiler pipeline.
-                let parent_def_id = DefId { index: key.parent.expect("invariant: def key has parent"), ..def_id };
+                let parent_def_id = DefId { index: key.parent.unwrap(), ..def_id };
                 let span = self.tcx.def_span(def_id);
 
                 self.print_def_path(parent_def_id, &[])?;
 
-                // tRust: accepted tradeoff (eddyb) — copy of `print_path_with_simple` to avoid
+                // HACK(eddyb) copy of `print_path_with_simple` to avoid
                 // constructing a `DisambiguatedDefPathData`.
                 if !self.empty_path {
                     write!(self, "::")?;
@@ -2583,7 +2579,7 @@ impl<'tcx> PrettyPrinter<'tcx> for FmtPrinter<'_, 'tcx> {
     }
 }
 
-// tRust: accepted tradeoff (eddyb) — limited to `FmtPrinter` because of `region_highlight_mode`.
+// HACK(eddyb) limited to `FmtPrinter` because of `region_highlight_mode`.
 impl<'tcx> FmtPrinter<'_, 'tcx> {
     pub fn pretty_print_region(&mut self, region: ty::Region<'tcx>) -> Result<(), fmt::Error> {
         // Watch out for region highlights.
@@ -2725,7 +2721,7 @@ impl<'a, 'tcx> ty::TypeFolder<TyCtxt<'tcx>> for RegionFolder<'a, 'tcx> {
     }
 }
 
-// tRust: accepted tradeoff (eddyb) — limited to `FmtPrinter` because of `binder_depth`,
+// HACK(eddyb) limited to `FmtPrinter` because of `binder_depth`,
 // `region_index` and `used_region_names`.
 impl<'tcx> FmtPrinter<'_, 'tcx> {
     pub fn name_all_regions<T>(

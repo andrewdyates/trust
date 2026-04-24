@@ -119,7 +119,6 @@ impl<'tcx> ProjectionCandidateSet<'tcx> {
                         convert_to_ambiguous = ()
                     }
                     (ProjectionCandidate::ParamEnv(..), _) => return false,
-                    // tRust: invariant — should never prefer non-param-env candidates over param-env candidates
                     (_, ProjectionCandidate::ParamEnv(..)) => bug!(
                         "should never prefer non-param-env candidates over param-env candidates"
                     ),
@@ -171,7 +170,7 @@ pub(super) enum ProjectAndUnifyResult<'tcx> {
 /// ```
 /// If successful, this may result in additional obligations. Also returns
 /// the projection cache key used to track these additional obligations.
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 #[instrument(level = "debug", skip(selcx))]
 pub(super) fn poly_project_and_unify_term<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
@@ -201,7 +200,7 @@ pub(super) fn poly_project_and_unify_term<'cx, 'tcx>(
 /// If successful, this may result in additional obligations.
 ///
 /// See [poly_project_and_unify_term] for an explanation of the return value.
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 #[instrument(level = "debug", skip(selcx))]
 fn project_and_unify_term<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
@@ -259,7 +258,7 @@ fn project_and_unify_term<'cx, 'tcx>(
 /// there are unresolved type variables in the projection, we will
 /// instantiate it with a fresh type variable `$X` and generate a new
 /// obligation `<T as Trait>::Item == $X` for later.
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 pub fn normalize_projection_term<'a, 'b, 'tcx>(
     selcx: &'a mut SelectionContext<'b, 'tcx>,
     param_env: ty::ParamEnv<'tcx>,
@@ -293,7 +292,7 @@ pub fn normalize_projection_term<'a, 'b, 'tcx>(
 /// often immediately appended to another obligations vector. So now this
 /// function takes an obligations vector and appends to it directly, which is
 /// slightly uglier but avoids the need for an extra short-lived allocation.
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 #[instrument(level = "debug", skip(selcx, param_env, cause, obligations))]
 pub(super) fn opt_normalize_projection_term<'a, 'b, 'tcx>(
     selcx: &'a mut SelectionContext<'b, 'tcx>,
@@ -308,7 +307,7 @@ pub(super) fn opt_normalize_projection_term<'a, 'b, 'tcx>(
     let projection_term = infcx.resolve_vars_if_possible(projection_term);
     let cache_key = ProjectionCacheKey::new(projection_term, param_env);
 
-    // tRust: known issue (#20304) — For now, I am caching here, which is good, but it
+    // FIXME(#20304) For now, I am caching here, which is good, but it
     // means we don't capture the type variables that are created in
     // the case of ambiguity. Which means we may create a large stream
     // of such variables. OTOH, if we move the caching up a level, we
@@ -454,7 +453,7 @@ pub(super) fn opt_normalize_projection_term<'a, 'b, 'tcx>(
 /// an error for this obligation, but we legitimately should not,
 /// because it contains `[type error]`. Yuck! (See issue #29857 for
 /// one case where this arose.)
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 fn normalize_to_error<'a, 'tcx>(
     selcx: &SelectionContext<'a, 'tcx>,
     param_env: ty::ParamEnv<'tcx>,
@@ -484,7 +483,7 @@ fn normalize_to_error<'a, 'tcx>(
 }
 
 /// Confirm and normalize the given inherent projection.
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 #[instrument(level = "debug", skip(selcx, param_env, cause, obligations))]
 pub fn normalize_inherent_projection<'a, 'b, 'tcx>(
     selcx: &'a mut SelectionContext<'b, 'tcx>,
@@ -528,7 +527,7 @@ pub fn normalize_inherent_projection<'a, 'b, 'tcx>(
         let nested_cause = ObligationCause::new(
             cause.span,
             cause.body_id,
-            // tRust: known issue (inherent_associated_types) — Since we can't pass along the self type to the
+            // FIXME(inherent_associated_types): Since we can't pass along the self type to the
             // cause code, inherent projections will be printed with identity instantiation in
             // diagnostics which is not ideal.
             // Consider creating separate cause codes for this specific situation.
@@ -559,7 +558,7 @@ pub fn normalize_inherent_projection<'a, 'b, 'tcx>(
     term
 }
 
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 pub fn compute_inherent_assoc_term_args<'a, 'b, 'tcx>(
     selcx: &'a mut SelectionContext<'b, 'tcx>,
     param_env: ty::ParamEnv<'tcx>,
@@ -646,7 +645,7 @@ impl<'tcx> Progress<'tcx> {
 ///
 /// IMPORTANT:
 /// - `obligation` must be fully normalized
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 #[instrument(level = "info", skip(selcx))]
 fn project<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
@@ -682,7 +681,7 @@ fn project<'cx, 'tcx>(
     if let ProjectionCandidateSet::Single(ProjectionCandidate::Object(_)) = candidates {
         // Avoid normalization cycle from selection (see
         // `assemble_candidates_from_object_ty`).
-        // tRust: known issue (lazy_normalization) — Lazy normalization should save us from
+        // FIXME(lazy_normalization): Lazy normalization should save us from
         // having to special case this.
     } else {
         assemble_candidates_from_impls(selcx, obligation, &mut candidates);
@@ -758,7 +757,7 @@ fn assemble_candidates_from_trait_def<'cx, 'tcx>(
                     candidate_set.push_candidate(ProjectionCandidate::TraitDef(clause));
 
                     if !obligation.predicate.has_non_region_infer() {
-                        // tRust: accepted tradeoff — Pick the first trait def candidate for a fully
+                        // HACK: Pick the first trait def candidate for a fully
                         // inferred predicate. This is to allow duplicates that
                         // differ only in normalization.
                         return ControlFlow::Break(());
@@ -870,7 +869,7 @@ fn assemble_candidates_from_predicates<'cx, 'tcx>(
                     if potentially_unnormalized_candidates
                         && !obligation.predicate.has_non_region_infer()
                     {
-                        // tRust: accepted tradeoff — Pick the first trait def candidate for a fully
+                        // HACK: Pick the first trait def candidate for a fully
                         // inferred predicate. This is to allow duplicates that
                         // differ only in normalization.
                         return;
@@ -997,7 +996,7 @@ fn assemble_candidates_from_impls<'cx, 'tcx>(
                         | LangItem::AsyncFnOnce,
                     ) => true,
                     Some(LangItem::AsyncFnKindHelper) => {
-                        // tRust: known issue (async_closures) — Validity constraints here could be cleaned up.
+                        // FIXME(async_closures): Validity constraints here could be cleaned up.
                         if obligation.predicate.args.type_at(0).is_ty_var()
                             || obligation.predicate.args.type_at(4).is_ty_var()
                             || obligation.predicate.args.type_at(5).is_ty_var()
@@ -1040,8 +1039,7 @@ fn assemble_candidates_from_impls<'cx, 'tcx>(
                         // Integers and floats always have `u8` as their discriminant.
                         | ty::Infer(ty::InferTy::IntVar(_) | ty::InferTy::FloatVar(..)) => true,
 
-                        // tRust: UnsafeBinder wraps a single type; it has a known discriminant
-                        ty::UnsafeBinder(_) => true,
+                        ty::UnsafeBinder(_) => todo!("FIXME(unsafe_binder)"),
 
                         // type parameters, opaques, and unnormalized projections don't have
                         // a known discriminant and may need to be normalized further or rely
@@ -1126,10 +1124,9 @@ fn assemble_candidates_from_impls<'cx, 'tcx>(
                                 true
                             }
 
-                            // tRust: UnsafeBinder wraps a type; treat like a single-field struct for sizing
-                            ty::UnsafeBinder(_) => true,
+                            ty::UnsafeBinder(_) => todo!("FIXME(unsafe_binder)"),
 
-                            // tRust: known issue (compiler-errors) — are Bound and Placeholder types ever known sized?
+                            // FIXME(compiler-errors): are Bound and Placeholder types ever known sized?
                             ty::Param(_)
                             | ty::Alias(..)
                             | ty::Bound(..)
@@ -1150,7 +1147,6 @@ fn assemble_candidates_from_impls<'cx, 'tcx>(
                         false
                     }
                     _ => {
-                        // tRust: invariant — only recognized builtin traits (Clone, Copy, etc.) should reach builtin confirmation
                         bug!("unexpected builtin trait with associated type: {trait_ref:?}")
                     }
                 }
@@ -1211,7 +1207,7 @@ fn assemble_candidates_from_impls<'cx, 'tcx>(
     });
 }
 
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 fn confirm_candidate<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
     obligation: &ProjectionTermObligation<'tcx>,
@@ -1245,7 +1241,7 @@ fn confirm_candidate<'cx, 'tcx>(
     result
 }
 
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 fn confirm_select_candidate<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
     obligation: &ProjectionTermObligation<'tcx>,
@@ -1285,7 +1281,6 @@ fn confirm_select_candidate<'cx, 'tcx>(
         | ImplSource::Param(..)
         | ImplSource::Builtin(BuiltinImplSource::TraitUpcasting { .. }, _) => {
             // we don't create Select candidates with this kind of resolution
-            // tRust: invariant — associated type projection requires a valid impl or bound to project from
             span_bug!(
                 obligation.cause.span,
                 "Cannot project an associated type from `{:?}`",
@@ -1333,7 +1328,6 @@ fn confirm_coroutine_candidate<'cx, 'tcx>(
     } else if tcx.is_lang_item(obligation.predicate.def_id, LangItem::CoroutineYield) {
         yield_ty
     } else {
-        // tRust: invariant — this code path should be unreachable in confirm_coroutine_candidate
         span_bug!(
             tcx.def_span(obligation.predicate.def_id),
             "unexpected associated type: `Coroutine::{}`",
@@ -1482,11 +1476,9 @@ fn confirm_async_iterator_candidate<'cx, 'tcx>(
     debug_assert_eq!(tcx.associated_item(obligation.predicate.def_id).name(), sym::Item);
 
     let ty::Adt(_poll_adt, args) = *yield_ty.kind() else {
-        // tRust: invariant — this code path should be unreachable in confirm_async_iterator_candidate
         bug!();
     };
     let ty::Adt(_option_adt, args) = *args.type_at(0).kind() else {
-        // tRust: invariant — this code path should be unreachable in confirm_async_iterator_candidate
         bug!();
     };
     let item_ty = args.type_at(0);
@@ -1540,7 +1532,7 @@ fn confirm_builtin_candidate<'cx, 'tcx>(
             if tail == self_ty {
                 // This is the "fallback impl" for type parameters, unnormalizable projections
                 // and opaque types: If the `self_ty` is `Sized`, then the metadata is `()`.
-                // tRust: known issue (ptr_metadata) — This impl overlaps with the other impls and shouldn't
+                // FIXME(ptr_metadata): This impl overlaps with the other impls and shouldn't
                 // exist. Instead, `Pointee<Metadata = ()>` should be a supertrait of `Sized`.
                 let sized_predicate = ty::TraitRef::new(
                     tcx,
@@ -1558,11 +1550,9 @@ fn confirm_builtin_candidate<'cx, 'tcx>(
         (metadata_ty.into(), obligations)
     } else if tcx.is_lang_item(trait_def_id, LangItem::Field) {
         let ty::Adt(def, args) = self_ty.kind() else {
-            // tRust: invariant — the `Field` trait can only be implemented for types that represent struct fields
             bug!("only field representing types can implement `Field`")
         };
         let Some(FieldInfo { base, ty, .. }) = def.field_representing_type_info(tcx, args) else {
-            // tRust: invariant — the `Field` trait can only be implemented for types that represent struct fields
             bug!("only field representing types can implement `Field`")
         };
         if tcx.is_lang_item(item_def_id, LangItem::FieldBase) {
@@ -1570,11 +1560,9 @@ fn confirm_builtin_candidate<'cx, 'tcx>(
         } else if tcx.is_lang_item(item_def_id, LangItem::FieldType) {
             (ty.into(), PredicateObligations::new())
         } else {
-            // tRust: invariant — Unexpected associated type in `Field`
             bug!("unexpected associated type {:?} in `Field`", obligation.predicate);
         }
     } else {
-        // tRust: invariant — only recognized builtin traits (Clone, Copy, etc.) should reach builtin confirmation
         bug!("unexpected builtin trait with associated type: {:?}", obligation.predicate);
     };
 
@@ -1733,7 +1721,7 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
     let self_ty = selcx.infcx.shallow_resolve(obligation.predicate.self_ty());
 
     let goal_kind =
-        tcx.async_fn_trait_kind_from_def_id(obligation.predicate.trait_def_id(tcx)).expect("invariant: value is present");
+        tcx.async_fn_trait_kind_from_def_id(obligation.predicate.trait_def_id(tcx)).unwrap();
     let env_region = match goal_kind {
         ty::ClosureKind::Fn | ty::ClosureKind::FnMut => obligation.predicate.args.region_at(2),
         ty::ClosureKind::FnOnce => tcx.lifetimes.re_static,
@@ -1753,7 +1741,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                         && !args.tupled_upvars_ty().is_ty_var()
                     {
                         if !closure_kind.extends(goal_kind) {
-                            // tRust: invariant — we should not be confirming if the closure kind is not met
                             bug!("we should not be confirming if the closure kind is not met");
                         }
                         sig.to_coroutine_given_kind_and_upvars(
@@ -1798,7 +1785,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                     }
                 }
                 sym::Output => sig.return_ty,
-                // tRust: invariant — the named associated type must exist on the trait being projected
                 name => bug!("no such associated type: {name}"),
             };
             let projection_term = match item_name {
@@ -1812,7 +1798,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                     obligation.predicate.def_id,
                     [ty::GenericArg::from(self_ty), sig.tupled_inputs_ty.into(), env_region.into()],
                 ),
-                // tRust: invariant — the named associated type must exist on the trait being projected
                 name => bug!("no such associated type: {name}"),
             };
 
@@ -1830,7 +1815,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                         tcx.require_lang_item(LangItem::FutureOutput, obligation.cause.span);
                     Ty::new_projection(tcx, future_output_def_id, [sig.output()])
                 }
-                // tRust: invariant — the named associated type must exist on the trait being projected
                 name => bug!("no such associated type: {name}"),
             };
             let projection_term = match item_name {
@@ -1848,7 +1832,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                         env_region.into(),
                     ],
                 ),
-                // tRust: invariant — the named associated type must exist on the trait being projected
                 name => bug!("no such associated type: {name}"),
             };
 
@@ -1866,7 +1849,6 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                         tcx.require_lang_item(LangItem::FutureOutput, obligation.cause.span);
                     Ty::new_projection(tcx, future_output_def_id, [sig.output()])
                 }
-                // tRust: invariant — the named associated type must exist on the trait being projected
                 name => bug!("no such associated type: {name}"),
             };
             let projection_term = match item_name {
@@ -1878,13 +1860,11 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                     obligation.predicate.def_id,
                     [ty::GenericArg::from(self_ty), sig.inputs()[0].into(), env_region.into()],
                 ),
-                // tRust: invariant — the named associated type must exist on the trait being projected
                 name => bug!("no such associated type: {name}"),
             };
 
             bound_sig.rebind(ty::ProjectionPredicate { projection_term, term: term.into() })
         }
-        // tRust: invariant — AsyncFn candidates can only be confirmed for callable types (closures or function items)
         _ => bug!("expected callable type for AsyncFn candidate"),
     };
 
@@ -1907,7 +1887,6 @@ fn confirm_async_fn_kind_helper_candidate<'cx, 'tcx>(
         coroutine_captures_by_ref_ty,
     ] = **obligation.predicate.args
     else {
-        // tRust: invariant — this code path should be unreachable in confirm_async_fn_kind_helper_candidate
         bug!();
     };
 
@@ -1919,7 +1898,7 @@ fn confirm_async_fn_kind_helper_candidate<'cx, 'tcx>(
         ),
         term: ty::CoroutineClosureSignature::tupled_upvars_by_closure_kind(
             selcx.tcx(),
-            goal_kind_ty.expect_ty().to_opt_closure_kind().expect("invariant: value is present"),
+            goal_kind_ty.expect_ty().to_opt_closure_kind().unwrap(),
             tupled_inputs_ty.expect_ty(),
             tupled_upvars_ty.expect_ty(),
             coroutine_captures_by_ref_ty.expect_ty(),
@@ -1932,7 +1911,7 @@ fn confirm_async_fn_kind_helper_candidate<'cx, 'tcx>(
         .with_addl_obligations(nested)
 }
 
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 fn confirm_param_env_candidate<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
     obligation: &ProjectionTermObligation<'tcx>,
@@ -2000,7 +1979,7 @@ fn confirm_param_env_candidate<'cx, 'tcx>(
     }
 }
 
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 fn confirm_impl_candidate<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
     obligation: &ProjectionTermObligation<'tcx>,
@@ -2090,7 +2069,7 @@ fn confirm_impl_candidate<'cx, 'tcx>(
 //
 // This is necessary for soundness until we properly handle implied bounds on binders.
 // see tests/ui/generic-associated-types/must-prove-where-clauses-on-norm.rs.
-// tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+// FIXME(mgca): While this supports constants, it is only used for types by default right now
 fn assoc_term_own_obligations<'cx, 'tcx>(
     selcx: &mut SelectionContext<'cx, 'tcx>,
     obligation: &ProjectionTermObligation<'tcx>,

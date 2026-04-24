@@ -22,7 +22,7 @@ impl FormulaRef {
 ///
 /// N-ary nodes (`And`, `Or`) store a start index and count into a separate
 /// `refs` vector to avoid per-node Vec allocations.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum FormulaNode {
     // Literals
@@ -98,8 +98,9 @@ pub enum FormulaNode {
     Ite(FormulaRef, FormulaRef, FormulaRef),
 
     // Quantifiers: bindings stored inline, body is a FormulaRef.
-    Forall(Vec<(String, Sort)>, FormulaRef),
-    Exists(Vec<(String, Sort)>, FormulaRef),
+    // tRust #883: Bindings use interned Symbol instead of heap-allocated String.
+    Forall(Vec<(crate::Symbol, Sort)>, FormulaRef),
+    Exists(Vec<(crate::Symbol, Sort)>, FormulaRef),
 
     // Arrays
     Select(FormulaRef, FormulaRef),

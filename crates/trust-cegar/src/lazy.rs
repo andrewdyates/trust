@@ -162,7 +162,7 @@ impl LazyRefiner {
                 CounterexampleValue::Float(_) => {
                     // Floats are complex; skip for now.
                 }
-                _ => {},
+                _ => {}
             }
         }
 
@@ -172,9 +172,7 @@ impl LazyRefiner {
             .iter()
             .filter_map(|(name, val)| match val {
                 CounterexampleValue::Int(n) => Some((name.as_str(), *n)),
-                CounterexampleValue::Uint(n) => {
-                    i128::try_from(*n).ok().map(|n| (name.as_str(), n))
-                }
+                CounterexampleValue::Uint(n) => i128::try_from(*n).ok().map(|n| (name.as_str(), n)),
                 _ => None,
             })
             .collect();
@@ -218,7 +216,9 @@ impl LazyRefiner {
 
 #[cfg(test)]
 mod tests {
-    use trust_types::{BlockId, ConstValue, Operand, Place, Rvalue, SourceSpan, Statement, Terminator};
+    use trust_types::{
+        BlockId, ConstValue, Operand, Place, Rvalue, SourceSpan, Statement, Terminator,
+    };
 
     use super::*;
 
@@ -255,16 +255,8 @@ mod tests {
                     span: span(),
                 },
             },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
-            BasicBlock {
-                id: BlockId(3),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
+            BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
         ]
     }
 
@@ -288,10 +280,7 @@ mod tests {
         let blocks = simple_blocks();
         let cex = Counterexample::new(vec![]);
         let result = refiner.refine_path(&[0, 99], &blocks, &cex);
-        assert!(matches!(
-            result,
-            Err(CegarError::InvalidBlockIndex { index: 99, num_blocks: 4 })
-        ));
+        assert!(matches!(result, Err(CegarError::InvalidBlockIndex { index: 99, num_blocks: 4 })));
     }
 
     #[test]
@@ -299,15 +288,11 @@ mod tests {
         let mut refiner = LazyRefiner::new(vec![]);
         let blocks = simple_blocks();
 
-        let cex1 = Counterexample::new(vec![
-            ("a".to_string(), CounterexampleValue::Int(-5)),
-        ]);
+        let cex1 = Counterexample::new(vec![("a".to_string(), CounterexampleValue::Int(-5))]);
         let preds1 = refiner.refine_path(&[0, 1], &blocks, &cex1).unwrap();
         let count_after_1 = refiner.predicates().len();
 
-        let cex2 = Counterexample::new(vec![
-            ("b".to_string(), CounterexampleValue::Uint(100)),
-        ]);
+        let cex2 = Counterexample::new(vec![("b".to_string(), CounterexampleValue::Uint(100))]);
         let preds2 = refiner.refine_path(&[1, 2], &blocks, &cex2).unwrap();
 
         assert!(!preds1.is_empty());
@@ -318,9 +303,7 @@ mod tests {
 
     #[test]
     fn test_abstract_path_computes_states() {
-        let refiner = LazyRefiner::new(vec![
-            Predicate::comparison("_1", CmpOp::Ge, "0"),
-        ]);
+        let refiner = LazyRefiner::new(vec![Predicate::comparison("_1", CmpOp::Ge, "0")]);
         let blocks = simple_blocks();
         let states = refiner.abstract_path(&[0, 2], &blocks).unwrap();
         assert_eq!(states.len(), 2);
@@ -338,9 +321,7 @@ mod tests {
     fn test_lazy_refiner_empty_path() {
         let mut refiner = LazyRefiner::new(vec![]);
         let blocks = simple_blocks();
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(42)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(42))]);
         let new_preds = refiner.refine_path(&[], &blocks, &cex).unwrap();
         // Empty path should not extract many predicates (no blocks to walk).
         // But it still increments the refinement count.

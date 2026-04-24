@@ -41,9 +41,7 @@ impl IntervalAbstraction {
     /// Check if a value is within the variable's interval.
     #[must_use]
     pub fn contains_value(&self, var: &str, value: i128) -> bool {
-        self.intervals
-            .get(var)
-            .is_none_or(|(lo, hi)| value >= *lo && value <= *hi)
+        self.intervals.get(var).is_none_or(|(lo, hi)| value >= *lo && value <= *hi)
     }
 
     /// Refine (narrow) an interval based on a counterexample value.
@@ -72,16 +70,8 @@ impl IntervalAbstraction {
                 new_preds.push(Predicate::range(var, lo, hi));
             }
             None => {
-                new_preds.push(Predicate::comparison(
-                    var,
-                    CmpOp::Ge,
-                    (cex_value + 1).to_string(),
-                ));
-                new_preds.push(Predicate::comparison(
-                    var,
-                    CmpOp::Le,
-                    (cex_value - 1).to_string(),
-                ));
+                new_preds.push(Predicate::comparison(var, CmpOp::Ge, (cex_value + 1).to_string()));
+                new_preds.push(Predicate::comparison(var, CmpOp::Le, (cex_value - 1).to_string()));
             }
         }
 
@@ -131,9 +121,6 @@ impl IntervalAbstraction {
     /// Generate predicates from all tracked intervals.
     #[must_use]
     pub fn to_predicates(&self) -> Vec<Predicate> {
-        self.intervals
-            .iter()
-            .map(|(var, (lo, hi))| Predicate::range(var, *lo, *hi))
-            .collect()
+        self.intervals.iter().map(|(var, (lo, hi))| Predicate::range(var, *lo, *hi)).collect()
     }
 }

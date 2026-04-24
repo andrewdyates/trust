@@ -459,10 +459,7 @@ mod tests {
         bindings.insert("type_max".to_string(), "u32::MAX".to_string());
 
         let result = instantiate_template(mul, &bindings);
-        assert_eq!(
-            result,
-            Some("height == 0 || width <= u32::MAX / height".to_string())
-        );
+        assert_eq!(result, Some("height == 0 || width <= u32::MAX / height".to_string()));
     }
 
     #[test]

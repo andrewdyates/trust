@@ -9,6 +9,7 @@ from unittest.mock import patch
 import tempfile
 import hashlib
 import sys
+from pathlib import Path
 
 from shutil import rmtree
 
@@ -70,6 +71,25 @@ class VerifyTestCase(unittest.TestCase):
     def test_invalid_file(self):
         """Should verify that the file is invalid"""
         self.assertFalse(bootstrap.verify(self.bad_src, self.expected, False))
+
+
+class FileUrlDownloadTestCase(unittest.TestCase):
+    """Test repo-local bootstrap artifact downloads."""
+
+    def setUp(self):
+        self.container = tempfile.mkdtemp()
+        self.src = os.path.join(self.container, "trust stage0.txt")
+        self.dst = os.path.join(self.container, "downloaded.txt")
+        with open(self.src, "w") as src:
+            src.write("local trust stage0")
+
+    def tearDown(self):
+        rmtree(self.container)
+
+    def test_file_url_download_copies_local_artifact(self):
+        bootstrap.download(self.dst, Path(self.src).as_uri(), False, False)
+        with open(self.dst) as dst:
+            self.assertEqual(dst.read(), "local trust stage0")
 
 
 class ProgramOutOfDate(unittest.TestCase):

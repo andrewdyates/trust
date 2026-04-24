@@ -17,7 +17,7 @@ const NEEDS_CANONICAL: TypeFlags = TypeFlags::from_bits(
         | TypeFlags::HAS_FREE_REGIONS.bits()
         | TypeFlags::HAS_RE_ERASED.bits(),
 )
-.expect("invariant: NEEDS_CANONICAL bits are valid TypeFlags"); // tRust: unwrap -> expect
+.unwrap();
 
 #[derive(Debug, Clone, Copy)]
 enum CanonicalizeInputKind {
@@ -37,7 +37,7 @@ enum CanonicalizeInputKind {
 #[derive(Debug, Clone, Copy)]
 enum CanonicalizeMode {
     Input(CanonicalizeInputKind),
-    /// tRust: known issue — We currently return region constraints referring to
+    /// FIXME: We currently return region constraints referring to
     /// placeholders and inference variables from a binder instantiated
     /// inside of the query.
     ///
@@ -156,7 +156,7 @@ impl<'a, D: SolverDelegate<Interner = I>, I: Interner> Canonicalizer<'a, D, I> {
                      ref variable_lookup_table,
                      ref var_kinds,
                  }| {
-                    // tRust: known issue (nnethercote) — for reasons I don't understand, this `new`+`extend`
+                    // FIXME(nnethercote): for reasons I don't understand, this `new`+`extend`
                     // combination is faster than `variables.clone()`, because it somehow avoids
                     // some allocations.
                     let mut variables = Vec::new();
@@ -427,7 +427,7 @@ impl<D: SolverDelegate<Interner = I>, I: Interner> TypeFolder<I> for Canonicaliz
             // type of an opaque for regions that are ignored for the purposes of
             // captures.
             //
-            // tRust: known issue — We should investigate the perf implications of not uniquifying
+            // FIXME: We should investigate the perf implications of not uniquifying
             // `ReErased`. We may be able to short-circuit registering region
             // obligations if we encounter a `ReErased` on one side, for example.
             ty::ReErased | ty::ReError(_) => match self.canonicalize_mode {
@@ -464,7 +464,7 @@ impl<D: SolverDelegate<Interner = I>, I: Interner> TypeFolder<I> for Canonicaliz
                 match self.canonicalize_mode {
                     CanonicalizeMode::Input(_) => CanonicalVarKind::Region(ty::UniverseIndex::ROOT),
                     CanonicalizeMode::Response { .. } => {
-                        CanonicalVarKind::Region(self.delegate.universe_of_lt(vid).expect("invariant: region vid resolved before canonicalization")) // tRust: unwrap -> expect
+                        CanonicalVarKind::Region(self.delegate.universe_of_lt(vid).unwrap())
                     }
                 }
             }
@@ -507,14 +507,11 @@ impl<D: SolverDelegate<Interner = I>, I: Interner> TypeFolder<I> for Canonicaliz
                             CanonicalVarKind::Const(ty::UniverseIndex::ROOT)
                         }
                         CanonicalizeMode::Response { .. } => {
-                            CanonicalVarKind::Const(self.delegate.universe_of_ct(vid).expect("invariant: const vid resolved before canonicalization")) // tRust: unwrap -> expect
+                            CanonicalVarKind::Const(self.delegate.universe_of_ct(vid).unwrap())
                         }
                     }
                 }
-                // tRust: Fresh inference variables should not appear during canonicalization
-                ty::InferConst::Fresh(_) => {
-                    panic!("fresh inference variable encountered during canonicalization")
-                }
+                ty::InferConst::Fresh(_) => todo!(),
             },
             ty::ConstKind::Placeholder(placeholder) => match self.canonicalize_mode {
                 CanonicalizeMode::Input { .. } => {
@@ -536,7 +533,7 @@ impl<D: SolverDelegate<Interner = I>, I: Interner> TypeFolder<I> for Canonicaliz
                 }
                 CanonicalizeMode::Response { .. } => panic!("param ty in response: {c:?}"),
             },
-            // tRust: known issue — See comment above -- we could fold the region separately or something.
+            // FIXME: See comment above -- we could fold the region separately or something.
             ty::ConstKind::Bound(_, _)
             | ty::ConstKind::Unevaluated(_)
             | ty::ConstKind::Value(_)

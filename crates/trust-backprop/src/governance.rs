@@ -29,7 +29,6 @@ pub struct GovernancePolicy {
     pub protected_functions: Vec<String>,
 
     // --- Safety invariant fields (Part of #459) ---
-
     /// Allow adding spec attributes (`#[requires]`, `#[ensures]`, `#[invariant]`)
     /// to protected functions. Specs do not change runtime behavior.
     /// Default: `true`.
@@ -83,16 +82,9 @@ pub enum GovernanceViolation {
     /// The function appears to be a test function.
     TestFunction { function: String },
     /// A pub function's spec changed but not all callers were updated.
-    PubApiChangedWithoutCallerUpdate {
-        function: String,
-        missing_callers: Vec<String>,
-    },
+    PubApiChangedWithoutCallerUpdate { function: String, missing_callers: Vec<String> },
     /// The function has been rewritten too many times (Part of #459).
-    RewriteLimitExceeded {
-        function: String,
-        count: usize,
-        limit: usize,
-    },
+    RewriteLimitExceeded { function: String, count: usize, limit: usize },
 }
 
 impl GovernancePolicy {
@@ -110,8 +102,7 @@ impl GovernancePolicy {
         if self.protected_functions.iter().any(|f| {
             if f.contains("::") {
                 // Qualified path: match as suffix of function_path
-                proposal.function_path == *f
-                    || proposal.function_path.ends_with(&format!("::{f}"))
+                proposal.function_path == *f || proposal.function_path.ends_with(&format!("::{f}"))
             } else {
                 // Simple name: match against function_name (backwards compatible)
                 f == &proposal.function_name
@@ -123,8 +114,8 @@ impl GovernancePolicy {
             let is_spec_only = matches!(
                 &proposal.kind,
                 ProposalKind::AddPrecondition { .. }
-                | ProposalKind::AddPostcondition { .. }
-                | ProposalKind::AddInvariant { .. }
+                    | ProposalKind::AddPostcondition { .. }
+                    | ProposalKind::AddInvariant { .. }
             );
 
             if !(self.allow_spec_only_on_protected && is_spec_only) {
@@ -220,10 +211,7 @@ pub fn check_cross_module_invariants(
 
     for proposal in proposals {
         // Only precondition changes on pub functions require caller updates.
-        let is_precondition = matches!(
-            &proposal.kind,
-            ProposalKind::AddPrecondition { .. }
-        );
+        let is_precondition = matches!(&proposal.kind, ProposalKind::AddPrecondition { .. });
         if !is_precondition {
             continue;
         }
@@ -233,10 +221,8 @@ pub fn check_cross_module_invariants(
 
         // Find callers that are NOT in the rewrite targets.
         let callers = call_graph.callers(&proposal.function_name);
-        let missing: Vec<String> = callers
-            .into_iter()
-            .filter(|c| !rewrite_targets.contains(c))
-            .collect();
+        let missing: Vec<String> =
+            callers.into_iter().filter(|c| !rewrite_targets.contains(c)).collect();
 
         if !missing.is_empty() {
             let mut sorted_missing = missing;
@@ -262,9 +248,7 @@ mod tests {
         Proposal {
             function_path: format!("crate::{func_name}"),
             function_name: func_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "x > 0".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "x > 0".into() },
             confidence: 0.9,
             rationale: "test".into(),
         }
@@ -288,7 +272,10 @@ mod tests {
         };
         let proposal = make_proposal("critical_fn"); // AddPrecondition = spec-only
         let violations = policy.check(&proposal);
-        assert!(violations.is_empty(), "spec-only proposals should be allowed on protected functions by default");
+        assert!(
+            violations.is_empty(),
+            "spec-only proposals should be allowed on protected functions by default"
+        );
     }
 
     #[test]
@@ -327,33 +314,21 @@ mod tests {
         };
         let violations = policy.check(&proposal);
         assert_eq!(violations.len(), 1);
-        assert!(matches!(
-            &violations[0],
-            GovernanceViolation::ProtectedFunction { .. }
-        ));
+        assert!(matches!(&violations[0], GovernanceViolation::ProtectedFunction { .. }));
     }
 
     #[test]
     fn test_test_function_blocked() {
-        let policy = GovernancePolicy {
-            immutable_tests: true,
-            ..Default::default()
-        };
+        let policy = GovernancePolicy { immutable_tests: true, ..Default::default() };
         let proposal = make_proposal("test_overflow_detection");
         let violations = policy.check(&proposal);
         assert_eq!(violations.len(), 1);
-        assert!(matches!(
-            &violations[0],
-            GovernanceViolation::TestFunction { .. }
-        ));
+        assert!(matches!(&violations[0], GovernanceViolation::TestFunction { .. }));
     }
 
     #[test]
     fn test_test_function_allowed_when_disabled() {
-        let policy = GovernancePolicy {
-            immutable_tests: false,
-            ..Default::default()
-        };
+        let policy = GovernancePolicy { immutable_tests: false, ..Default::default() };
         let proposal = make_proposal("test_overflow_detection");
         let violations = policy.check(&proposal);
         assert!(violations.is_empty());
@@ -365,10 +340,7 @@ mod tests {
         let proposal = make_proposal("module::tests::helper");
         let violations = policy.check(&proposal);
         assert_eq!(violations.len(), 1);
-        assert!(matches!(
-            &violations[0],
-            GovernanceViolation::TestFunction { .. }
-        ));
+        assert!(matches!(&violations[0], GovernanceViolation::TestFunction { .. }));
     }
 
     #[test]
@@ -398,10 +370,7 @@ mod tests {
         let violations = policy.check(&proposal);
         // Only TestFunction violation since spec-only exempts from ProtectedFunction
         assert_eq!(violations.len(), 1);
-        assert!(matches!(
-            &violations[0],
-            GovernanceViolation::TestFunction { .. }
-        ));
+        assert!(matches!(&violations[0], GovernanceViolation::TestFunction { .. }));
     }
 
     #[test]
@@ -452,9 +421,7 @@ mod tests {
 
     #[test]
     fn test_violation_serialization_roundtrip() {
-        let violation = GovernanceViolation::ProtectedFunction {
-            function: "foo".into(),
-        };
+        let violation = GovernanceViolation::ProtectedFunction { function: "foo".into() };
         let json = serde_json::to_string(&violation).unwrap();
         let deserialized: GovernanceViolation = serde_json::from_str(&json).unwrap();
         assert_eq!(violation, deserialized);
@@ -488,12 +455,7 @@ mod tests {
             name: name.to_string(),
             def_path: format!("crate::{name}"),
             span: SourceSpan::default(),
-            body: VerifiableBody {
-                locals: vec![],
-                blocks,
-                arg_count: 0,
-                return_ty: Ty::Unit,
-            },
+            body: VerifiableBody { locals: vec![], blocks, arg_count: 0, return_ty: Ty::Unit },
             contracts: vec![],
             preconditions: vec![],
             postconditions: vec![],
@@ -503,10 +465,7 @@ mod tests {
 
     #[test]
     fn test_cross_module_no_violations_when_all_callers_updated() {
-        let funcs = vec![
-            make_vfunc("caller", &["callee"]),
-            make_vfunc("callee", &[]),
-        ];
+        let funcs = vec![make_vfunc("caller", &["callee"]), make_vfunc("callee", &[])];
         let graph = build_call_graph(&funcs);
 
         let proposals = vec![make_proposal("callee")];
@@ -521,10 +480,7 @@ mod tests {
 
     #[test]
     fn test_cross_module_violation_when_caller_missing() {
-        let funcs = vec![
-            make_vfunc("caller", &["callee"]),
-            make_vfunc("callee", &[]),
-        ];
+        let funcs = vec![make_vfunc("caller", &["callee"]), make_vfunc("callee", &[])];
         let graph = build_call_graph(&funcs);
 
         let proposals = vec![make_proposal("callee")];
@@ -546,10 +502,8 @@ mod tests {
 
     #[test]
     fn test_cross_module_no_violation_for_private_function() {
-        let funcs = vec![
-            make_vfunc("caller", &["private_helper"]),
-            make_vfunc("private_helper", &[]),
-        ];
+        let funcs =
+            vec![make_vfunc("caller", &["private_helper"]), make_vfunc("private_helper", &[])];
         let graph = build_call_graph(&funcs);
 
         let proposals = vec![make_proposal("private_helper")];
@@ -565,10 +519,7 @@ mod tests {
 
     #[test]
     fn test_cross_module_no_violation_for_non_precondition() {
-        let funcs = vec![
-            make_vfunc("caller", &["callee"]),
-            make_vfunc("callee", &[]),
-        ];
+        let funcs = vec![make_vfunc("caller", &["callee"]), make_vfunc("callee", &[])];
         let graph = build_call_graph(&funcs);
 
         // SafeArithmetic proposal, not AddPrecondition.
@@ -604,9 +555,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "crate::json::parse".into(),
             function_name: "parse".into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "x > 0".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "x > 0".into() },
             confidence: 0.9,
             rationale: "test".into(),
         };
@@ -624,9 +573,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "crate::csv::parse".into(),
             function_name: "parse".into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "x > 0".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "x > 0".into() },
             confidence: 0.9,
             rationale: "test".into(),
         };
@@ -660,9 +607,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "crate::json::parse".into(),
             function_name: "parse".into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "x > 0".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "x > 0".into() },
             confidence: 0.9,
             rationale: "test".into(),
         };
@@ -690,9 +635,7 @@ mod tests {
             check_cross_module_invariants(&proposals, &graph, &rewrite_targets, &pub_fns);
         assert_eq!(violations.len(), 1);
         match &violations[0] {
-            GovernanceViolation::PubApiChangedWithoutCallerUpdate {
-                missing_callers, ..
-            } => {
+            GovernanceViolation::PubApiChangedWithoutCallerUpdate { missing_callers, .. } => {
                 assert_eq!(missing_callers.len(), 2);
                 assert!(missing_callers.contains(&"b".to_string()));
                 assert!(missing_callers.contains(&"c".to_string()));

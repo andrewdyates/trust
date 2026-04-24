@@ -8,7 +8,7 @@ use super::map::SsoHashMap;
 /// Stores elements in a small array up to a certain length
 /// and switches to `HashSet` when that length is exceeded.
 //
-// tRust: known issue — Implements subset of HashSet API.
+// FIXME: Implements subset of HashSet API.
 //
 // Missing HashSet API:
 //   all hasher-related

@@ -26,7 +26,9 @@ use trust_convergence::{
 // tRust: Import trust-loop for integration testing of the iterative verification loop (#469)
 use trust_loop::{LoopConfig, VerifyContext};
 use trust_strengthen::{Proposal, ProposalKind, StrengthenOutput};
-use trust_types::{Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition, VerificationResult};
+use trust_types::{
+    Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition, VerificationResult,
+};
 
 // ---------------------------------------------------------------------------
 // Mock phase outputs (mirrors trust-driver's VerifyOutput / BackpropOutput)
@@ -45,7 +47,6 @@ struct VerifyOutput {
 #[derive(Debug, Clone)]
 struct BackpropOutput {
     applied: usize,
-    #[allow(dead_code)]
     skipped: usize,
 }
 
@@ -134,20 +135,12 @@ fn run_loop(
             }
             ConvergenceDecision::IterationLimitReached { limit, .. } => {
                 return (
-                    LoopOutcome::Timeout {
-                        iterations: iteration + 1,
-                        max_iterations: *limit,
-                    },
+                    LoopOutcome::Timeout { iterations: iteration + 1, max_iterations: *limit },
                     history,
                 );
             }
             ConvergenceDecision::Regressed { .. } => {
-                return (
-                    LoopOutcome::Diverged {
-                        iterations: iteration + 1,
-                    },
-                    history,
-                );
+                return (LoopOutcome::Diverged { iterations: iteration + 1 }, history);
             }
             ConvergenceDecision::Continue { .. } => {
                 // Continue to strengthen + backprop
@@ -200,9 +193,7 @@ struct BinarySearchVerify {
 
 impl BinarySearchVerify {
     fn new() -> Self {
-        Self {
-            call_count: Cell::new(0),
-        }
+        Self { call_count: Cell::new(0) }
     }
 }
 
@@ -272,9 +263,7 @@ impl StrengthenPhase for BinarySearchStrengthen {
             Proposal {
                 function_path: "search::binary_search".into(),
                 function_name: "binary_search".into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "hi >= lo".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "hi >= lo".into() },
                 confidence: 0.90,
                 rationale: "Require hi >= lo as a precondition for binary search correctness"
                     .into(),
@@ -294,10 +283,7 @@ struct ApplyAllBackprop;
 
 impl BackpropPhase for ApplyAllBackprop {
     fn backpropagate(&self, proposals: &[Proposal]) -> BackpropOutput {
-        BackpropOutput {
-            applied: proposals.len(),
-            skipped: 0,
-        }
+        BackpropOutput { applied: proposals.len(), skipped: 0 }
     }
 }
 
@@ -313,10 +299,7 @@ struct SequenceVerify {
 
 impl SequenceVerify {
     fn new(outputs: Vec<VerifyOutput>) -> Self {
-        Self {
-            outputs,
-            call_count: Cell::new(0),
-        }
+        Self { outputs, call_count: Cell::new(0) }
     }
 }
 
@@ -339,9 +322,7 @@ impl StrengthenPhase for FixedStrengthen {
             .map(|i| Proposal {
                 function_path: format!("test::fn_{i}"),
                 function_name: format!("fn_{i}"),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: format!("x > {i}"),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: format!("x > {i}") },
                 confidence: 0.9,
                 rationale: format!("mock proposal {i}"),
             })
@@ -359,11 +340,7 @@ struct EmptyStrengthen;
 
 impl StrengthenPhase for EmptyStrengthen {
     fn strengthen(&self, _: &VerifyOutput) -> StrengthenOutput {
-        StrengthenOutput {
-            has_proposals: false,
-            failures_analyzed: 0,
-            proposals: vec![],
-        }
+        StrengthenOutput { has_proposals: false, failures_analyzed: 0, proposals: vec![] }
     }
 }
 
@@ -372,10 +349,7 @@ struct NoOpBackprop;
 
 impl BackpropPhase for NoOpBackprop {
     fn backpropagate(&self, proposals: &[Proposal]) -> BackpropOutput {
-        BackpropOutput {
-            applied: 0,
-            skipped: proposals.len(),
-        }
+        BackpropOutput { applied: 0, skipped: proposals.len() }
     }
 }
 
@@ -385,13 +359,7 @@ impl BackpropPhase for NoOpBackprop {
 
 fn make_verify_output(trusted: u32, failed: u32) -> VerifyOutput {
     VerifyOutput {
-        frontier: ProofFrontier {
-            trusted,
-            certified: 0,
-            runtime_checked: 0,
-            failed,
-            unknown: 0,
-        },
+        frontier: ProofFrontier { trusted, certified: 0, runtime_checked: 0, failed, unknown: 0 },
         fingerprint: None,
         vcs_dispatched: (trusted + failed) as usize,
         vcs_failed: failed as usize,
@@ -415,10 +383,7 @@ fn test_e2e_binary_search_loop_converges_in_two_iterations() {
     //   Iteration 1: all VCs pass -> Verified
     assert_eq!(
         outcome,
-        LoopOutcome::Verified {
-            iterations: 2,
-            vcs_proved: 5,
-        },
+        LoopOutcome::Verified { iterations: 2, vcs_proved: 5 },
         "binary_search loop should converge to Verified in 2 iterations"
     );
     assert_eq!(history.len(), 2, "should have 2 frontier snapshots");
@@ -479,10 +444,7 @@ fn test_e2e_strengthen_proposes_safe_midpoint() {
         .proposals
         .iter()
         .find(|p| matches!(&p.kind, ProposalKind::AddPrecondition { spec_body } if spec_body.contains("hi >= lo")));
-    assert!(
-        precond.is_some(),
-        "should propose hi >= lo as a precondition"
-    );
+    assert!(precond.is_some(), "should propose hi >= lo as a precondition");
 
     // All proposals should target binary_search
     for p in &s_out.proposals {
@@ -499,10 +461,7 @@ fn test_e2e_strengthen_proposes_safe_midpoint() {
 fn test_e2e_loop_detects_regression() {
     // Iteration 0: 4 proved, 1 failed
     // Iteration 1: 3 proved, 2 failed (regression!)
-    let verify = SequenceVerify::new(vec![
-        make_verify_output(4, 1),
-        make_verify_output(3, 2),
-    ]);
+    let verify = SequenceVerify::new(vec![make_verify_output(4, 1), make_verify_output(3, 2)]);
     let strengthen = FixedStrengthen { proposal_count: 1 };
     let backprop = ApplyAllBackprop;
 
@@ -539,10 +498,7 @@ fn test_e2e_loop_respects_max_iterations() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Timeout {
-            iterations: 4,
-            max_iterations: 3,
-        },
+        LoopOutcome::Timeout { iterations: 4, max_iterations: 3 },
         "loop should stop at iteration limit"
     );
     assert_eq!(history.len(), 4, "should have tried 4 iterations before limit");
@@ -562,11 +518,7 @@ fn test_e2e_loop_stops_when_no_proposals() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Refuted {
-            iterations: 1,
-            vcs_failed: 2,
-            exhausted_proposals: true,
-        },
+        LoopOutcome::Refuted { iterations: 1, vcs_failed: 2, exhausted_proposals: true },
         "should report Refuted with exhausted_proposals when strengthen has nothing"
     );
     assert_eq!(history.len(), 1);
@@ -586,11 +538,7 @@ fn test_e2e_loop_stops_when_backprop_fails() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Refuted {
-            iterations: 1,
-            vcs_failed: 2,
-            exhausted_proposals: true,
-        },
+        LoopOutcome::Refuted { iterations: 1, vcs_failed: 2, exhausted_proposals: true },
         "should report Refuted when backprop applies nothing"
     );
 }
@@ -614,11 +562,7 @@ fn test_e2e_loop_converges_with_failures_is_refuted() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Refuted {
-            iterations: 3,
-            vcs_failed: 1,
-            exhausted_proposals: false,
-        },
+        LoopOutcome::Refuted { iterations: 3, vcs_failed: 1, exhausted_proposals: false },
         "stable frontier with failures should be Refuted (not exhausted)"
     );
     assert_eq!(history.len(), 3);
@@ -639,10 +583,7 @@ fn test_e2e_loop_all_proved_first_pass() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Verified {
-            iterations: 1,
-            vcs_proved: 5,
-        },
+        LoopOutcome::Verified { iterations: 1, vcs_proved: 5 },
         "all proved on first pass should return Verified with 1 iteration"
     );
     assert_eq!(history.len(), 1);
@@ -669,10 +610,7 @@ fn test_e2e_loop_gradual_improvement_to_verified() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Verified {
-            iterations: 4,
-            vcs_proved: 5,
-        },
+        LoopOutcome::Verified { iterations: 4, vcs_proved: 5 },
         "gradual improvement should eventually reach Verified"
     );
     assert_eq!(history.len(), 4);
@@ -708,11 +646,7 @@ fn test_e2e_loop_fingerprint_convergence() {
 
     assert_eq!(
         outcome,
-        LoopOutcome::Refuted {
-            iterations: 2,
-            vcs_failed: 1,
-            exhausted_proposals: false,
-        },
+        LoopOutcome::Refuted { iterations: 2, vcs_failed: 1, exhausted_proposals: false },
         "same fingerprint should trigger convergence -> Refuted"
     );
 }
@@ -752,7 +686,7 @@ fn test_e2e_loop_history_fidelity() {
 /// tRust: Helper to build a VerificationCondition for trust-loop integration tests.
 fn make_vc(function: &str, kind: VcKind, formula_name: &str) -> VerificationCondition {
     VerificationCondition {
-        function: function.to_string(),
+        function: function.into(),
         kind,
         location: SourceSpan::default(),
         formula: Formula::Var(formula_name.to_string(), Sort::Bool),
@@ -762,19 +696,16 @@ fn make_vc(function: &str, kind: VcKind, formula_name: &str) -> VerificationCond
 
 fn make_proved() -> VerificationResult {
     VerificationResult::Proved {
-        solver: "mock".to_string(),
+        solver: "mock".into(),
         strength: ProofStrength::smt_unsat(),
         time_ms: 1,
-            proof_certificate: None, solver_warnings: None,
-        }
+        proof_certificate: None,
+        solver_warnings: None,
+    }
 }
 
 fn make_failed() -> VerificationResult {
-    VerificationResult::Failed {
-        solver: "mock".to_string(),
-        counterexample: None,
-        time_ms: 1,
-    }
+    VerificationResult::Failed { solver: "mock".into(), counterexample: None, time_ms: 1 }
 }
 
 // tRust: VerifyContext implementation for trust-loop integration tests.
@@ -841,11 +772,8 @@ fn test_trust_loop_integration_all_proved_first_pass() {
         vec![],
     );
 
-    let result = trust_loop::run_iterative_verification(
-        &LoopConfig::default(),
-        vec![vc_a, vc_b],
-        &ctx,
-    );
+    let result =
+        trust_loop::run_iterative_verification(&LoopConfig::default(), vec![vc_a, vc_b], &ctx);
 
     assert_eq!(result.iterations, 1);
     assert_eq!(result.reason, trust_loop::TerminationReason::AllProved);
@@ -861,19 +789,13 @@ fn test_trust_loop_integration_all_proved_first_pass() {
 
 #[test]
 fn test_trust_loop_integration_converges_after_strengthening() {
-    let vc_a = make_vc(
-        "crate::alpha",
-        VcKind::Assertion { message: "bounds".to_string() },
-        "alpha_0",
-    );
+    let vc_a =
+        make_vc("crate::alpha", VcKind::Assertion { message: "bounds".to_string() }, "alpha_0");
     let vc_b = make_vc("crate::beta", VcKind::DivisionByZero, "beta_0");
 
     // After strengthening, alpha proves but beta remains failed.
-    let vc_a_strengthened = make_vc(
-        "crate::alpha",
-        VcKind::Assertion { message: "bounds".to_string() },
-        "alpha_1",
-    );
+    let vc_a_strengthened =
+        make_vc("crate::alpha", VcKind::Assertion { message: "bounds".to_string() }, "alpha_1");
 
     let ctx = IntegrationVerifyContext::new(
         vec![
@@ -895,10 +817,7 @@ fn test_trust_loop_integration_converges_after_strengthening() {
     let result = trust_loop::run_iterative_verification(&config, vec![vc_a, vc_b], &ctx);
 
     assert_eq!(result.iterations, 3);
-    assert_eq!(
-        result.reason,
-        trust_loop::TerminationReason::Converged { stable_rounds: 2 }
-    );
+    assert_eq!(result.reason, trust_loop::TerminationReason::Converged { stable_rounds: 2 });
     assert_eq!(result.final_proved, 1, "alpha should be proved");
     assert_eq!(result.final_failed, 1, "beta should remain failed");
     assert_eq!(result.history.len(), 3, "should record 3 iterations");
@@ -911,8 +830,8 @@ fn test_trust_loop_integration_converges_after_strengthening() {
 #[test]
 fn test_trust_loop_analysis_integration() {
     use trust_loop::analysis::{
-        MetricSnapshot, classify_loop, convergence_rate, detect_fixpoint,
-        detect_regressions, FixpointConfig, LoopCharacteristic,
+        FixpointConfig, LoopCharacteristic, MetricSnapshot, classify_loop, convergence_rate,
+        detect_fixpoint, detect_regressions,
     };
 
     // Build a realistic improving sequence matching a verification loop trajectory
@@ -957,19 +876,19 @@ fn test_trust_loop_scheduling_integration() {
     // Build candidates matching a realistic verification workload
     let candidates = vec![
         VerificationCandidate {
-            function: "crate::safe_div".to_string(),
+            function: "crate::safe_div".into(),
             difficulty_estimate: 0.3,
             past_failures: 0,
             vc_count: 2,
         },
         VerificationCandidate {
-            function: "crate::binary_search".to_string(),
+            function: "crate::binary_search".into(),
             difficulty_estimate: 0.8,
             past_failures: 3,
             vc_count: 5,
         },
         VerificationCandidate {
-            function: "crate::sort".to_string(),
+            function: "crate::sort".into(),
             difficulty_estimate: 0.9,
             past_failures: 1,
             vc_count: 10,
@@ -977,11 +896,7 @@ fn test_trust_loop_scheduling_integration() {
     ];
 
     let budget = IterationBudget::default();
-    let mut scheduler = SchedulerState::new(
-        SchedulingPolicy::PriorityBased,
-        budget,
-        candidates,
-    );
+    let mut scheduler = SchedulerState::new(SchedulingPolicy::PriorityBased, budget, candidates);
 
     // Priority-based should schedule hardest/most-failed first
     let first = scheduler.schedule_next().expect("should have candidates");

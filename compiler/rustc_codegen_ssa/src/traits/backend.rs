@@ -28,7 +28,7 @@ pub trait BackendTypes {
     type Type: CodegenObject + PartialEq;
     type FunctionSignature: CodegenObject + PartialEq;
 
-    // NOTE(eddyb): Debuginfo-related types lack a common naming convention.
+    // FIXME(eddyb) find a common convention for all of the debuginfo-related
     // names (choose between `Dbg`, `Debug`, `DebugInfo`, `DI` etc.).
     type DIScope: Copy + Hash + PartialEq + Eq;
     type DILocation: Copy;

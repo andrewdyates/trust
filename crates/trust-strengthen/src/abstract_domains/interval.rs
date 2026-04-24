@@ -85,38 +85,26 @@ impl IntervalDomain {
         if low > high {
             Self::Bottom
         } else {
-            Self::Interval {
-                low: Bound::Finite(low),
-                high: Bound::Finite(high),
-            }
+            Self::Interval { low: Bound::Finite(low), high: Bound::Finite(high) }
         }
     }
 
     /// Create a singleton interval [v, v].
     #[must_use]
     pub fn constant(v: i128) -> Self {
-        Self::Interval {
-            low: Bound::Finite(v),
-            high: Bound::Finite(v),
-        }
+        Self::Interval { low: Bound::Finite(v), high: Bound::Finite(v) }
     }
 
     /// Create an interval [low, +inf).
     #[must_use]
     pub fn at_least(low: i128) -> Self {
-        Self::Interval {
-            low: Bound::Finite(low),
-            high: Bound::Unbounded,
-        }
+        Self::Interval { low: Bound::Finite(low), high: Bound::Unbounded }
     }
 
     /// Create an interval (-inf, high].
     #[must_use]
     pub fn at_most(high: i128) -> Self {
-        Self::Interval {
-            low: Bound::Unbounded,
-            high: Bound::Finite(high),
-        }
+        Self::Interval { low: Bound::Unbounded, high: Bound::Finite(high) }
     }
 
     /// Returns the lower bound, if finite.
@@ -165,12 +153,8 @@ impl IntervalDomain {
             (Self::Bottom, x) => x.clone(),
             (x, Self::Bottom) => x.clone(),
             (
-                Self::Interval {
-                    low: l1, high: h1, ..
-                },
-                Self::Interval {
-                    low: l2, high: h2, ..
-                },
+                Self::Interval { low: l1, high: h1, .. },
+                Self::Interval { low: l2, high: h2, .. },
             ) => {
                 let low = widen_lower_bound(*l1, *l2, thresholds);
                 let high = widen_upper_bound(*h1, *h2, thresholds);
@@ -184,13 +168,9 @@ impl IntervalDomain {
     pub fn add(&self, other: &Self) -> Self {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
-            (
-                Self::Interval { low: l1, high: h1 },
-                Self::Interval { low: l2, high: h2 },
-            ) => Self::Interval {
-                low: add_bounds(*l1, *l2),
-                high: add_bounds(*h1, *h2),
-            },
+            (Self::Interval { low: l1, high: h1 }, Self::Interval { low: l2, high: h2 }) => {
+                Self::Interval { low: add_bounds(*l1, *l2), high: add_bounds(*h1, *h2) }
+            }
         }
     }
 
@@ -199,13 +179,9 @@ impl IntervalDomain {
     pub fn sub(&self, other: &Self) -> Self {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
-            (
-                Self::Interval { low: l1, high: h1 },
-                Self::Interval { low: l2, high: h2 },
-            ) => Self::Interval {
-                low: sub_bounds(*l1, *h2),
-                high: sub_bounds(*h1, *l2),
-            },
+            (Self::Interval { low: l1, high: h1 }, Self::Interval { low: l2, high: h2 }) => {
+                Self::Interval { low: sub_bounds(*l1, *h2), high: sub_bounds(*h1, *l2) }
+            }
         }
     }
 
@@ -318,10 +294,7 @@ impl AbstractDomainOps for IntervalDomain {
     fn join(&self, other: &Self) -> Self {
         match (self, other) {
             (Self::Bottom, x) | (x, Self::Bottom) => x.clone(),
-            (
-                Self::Interval { low: l1, high: h1 },
-                Self::Interval { low: l2, high: h2 },
-            ) => {
+            (Self::Interval { low: l1, high: h1 }, Self::Interval { low: l2, high: h2 }) => {
                 let low = match (l1, l2) {
                     (Bound::Unbounded, _) | (_, Bound::Unbounded) => Bound::Unbounded,
                     (Bound::Finite(a), Bound::Finite(b)) => Bound::Finite((*a).min(*b)),
@@ -338,10 +311,7 @@ impl AbstractDomainOps for IntervalDomain {
     fn meet(&self, other: &Self) -> Self {
         match (self, other) {
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
-            (
-                Self::Interval { low: l1, high: h1 },
-                Self::Interval { low: l2, high: h2 },
-            ) => {
+            (Self::Interval { low: l1, high: h1 }, Self::Interval { low: l2, high: h2 }) => {
                 let low = match (l1, l2) {
                     (Bound::Unbounded, x) | (x, Bound::Unbounded) => *x,
                     (Bound::Finite(a), Bound::Finite(b)) => Bound::Finite((*a).max(*b)),
@@ -367,10 +337,7 @@ impl AbstractDomainOps for IntervalDomain {
         match (self, new) {
             (Self::Bottom, _) => Self::Bottom,
             (x, Self::Bottom) => x.clone(),
-            (
-                Self::Interval { low: l1, high: h1 },
-                Self::Interval { low: l2, high: h2 },
-            ) => {
+            (Self::Interval { low: l1, high: h1 }, Self::Interval { low: l2, high: h2 }) => {
                 let low = if *l1 == Bound::Unbounded { *l2 } else { *l1 };
                 let high = if *h1 == Bound::Unbounded { *h2 } else { *h1 };
                 match (low, high) {
@@ -386,13 +353,7 @@ impl AbstractDomainOps for IntervalDomain {
     }
 
     fn is_top(&self) -> bool {
-        matches!(
-            self,
-            Self::Interval {
-                low: Bound::Unbounded,
-                high: Bound::Unbounded,
-            }
-        )
+        matches!(self, Self::Interval { low: Bound::Unbounded, high: Bound::Unbounded })
     }
 
     fn bottom() -> Self {
@@ -400,20 +361,14 @@ impl AbstractDomainOps for IntervalDomain {
     }
 
     fn top() -> Self {
-        Self::Interval {
-            low: Bound::Unbounded,
-            high: Bound::Unbounded,
-        }
+        Self::Interval { low: Bound::Unbounded, high: Bound::Unbounded }
     }
 
     fn is_subset_of(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Bottom, _) => true,
             (_, Self::Bottom) => false,
-            (
-                Self::Interval { low: l1, high: h1 },
-                Self::Interval { low: l2, high: h2 },
-            ) => {
+            (Self::Interval { low: l1, high: h1 }, Self::Interval { low: l2, high: h2 }) => {
                 let low_ok = match (l1, l2) {
                     (_, Bound::Unbounded) => true,
                     (Bound::Unbounded, Bound::Finite(_)) => false,

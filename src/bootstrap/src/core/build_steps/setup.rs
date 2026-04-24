@@ -10,7 +10,7 @@ use std::env::consts::EXE_SUFFIX;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::Write;
-use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::LazyLock;
 use std::{fmt, fs, io};
@@ -37,6 +37,8 @@ pub enum Profile {
 }
 
 static PROFILE_DIR: &str = "src/bootstrap/defaults";
+// tRust: local built toolchains are exposed as the `trust` rustup toolchain.
+const LOCAL_TOOLCHAIN_NAME: &str = "trust";
 
 impl Profile {
     fn include_path(&self, src_path: &Path) -> PathBuf {
@@ -232,7 +234,10 @@ fn setup_config_toml(path: &Path, profile: Profile, config: &Config) {
     println!("`x.py` will now use the configuration at {}", include_path.display());
 }
 
-/// Creates a toolchain link for stage1 using `rustup`
+/// Creates a toolchain link for the current local build stage using `rustup`.
+///
+/// tRust: the local built sysroot is exposed as the `trust` toolchain to match
+/// the repo's documented workflow.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Link;
 impl Step for Link {
@@ -263,16 +268,18 @@ impl Step for Link {
             return;
         }
 
+        let toolchain_name = local_toolchain_name();
         if !rustup_installed(builder) {
-            println!("WARNING: `rustup` is not installed; Skipping `stage1` toolchain linking.");
+            println!(
+                "WARNING: `rustup` is not installed; skipping `{toolchain_name}` toolchain linking."
+            );
             return;
         }
 
-        let stage_path =
-            ["build", config.host_target.rustc_target_arg(), "stage1"].join(MAIN_SEPARATOR_STR);
+        let stage_path = stage_path(config);
 
-        if stage_dir_exists(&stage_path[..]) && !config.dry_run() {
-            attempt_toolchain_link(builder, &stage_path[..]);
+        if stage_dir_exists(&stage_path) && !config.dry_run() {
+            attempt_toolchain_link(builder, &stage_path);
         }
     }
 }
@@ -284,75 +291,127 @@ fn rustup_installed(builder: &Builder<'_>) -> bool {
     rustup.allow_failure().run_in_dry_run().run_capture_stdout(builder).is_success()
 }
 
-fn stage_dir_exists(stage_path: &str) -> bool {
-    match fs::create_dir(stage_path) {
-        Ok(_) => true,
-        Err(_) => Path::new(&stage_path).exists(),
-    }
+fn stage_path(config: &Config) -> PathBuf {
+    stage_path_for(&config.out, config.stage)
 }
 
-fn attempt_toolchain_link(builder: &Builder<'_>, stage_path: &str) {
-    if toolchain_is_linked(builder) {
+fn stage_path_for(out: &Path, stage: u32) -> PathBuf {
+    let stage = stage.max(1);
+    out.join("host").join(format!("stage{stage}"))
+}
+
+fn stage_dir_exists(stage_path: &Path) -> bool {
+    fs::create_dir_all(stage_path).is_ok() || stage_path.exists()
+}
+
+fn attempt_toolchain_link(builder: &Builder<'_>, stage_path: &Path) {
+    let toolchain_name = local_toolchain_name();
+    if !ensure_stage1_toolchain_placeholder_exists(stage_path) {
+        eprintln!(
+            "Failed to create a template for the local toolchain sysroot or confirm that it already exists"
+        );
         return;
     }
 
-    if !ensure_stage1_toolchain_placeholder_exists(stage_path) {
-        eprintln!(
-            "Failed to create a template for stage 1 toolchain or confirm that it already exists"
-        );
+    if toolchain_is_linked(builder, stage_path) {
         return;
     }
 
     if try_link_toolchain(builder, stage_path) {
         println!(
-            "Added `stage1` rustup toolchain; try `cargo +stage1 build` on a separate rust project to run a newly-built toolchain"
+            "Added `{toolchain_name}` rustup toolchain; try `cargo +{toolchain_name} build` on a separate rust project to run a newly-built toolchain"
         );
     } else {
-        eprintln!("`rustup` failed to link stage 1 build to `stage1` toolchain");
+        eprintln!("`rustup` failed to link the local build to `{toolchain_name}` toolchain");
         eprintln!(
-            "To manually link stage 1 build to `stage1` toolchain, run:\n
-            `rustup toolchain link stage1 {}`",
-            &stage_path
+            "To manually link the local build to `{toolchain_name}` toolchain, run:\n
+            `rustup toolchain link {toolchain_name} {}`",
+            stage_path.display(),
         );
     }
 }
 
-fn toolchain_is_linked(builder: &Builder<'_>) -> bool {
+fn toolchain_is_linked(builder: &Builder<'_>, stage_path: &Path) -> bool {
+    let toolchain_name = local_toolchain_name();
+    let expected_path = stage_path.canonicalize().ok();
+
     match command("rustup")
         .allow_failure()
-        .args(["toolchain", "list"])
+        .args(["toolchain", "list", "-v"])
         .run_capture_stdout(builder)
         .stdout_if_ok()
     {
         Some(toolchain_list) => {
-            if !toolchain_list.contains("stage1") {
+            let Some(toolchain_line) = toolchain_list
+                .lines()
+                .find(|line| toolchain_list_entry_name(line) == Some(toolchain_name))
+            else {
+                return false;
+            };
+
+            if let Some(expected_path) = expected_path.as_ref()
+                && !toolchain_list_entry_matches_path(toolchain_line, expected_path)
+            {
+                println!(
+                    "`{toolchain_name}` toolchain exists but points somewhere else; attempting to relink it to {}",
+                    expected_path.display()
+                );
                 return false;
             }
-            // The toolchain has already been linked.
+
             println!(
-                "`stage1` toolchain already linked; not attempting to link `stage1` toolchain"
+                "`{toolchain_name}` toolchain already linked; not attempting to link `{toolchain_name}` toolchain"
             );
         }
         None => {
-            // In this case, we don't know if the `stage1` toolchain has been linked;
-            // but `rustup` failed, so let's not go any further.
+            // In this case, we don't know if the toolchain is linked; attempt to refresh it.
             println!(
-                "`rustup` failed to list current toolchains; not attempting to link `stage1` toolchain"
+                "`rustup` failed to list current toolchains; attempting to link `{toolchain_name}` toolchain anyway"
             );
+            return false;
         }
     }
     true
 }
 
-fn try_link_toolchain(builder: &Builder<'_>, stage_path: &str) -> bool {
+fn try_link_toolchain(builder: &Builder<'_>, stage_path: &Path) -> bool {
+    let toolchain_name = local_toolchain_name();
     command("rustup")
-        .args(["toolchain", "link", "stage1", stage_path])
+        .args(["toolchain", "link", toolchain_name])
+        .arg(stage_path)
         .run_capture_stdout(builder)
         .is_success()
 }
 
-fn ensure_stage1_toolchain_placeholder_exists(stage_path: &str) -> bool {
-    let pathbuf = PathBuf::from(stage_path);
+fn local_toolchain_name() -> &'static str {
+    LOCAL_TOOLCHAIN_NAME
+}
+
+fn toolchain_list_entry_name(line: &str) -> Option<&str> {
+    line.split_whitespace().next()
+}
+
+fn toolchain_list_entry_path(line: &str) -> Option<&str> {
+    let name = toolchain_list_entry_name(line)?;
+    let mut rest = line[name.len()..].trim_start();
+
+    while rest.starts_with('(') {
+        let status_end = rest.find(") ")?;
+        rest = rest[status_end + 2..].trim_start();
+    }
+
+    if rest.is_empty() { None } else { Some(rest) }
+}
+
+fn toolchain_list_entry_matches_path(line: &str, expected_path: &Path) -> bool {
+    let Some(linked_path) = toolchain_list_entry_path(line) else {
+        return false;
+    };
+    Path::new(linked_path).canonicalize().is_ok_and(|path| path == expected_path)
+}
+
+fn ensure_stage1_toolchain_placeholder_exists(stage_path: &Path) -> bool {
+    let pathbuf = stage_path.to_path_buf();
 
     if fs::create_dir_all(pathbuf.join("lib")).is_err() {
         return false;

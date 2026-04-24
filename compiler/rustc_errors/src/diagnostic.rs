@@ -443,13 +443,13 @@ impl<G: EmissionGuarantee> Deref for Diag<'_, G> {
     type Target = DiagInner;
 
     fn deref(&self) -> &DiagInner {
-        self.diag.as_ref().expect("invariant: diagnostic must not be accessed after take") // tRust: unwrap -> expect
+        self.diag.as_ref().unwrap()
     }
 }
 
 impl<G: EmissionGuarantee> DerefMut for Diag<'_, G> {
     fn deref_mut(&mut self) -> &mut DiagInner {
-        self.diag.as_mut().expect("invariant: diagnostic must not be accessed after take") // tRust: unwrap -> expect
+        self.diag.as_mut().unwrap()
     }
 }
 
@@ -1222,7 +1222,7 @@ impl<'a, G: EmissionGuarantee> Diag<'a, G> {
             ));
             self.note("consider using `--verbose` to print the full type name to the console");
         }
-        *self.diag.take().expect("invariant: diagnostic must not be taken twice") // tRust: unwrap -> expect
+        *self.diag.take().unwrap()
     }
 
     /// This method allows us to access the path of the file where "long types" are written to.
@@ -1276,7 +1276,7 @@ impl<'a, G: EmissionGuarantee> Diag<'a, G> {
         );
 
         let guar = self.dcx.emit_diagnostic(diag);
-        guar.expect("invariant: diagnostic must produce a guaranteed error") // tRust: unwrap -> expect
+        guar.unwrap()
     }
 
     /// Emit and consume the diagnostic.

@@ -260,7 +260,7 @@ pub struct PointerSpec {
     /// The size of the value a pointer can be offset by in this address space.
     pointer_offset: Size,
     /// Pointers into this address space contain extra metadata
-    /// tRust: known issue (workingjubilee) — Consider adequately reflecting this in the compiler?
+    /// FIXME(workingjubilee): Consider adequately reflecting this in the compiler?
     _is_fat: bool,
 }
 
@@ -306,7 +306,7 @@ pub struct TargetDataLayout {
 impl Default for TargetDataLayout {
     /// Creates an instance of `TargetDataLayout`.
     fn default() -> TargetDataLayout {
-        let align = |bits| Align::from_bits(bits).expect("invariant: default layout uses valid power-of-two bit alignments"); // tRust: unwrap -> expect
+        let align = |bits| Align::from_bits(bits).unwrap();
         TargetDataLayout {
             endian: Endian::Big,
             i1_align: align(8),
@@ -418,14 +418,14 @@ impl TargetDataLayout {
                 ["f64", a @ ..] => dl.f64_align = parse_align_seq(a, "f64")?,
                 ["f128", a @ ..] => dl.f128_align = parse_align_seq(a, "f128")?,
                 [p, s, a @ ..] if p.starts_with("p") => {
-                    let mut p = p.strip_prefix('p').expect("invariant: match guard guarantees 'p' prefix"); // tRust: unwrap -> expect
+                    let mut p = p.strip_prefix('p').unwrap();
                     let mut _is_fat = false;
 
                     // Some targets, such as CHERI, use the 'f' suffix in the p- spec to signal that
                     // they use 'fat' pointers. The resulting prefix may look like `pf<addr_space>`.
 
                     if p.starts_with('f') {
-                        p = p.strip_prefix('f').expect("invariant: starts_with('f') check guarantees prefix"); // tRust: unwrap -> expect
+                        p = p.strip_prefix('f').unwrap();
                         _is_fat = true;
                     }
 
@@ -463,14 +463,14 @@ impl TargetDataLayout {
                     }
                 }
                 [p, s, a, _pr, i] if p.starts_with("p") => {
-                    let mut p = p.strip_prefix('p').expect("invariant: match guard guarantees 'p' prefix"); // tRust: unwrap -> expect
+                    let mut p = p.strip_prefix('p').unwrap();
                     let mut _is_fat = false;
 
                     // Some targets, such as CHERI, use the 'f' suffix in the p- spec to signal that
                     // they use 'fat' pointers. The resulting prefix may look like `pf<addr_space>`.
 
                     if p.starts_with('f') {
-                        p = p.strip_prefix('f').expect("invariant: starts_with('f') check guarantees prefix"); // tRust: unwrap -> expect
+                        p = p.strip_prefix('f').unwrap();
                         _is_fat = true;
                     }
 
@@ -634,7 +634,7 @@ impl TargetDataLayout {
     #[inline]
     pub fn llvmlike_vector_align(&self, vec_size: Size) -> Align {
         self.cabi_vector_align(vec_size)
-            .unwrap_or(Align::from_bytes(vec_size.bytes().next_power_of_two()).expect("invariant: next_power_of_two produces valid alignment")) // tRust: unwrap -> expect
+            .unwrap_or(Align::from_bytes(vec_size.bytes().next_power_of_two()).unwrap())
     }
 
     /// Get the pointer size in the default data address space.
@@ -781,13 +781,13 @@ impl Size {
     /// Rounds `bits` up to the next-higher byte boundary, if `bits` is
     /// not a multiple of 8.
     pub fn from_bits(bits: impl TryInto<u64>) -> Size {
-        let bits = bits.try_into().ok().expect("invariant: bit count must fit in u64"); // tRust: unwrap -> expect
+        let bits = bits.try_into().ok().unwrap();
         Size { raw: bits.div_ceil(8) }
     }
 
     #[inline]
     pub fn from_bytes(bytes: impl TryInto<u64>) -> Size {
-        let bytes: u64 = bytes.try_into().ok().expect("invariant: byte count must fit in u64"); // tRust: unwrap -> expect
+        let bytes: u64 = bytes.try_into().ok().unwrap();
         Size { raw: bytes }
     }
 
@@ -798,7 +798,7 @@ impl Size {
 
     #[inline]
     pub fn bytes_usize(self) -> usize {
-        self.bytes().try_into().expect("invariant: size in bytes fits in usize on this target") // tRust: unwrap -> expect
+        self.bytes().try_into().unwrap()
     }
 
     #[inline]
@@ -813,7 +813,7 @@ impl Size {
 
     #[inline]
     pub fn bits_usize(self) -> usize {
-        self.bits().try_into().expect("invariant: size in bits fits in usize on this target") // tRust: unwrap -> expect
+        self.bits().try_into().unwrap()
     }
 
     #[inline]
@@ -958,8 +958,6 @@ impl Step for Size {
 
     #[inline]
     unsafe fn forward_unchecked(start: Self, count: usize) -> Self {
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         Self::from_bytes(unsafe { u64::forward_unchecked(start.bytes(), count) })
     }
 
@@ -975,8 +973,6 @@ impl Step for Size {
 
     #[inline]
     unsafe fn backward_unchecked(start: Self, count: usize) -> Self {
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         Self::from_bytes(unsafe { u64::backward_unchecked(start.bytes(), count) })
     }
 }
@@ -1080,7 +1076,7 @@ impl Align {
 
     #[inline]
     pub fn bytes_usize(self) -> usize {
-        self.bytes().try_into().expect("invariant: alignment in bytes fits in usize on this target") // tRust: unwrap -> expect
+        self.bytes().try_into().unwrap()
     }
 
     #[inline]
@@ -1090,7 +1086,7 @@ impl Align {
 
     #[inline]
     pub fn bits_usize(self) -> usize {
-        self.bits().try_into().expect("invariant: alignment in bits fits in usize on this target") // tRust: unwrap -> expect
+        self.bits().try_into().unwrap()
     }
 
     /// Obtain the greatest factor of `size` that is an alignment
@@ -1288,7 +1284,7 @@ impl Integer {
         use Integer::*;
         let dl = cx.data_layout();
 
-        // tRust: known issue (eddyb) — maybe include I128 in the future, when it works everywhere.
+        // FIXME(eddyb) maybe include I128 in the future, when it works everywhere.
         for candidate in [I64, I32, I16] {
             if wanted >= candidate.align(dl).abi && wanted.bytes() >= candidate.size().bytes() {
                 return candidate;
@@ -1297,7 +1293,7 @@ impl Integer {
         I8
     }
 
-    // tRust: known issue (eddyb) — consolidate this and other methods that find the appropriate
+    // FIXME(eddyb) consolidate this and other methods that find the appropriate
     // `Integer` given some requirements.
     #[inline]
     pub fn from_size(size: Size) -> Result<Self, String> {
@@ -1514,7 +1510,7 @@ pub enum Scalar {
     Initialized {
         value: Primitive,
 
-        // tRust: known issue (eddyb) — always use the shortest range, e.g., by finding
+        // FIXME(eddyb) always use the shortest range, e.g., by finding
         // the largest space between two consecutive valid values and
         // taking everything else as the (shortest) valid range.
         valid_range: WrappingRange,
@@ -1635,7 +1631,7 @@ pub enum FieldsShape<FieldIdx: Idx> {
         /// Offsets for the first byte of each field,
         /// ordered to match the source definition order.
         /// This vector does not go in increasing order.
-        // tRust: known issue (eddyb) — use small vector optimization for the common case.
+        // FIXME(eddyb) use small vector optimization for the common case.
         offsets: IndexVec<FieldIdx, Size>,
 
         /// Maps memory order field indices to source order indices,
@@ -1643,8 +1639,8 @@ pub enum FieldsShape<FieldIdx: Idx> {
         /// This is a permutation, with both the source order and the
         /// memory order using the same (0..n) index ranges.
         ///
-        // tRust: known issue (eddyb) — build a better abstraction for permutations, if possible.
-        // tRust: known issue (camlorn) — also consider small vector optimization here.
+        // FIXME(eddyb) build a better abstraction for permutations, if possible.
+        // FIXME(camlorn) also consider small vector optimization here.
         in_memory_order: IndexVec<u32, FieldIdx>,
     },
 }
@@ -1655,7 +1651,7 @@ impl<FieldIdx: Idx> FieldsShape<FieldIdx> {
         match *self {
             FieldsShape::Primitive => 0,
             FieldsShape::Union(count) => count.get(),
-            FieldsShape::Array { count, .. } => count.try_into().expect("invariant: array field count fits in usize"), // tRust: unwrap -> expect
+            FieldsShape::Array { count, .. } => count.try_into().unwrap(),
             FieldsShape::Arbitrary { ref offsets, .. } => offsets.len(),
         }
     }
@@ -1671,7 +1667,7 @@ impl<FieldIdx: Idx> FieldsShape<FieldIdx> {
                 Size::ZERO
             }
             FieldsShape::Array { stride, count } => {
-                let i = u64::try_from(i).expect("invariant: field index fits in u64"); // tRust: unwrap -> expect
+                let i = u64::try_from(i).unwrap();
                 assert!(i < count, "tried to access field {i} of array with {count} fields");
                 stride * i
             }
@@ -1729,7 +1725,7 @@ pub enum BackendRepr {
         element: Scalar,
         count: u64,
     },
-    // tRust: known issue — I sometimes use memory, sometimes use an IR aggregate!
+    // FIXME: I sometimes use memory, sometimes use an IR aggregate!
     Memory {
         /// If true, the size is exact, otherwise it's only a lower bound.
         sized: bool,
@@ -1743,7 +1739,7 @@ impl BackendRepr {
         match *self {
             BackendRepr::Scalar(_)
             | BackendRepr::ScalarPair(..)
-            // tRust: known issue (rustc_scalable_vector) — Scalable vectors are `Sized` while the
+            // FIXME(rustc_scalable_vector): Scalable vectors are `Sized` while the
             // `sized_hierarchy` feature is not yet fully implemented. After `sized_hierarchy` is
             // fully implemented, scalable vectors will remain `Sized`, they just won't be
             // `const Sized` - whether `is_unsized` continues to return `false` at that point will
@@ -1808,7 +1804,7 @@ impl BackendRepr {
                 let size = (field2_offset + s2.size(cx)).align_to(
                     self.scalar_align(cx)
                         // We absolutely must have an answer here or everything is FUBAR.
-                        .expect("invariant: ScalarPair always has a scalar alignment"), // tRust: unwrap -> expect
+                        .unwrap(),
                 );
                 Some(size)
             }

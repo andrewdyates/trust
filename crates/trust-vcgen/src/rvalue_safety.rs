@@ -14,8 +14,8 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use trust_types::{
-    AggregateKind, BasicBlock, Formula, Rvalue, Sort, SourceSpan, Ty,
-    VcKind, VerifiableFunction, VerificationCondition,
+    AggregateKind, BasicBlock, Formula, Rvalue, Sort, SourceSpan, Ty, VcKind, VerifiableFunction,
+    VerificationCondition,
 };
 
 use crate::{operand_ty, place_to_var_name};
@@ -35,11 +35,7 @@ pub(crate) fn check_rvalue_safety(
         // tRust #438: Discriminant read — place must hold an enum/ADT type.
         Rvalue::Discriminant(place) => {
             let place_name = place_to_var_name(func, place);
-            let resolved_ty = func
-                .body
-                .locals
-                .get(place.local)
-                .map(|d| &d.ty);
+            let resolved_ty = func.body.locals.get(place.local).map(|d| &d.ty);
 
             // If the type is not an ADT (which models enums), the discriminant
             // read is invalid. Generate a VC whose formula is unsatisfiable
@@ -50,10 +46,7 @@ pub(crate) fn check_rvalue_safety(
                 // The discriminant is read on a type that is not an ADT/enum.
                 // Formula: the place's "type tag" != ADT_TAG, which is trivially
                 // satisfiable, meaning a solver will confirm the violation.
-                let type_tag_var = Formula::Var(
-                    format!("{place_name}__type_tag"),
-                    Sort::Int,
-                );
+                let type_tag_var = Formula::Var(format!("{place_name}__type_tag"), Sort::Int);
                 // ADT_TAG sentinel: we use -1 as a sentinel for "is an ADT"
                 let adt_sentinel = Formula::Int(-1);
                 let not_adt = Formula::Not(Box::new(Formula::Eq(
@@ -62,7 +55,7 @@ pub(crate) fn check_rvalue_safety(
                 )));
                 vcs.push(VerificationCondition {
                     kind: VcKind::InvalidDiscriminant { place_name },
-                    function: func.name.clone(),
+                    function: func.name.as_str().into(),
                     location: stmt_span.clone(),
                     formula: not_adt,
                     contract_metadata: None,
@@ -85,7 +78,7 @@ pub(crate) fn check_rvalue_safety(
                     )));
                     vcs.push(VerificationCondition {
                         kind: VcKind::AggregateArrayLengthMismatch { expected, actual },
-                        function: func.name.clone(),
+                        function: func.name.as_str().into(),
                         location: stmt_span.clone(),
                         formula: mismatch,
                         contract_metadata: None,
@@ -111,8 +104,8 @@ pub(crate) fn place_ty(func: &VerifiableFunction, place: &trust_types::Place) ->
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BlockId, ConstValue, LocalDecl, Operand, Place, Rvalue,
-        SourceSpan, Statement, Terminator, VerifiableBody, VerifiableFunction,
+        BasicBlock, BlockId, ConstValue, LocalDecl, Operand, Place, Rvalue, SourceSpan, Statement,
+        Terminator, VerifiableBody, VerifiableFunction,
     };
 
     /// Helper: build a function with a Discriminant rvalue on a non-ADT local.
@@ -123,7 +116,7 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::u32(), name: None },       // return
+                    LocalDecl { index: 0, ty: Ty::u32(), name: None }, // return
                     LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) }, // not an enum
                     LocalDecl { index: 2, ty: Ty::u32(), name: Some("d".into()) }, // discriminant dest
                 ],
@@ -193,7 +186,8 @@ mod tests {
             .filter(|vc| matches!(&vc.kind, VcKind::InvalidDiscriminant { .. }))
             .collect();
         assert_eq!(
-            disc_vcs.len(), 1,
+            disc_vcs.len(),
+            1,
             "Discriminant on non-enum should produce exactly 1 InvalidDiscriminant VC"
         );
         if let VcKind::InvalidDiscriminant { place_name } = &disc_vcs[0].kind {
@@ -240,10 +234,7 @@ mod tests {
                         // Only 2 operands for a [u32; 3] array — mismatch!
                         rvalue: Rvalue::Aggregate(
                             AggregateKind::Array,
-                            vec![
-                                Operand::Copy(Place::local(1)),
-                                Operand::Copy(Place::local(2)),
-                            ],
+                            vec![Operand::Copy(Place::local(1)), Operand::Copy(Place::local(2))],
                         ),
                         span: SourceSpan::default(),
                     }],
@@ -281,10 +272,7 @@ mod tests {
                         place: Place::local(0),
                         rvalue: Rvalue::Aggregate(
                             AggregateKind::Array,
-                            vec![
-                                Operand::Copy(Place::local(1)),
-                                Operand::Copy(Place::local(2)),
-                            ],
+                            vec![Operand::Copy(Place::local(1)), Operand::Copy(Place::local(2))],
                         ),
                         span: SourceSpan::default(),
                     }],
@@ -308,10 +296,7 @@ mod tests {
             .iter()
             .filter(|vc| matches!(&vc.kind, VcKind::AggregateArrayLengthMismatch { .. }))
             .collect();
-        assert_eq!(
-            arr_vcs.len(), 1,
-            "Array aggregate with mismatched length should produce 1 VC"
-        );
+        assert_eq!(arr_vcs.len(), 1, "Array aggregate with mismatched length should produce 1 VC");
         if let VcKind::AggregateArrayLengthMismatch { expected, actual } = &arr_vcs[0].kind {
             assert_eq!(*expected, 3);
             assert_eq!(*actual, 2);
@@ -326,10 +311,7 @@ mod tests {
             .iter()
             .filter(|vc| matches!(&vc.kind, VcKind::AggregateArrayLengthMismatch { .. }))
             .collect();
-        assert!(
-            arr_vcs.is_empty(),
-            "Array aggregate with matching length should not produce VC"
-        );
+        assert!(arr_vcs.is_empty(), "Array aggregate with matching length should not produce VC");
     }
 
     #[test]
@@ -373,11 +355,7 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl {
-                        index: 0,
-                        ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                        name: None,
-                    },
+                    LocalDecl { index: 0, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                     LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                     LocalDecl { index: 2, ty: Ty::Bool, name: Some("b".into()) },
                 ],
@@ -409,9 +387,6 @@ mod tests {
             .iter()
             .filter(|vc| matches!(&vc.kind, VcKind::AggregateArrayLengthMismatch { .. }))
             .collect();
-        assert!(
-            arr_vcs.is_empty(),
-            "Tuple aggregate should not produce array-length VC"
-        );
+        assert!(arr_vcs.is_empty(), "Tuple aggregate should not produce array-length VC");
     }
 }

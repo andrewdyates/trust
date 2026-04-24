@@ -217,7 +217,10 @@ fn test_lea_rip_relative() {
     assert_eq!(insn.opcode, Opcode::Lea);
     assert_eq!(insn.size, 7);
     assert!(matches!(insn.operand(0), Some(Operand::Reg(r)) if r.index == 0));
-    assert!(matches!(insn.operand(1), Some(Operand::Mem(MemoryOperand::PcRelative { offset: 0x10 }))));
+    assert!(matches!(
+        insn.operand(1),
+        Some(Operand::Mem(MemoryOperand::PcRelative { offset: 0x10 }))
+    ));
 }
 
 // ==========================================================================
@@ -520,7 +523,9 @@ fn test_mov_reg_indirect() {
     assert_eq!(insn.opcode, Opcode::Mov);
     assert_eq!(insn.size, 2);
     assert!(matches!(insn.operand(0), Some(Operand::Reg(r)) if r.index == 0));
-    assert!(matches!(insn.operand(1), Some(Operand::Mem(MemoryOperand::Base { base })) if base.index == 1));
+    assert!(
+        matches!(insn.operand(1), Some(Operand::Mem(MemoryOperand::Base { base })) if base.index == 1)
+    );
 }
 
 #[test]
@@ -582,10 +587,10 @@ fn test_decode_all() {
     let d = X86_64Decoder::new();
     // PUSH RBP; MOV RBP, RSP; SUB RSP, 0x20; RET
     let bytes = [
-        0x55,                         // PUSH RBP
-        0x48, 0x89, 0xE5,             // MOV RBP, RSP
-        0x48, 0x83, 0xEC, 0x20,       // SUB RSP, 0x20
-        0xC3,                         // RET
+        0x55, // PUSH RBP
+        0x48, 0x89, 0xE5, // MOV RBP, RSP
+        0x48, 0x83, 0xEC, 0x20, // SUB RSP, 0x20
+        0xC3, // RET
     ];
     let results = d.decode_all(&bytes, 0x1000);
     assert_eq!(results.len(), 4);
@@ -977,10 +982,10 @@ fn test_decode_all_with_new_insns() {
     let d = X86_64Decoder::new();
     // MOVSXD RAX, ECX; CQO; SHL RAX, CL; RET
     let bytes = [
-        0x48, 0x63, 0xC1,       // MOVSXD RAX, ECX
-        0x48, 0x99,              // CQO
-        0x48, 0xD3, 0xE0,       // SHL RAX, CL
-        0xC3,                    // RET
+        0x48, 0x63, 0xC1, // MOVSXD RAX, ECX
+        0x48, 0x99, // CQO
+        0x48, 0xD3, 0xE0, // SHL RAX, CL
+        0xC3, // RET
     ];
     let results = d.decode_all(&bytes, 0x2000);
     assert_eq!(results.len(), 4);

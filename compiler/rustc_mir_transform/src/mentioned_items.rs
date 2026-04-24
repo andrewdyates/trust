@@ -1,6 +1,3 @@
-//! tRust: MIR pass that collects items mentioned in a body for the codegen
-//! tRust: collector.
-
 use rustc_middle::mir::visit::Visitor;
 use rustc_middle::mir::{self, Location, MentionedItem};
 use rustc_middle::ty::adjustment::PointerCoercion;

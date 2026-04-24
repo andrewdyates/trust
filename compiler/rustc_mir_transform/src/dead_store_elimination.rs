@@ -109,11 +109,9 @@ fn eliminate<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) -> bool {
     }
     for (block, argument_index) in call_operands_to_move {
         let TerminatorKind::Call { ref mut args, .. } = bbs[block].terminator_mut().kind else {
-            // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
             bug!()
         };
         let arg = &mut args[argument_index].node;
-        // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
         let Operand::Copy(place) = *arg else { bug!() };
         *arg = Operand::Move(place);
     }

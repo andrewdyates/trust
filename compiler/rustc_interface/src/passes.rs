@@ -189,17 +189,13 @@ fn configure_and_expand(
                     new_path.push(path);
                 }
             }
-            // SAFETY: `env::set_var` is unsafe because modifying environment
-            // variables is not thread-safe. This is called early during macro
-            // expansion setup, before any parallel compilation occurs, so no
-            // other threads are concurrently reading the environment.
             unsafe {
                 env::set_var(
                     "PATH",
                     env::join_paths(
                         new_path.iter().filter(|p| env::join_paths(iter::once(p)).is_ok()),
                     )
-                    .expect("invariant: path canonicalization succeeds"), // tRust: unwrap -> expect
+                    .unwrap(),
                 );
             }
         }
@@ -244,10 +240,6 @@ fn configure_and_expand(
         }
 
         if cfg!(windows) {
-            // SAFETY: `env::set_var` is unsafe because modifying environment
-            // variables is not thread-safe. This restores PATH to `old_path`
-            // (captured before expansion) after macro expansion completes,
-            // still within the single-threaded expansion phase.
             unsafe {
                 env::set_var("PATH", &old_path);
             }
@@ -672,7 +664,7 @@ fn write_out_deps(tcx: TyCtxt<'_>, outputs: &OutputFilenames, out_filenames: &[P
         // Debugger visualizer files
         for debugger_visualizer in tcx.debugger_visualizers(LOCAL_CRATE) {
             files.extend(hash_iter_files(
-                iter::once(normalize_path(debugger_visualizer.path.clone().expect("invariant: debugger visualizer path is set for file-based visualizers"))), // tRust: unwrap -> expect
+                iter::once(normalize_path(debugger_visualizer.path.clone().unwrap())),
                 checksum_hash_algo,
             ));
         }
@@ -879,7 +871,7 @@ pub fn write_interface<'tcx>(tcx: TyCtxt<'tcx>) {
         &tcx.sess.psess.attr_id_generator,
     );
     let export_output = tcx.output_filenames(()).interface_path();
-    let mut file = fs::File::create_buffered(export_output).expect("invariant: export output file creation succeeds"); // tRust: unwrap -> expect
+    let mut file = fs::File::create_buffered(export_output).unwrap();
     if let Err(err) = write!(file, "{}", krate) {
         tcx.dcx().fatal(format!("error writing interface file: {}", err));
     }
@@ -1014,7 +1006,7 @@ pub fn create_and_enter_global_ctxt<T, F: for<'tcx> FnOnce(TyCtxt<'tcx>) -> T>(
         compiler.current_gcx.clone(),
         Arc::clone(&compiler.jobserver_proxy),
         |tcx| {
-            let feed = tcx.create_crate_num(stable_crate_id).expect("invariant: create_crate_num succeeds for valid stable_crate_id"); // tRust: unwrap -> expect
+            let feed = tcx.create_crate_num(stable_crate_id).unwrap();
             assert_eq!(feed.key(), LOCAL_CRATE);
             feed.crate_name(crate_name);
 
@@ -1028,7 +1020,7 @@ pub fn create_and_enter_global_ctxt<T, F: for<'tcx> FnOnce(TyCtxt<'tcx>) -> T>(
             feed.output_filenames(Arc::new(outputs));
 
             let res = f(tcx);
-            // tRust: known issue — maybe run finish even when a fatal error occurred? or at least
+            // FIXME maybe run finish even when a fatal error occurred? or at least
             // tcx.alloc_self_profile_query_strings()?
             tcx.finish();
             res

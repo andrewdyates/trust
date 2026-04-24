@@ -140,7 +140,7 @@ impl<'mir, 'tcx> Qualifs<'mir, 'tcx> {
         ccx: &'mir ConstCx<'mir, 'tcx>,
         tainted_by_errors: Option<ErrorGuaranteed>,
     ) -> ConstQualifs {
-        // tRust: known issue (explicit_tail_calls) — uhhhh I think we can return without return now, does it change anything
+        // FIXME(explicit_tail_calls): uhhhh I think we can return without return now, does it change anything
 
         // Find the `Return` terminator if one exists.
         //
@@ -651,7 +651,6 @@ impl<'tcx> Visitor<'tcx> for Checker<'_, 'tcx> {
                         if is_int_bool_float_or_char(ty) {
                             // Int, bool, float, and char operations are fine.
                         } else {
-                            // tRust: invariant — unary operations only apply to primitive types (bool, int, float)
                             span_bug!(
                                 self.span,
                                 "non-primitive type in `Rvalue::UnaryOp{op:?}`: {ty:?}",
@@ -685,7 +684,6 @@ impl<'tcx> Visitor<'tcx> for Checker<'_, 'tcx> {
 
                     self.check_op(ops::RawPtrComparison);
                 } else {
-                    // tRust: invariant — binary operations only apply to primitive types (bool, int, float, char, ptr)
                     span_bug!(
                         self.span,
                         "non-primitive type in `Rvalue::BinaryOp`: {:?} ⚬ {:?}",
@@ -764,7 +762,6 @@ impl<'tcx> Visitor<'tcx> for Checker<'_, 'tcx> {
                         return;
                     }
                     _ => {
-                        // tRust: invariant — call terminator callee must have a function or function pointer type
                         span_bug!(terminator.source_info.span, "invalid callee of type {:?}", fn_ty)
                     }
                 };
@@ -951,7 +948,6 @@ impl<'tcx> Visitor<'tcx> for Checker<'_, 'tcx> {
             }
 
             TerminatorKind::CoroutineDrop => {
-                // tRust: invariant — CoroutineDrop is eliminated by the coroutine transform pass
                 span_bug!(
                     self.body.source_info(location).span,
                     "We should not encounter TerminatorKind::CoroutineDrop after coroutine transform"
@@ -960,7 +956,6 @@ impl<'tcx> Visitor<'tcx> for Checker<'_, 'tcx> {
 
             TerminatorKind::UnwindTerminate(_) => {
                 // Cleanup blocks are skipped for const checking (see `visit_basic_block_data`).
-                // tRust: invariant — Terminate terminator only appears inside cleanup (unwind) blocks
                 span_bug!(self.span, "`Terminate` terminator outside of cleanup block")
             }
 

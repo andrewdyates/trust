@@ -14,7 +14,7 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
     if layout.size.bytes() >= tcx.data_layout.obj_size_bound() {
         bug!("size is too large, in the following layout:\n{layout:#?}");
     }
-    // tRust: known issue (#124403) — Once `repr_c_enums_larger_than_int` is a hard error, we could assert
+    // FIXME(#124403): Once `repr_c_enums_larger_than_int` is a hard error, we could assert
     // here that a repr(c) enum discriminant is never larger than a c_int.
 
     if !cfg!(debug_assertions) {
@@ -65,7 +65,7 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
             let (offset, first) = first;
             if offset == Size::ZERO && first.layout.size() == layout.size {
                 // This is a newtype, so keep recursing.
-                // tRust: known issue (RalfJung) — I don't think it would be correct to do any checks for
+                // FIXME(RalfJung): I don't think it would be correct to do any checks for
                 // alignment here, so we don't. Is that correct?
                 return skip_newtypes(cx, &first);
             }
@@ -97,8 +97,8 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
         match layout.layout.backend_repr() {
             BackendRepr::Scalar(_) => {
                 // These must always be present for `Scalar` types.
-                let align = align.expect("invariant: Scalar backend repr must have ABI alignment"); // tRust: unwrap -> expect
-                let size = size.expect("invariant: Scalar backend repr must have ABI size"); // tRust: unwrap -> expect
+                let align = align.unwrap();
+                let size = size.unwrap();
                 // Check that this matches the underlying field.
                 let inner = skip_newtypes(cx, layout);
                 assert!(
@@ -112,7 +112,7 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
                         // Fine.
                     }
                     FieldsShape::Union(..) => {
-                        // tRust: known issue — I guess we could also check something here? Like, look at all fields?
+                        // FIXME: I guess we could also check something here? Like, look at all fields?
                         return;
                     }
                     FieldsShape::Arbitrary { .. } => {
@@ -160,7 +160,7 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
                     inner.ty
                 );
                 if matches!(inner.layout.variants(), Variants::Multiple { .. }) {
-                    // tRust: known issue — ScalarPair for enums is enormously complicated and it is very hard
+                    // FIXME: ScalarPair for enums is enormously complicated and it is very hard
                     // to check anything about them.
                     return;
                 }
@@ -169,7 +169,7 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
                         // Checked below.
                     }
                     FieldsShape::Union(..) => {
-                        // tRust: known issue — I guess we could also check something here? Like, look at all fields?
+                        // FIXME: I guess we could also check something here? Like, look at all fields?
                         return;
                     }
                     _ => {
@@ -281,9 +281,9 @@ pub(super) fn layout_sanity_check<'tcx>(cx: &LayoutCx<'tcx>, layout: &TyAndLayou
                     }
 
                     // Ensure that for niche encoded tags the discriminant coincides with the variant index.
-                    let val = layout.ty.discriminant_for_variant(tcx, idx).expect("invariant: niche-encoded variant must have a discriminant").val; // tRust: unwrap -> expect
+                    let val = layout.ty.discriminant_for_variant(tcx, idx).unwrap().val;
                     if val != u128::from(idx.as_u32()) {
-                        let adt_def = layout.ty.ty_adt_def().expect("invariant: type with variants must be an ADT"); // tRust: unwrap -> expect
+                        let adt_def = layout.ty.ty_adt_def().unwrap();
                         cx.tcx().dcx().span_delayed_bug(
                             cx.tcx().def_span(adt_def.did()),
                             format!(

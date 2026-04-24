@@ -67,7 +67,7 @@ impl SunderResult {
     pub fn to_verification_result(&self) -> trust_types::VerificationResult {
         match &self.verdict {
             Verdict::Verified => trust_types::VerificationResult::Proved {
-                solver: "sunder-lib".to_string(),
+                solver: "sunder-lib".into(),
                 time_ms: self.time_ms,
                 strength: trust_types::ProofStrength::deductive(),
                 proof_certificate: self.proof_certificate.clone(),
@@ -77,22 +77,22 @@ impl SunderResult {
                 // Sunder produces deductive failures, not concrete counterexamples
                 // in the same way as BMC. The function_verdicts carry the details.
                 trust_types::VerificationResult::Failed {
-                    solver: "sunder-lib".to_string(),
+                    solver: "sunder-lib".into(),
                     time_ms: self.time_ms,
                     counterexample: None,
                 }
             }
             Verdict::Unknown { reason } => trust_types::VerificationResult::Unknown {
-                solver: "sunder-lib".to_string(),
+                solver: "sunder-lib".into(),
                 time_ms: self.time_ms,
                 reason: reason.clone(),
             },
             Verdict::Timeout => trust_types::VerificationResult::Timeout {
-                solver: "sunder-lib".to_string(),
+                solver: "sunder-lib".into(),
                 timeout_ms: self.time_ms,
             },
             Verdict::Error { message } => trust_types::VerificationResult::Unknown {
-                solver: "sunder-lib".to_string(),
+                solver: "sunder-lib".into(),
                 time_ms: self.time_ms,
                 reason: format!("sunder error: {message}"),
             },

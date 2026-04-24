@@ -15,24 +15,13 @@ use crate::{RewriteKind, RewritePlan, SourceRewrite};
 pub enum RewriteError {
     /// A governance rule was violated.
     #[error("governance violation in `{function}`: {violations:?}")]
-    Governance {
-        function: String,
-        violations: Vec<crate::GovernanceViolation>,
-    },
+    Governance { function: String, violations: Vec<crate::GovernanceViolation> },
     /// The source text did not contain the expected content at the rewrite site.
     #[error("source mismatch at offset {offset} in `{file_path}`: expected `{expected}`")]
-    SourceMismatch {
-        file_path: String,
-        offset: usize,
-        expected: String,
-    },
+    SourceMismatch { file_path: String, offset: usize, expected: String },
     /// The offset is out of bounds for the source text.
     #[error("offset {offset} out of bounds for `{file_path}` (length {length})")]
-    OffsetOutOfBounds {
-        file_path: String,
-        offset: usize,
-        length: usize,
-    },
+    OffsetOutOfBounds { file_path: String, offset: usize, length: usize },
 }
 
 /// Engine that applies rewrite plans to source text.
@@ -47,9 +36,7 @@ pub struct RewriteEngine {
 
 impl Default for RewriteEngine {
     fn default() -> Self {
-        Self {
-            indent: "    ".into(),
-        }
+        Self { indent: "    ".into() }
     }
 }
 
@@ -63,9 +50,7 @@ impl RewriteEngine {
     /// Create a rewrite engine with custom indentation.
     #[must_use]
     pub fn with_indent(indent: impl Into<String>) -> Self {
-        Self {
-            indent: indent.into(),
-        }
+        Self { indent: indent.into() }
     }
 
     /// Apply a single rewrite to source text, returning the modified text.
@@ -177,9 +162,7 @@ mod tests {
         let source = "fn foo() {}\n";
         let rewrite = make_rewrite(
             0,
-            RewriteKind::InsertAttribute {
-                attribute: "#[requires(\"x > 0\")]".into(),
-            },
+            RewriteKind::InsertAttribute { attribute: "#[requires(\"x > 0\")]".into() },
         );
 
         let result = engine.apply_rewrite(source, &rewrite).unwrap();
@@ -192,9 +175,7 @@ mod tests {
         let source = "// comment\nfn foo() {}\n";
         let rewrite = make_rewrite(
             11, // after "// comment\n"
-            RewriteKind::InsertAttribute {
-                attribute: "#[ensures(\"result >= 0\")]".into(),
-            },
+            RewriteKind::InsertAttribute { attribute: "#[ensures(\"result >= 0\")]".into() },
         );
 
         let result = engine.apply_rewrite(source, &rewrite).unwrap();
@@ -257,17 +238,12 @@ mod tests {
         let source = "short";
         let rewrite = make_rewrite(
             100,
-            RewriteKind::InsertAttribute {
-                attribute: "#[requires(\"true\")]".into(),
-            },
+            RewriteKind::InsertAttribute { attribute: "#[requires(\"true\")]".into() },
         );
 
         let result = engine.apply_rewrite(source, &rewrite);
         assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(RewriteError::OffsetOutOfBounds { .. })
-        ));
+        assert!(matches!(result, Err(RewriteError::OffsetOutOfBounds { .. })));
     }
 
     #[test]
@@ -279,9 +255,7 @@ mod tests {
         // Insert attribute at start (offset 0)
         plan.rewrites.push(make_rewrite(
             0,
-            RewriteKind::InsertAttribute {
-                attribute: "#[requires(\"a + b < u64::MAX\")]".into(),
-            },
+            RewriteKind::InsertAttribute { attribute: "#[requires(\"a + b < u64::MAX\")]".into() },
         ));
         plan.sort_for_application();
 
@@ -303,12 +277,8 @@ mod tests {
     fn test_custom_indent() {
         let engine = RewriteEngine::with_indent("\t");
         let source = "let x = 1;\n";
-        let rewrite = make_rewrite(
-            0,
-            RewriteKind::InsertAssertion {
-                assertion: "assert!(x > 0);".into(),
-            },
-        );
+        let rewrite =
+            make_rewrite(0, RewriteKind::InsertAssertion { assertion: "assert!(x > 0);".into() });
 
         let result = engine.apply_rewrite(source, &rewrite).unwrap();
         assert!(result.starts_with("\tassert!(x > 0);"));
@@ -336,9 +306,7 @@ mod tests {
         let source = "fn foo() {}";
         let rewrite = make_rewrite(
             source.len(),
-            RewriteKind::InsertAttribute {
-                attribute: "\n// end".into(),
-            },
+            RewriteKind::InsertAttribute { attribute: "\n// end".into() },
         );
 
         let result = engine.apply_rewrite(source, &rewrite).unwrap();

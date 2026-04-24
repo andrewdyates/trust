@@ -3,7 +3,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
+use std::collections::BTreeMap;
 
 use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
@@ -22,10 +22,8 @@ fn sample_solver(strength: ProofStrength, time_ms: u64) -> SolverInfo {
 
 fn sample_vc(function: &str) -> VerificationCondition {
     VerificationCondition {
-        kind: VcKind::Assertion {
-            message: "must hold".to_string(),
-        },
-        function: function.to_string(),
+        kind: VcKind::Assertion { message: "must hold".to_string() },
+        function: function.into(),
         location: SourceSpan {
             file: "src/lib.rs".to_string(),
             line_start: 10,
@@ -172,7 +170,7 @@ fn test_transitive_closure_all_proved() {
     let a = make_cert("crate::foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
     let b = make_cert("crate::bar", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("crate::foo".to_string(), vec!["crate::bar".to_string()]);
 
     let closure = transitive_closure(&[&a, &b], &call_graph);
@@ -184,7 +182,7 @@ fn test_transitive_closure_all_proved() {
 fn test_transitive_closure_missing_callee() {
     let a = make_cert("crate::foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("crate::foo".to_string(), vec!["crate::bar".to_string()]);
 
     let closure = transitive_closure(&[&a], &call_graph);
@@ -195,7 +193,7 @@ fn test_transitive_closure_missing_callee() {
 #[test]
 fn test_transitive_closure_no_deps() {
     let a = make_cert("crate::foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
-    let call_graph = FxHashMap::default();
+    let call_graph = BTreeMap::new();
 
     let closure = transitive_closure(&[&a], &call_graph);
     assert!(closure.contains("crate::foo"));
@@ -269,7 +267,7 @@ fn test_modular_composition_success() {
 
     let required = vec!["crate::bar".to_string(), "crate::baz".to_string()];
 
-    let call_graph = FxHashMap::default();
+    let call_graph = BTreeMap::new();
     let composed =
         modular_composition(&caller, &[&callee1, &callee2], &required, &call_graph).unwrap();
 
@@ -288,7 +286,7 @@ fn test_modular_composition_missing_callee() {
     let callee = make_cert("crate::bar", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["crate::bar".to_string(), "crate::baz".to_string()];
-    let call_graph = FxHashMap::default();
+    let call_graph = BTreeMap::new();
 
     let result = modular_composition(&caller, &[&callee], &required, &call_graph);
     assert!(result.is_err());
@@ -307,7 +305,7 @@ fn test_modular_composition_direct_recursion() {
     let self_ref = make_cert("crate::foo", "2026-03-27T12:05:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["crate::foo".to_string()];
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("crate::foo".to_string(), vec!["crate::foo".to_string()]);
 
     let result = modular_composition(&caller, &[&self_ref], &required, &call_graph);
@@ -325,7 +323,7 @@ fn test_modular_composition_mutual_recursion() {
     let callee_b = make_cert("B", "2026-03-27T12:01:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["B".to_string()];
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("A".to_string(), vec!["B".to_string()]);
     call_graph.insert("B".to_string(), vec!["A".to_string()]);
 
@@ -349,18 +347,14 @@ fn test_modular_composition_diamond_not_flagged() {
     let callee_d = make_cert("D", "2026-03-27T12:03:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["B".to_string(), "C".to_string()];
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("A".to_string(), vec!["B".to_string(), "C".to_string()]);
     call_graph.insert("B".to_string(), vec!["D".to_string()]);
     call_graph.insert("C".to_string(), vec!["D".to_string()]);
     call_graph.insert("D".to_string(), vec![]);
 
-    let result = modular_composition(
-        &caller_a,
-        &[&callee_b, &callee_c, &callee_d],
-        &required,
-        &call_graph,
-    );
+    let result =
+        modular_composition(&caller_a, &[&callee_b, &callee_c, &callee_d], &required, &call_graph);
     assert!(result.is_ok(), "diamond dependency should NOT be flagged as a cycle: {result:?}");
 }
 
@@ -368,7 +362,7 @@ fn test_modular_composition_diamond_not_flagged() {
 fn test_modular_composition_no_callees() {
     let caller = make_cert("crate::foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
     let required: Vec<String> = vec![];
-    let call_graph = FxHashMap::default();
+    let call_graph = BTreeMap::new();
 
     let composed = modular_composition(&caller, &[], &required, &call_graph).unwrap();
     assert_eq!(composed.constituent_ids.len(), 1);
@@ -383,16 +377,12 @@ fn test_modular_composition_transitive_cycle_detected() {
     let callee_c = make_cert("C", "2026-03-27T12:02:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["B".to_string()];
-    let mut callee_deps = FxHashMap::default();
+    let mut callee_deps = BTreeMap::new();
     callee_deps.insert("B".to_string(), vec!["C".to_string()]);
     callee_deps.insert("C".to_string(), vec!["A".to_string()]); // cycle back to caller
 
-    let result = modular_composition_with_deps(
-        &caller,
-        &[&callee_b, &callee_c],
-        &required,
-        &callee_deps,
-    );
+    let result =
+        modular_composition_with_deps(&caller, &[&callee_b, &callee_c], &required, &callee_deps);
     assert!(result.is_err(), "transitive cycle A -> B -> C -> A should be detected");
     match result.unwrap_err() {
         CompositionError::CircularDependency { cycle } => {
@@ -412,15 +402,11 @@ fn test_modular_composition_with_deps_no_cycle() {
     let callee_c = make_cert("C", "2026-03-27T12:02:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["B".to_string()];
-    let mut callee_deps = FxHashMap::default();
+    let mut callee_deps = BTreeMap::new();
     callee_deps.insert("B".to_string(), vec!["C".to_string()]);
 
-    let result = modular_composition_with_deps(
-        &caller,
-        &[&callee_b, &callee_c],
-        &required,
-        &callee_deps,
-    );
+    let result =
+        modular_composition_with_deps(&caller, &[&callee_b, &callee_c], &required, &callee_deps);
     assert!(result.is_ok(), "A -> B -> C has no cycle");
 }
 
@@ -431,9 +417,15 @@ fn test_modular_composition_with_deps_no_cycle() {
 #[test]
 fn test_strength_ranking() {
     use super::checkers::strength_rank;
-    assert!(strength_rank(&ProofStrength::bounded(10)) < strength_rank(&ProofStrength::smt_unsat()));
-    assert!(strength_rank(&ProofStrength::smt_unsat()) < strength_rank(&ProofStrength::deductive()));
-    assert!(strength_rank(&ProofStrength::deductive()) < strength_rank(&ProofStrength::inductive()));
+    assert!(
+        strength_rank(&ProofStrength::bounded(10)) < strength_rank(&ProofStrength::smt_unsat())
+    );
+    assert!(
+        strength_rank(&ProofStrength::smt_unsat()) < strength_rank(&ProofStrength::deductive())
+    );
+    assert!(
+        strength_rank(&ProofStrength::deductive()) < strength_rank(&ProofStrength::inductive())
+    );
     assert!(
         strength_rank(&ProofStrength::inductive()) < strength_rank(&ProofStrength::constructive())
     );
@@ -727,7 +719,7 @@ fn test_transitive_closure_adds_unproved_caller_with_all_proved_callees() {
     let foo = make_cert("foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
     let bar = make_cert("bar", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("baz".to_string(), vec!["foo".to_string(), "bar".to_string()]);
 
     let closure = transitive_closure(&[&foo, &bar], &call_graph);
@@ -745,7 +737,7 @@ fn test_transitive_closure_chain() {
     // Before the fix, b and a would never be added transitively.
     let c = make_cert("c", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("a".to_string(), vec!["b".to_string()]);
     call_graph.insert("b".to_string(), vec!["c".to_string()]);
 
@@ -761,11 +753,8 @@ fn test_transitive_closure_partial_callees_not_proved() {
     // "baz" should NOT be transitively verified.
     let foo = make_cert("foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
-    let mut call_graph = FxHashMap::default();
-    call_graph.insert(
-        "baz".to_string(),
-        vec!["foo".to_string(), "missing".to_string()],
-    );
+    let mut call_graph = BTreeMap::new();
+    call_graph.insert("baz".to_string(), vec!["foo".to_string(), "missing".to_string()]);
 
     let closure = transitive_closure(&[&foo], &call_graph);
     assert!(closure.contains("foo"));
@@ -851,17 +840,9 @@ fn test_function_strengths_in_composed_proof() {
     // combined_strength should be the weakest (smt_unsat)
     assert_eq!(composed.combined_strength, ProofStrength::smt_unsat());
     // Individual strengths should differ
-    let a_strength = composed
-        .function_strengths
-        .iter()
-        .find(|fs| fs.function == "a")
-        .unwrap();
+    let a_strength = composed.function_strengths.iter().find(|fs| fs.function == "a").unwrap();
     assert_eq!(a_strength.strength, ProofStrength::constructive());
-    let b_strength = composed
-        .function_strengths
-        .iter()
-        .find(|fs| fs.function == "b")
-        .unwrap();
+    let b_strength = composed.function_strengths.iter().find(|fs| fs.function == "b").unwrap();
     assert_eq!(b_strength.strength, ProofStrength::smt_unsat());
 }
 
@@ -886,7 +867,7 @@ fn test_transitive_closure_preserves_directly_proved() {
     // Before the fix, foo would be removed. After fix, foo stays.
     let foo = make_cert("foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
 
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("foo".to_string(), vec!["bar".to_string()]);
 
     let closure = transitive_closure(&[&foo], &call_graph);
@@ -920,11 +901,7 @@ fn make_cert_with_formula(
     kind: &str,
 ) -> crate::ProofCertificate {
     let formula_json = serde_json::to_string(&formula).expect("formula should serialize");
-    let vc_snapshot = VcSnapshot {
-        kind: kind.to_string(),
-        formula_json,
-        location: None,
-    };
+    let vc_snapshot = VcSnapshot { kind: kind.to_string(), formula_json, location: None };
     crate::ProofCertificate::new_trusted(
         function.to_string(),
         FunctionHash::from_bytes(format!("{function}-body").as_bytes()),
@@ -1176,10 +1153,7 @@ fn test_manifest_function_names_sorted() {
     m.add_entry("crate::alpha", make_manifest_entry(ProofStrength::smt_unsat(), true, vec![]));
     m.add_entry("crate::mu", make_manifest_entry(ProofStrength::smt_unsat(), true, vec![]));
 
-    assert_eq!(
-        m.function_names(),
-        vec!["crate::alpha", "crate::mu", "crate::zeta"]
-    );
+    assert_eq!(m.function_names(), vec!["crate::alpha", "crate::mu", "crate::zeta"]);
 }
 
 #[test]
@@ -1295,8 +1269,7 @@ fn test_manifest_json_roundtrip() {
     m.add_entry("foo", make_manifest_entry(ProofStrength::smt_unsat(), true, vec!["bar"]));
     m.add_entry("bar", make_manifest_entry(ProofStrength::constructive(), true, vec![]));
     m.internal_edges.push(("foo".to_string(), "bar".to_string()));
-    m.external_deps
-        .push(("foo".to_string(), "dep-crate".to_string(), "dep::helper".to_string()));
+    m.external_deps.push(("foo".to_string(), "dep-crate".to_string(), "dep::helper".to_string()));
     m.spec_hashes.insert("foo".to_string(), 0xDEAD_BEEF);
     m.bundle_hash = vec![1, 2, 3, 4];
 
@@ -1307,8 +1280,8 @@ fn test_manifest_json_roundtrip() {
 
 #[test]
 fn test_manifest_json_invalid() {
-    let err = CompositionManifest::from_json("not valid json{{{")
-        .expect_err("invalid JSON should fail");
+    let err =
+        CompositionManifest::from_json("not valid json{{{").expect_err("invalid JSON should fail");
     match err {
         ManifestError::SerializationFailed { .. } => {}
         other => panic!("expected SerializationFailed, got: {other:?}"),
@@ -1342,10 +1315,9 @@ fn test_generate_manifest_from_composition() {
 
     // Should have one internal edge: foo -> bar
     assert_eq!(manifest.internal_edges.len(), 1);
-    assert!(manifest.internal_edges.contains(&(
-        "crate::foo".to_string(),
-        "crate::bar".to_string()
-    )));
+    assert!(
+        manifest.internal_edges.contains(&("crate::foo".to_string(), "crate::bar".to_string()))
+    );
 }
 
 #[test]
@@ -1361,18 +1333,12 @@ fn test_generate_manifest_missing_cert_not_composable() {
 #[test]
 fn test_manifest_entry_dependencies_preserved() {
     let mut m = CompositionManifest::new("my-crate", "0.1.0");
-    let entry = make_manifest_entry(
-        ProofStrength::smt_unsat(),
-        true,
-        vec!["dep::a", "dep::b", "dep::c"],
-    );
+    let entry =
+        make_manifest_entry(ProofStrength::smt_unsat(), true, vec!["dep::a", "dep::b", "dep::c"]);
     m.add_entry("caller", entry);
 
     let looked_up = m.lookup("caller").unwrap();
-    assert_eq!(
-        looked_up.dependencies,
-        vec!["dep::a", "dep::b", "dep::c"]
-    );
+    assert_eq!(looked_up.dependencies, vec!["dep::a", "dep::b", "dep::c"]);
 }
 
 // -----------------------------------------------------------------------
@@ -1392,10 +1358,7 @@ fn test_error_composition_failed_variant_and_display() {
         msg.contains("composition failed"),
         "Display should contain 'composition failed': {msg}"
     );
-    assert!(
-        msg.contains("zero certificates"),
-        "Display should mention reason: {msg}"
-    );
+    assert!(msg.contains("zero certificates"), "Display should mention reason: {msg}");
 }
 
 #[test]
@@ -1407,11 +1370,7 @@ fn test_error_incompatible_assumptions_variant_and_display() {
 
     let err = compose_proofs(&[&a, &b]).unwrap_err();
     match &err {
-        CompositionError::IncompatibleAssumptions {
-            cert_a,
-            cert_b,
-            detail,
-        } => {
+        CompositionError::IncompatibleAssumptions { cert_a, cert_b, detail } => {
             assert!(!cert_a.is_empty(), "cert_a should be populated");
             assert!(!cert_b.is_empty(), "cert_b should be populated");
             assert!(!detail.is_empty(), "detail should be populated");
@@ -1431,7 +1390,7 @@ fn test_error_circular_dependency_variant_and_display() {
     let callee = make_cert("B", "2026-03-27T12:01:00Z", ProofStrength::smt_unsat());
 
     let required = vec!["B".to_string()];
-    let mut call_graph = FxHashMap::default();
+    let mut call_graph = BTreeMap::new();
     call_graph.insert("A".to_string(), vec!["B".to_string()]);
     call_graph.insert("B".to_string(), vec!["A".to_string()]);
 
@@ -1455,7 +1414,7 @@ fn test_error_circular_dependency_variant_and_display() {
 fn test_error_missing_link_variant_and_display() {
     let caller = make_cert("crate::foo", "2026-03-27T12:00:00Z", ProofStrength::smt_unsat());
     let required = vec!["crate::bar".to_string()];
-    let call_graph = FxHashMap::default();
+    let call_graph = BTreeMap::new();
 
     let err = modular_composition(&caller, &[], &required, &call_graph).unwrap_err();
     match &err {
@@ -1465,14 +1424,8 @@ fn test_error_missing_link_variant_and_display() {
         other => panic!("expected MissingLink, got: {other:?}"),
     }
     let msg = err.to_string();
-    assert!(
-        msg.contains("missing link"),
-        "Display should contain 'missing link': {msg}"
-    );
-    assert!(
-        msg.contains("crate::bar"),
-        "Display should name the missing function: {msg}"
-    );
+    assert!(msg.contains("missing link"), "Display should contain 'missing link': {msg}");
+    assert!(msg.contains("crate::bar"), "Display should name the missing function: {msg}");
 }
 
 #[test]
@@ -1488,14 +1441,8 @@ fn test_error_weakening_failed_variant_and_display() {
         other => panic!("expected WeakeningFailed, got: {other:?}"),
     }
     let msg = err.to_string();
-    assert!(
-        msg.contains("weakening failed"),
-        "Display should contain 'weakening failed': {msg}"
-    );
-    assert!(
-        msg.contains("Overflow"),
-        "Display should name the target property: {msg}"
-    );
+    assert!(msg.contains("weakening failed"), "Display should contain 'weakening failed': {msg}");
+    assert!(msg.contains("Overflow"), "Display should name the target property: {msg}");
 }
 
 #[test]
@@ -1505,10 +1452,7 @@ fn test_error_strengthening_failed_variant_and_display() {
 
     let err = strengthening_check(&cert, &stronger).unwrap_err();
     match &err {
-        CompositionError::StrengtheningFailed {
-            cert_id,
-            target_property,
-        } => {
+        CompositionError::StrengtheningFailed { cert_id, target_property } => {
             assert!(!cert_id.is_empty(), "cert_id should be populated");
             assert_eq!(target_property, "MemorySafety");
         }
@@ -1519,18 +1463,13 @@ fn test_error_strengthening_failed_variant_and_display() {
         msg.contains("strengthening check failed"),
         "Display should contain 'strengthening check failed': {msg}"
     );
-    assert!(
-        msg.contains("MemorySafety"),
-        "Display should name the target property: {msg}"
-    );
+    assert!(msg.contains("MemorySafety"), "Display should name the target property: {msg}");
 }
 
 #[test]
 fn test_error_into_cert_error() {
     // CompositionError should convert into CertError::VerificationFailed
-    let comp_err = CompositionError::CompositionFailed {
-        reason: "test reason".to_string(),
-    };
+    let comp_err = CompositionError::CompositionFailed { reason: "test reason".to_string() };
     let cert_err: crate::CertError = comp_err.into();
     match cert_err {
         crate::CertError::VerificationFailed { reason } => {

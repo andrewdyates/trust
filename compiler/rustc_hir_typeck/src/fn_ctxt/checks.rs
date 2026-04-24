@@ -223,7 +223,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let expected_input_tys: Option<Vec<_>> = expectation
             .only_has_type(self)
             .and_then(|expected_output| {
-                // NOTE(#149379): This operation results in expected input
+                // FIXME(#149379): This operation results in expected input
                 // types which are potentially not well-formed or for whom the
                 // function where-bounds don't actually hold. This results
                 // in weird bugs when later treating these expectations as if
@@ -260,7 +260,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 }
 
                                 let generalized_ty = self.next_ty_var(call_span);
-                                ocx.eq(&origin, self.param_env, ty, generalized_ty).expect("invariant: value is present");
+                                ocx.eq(&origin, self.param_env, ty, generalized_ty).unwrap();
                                 generalized_ty
                             })
                             .collect_vec();
@@ -428,7 +428,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // the arguments hence we only do our usual type checking with
                 // the arguments who's types we do know. However, we *can* check
                 // for unreachable expressions (see above).
-                // NOTE: unreachable warning currently isn't emitted
+                // FIXME: unreachable warning current isn't emitted
                 if idx >= minimum_input_count {
                     continue;
                 }
@@ -788,7 +788,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 Some(adt) => {
                     Some((adt.variant_of_res(def), adt.did(), Self::user_args_for_adt(ty)))
                 }
-                // tRust: invariant — resolving a struct path to a variant definition must yield the enclosing enum ADT type
                 _ => bug!("unexpected type: {:?}", ty.normalized),
             },
             Res::Def(DefKind::Struct | DefKind::Union | DefKind::TyAlias | DefKind::AssocTy, _)
@@ -799,7 +798,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 _ => None,
             },
-            // tRust: invariant — check_struct_path is only called for paths that resolve to struct-like defs, aliases to them, or self types
             _ => bug!("unexpected definition: {:?}", def),
         };
 
@@ -841,7 +839,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         pat: &'tcx hir::Pat<'tcx>,
         init: &'tcx hir::Expr<'tcx>,
     ) -> Ty<'tcx> {
-        // NOTE(tschottdorf): `contains_explicit_ref_binding()` must be removed
+        // FIXME(tschottdorf): `contains_explicit_ref_binding()` must be removed
         // for #42640 (default match binding modes).
         //
         // See #44848.
@@ -1027,7 +1025,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
             let mut enclosing_breakables = self.enclosing_breakables.borrow_mut();
             let ctxt = enclosing_breakables.find_breakable(blk.hir_id);
-            let coerce = ctxt.coerce.as_mut().expect("invariant: value is present");
+            let coerce = ctxt.coerce.as_mut().unwrap();
             if let Some((tail_expr, tail_expr_ty)) = tail_expr_ty {
                 let span = self.get_expr_coercion_span(tail_expr);
                 let cause = self.cause(
@@ -1072,7 +1070,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     if let Some((fn_def_id, decl)) = self.get_fn_decl(blk.hir_id) {
                         let ret_sp = decl.output.span();
                         if let Some(block_sp) = self.parent_item_span(blk.hir_id) {
-                            // tRust: known issue — on some cases (`ui/liveness/liveness-issue-2163.rs`) the
+                            // HACK: on some cases (`ui/liveness/liveness-issue-2163.rs`) the
                             // output would otherwise be incorrect and even misleading. Make sure
                             // the span we're aiming at correspond to a `fn` body.
                             if block_sp == blk.span {
@@ -1169,7 +1167,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             self.diverges.set(prev_diverges);
         }
 
-        let ty = ctxt.coerce.expect("invariant: value is present").complete(self);
+        let ty = ctxt.coerce.unwrap().complete(self);
 
         self.write_ty(blk.hir_id, ty);
 
@@ -1400,7 +1398,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             .tcx
                             .explicit_predicates_of(self.body_id)
                             .instantiate_identity(self.tcx);
-                        // NOTE(compiler-errors): This could be problematic if something has two
+                        // FIXME(compiler-errors): This could be problematic if something has two
                         // fn-like predicates with different args, but callable types really never
                         // do that, so it's OK.
                         for (predicate, span) in instantiated {
@@ -2069,7 +2067,6 @@ impl<'a, 'b, 'tcx> FnCallDiagCtxt<'a, 'b, 'tcx> {
     fn ensure_has_errors(&self) -> Option<ErrorGuaranteed> {
         if self.errors.is_empty() {
             if cfg!(debug_assertions) {
-                // tRust: invariant — the argument matrix should have emitted at least one diagnostic before ensure_has_errors is asked to surface call errors
                 span_bug!(self.call_metadata.error_span, "expected errors from argument matrix");
             } else {
                 let mut err = self.dcx().create_err(errors::ArgMismatchIndeterminate {
@@ -2328,7 +2325,7 @@ impl<'a, 'b, 'tcx> FnCallDiagCtxt<'a, 'b, 'tcx> {
                 Error::Extra(arg_idx) => {
                     let (provided_ty, provided_span) = self.provided_arg_tys[*arg_idx];
                     let provided_ty_name = if !has_error_or_infer([provided_ty]) {
-                        // NOTE: not suggestable, use something else
+                        // FIXME: not suggestable, use something else
                         format!(" of type `{provided_ty}`")
                     } else {
                         "".to_string()
@@ -2422,7 +2419,7 @@ impl<'a, 'b, 'tcx> FnCallDiagCtxt<'a, 'b, 'tcx> {
                     let mut missing_idxs = vec![*expected_idx];
                     while let Some(e) = errors.next_if(|e| {
                         matches!(e, Error::Missing(next_expected_idx)
-                            if *next_expected_idx == *missing_idxs.last().expect("invariant: non-empty collection") + 1)
+                            if *next_expected_idx == *missing_idxs.last().unwrap() + 1)
                     }) {
                         match e {
                             Error::Missing(expected_idx) => missing_idxs.push(*expected_idx),
@@ -2526,8 +2523,8 @@ impl<'a, 'b, 'tcx> FnCallDiagCtxt<'a, 'b, 'tcx> {
                             };
                         }
                         missing_idxs => {
-                            let first_idx = *missing_idxs.first().expect("invariant: non-empty collection");
-                            let last_idx = *missing_idxs.last().expect("invariant: non-empty collection");
+                            let first_idx = *missing_idxs.first().unwrap();
+                            let last_idx = *missing_idxs.last().unwrap();
                             // NOTE: Because we might be re-arranging arguments, might have extra arguments, etc.
                             // It's hard to *really* know where we should provide this error label, so this is a
                             // decent heuristic
@@ -2634,7 +2631,7 @@ impl<'a, 'b, 'tcx> FnCallDiagCtxt<'a, 'b, 'tcx> {
     /// not be present. So we have to look at what the *last* provided position was, and point
     /// one after to suggest the replacement.
     fn append_arguments_changes(&self, suggestions: &mut Vec<(Span, String)>) {
-        // NOTE(estebank): This is hacky, and there's
+        // FIXME(estebank): This is hacky, and there's
         // probably a better more involved change we can make to make this work.
         // For example, if we have
         // ```
@@ -3016,7 +3013,7 @@ impl<'a, 'b, 'tcx> ArgsCtxt<'a, 'b, 'tcx> {
                 None,
                 IsSuggestion(true),
                 callee_ty.peel_refs(),
-                self.call_ctxt.callee_expr.expect("invariant: value is present").hir_id,
+                self.call_ctxt.callee_expr.unwrap().hir_id,
                 TraitsInScope,
                 |mut ctxt| ctxt.probe_for_similar_candidate(),
             )
@@ -3177,7 +3174,6 @@ impl<'a, 'b, 'tcx> CallCtxt<'a, 'b, 'tcx> {
                     is_method: true,
                 }
             }
-            // tRust: invariant — call metadata for argument checking is only computed from call or method-call expressions
             k => span_bug!(self.call_span, "checking argument types on a non-call: `{:?}`", k),
         }
     }

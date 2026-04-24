@@ -17,9 +17,9 @@ mod tests {
     use proptest::prelude::*;
     use trust_types::{Formula, FunctionVerdict, Sort};
 
-    use crate::alpha_normalize::{alpha_normalize, alpha_normalized_hash, SubFormulaCache};
-    use crate::result_cache::{CachedResult, ResultCacheKey};
     use crate::CacheEntry;
+    use crate::alpha_normalize::{SubFormulaCache, alpha_normalize, alpha_normalized_hash};
+    use crate::result_cache::{CachedResult, ResultCacheKey};
 
     // -----------------------------------------------------------------------
     // Arbitrary Formula strategy (adapted from trust-vcgen/formula_proptest.rs)
@@ -111,15 +111,15 @@ mod tests {
 
     fn arb_cache_entry() -> impl Strategy<Value = CacheEntry> {
         (
-            "[a-f0-9]{64}",          // content_hash (SHA-256 hex)
+            "[a-f0-9]{64}", // content_hash (SHA-256 hex)
             arb_function_verdict(),
-            0usize..100,             // total_obligations
-            0usize..100,             // proved
-            0usize..100,             // failed
-            0usize..100,             // unknown
-            0usize..100,             // runtime_checked
-            0u64..=u64::MAX,         // cached_at
-            "[a-f0-9]{0,64}",        // spec_hash
+            0usize..100,      // total_obligations
+            0usize..100,      // proved
+            0usize..100,      // failed
+            0usize..100,      // unknown
+            0usize..100,      // runtime_checked
+            0u64..=u64::MAX,  // cached_at
+            "[a-f0-9]{0,64}", // spec_hash
         )
             .prop_map(
                 |(content_hash, verdict, total, proved, failed, unknown, runtime, ts, spec)| {
@@ -133,6 +133,7 @@ mod tests {
                         runtime_checked: runtime,
                         cached_at: ts,
                         spec_hash: spec,
+                        obligation_results: vec![],
                     }
                 },
             )
@@ -140,25 +141,20 @@ mod tests {
 
     fn arb_cached_result() -> impl Strategy<Value = CachedResult> {
         (
-            "[a-f0-9]{16}",        // formula_hash
-            "[a-z]{2,8}",          // solver_name
-            "(proved|failed|unknown|timeout)", // verdict
+            "[a-f0-9]{16}",                           // formula_hash
+            "[a-z]{2,8}",                             // solver_name
+            "(proved|failed|unknown|timeout)",        // verdict
             proptest::option::of("[a-z0-9= ]{0,30}"), // model
-            0u64..10_000,          // time_ms
-            0u64..=u64::MAX,       // cached_at
+            0u64..10_000,                             // time_ms
+            0u64..=u64::MAX,                          // cached_at
         )
-            .prop_map(|(fhash, solver, verdict, model, time_ms, cached_at)| {
-                CachedResult {
-                    key: ResultCacheKey {
-                        formula_hash: fhash,
-                        solver_name: solver,
-                    },
-                    verdict,
-                    model,
-                    time_ms,
-                    cached_at,
-                    strength_json: None,
-                }
+            .prop_map(|(fhash, solver, verdict, model, time_ms, cached_at)| CachedResult {
+                key: ResultCacheKey { formula_hash: fhash, solver_name: solver },
+                verdict,
+                model,
+                time_ms,
+                cached_at,
+                strength_json: None,
             })
     }
 

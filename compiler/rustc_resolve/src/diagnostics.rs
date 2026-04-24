@@ -216,7 +216,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             return self.report_conflict(ident, ns, new_binding, old_binding);
         }
 
-        let container = match old_binding.parent_module.expect("invariant: binding has parent module").kind {
+        let container = match old_binding.parent_module.unwrap().kind {
             // Avoid using TyCtxt::def_kind_descr in the resolver, because it
             // indirectly *calls* the resolver, and would cause a query cycle.
             ModuleKind::Def(kind, def_id, _) => kind.descr(def_id),
@@ -367,7 +367,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         import: Import<'_>,
         binding_span: Span,
     ) {
-        let suggested_name = if name.as_str().chars().next().expect("invariant: iterator is non-empty").is_uppercase() {
+        let suggested_name = if name.as_str().chars().next().unwrap().is_uppercase() {
             format!("Other{name}")
         } else {
             format!("other_{name}")
@@ -611,7 +611,6 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                         def_id
                     }
                     _ => {
-                    // tRust: invariant — GenericParamsFromOuterItem rib only stores SelfTyParam, SelfTyAlias, TyParam, or ConstParam
                         bug!(
                             "GenericParamsFromOuterItem should only be used with \
                             Res::SelfTyParam, Res::SelfTyAlias, DefKind::TyParam or \
@@ -1391,7 +1390,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                     // create the path
                     let mut segms = if lookup_ident.span.at_least_rust_2018() {
                         // crate-local absolute paths start with `crate::` in edition 2018
-                        // NOTE: may also be stabilized for Rust 2015 (Issues #45477, #44660)
+                        // FIXME: may also be stabilized for Rust 2015 (Issues #45477, #44660)
                         crate_path.clone()
                     } else {
                         ThinVec::new()
@@ -1795,7 +1794,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
     ) {
         // Find all of the `derive`s in scope and collect their corresponding declared
         // attributes.
-        // NOTE: this only works if the crate that owns the macro that has the helper_attr
+        // FIXME: this only works if the crate that owns the macro that has the helper_attr
         // has already been imported.
         let mut derives = vec![];
         let mut all_attrs: UnordMap<Symbol, Vec<_>> = UnordMap::default();
@@ -2366,7 +2365,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         if struct_expr.fields.is_empty() {
             return;
         }
-        let last_span = struct_expr.fields.iter().last().expect("invariant: non-empty collection").span;
+        let last_span = struct_expr.fields.iter().last().unwrap().span;
         let mut iter = struct_expr.fields.iter().peekable();
         let mut prev: Option<Span> = None;
         while let Some(field) = iter.next() {
@@ -2643,7 +2642,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                 // }
                 // ```
                 Some(LateDecl::RibDef(Res::Local(id))) => {
-                    Some((*self.pat_span_map.get(&id).expect("invariant: index/key is valid"), "a", "local binding"))
+                    Some((*self.pat_span_map.get(&id).unwrap(), "a", "local binding"))
                 }
                 // Name matches item from a local name binding
                 // created by `use` declaration. For example:
@@ -2761,7 +2760,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
 
         let src = map.span_to_filename(ident.span).into_local_path()?;
         let i = ident.as_str();
-        // NOTE: add case where non parent using undeclared module
+        // FIXME: add case where non parent using undeclared module (hard?)
         let dir = src.parent()?;
         let src = src.file_stem()?.to_str()?;
         for file in [
@@ -3235,8 +3234,8 @@ fn extend_span_to_previous_binding(sess: &Session, binding_span: Span) -> Option
         return None;
     }
 
-    let prev_comma = prev_comma.first().expect("invariant: non-empty collection");
-    let prev_starting_brace = prev_starting_brace.first().expect("invariant: non-empty collection");
+    let prev_comma = prev_comma.first().unwrap();
+    let prev_starting_brace = prev_starting_brace.first().unwrap();
 
     // If the amount of source code before the comma is greater than
     // the amount of source code before the starting brace then we've only

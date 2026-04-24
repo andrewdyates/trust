@@ -241,7 +241,7 @@ impl<'a> Parser<'a> {
     ) -> PResult<'a, FnRetTy> {
         let lo = self.prev_token.span;
         Ok(if self.eat(exp!(RArrow)) {
-            // tRust: known issue —(Centril): Can we unconditionally `allow_plus`?
+            // FIXME(Centril): Can we unconditionally `allow_plus`?
             let ty = self.parse_ty_common(
                 allow_plus,
                 AllowCVariadic::No,
@@ -287,7 +287,7 @@ impl<'a> Parser<'a> {
         if self.token == token::Pound && self.look_ahead(1, |t| *t == token::OpenBracket) {
             let attrs_wrapper = self.parse_outer_attributes()?;
             let raw_attrs = attrs_wrapper.take_for_recovery(self.psess);
-            let attr_span = raw_attrs[0].span.to(raw_attrs.last().expect("invariant: collection is non-empty").span); // tRust: unwrap -> expect
+            let attr_span = raw_attrs[0].span.to(raw_attrs.last().unwrap().span);
             let (full_span, guar) = match self.parse_ty() {
                 Ok(ty) => {
                     let full_span = attr_span.until(ty.span);
@@ -354,7 +354,7 @@ impl<'a> Parser<'a> {
                 if self.may_recover()
                     && (self.eat_keyword_noexpect(kw::Impl) || self.eat_keyword_noexpect(kw::Dyn))
                 {
-                    let kw = self.prev_token.ident().expect("invariant: token is an identifier").0; // tRust: unwrap -> expect
+                    let kw = self.prev_token.ident().unwrap().0;
                     let removal_span = kw.span.with_hi(self.token.span.lo());
                     let path = self.parse_path(PathStyle::Type)?;
                     let parse_plus = allow_plus == AllowPlus::Yes && self.check_plus();
@@ -420,7 +420,7 @@ impl<'a> Parser<'a> {
             match allow_c_variadic {
                 AllowCVariadic::Yes => TyKind::CVarArgs,
                 AllowCVariadic::No => {
-                    // tRust: known issue —(c_variadic): Should we just allow `...` syntactically
+                    // FIXME(c_variadic): Should we just allow `...` syntactically
                     // anywhere in a type and use semantic restrictions instead?
                     // NOTE: This may regress certain MBE calls if done incorrectly.
                     let guar = self.dcx().emit_err(NestedCVariadicType { span: lo });
@@ -477,7 +477,7 @@ impl<'a> Parser<'a> {
         })?;
 
         if ts.len() == 1 && matches!(trailing, Trailing::No) {
-            let ty = ts.into_iter().next().expect("invariant: collection has at least one element"); // tRust: unwrap -> expect
+            let ty = ts.into_iter().next().unwrap();
             let maybe_bounds = allow_plus == AllowPlus::Yes && self.token.is_like_plus();
             match ty.kind {
                 // `"(" BareTraitBound ")" "+" Bound "+" ...`.
@@ -702,7 +702,7 @@ impl<'a> Parser<'a> {
         _ = self.eat(exp!(Comma)) || self.eat(exp!(Colon)) || self.eat(exp!(Star));
         let suggestion_span = self.prev_token.span.with_lo(hi);
 
-        // tRust: known issue —(mgca): recovery is broken for `const {` args
+        // FIXME(mgca): recovery is broken for `const {` args
         // we first try to parse pattern like `[u8 5]`
         let length = match self.parse_expr_anon_const(|_, _| MgcaDisambiguation::Direct) {
             Ok(length) => length,
@@ -781,7 +781,7 @@ impl<'a> Parser<'a> {
         if self.token.is_ident_named(sym::pin) && self.look_ahead(1, Token::is_mutability) {
             self.psess.gated_spans.gate(sym::pin_ergonomics, self.token.span);
             assert!(self.eat_keyword(exp!(Pin)));
-            let mutbl = self.parse_const_or_mut().expect("invariant: token is const or mut"); // tRust: unwrap -> expect
+            let mutbl = self.parse_const_or_mut().unwrap();
             (Pinnedness::Pinned, mutbl)
         } else {
             (Pinnedness::Not, self.parse_mutability())
@@ -979,7 +979,7 @@ impl<'a> Parser<'a> {
                 if self_.check_keyword(exp!(SelfUpper)) {
                     self_.bump();
                     Ok(PreciseCapturingArg::Arg(
-                        ast::Path::from_ident(self_.prev_token.ident().expect("invariant: token is an identifier").0), // tRust: unwrap -> expect
+                        ast::Path::from_ident(self_.prev_token.ident().unwrap().0),
                         DUMMY_NODE_ID,
                     ))
                 } else if self_.check_ident() {
@@ -1279,7 +1279,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_bound_constness(&mut self) -> PResult<'a, BoundConstness> {
-        // tRust: known issue —(const_trait_impl): remove `~const` parser support once bootstrap has the new syntax
+        // FIXME(const_trait_impl): remove `~const` parser support once bootstrap has the new syntax
         // in rustfmt
         Ok(if self.eat(exp!(Tilde)) {
             let tilde = self.prev_token.span;
@@ -1290,7 +1290,7 @@ impl<'a> Parser<'a> {
         } else if self.can_begin_maybe_const_bound() {
             let start = self.token.span;
             self.bump();
-            self.expect_keyword(exp!(Const)).expect("invariant: keyword is present"); // tRust: unwrap -> expect
+            self.expect_keyword(exp!(Const)).unwrap();
             self.bump();
             let span = start.to(self.prev_token.span);
             self.psess.gated_spans.gate(sym::const_trait_impl, span);
@@ -1496,7 +1496,7 @@ impl<'a> Parser<'a> {
         fn_path: &mut ast::Path,
         lifetime_defs: &mut ThinVec<GenericParam>,
     ) -> PResult<'a, ()> {
-        let fn_path_segment = fn_path.segments.last_mut().expect("invariant: collection is non-empty"); // tRust: unwrap -> expect
+        let fn_path_segment = fn_path.segments.last_mut().unwrap();
         let generic_args = if let Some(p_args) = &fn_path_segment.args {
             *p_args.clone()
         } else {

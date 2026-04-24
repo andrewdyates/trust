@@ -107,10 +107,7 @@ impl WitnessValidator {
 
         if !missing.is_empty() {
             return WitnessValidation::Inconclusive {
-                reason: format!(
-                    "missing assignments for free variables: {}",
-                    missing.join(", ")
-                ),
+                reason: format!("missing assignments for free variables: {}", missing.join(", ")),
             };
         }
 
@@ -124,10 +121,7 @@ impl WitnessValidator {
                 reason: "formula evaluates to false under the given assignments".to_string(),
             },
             _ => WitnessValidation::Inconclusive {
-                reason: format!(
-                    "formula did not reduce to a boolean: {}",
-                    evaluated.to_smtlib()
-                ),
+                reason: format!("formula did not reduce to a boolean: {}", evaluated.to_smtlib()),
             },
         }
     }
@@ -155,10 +149,7 @@ impl WitnessValidator {
 
         if !missing.is_empty() {
             return WitnessValidation::Inconclusive {
-                reason: format!(
-                    "missing assignments for free variables: {}",
-                    missing.join(", ")
-                ),
+                reason: format!("missing assignments for free variables: {}", missing.join(", ")),
             };
         }
 
@@ -171,10 +162,7 @@ impl WitnessValidator {
                 reason: "formula evaluates to false under the given assignments".to_string(),
             },
             _ => WitnessValidation::Inconclusive {
-                reason: format!(
-                    "formula did not reduce to a boolean: {}",
-                    evaluated.to_smtlib()
-                ),
+                reason: format!("formula did not reduce to a boolean: {}", evaluated.to_smtlib()),
             },
         }
     }
@@ -192,12 +180,12 @@ fn const_value_to_formula(val: &ConstValue) -> Formula {
         ConstValue::Float(_f) => {
             // tRust #478: Floats are not precisely representable in our integer
             // formula domain. Return an opaque variable to force Inconclusive.
-            Formula::Var("__float_witness".to_string(), Sort::BitVec(64))
+            Formula::Var("__float_witness".into(), Sort::BitVec(64))
         }
         ConstValue::Unit => Formula::Int(0),
         // tRust #478: ConstValue is #[non_exhaustive]; unknown variants produce
         // an unconstrained symbolic variable (sound: forces Inconclusive).
-        _ => Formula::Var("__unknown_witness".to_string(), Sort::Int),
+        _ => Formula::Var("__unknown_witness".into(), Sort::Int),
     }
 }
 
@@ -215,14 +203,14 @@ fn substitute(formula: &Formula, env: &FxHashMap<String, Formula>) -> Formula {
         Formula::Forall(bindings, body) => {
             let mut inner_env = env.clone();
             for (name, _) in bindings {
-                inner_env.remove(name);
+                inner_env.remove(name.as_str());
             }
             Formula::Forall(bindings.clone(), Box::new(substitute(body, &inner_env)))
         }
         Formula::Exists(bindings, body) => {
             let mut inner_env = env.clone();
             for (name, _) in bindings {
-                inner_env.remove(name);
+                inner_env.remove(name.as_str());
             }
             Formula::Exists(bindings.clone(), Box::new(substitute(body, &inner_env)))
         }
@@ -337,10 +325,9 @@ fn evaluate(formula: &Formula) -> Formula {
         Formula::Neg(inner) => {
             let v = evaluate(inner);
             match v {
-                Formula::Int(n) => n.checked_neg().map_or(
-                    Formula::Neg(Box::new(Formula::Int(n))),
-                    Formula::Int,
-                ),
+                Formula::Int(n) => {
+                    n.checked_neg().map_or(Formula::Neg(Box::new(Formula::Int(n))), Formula::Int)
+                }
                 other => Formula::Neg(Box::new(other)),
             }
         }
@@ -385,11 +372,7 @@ fn eval_int_cmp(lhs: &Formula, rhs: &Formula, cmp: fn(i128, i128) -> bool) -> Fo
 }
 
 // tRust #478: Helper for integer binary operation evaluation.
-fn eval_int_binop(
-    lhs: &Formula,
-    rhs: &Formula,
-    op: fn(i128, i128) -> Option<i128>,
-) -> Formula {
+fn eval_int_binop(lhs: &Formula, rhs: &Formula, op: fn(i128, i128) -> Option<i128>) -> Formula {
     let l = evaluate(lhs);
     let r = evaluate(rhs);
     match (&l, &r) {
@@ -409,7 +392,7 @@ mod tests {
     fn make_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -475,10 +458,8 @@ mod tests {
             Formula::Eq(Box::new(int_var("y")), Box::new(Formula::Int(20))),
         ]);
         let vc = make_vc(formula);
-        let assignments = vec![
-            ("x".to_string(), ConstValue::Int(10)),
-            ("y".to_string(), ConstValue::Int(20)),
-        ];
+        let assignments =
+            vec![("x".to_string(), ConstValue::Int(10)), ("y".to_string(), ConstValue::Int(20))];
         let result = validator.validate_witness(&vc, &assignments);
         assert!(result.is_valid(), "both equalities hold");
     }
@@ -494,10 +475,8 @@ mod tests {
             Formula::Eq(Box::new(int_var("y")), Box::new(Formula::Int(20))),
         ]);
         let vc = make_vc(formula);
-        let assignments = vec![
-            ("x".to_string(), ConstValue::Int(10)),
-            ("y".to_string(), ConstValue::Int(99)),
-        ];
+        let assignments =
+            vec![("x".to_string(), ConstValue::Int(10)), ("y".to_string(), ConstValue::Int(99))];
         let result = validator.validate_witness(&vc, &assignments);
         assert!(result.is_invalid(), "y=99 fails y==20");
     }
@@ -513,10 +492,8 @@ mod tests {
             Formula::Eq(Box::new(int_var("y")), Box::new(Formula::Int(20))),
         ]);
         let vc = make_vc(formula);
-        let assignments = vec![
-            ("x".to_string(), ConstValue::Int(10)),
-            ("y".to_string(), ConstValue::Int(0)),
-        ];
+        let assignments =
+            vec![("x".to_string(), ConstValue::Int(10)), ("y".to_string(), ConstValue::Int(0))];
         let result = validator.validate_witness(&vc, &assignments);
         assert!(result.is_valid(), "x=10 satisfies first disjunct");
     }
@@ -528,23 +505,15 @@ mod tests {
     fn test_validate_witness_not_negation() {
         let validator = WitnessValidator::new();
         // Formula: NOT(x == 5)
-        let formula = Formula::Not(Box::new(Formula::Eq(
-            Box::new(int_var("x")),
-            Box::new(Formula::Int(5)),
-        )));
+        let formula =
+            Formula::Not(Box::new(Formula::Eq(Box::new(int_var("x")), Box::new(Formula::Int(5)))));
         let vc = make_vc(formula);
         // x=5: NOT(true) = false => Invalid
-        let result = validator.validate_witness(
-            &vc,
-            &[("x".to_string(), ConstValue::Int(5))],
-        );
+        let result = validator.validate_witness(&vc, &[("x".to_string(), ConstValue::Int(5))]);
         assert!(result.is_invalid());
 
         // x=3: NOT(false) = true => Valid
-        let result = validator.validate_witness(
-            &vc,
-            &[("x".to_string(), ConstValue::Int(3))],
-        );
+        let result = validator.validate_witness(&vc, &[("x".to_string(), ConstValue::Int(3))]);
         assert!(result.is_valid());
     }
 
@@ -564,20 +533,14 @@ mod tests {
         // x=3, y=7 => (3+7)==10 => true
         let result = validator.validate_witness(
             &vc,
-            &[
-                ("x".to_string(), ConstValue::Int(3)),
-                ("y".to_string(), ConstValue::Int(7)),
-            ],
+            &[("x".to_string(), ConstValue::Int(3)), ("y".to_string(), ConstValue::Int(7))],
         );
         assert!(result.is_valid());
 
         // x=3, y=8 => (3+8)==10 => false
         let result = validator.validate_witness(
             &vc,
-            &[
-                ("x".to_string(), ConstValue::Int(3)),
-                ("y".to_string(), ConstValue::Int(8)),
-            ],
+            &[("x".to_string(), ConstValue::Int(3)), ("y".to_string(), ConstValue::Int(8))],
         );
         assert!(result.is_invalid());
     }
@@ -598,20 +561,14 @@ mod tests {
         // x=-1: antecedent false => implication true
         let result = validator.validate_witness(
             &vc,
-            &[
-                ("x".to_string(), ConstValue::Int(-1)),
-                ("y".to_string(), ConstValue::Int(-5)),
-            ],
+            &[("x".to_string(), ConstValue::Int(-1)), ("y".to_string(), ConstValue::Int(-5))],
         );
         assert!(result.is_valid());
 
         // x=1, y=1: both true => true
         let result = validator.validate_witness(
             &vc,
-            &[
-                ("x".to_string(), ConstValue::Int(1)),
-                ("y".to_string(), ConstValue::Int(1)),
-            ],
+            &[("x".to_string(), ConstValue::Int(1)), ("y".to_string(), ConstValue::Int(1))],
         );
         assert!(result.is_valid());
     }
@@ -625,7 +582,7 @@ mod tests {
         // Formula: ite(flag, x, y) == 42
         let formula = Formula::Eq(
             Box::new(Formula::Ite(
-                Box::new(Formula::Var("flag".to_string(), Sort::Bool)),
+                Box::new(Formula::Var("flag".into(), Sort::Bool)),
                 Box::new(int_var("x")),
                 Box::new(int_var("y")),
             )),
@@ -709,11 +666,7 @@ mod tests {
         // Float cannot be precisely represented => Inconclusive
         let assignments = vec![("f".to_string(), ConstValue::Float(3.125))];
         let result = validator.validate_witness(&vc, &assignments);
-        assert!(
-            result.is_inconclusive(),
-            "float witness should be Inconclusive, got {:?}",
-            result
-        );
+        assert!(result.is_inconclusive(), "float witness should be Inconclusive, got {:?}", result);
     }
 
     // -----------------------------------------------------------------------
@@ -758,10 +711,8 @@ mod tests {
             )),
         );
         let vc = make_vc(formula);
-        let assignments = vec![
-            ("x".to_string(), ConstValue::Int(3)),
-            ("y".to_string(), ConstValue::Int(7)),
-        ];
+        let assignments =
+            vec![("x".to_string(), ConstValue::Int(3)), ("y".to_string(), ConstValue::Int(7))];
         let result = validator.validate_witness(&vc, &assignments);
         assert!(result.is_valid(), "(3>0 AND 7>0) => (10>0) should be valid");
     }
@@ -775,18 +726,14 @@ mod tests {
 
         // x <= 5 with x=5 => true
         let formula_le = Formula::Le(Box::new(int_var("x")), Box::new(Formula::Int(5)));
-        let result = validator.validate_formula(
-            &formula_le,
-            &[("x".to_string(), ConstValue::Int(5))],
-        );
+        let result =
+            validator.validate_formula(&formula_le, &[("x".to_string(), ConstValue::Int(5))]);
         assert!(result.is_valid(), "5 <= 5 should be valid");
 
         // x >= 5 with x=3 => false
         let formula_ge = Formula::Ge(Box::new(int_var("x")), Box::new(Formula::Int(5)));
-        let result = validator.validate_formula(
-            &formula_ge,
-            &[("x".to_string(), ConstValue::Int(3))],
-        );
+        let result =
+            validator.validate_formula(&formula_ge, &[("x".to_string(), ConstValue::Int(3))]);
         assert!(result.is_invalid(), "3 >= 5 should be invalid");
     }
 
@@ -804,10 +751,7 @@ mod tests {
         );
         let result = validator.validate_formula(
             &formula,
-            &[
-                ("x".to_string(), ConstValue::Int(15)),
-                ("y".to_string(), ConstValue::Int(3)),
-            ],
+            &[("x".to_string(), ConstValue::Int(15)), ("y".to_string(), ConstValue::Int(3))],
         );
         assert!(result.is_valid(), "15/3 == 5 should be valid");
 
@@ -818,10 +762,7 @@ mod tests {
         );
         let result = validator.validate_formula(
             &formula_rem,
-            &[
-                ("x".to_string(), ConstValue::Int(7)),
-                ("y".to_string(), ConstValue::Int(3)),
-            ],
+            &[("x".to_string(), ConstValue::Int(7)), ("y".to_string(), ConstValue::Int(3))],
         );
         assert!(result.is_valid(), "7 % 3 == 1 should be valid");
     }
@@ -833,14 +774,9 @@ mod tests {
     fn test_validate_witness_negation() {
         let validator = WitnessValidator::new();
         // (-x) == -5 with x=5 => true
-        let formula = Formula::Eq(
-            Box::new(Formula::Neg(Box::new(int_var("x")))),
-            Box::new(Formula::Int(-5)),
-        );
-        let result = validator.validate_formula(
-            &formula,
-            &[("x".to_string(), ConstValue::Int(5))],
-        );
+        let formula =
+            Formula::Eq(Box::new(Formula::Neg(Box::new(int_var("x")))), Box::new(Formula::Int(-5)));
+        let result = validator.validate_formula(&formula, &[("x".to_string(), ConstValue::Int(5))]);
         assert!(result.is_valid(), "-5 == -5 should be valid");
     }
 
@@ -856,10 +792,7 @@ mod tests {
         ]);
         let vc = make_vc(formula);
         // x=99 => neither disjunct holds => false
-        let result = validator.validate_witness(
-            &vc,
-            &[("x".to_string(), ConstValue::Int(99))],
-        );
+        let result = validator.validate_witness(&vc, &[("x".to_string(), ConstValue::Int(99))]);
         assert!(result.is_invalid(), "x=99 satisfies neither disjunct");
     }
 
@@ -897,10 +830,7 @@ mod tests {
         );
         let result = validator.validate_formula(
             &formula,
-            &[
-                ("x".to_string(), ConstValue::Int(10)),
-                ("y".to_string(), ConstValue::Int(7)),
-            ],
+            &[("x".to_string(), ConstValue::Int(10)), ("y".to_string(), ConstValue::Int(7))],
         );
         assert!(result.is_valid(), "10 - 7 == 3");
     }
@@ -918,10 +848,7 @@ mod tests {
         );
         let result = validator.validate_formula(
             &formula,
-            &[
-                ("x".to_string(), ConstValue::Int(6)),
-                ("y".to_string(), ConstValue::Int(7)),
-            ],
+            &[("x".to_string(), ConstValue::Int(6)), ("y".to_string(), ConstValue::Int(7))],
         );
         assert!(result.is_valid(), "6 * 7 == 42");
     }

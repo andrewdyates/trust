@@ -46,7 +46,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
         match c.kind() {
             ty::ConstKind::Unevaluated(uv) => convert.unevaluated_to_pat(uv, ty),
             ty::ConstKind::Value(value) => convert.valtree_to_pat(value),
-            // tRust: invariant — constant patterns are lowered only from type-system constants that are either unevaluated or already materialized as valtrees.
             _ => span_bug!(span, "Invalid `ConstKind` for `const_to_pat`: {:?}", c),
         }
     }
@@ -99,7 +98,7 @@ impl<'tcx> ConstToPat<'tcx> {
         // during typeck and not doing so has a lot of (undesirable) fallout (#101478, #119821).
         // As a result we always use a revealed env when resolving the instance to evaluate.
         //
-        // tRust: known issue — `const_eval_resolve_for_typeck` should probably just modify the env itself
+        // FIXME: `const_eval_resolve_for_typeck` should probably just modify the env itself
         // instead of having this logic here
         let typing_env = self
             .tcx
@@ -316,7 +315,7 @@ impl<'tcx> ConstToPat<'tcx> {
                 return self.mk_err(tcx.dcx().create_err(err), ty);
             }
             ty::Adt(adt_def, args) if adt_def.is_enum() => {
-                let (&variant_index, fields) = valtree.to_branch().split_first().expect("invariant: slice is non-empty"); // tRust: unwrap -> expect
+                let (&variant_index, fields) = valtree.to_branch().split_first().unwrap();
                 let variant_index = VariantIdx::from_u32(variant_index.to_leaf().to_u32());
                 PatKind::Variant {
                     adt_def: *adt_def,

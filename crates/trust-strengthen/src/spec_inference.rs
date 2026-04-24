@@ -51,51 +51,27 @@ pub struct StrengtheningProposal {
 #[must_use]
 pub fn infer_specs(vc: &VerificationCondition) -> Vec<StrengtheningProposal> {
     let target = InsertionTarget {
-        function_path: vc.function.clone(),
-        function_name: short_name(&vc.function),
-        file: if vc.location.file.is_empty() {
-            None
-        } else {
-            Some(vc.location.file.clone())
-        },
-        line: if vc.location.line_start == 0 {
-            None
-        } else {
-            Some(vc.location.line_start)
-        },
+        function_path: vc.function.as_str().to_string(),
+        function_name: short_name(vc.function.as_str()),
+        file: if vc.location.file.is_empty() { None } else { Some(vc.location.file.clone()) },
+        line: if vc.location.line_start == 0 { None } else { Some(vc.location.line_start) },
     };
 
     let mut proposals = match &vc.kind {
         VcKind::ArithmeticOverflow { op, operand_tys } => {
             infer_arithmetic_overflow(&target, op, operand_tys)
         }
-        VcKind::DivisionByZero | VcKind::RemainderByZero => {
-            infer_division_by_zero(&target)
-        }
-        VcKind::IndexOutOfBounds | VcKind::SliceBoundsCheck => {
-            infer_index_out_of_bounds(&target)
-        }
-        VcKind::NegationOverflow { ty } => {
-            infer_negation_overflow(&target, ty)
-        }
-        VcKind::CastOverflow { from_ty, to_ty } => {
-            infer_cast_overflow(&target, from_ty, to_ty)
-        }
+        VcKind::DivisionByZero | VcKind::RemainderByZero => infer_division_by_zero(&target),
+        VcKind::IndexOutOfBounds | VcKind::SliceBoundsCheck => infer_index_out_of_bounds(&target),
+        VcKind::NegationOverflow { ty } => infer_negation_overflow(&target, ty),
+        VcKind::CastOverflow { from_ty, to_ty } => infer_cast_overflow(&target, from_ty, to_ty),
         VcKind::ShiftOverflow { op: _, operand_ty, shift_ty: _ } => {
             infer_shift_overflow(&target, operand_ty)
         }
-        VcKind::Assertion { message } => {
-            infer_assertion_failure(&target, message)
-        }
-        VcKind::Precondition { callee } => {
-            infer_precondition_violation(&target, callee)
-        }
-        VcKind::Postcondition => {
-            infer_postcondition_violation(&target)
-        }
-        VcKind::Unreachable => {
-            infer_unreachable(&target)
-        }
+        VcKind::Assertion { message } => infer_assertion_failure(&target, message),
+        VcKind::Precondition { callee } => infer_precondition_violation(&target, callee),
+        VcKind::Postcondition => infer_postcondition_violation(&target),
+        VcKind::Unreachable => infer_unreachable(&target),
         _ => {
             // For VcKinds without specialized generators (temporal, neural, etc.),
             // produce a generic low-confidence proposal.
@@ -105,9 +81,7 @@ pub fn infer_specs(vc: &VerificationCondition) -> Vec<StrengtheningProposal> {
 
     // Sort by confidence descending
     proposals.sort_by(|a, b| {
-        b.confidence
-            .partial_cmp(&a.confidence)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
     });
 
     proposals
@@ -171,13 +145,15 @@ fn infer_arithmetic_overflow(
         BinOp::Add => "checked_add",
         BinOp::Sub => "checked_sub",
         BinOp::Mul => "checked_mul",
-        _ => return vec![make_proposal(
-            target,
-            &format!("#[requires(\"{op_name} does not overflow\")]"),
-            0.6,
-            &format!("ArithmeticOverflow::{op_name}"),
-            &format!("Arithmetic {op_name} can overflow"),
-        )],
+        _ => {
+            return vec![make_proposal(
+                target,
+                &format!("#[requires(\"{op_name} does not overflow\")]"),
+                0.6,
+                &format!("ArithmeticOverflow::{op_name}"),
+                &format!("Arithmetic {op_name} can overflow"),
+            )];
+        }
     };
 
     vec![
@@ -312,10 +288,7 @@ fn infer_shift_overflow(
     ]
 }
 
-fn infer_assertion_failure(
-    target: &InsertionTarget,
-    message: &str,
-) -> Vec<StrengtheningProposal> {
+fn infer_assertion_failure(target: &InsertionTarget, message: &str) -> Vec<StrengtheningProposal> {
     vec![
         make_proposal(
             target,
@@ -343,15 +316,11 @@ fn infer_precondition_violation(
         &format!("#[requires(\"satisfies {callee} precondition\")]"),
         0.70,
         "Precondition",
-        &format!(
-            "Call to {callee} violates its precondition -- propagate requirement to caller"
-        ),
+        &format!("Call to {callee} violates its precondition -- propagate requirement to caller"),
     )]
 }
 
-fn infer_postcondition_violation(
-    target: &InsertionTarget,
-) -> Vec<StrengtheningProposal> {
+fn infer_postcondition_violation(target: &InsertionTarget) -> Vec<StrengtheningProposal> {
     vec![
         make_proposal(
             target,
@@ -380,10 +349,7 @@ fn infer_unreachable(target: &InsertionTarget) -> Vec<StrengtheningProposal> {
     )]
 }
 
-fn infer_unknown(
-    target: &InsertionTarget,
-    vc_kind: &VcKind,
-) -> Vec<StrengtheningProposal> {
+fn infer_unknown(target: &InsertionTarget, vc_kind: &VcKind) -> Vec<StrengtheningProposal> {
     vec![make_proposal(
         target,
         "// PLACEHOLDER: investigate failure and add appropriate precondition",
@@ -442,20 +408,14 @@ pub fn infer_null_deref(
                 &format!("#[requires(\"{param_name}.is_some()\")]"),
                 0.90,
                 "NullPointerDeref",
-                &format!(
-                    "Option `{param_name}` may be None -- require is_some() precondition"
-                ),
+                &format!("Option `{param_name}` may be None -- require is_some() precondition"),
             ),
             make_proposal(
                 &target,
-                &format!(
-                    "// Use {param_name}.unwrap_or_default() or match instead of unwrap()"
-                ),
+                &format!("// Use {param_name}.unwrap_or_default() or match instead of unwrap()"),
                 0.75,
                 "NullPointerDeref",
-                &format!(
-                    "Replace `{param_name}.unwrap()` with safe alternative"
-                ),
+                &format!("Replace `{param_name}.unwrap()` with safe alternative"),
             ),
         ]
     }
@@ -512,9 +472,7 @@ pub fn infer_binary_search_specs(
             &format!("#[requires(\"!{slice_param}.is_empty()\")]"),
             0.90,
             "BinarySearchPrecondition",
-            &format!(
-                "Binary search requires `{slice_param}` to be non-empty"
-            ),
+            &format!("Binary search requires `{slice_param}` to be non-empty"),
         ),
         // Correctness postcondition: found element matches target
         make_proposal(
@@ -524,9 +482,7 @@ pub fn infer_binary_search_specs(
             ),
             0.90,
             "BinarySearchPostcondition",
-            &format!(
-                "If binary search returns Some(i), then `{slice_param}[i] == {target_param}`"
-            ),
+            &format!("If binary search returns Some(i), then `{slice_param}[i] == {target_param}`"),
         ),
         // Completeness postcondition: not found means absent
         make_proposal(
@@ -573,11 +529,7 @@ fn ty_to_rust_name(ty: &trust_types::Ty) -> String {
         trust_types::Ty::Int { width, signed } => {
             let prefix = if *signed { "i" } else { "u" };
             // width == 0 means pointer-width (usize/isize)
-            if *width == 0 {
-                format!("{prefix}size")
-            } else {
-                format!("{prefix}{width}")
-            }
+            if *width == 0 { format!("{prefix}size") } else { format!("{prefix}{width}") }
         }
         trust_types::Ty::Float { width } => format!("f{width}"),
         trust_types::Ty::Bool => "bool".to_string(),
@@ -588,8 +540,9 @@ fn ty_to_rust_name(ty: &trust_types::Ty) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{Formula, SourceSpan, Ty};
+
+    use super::*;
 
     fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
         VerificationCondition {
@@ -763,9 +716,7 @@ mod tests {
     #[test]
     fn test_negation_overflow_proposals() {
         let vc = make_vc(
-            VcKind::NegationOverflow {
-                ty: Ty::Int { width: 64, signed: true },
-            },
+            VcKind::NegationOverflow { ty: Ty::Int { width: 64, signed: true } },
             "math::negate",
         );
 
@@ -811,12 +762,7 @@ mod tests {
 
     #[test]
     fn test_assertion_failure_proposals() {
-        let vc = make_vc(
-            VcKind::Assertion {
-                message: "x > 0".into(),
-            },
-            "validate::check_positive",
-        );
+        let vc = make_vc(VcKind::Assertion { message: "x > 0".into() }, "validate::check_positive");
 
         let proposals = infer_specs(&vc);
         assert_eq!(proposals.len(), 2);
@@ -828,12 +774,7 @@ mod tests {
 
     #[test]
     fn test_precondition_violation_proposals() {
-        let vc = make_vc(
-            VcKind::Precondition {
-                callee: "safe_divide".into(),
-            },
-            "compute::process",
-        );
+        let vc = make_vc(VcKind::Precondition { callee: "safe_divide".into() }, "compute::process");
 
         let proposals = infer_specs(&vc);
         assert_eq!(proposals.len(), 1);
@@ -883,20 +824,12 @@ mod tests {
 
         let proposals = infer_specs(&vc);
         assert_eq!(proposals[0].target.function_name, "my_func");
-        assert_eq!(
-            proposals[0].target.function_path,
-            "crate::module::submod::my_func"
-        );
+        assert_eq!(proposals[0].target.function_path, "crate::module::submod::my_func");
     }
 
     #[test]
     fn test_target_includes_location_when_available() {
-        let vc = make_vc_with_location(
-            VcKind::DivisionByZero,
-            "math::divide",
-            "src/math.rs",
-            42,
-        );
+        let vc = make_vc_with_location(VcKind::DivisionByZero, "math::divide", "src/math.rs", 42);
 
         let proposals = infer_specs(&vc);
         assert_eq!(proposals[0].target.file, Some("src/math.rs".into()));
@@ -945,9 +878,7 @@ mod tests {
             VcKind::RemainderByZero,
             VcKind::IndexOutOfBounds,
             VcKind::SliceBoundsCheck,
-            VcKind::NegationOverflow {
-                ty: Ty::Int { width: 64, signed: true },
-            },
+            VcKind::NegationOverflow { ty: Ty::Int { width: 64, signed: true } },
             VcKind::CastOverflow {
                 from_ty: Ty::Int { width: 64, signed: false },
                 to_ty: Ty::Int { width: 32, signed: false },
@@ -1056,7 +987,11 @@ mod tests {
         assert!(!proposals.is_empty());
 
         let top = &proposals[0];
-        assert!(top.spec_text.contains("y != 0"), "should name the concrete variable: {}", top.spec_text);
+        assert!(
+            top.spec_text.contains("y != 0"),
+            "should name the concrete variable: {}",
+            top.spec_text
+        );
         assert!(top.confidence >= 0.95);
     }
 
@@ -1110,9 +1045,7 @@ mod tests {
         use trust_types::CounterexampleValue;
 
         let vc = make_vc(VcKind::DivisionByZero, "f");
-        let cex = Counterexample::new(vec![
-            ("d".into(), CounterexampleValue::Int(0)),
-        ]);
+        let cex = Counterexample::new(vec![("d".into(), CounterexampleValue::Int(0))]);
 
         let cex_proposals = infer_specs_with_cex(&vc, &cex);
         let heuristic_proposals = infer_specs(&vc);

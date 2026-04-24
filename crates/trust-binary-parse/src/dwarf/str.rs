@@ -21,7 +21,8 @@ impl<'a> StringTable<'a> {
     /// Look up a null-terminated UTF-8 string at `offset`.
     pub fn get_string(&self, offset: usize) -> Result<&'a str, DwarfError> {
         let bytes = self.data.get(offset..).ok_or(DwarfError::UnexpectedEof { offset })?;
-        let end = bytes.iter().position(|byte| *byte == 0).ok_or(DwarfError::UnexpectedEof { offset })?;
+        let end =
+            bytes.iter().position(|byte| *byte == 0).ok_or(DwarfError::UnexpectedEof { offset })?;
         std::str::from_utf8(&bytes[..end]).map_err(|_| DwarfError::InvalidUnit)
     }
 }

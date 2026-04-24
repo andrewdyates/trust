@@ -175,7 +175,7 @@ fn flatten_format_args(mut fmt: Cow<'_, FormatArgs>) -> Cow<'_, FormatArgs> {
             let args = fmt.arguments.all_args_mut();
             let remaining_args = args.split_off(arg_index + 1);
             let old_arg_offset = args.len();
-            let mut fmt2 = &mut args.pop().expect("invariant: args is non-empty for nested format_args").expr; // tRust:; // The inner FormatArgs.
+            let mut fmt2 = &mut args.pop().unwrap().expr; // The inner FormatArgs.
             let fmt2 = loop {
                 // Unwrap the Expr to get to the FormatArgs.
                 match &mut fmt2.kind {
@@ -495,8 +495,6 @@ fn expand_format_args<'hir>(
     };
 
     // Generate:
-    // SAFETY: `bytecode` and `args` are built from the same `argmap`, so every
-    // placeholder and dynamic count in the template points at a valid argument.
     //     unsafe {
     //         <core::fmt::Arguments>::new(b"…", &args)
     //     }

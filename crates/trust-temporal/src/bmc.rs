@@ -12,8 +12,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashSet;
 use std::fmt;
+use trust_types::fx::FxHashSet;
 
 use crate::{StateId, StateMachine, Trace};
 use trust_types::fx::FxHashMap;
@@ -87,15 +87,6 @@ impl BmcResult {
         matches!(self, BmcResult::Unsafe { .. })
     }
 
-    /// The bound at which the result was determined.
-    #[must_use]
-    pub(crate) fn bound(&self) -> usize {
-        match self {
-            BmcResult::Safe { bound } => *bound,
-            BmcResult::Unsafe { depth, .. } => *depth,
-        }
-    }
-
     /// Extract the counterexample trace, if any.
     #[must_use]
     pub fn counterexample(&self) -> Option<&Trace> {
@@ -117,9 +108,10 @@ impl fmt::Display for BmcResult {
     }
 }
 
-/// Result of a completeness check.
+/// Result of a completeness check (test-only; not part of public API).
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CompletenessResult {
+struct CompletenessResult {
     /// Whether the bound K is sufficient to prove the property for all depths.
     pub is_complete: bool,
     /// The bound that was checked.
@@ -130,10 +122,11 @@ pub(crate) struct CompletenessResult {
     pub total_states: usize,
 }
 
+#[cfg(test)]
 impl CompletenessResult {
     /// Whether the bounded check proves the property for all depths.
     #[must_use]
-    pub(crate) fn proves_unbounded(&self) -> bool {
+    fn proves_unbounded(&self) -> bool {
         self.is_complete
     }
 }
@@ -145,8 +138,6 @@ impl CompletenessResult {
 /// logical formulas. Here we represent it structurally for model checking.
 #[derive(Debug, Clone)]
 pub(crate) struct UnrolledTransition {
-    /// The number of unrolling steps.
-    pub depth: usize,
     /// States reachable at each step. `steps[i]` is the set of states
     /// reachable in exactly `i` transitions from the initial state.
     pub steps: Vec<FxHashSet<StateId>>,
@@ -155,16 +146,17 @@ pub(crate) struct UnrolledTransition {
     pub(crate) parent: Vec<FxHashMap<StateId, StateId>>,
 }
 
+#[cfg(test)]
 impl UnrolledTransition {
     /// States reachable at exactly step `k`.
     #[must_use]
-    pub(crate) fn states_at_step(&self, k: usize) -> Option<&FxHashSet<StateId>> {
+    fn states_at_step(&self, k: usize) -> Option<&FxHashSet<StateId>> {
         self.steps.get(k)
     }
 
     /// Total number of distinct states reached across all steps.
     #[must_use]
-    pub(crate) fn total_reachable(&self) -> usize {
+    fn total_reachable(&self) -> usize {
         let mut all: FxHashSet<StateId> = FxHashSet::default();
         for step in &self.steps {
             all.extend(step);
@@ -197,10 +189,9 @@ impl<'a> BmcEngine<'a> {
     /// Returns the set of states reachable at each step, along with the
     /// parent map for counterexample reconstruction.
     #[must_use]
-    pub(crate) fn unroll_transition(&self, k: usize) -> UnrolledTransition {
+    fn unroll_transition(&self, k: usize) -> UnrolledTransition {
         let mut steps: Vec<FxHashSet<StateId>> = Vec::with_capacity(k + 1);
-        let mut parent: Vec<FxHashMap<StateId, StateId>> =
-            Vec::with_capacity(k + 1);
+        let mut parent: Vec<FxHashMap<StateId, StateId>> = Vec::with_capacity(k + 1);
 
         // Step 0: initial state
         let mut current = FxHashSet::default();
@@ -226,7 +217,7 @@ impl<'a> BmcEngine<'a> {
             parent.push(next_parent);
         }
 
-        UnrolledTransition { depth: k, steps, parent }
+        UnrolledTransition { steps, parent }
     }
 
     /// Check whether a safety property holds within K transitions.
@@ -240,10 +231,7 @@ impl<'a> BmcEngine<'a> {
         // Check each step for a violating state
         for (step_idx, step_states) in unrolled.steps.iter().enumerate() {
             for &state_id in step_states {
-                let satisfies = self
-                    .machine
-                    .state(state_id)
-                    .is_some_and(|s| property.holds_at(s));
+                let satisfies = self.machine.state(state_id).is_some_and(|s| property.holds_at(s));
 
                 if !satisfies {
                     let trace = self.reconstruct_trace(&unrolled, step_idx, state_id);
@@ -255,18 +243,58 @@ impl<'a> BmcEngine<'a> {
         BmcResult::Safe { bound: k }
     }
 
+    /// Reconstruct a counterexample trace from the unrolled transition.
+    fn reconstruct_trace(
+        &self,
+        unrolled: &UnrolledTransition,
+        step: usize,
+        target: StateId,
+    ) -> Trace {
+        let mut path = vec![target];
+        let mut current = target;
+
+        for s in (1..=step).rev() {
+            if let Some(&prev) = unrolled.parent[s].get(&current) {
+                path.push(prev);
+                current = prev;
+            } else {
+                break;
+            }
+        }
+
+        path.reverse();
+        Trace::new(path)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test-only helpers
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+impl BmcResult {
+    /// The bound at which the result was determined.
+    #[must_use]
+    fn bound(&self) -> usize {
+        match self {
+            BmcResult::Safe { bound } => *bound,
+            BmcResult::Unsafe { depth, .. } => *depth,
+        }
+    }
+}
+
+#[cfg(test)]
+impl<'a> BmcEngine<'a> {
     /// Iterative deepening: increment the bound from 0 to `max_k`,
     /// stopping at the first violation or when `max_k` is reached.
     #[must_use]
-    pub(crate) fn iterative_deepening(&self, property: &SafetyProperty, max_k: usize) -> BmcResult {
+    fn iterative_deepening(&self, property: &SafetyProperty, max_k: usize) -> BmcResult {
         for k in 0..=max_k {
             let result = self.check_bounded(property, k);
             if result.is_unsafe() {
                 return result;
             }
 
-            // Early termination: if completeness holds at this bound,
-            // we can prove safety for all depths.
             let completeness = self.completeness_check(k);
             if completeness.is_complete {
                 return BmcResult::Safe { bound: k };
@@ -278,22 +306,15 @@ impl<'a> BmcEngine<'a> {
 
     /// Completeness check: determines whether bound K is sufficient to prove
     /// safety for ALL depths (not just up to K).
-    ///
-    /// The check succeeds when the set of reachable states at step K is a
-    /// subset of states already seen at earlier steps. This means no new
-    /// states can be discovered by increasing the bound, so the bounded
-    /// result generalizes to unbounded safety.
     #[must_use]
-    pub(crate) fn completeness_check(&self, k: usize) -> CompletenessResult {
+    fn completeness_check(&self, k: usize) -> CompletenessResult {
         let unrolled = self.unroll_transition(k);
 
-        // Collect all states seen at steps 0..k-1
         let mut seen_before_k: FxHashSet<StateId> = FxHashSet::default();
         for step in unrolled.steps.iter().take(k) {
             seen_before_k.extend(step);
         }
 
-        // Check if step K introduces any new states
         let step_k = unrolled.steps.get(k).cloned().unwrap_or_default();
         let is_complete = step_k.is_subset(&seen_before_k);
 
@@ -304,12 +325,8 @@ impl<'a> BmcEngine<'a> {
     }
 
     /// Estimate the maximum useful bound (diameter) of the model.
-    ///
-    /// The diameter is the longest shortest path between any two reachable
-    /// states. Beyond the diameter, no new states can be discovered.
-    /// We estimate this by finding the depth at which BFS saturates.
     #[must_use]
-    pub(crate) fn diameter_bound(&self) -> usize {
+    fn diameter_bound(&self) -> usize {
         let mut seen = FxHashSet::default();
         let mut frontier: FxHashSet<StateId> = FxHashSet::default();
 
@@ -337,29 +354,6 @@ impl<'a> BmcEngine<'a> {
         }
 
         depth
-    }
-
-    /// Reconstruct a counterexample trace from the unrolled transition.
-    fn reconstruct_trace(
-        &self,
-        unrolled: &UnrolledTransition,
-        step: usize,
-        target: StateId,
-    ) -> Trace {
-        let mut path = vec![target];
-        let mut current = target;
-
-        for s in (1..=step).rev() {
-            if let Some(&prev) = unrolled.parent[s].get(&current) {
-                path.push(prev);
-                current = prev;
-            } else {
-                break;
-            }
-        }
-
-        path.reverse();
-        Trace::new(path)
     }
 }
 
@@ -437,7 +431,7 @@ mod tests {
         let engine = BmcEngine::new(&model);
         let unrolled = engine.unroll_transition(0);
 
-        assert_eq!(unrolled.depth, 0);
+        assert_eq!(unrolled.steps.len() - 1, 0);
         assert_eq!(unrolled.steps.len(), 1);
         assert!(unrolled.steps[0].contains(&StateId(0)));
     }
@@ -601,9 +595,8 @@ mod tests {
 
     #[test]
     fn test_diameter_single_state() {
-        let model = StateMachineBuilder::new(StateId(0))
-            .add_state(State::new(StateId(0), "lone"))
-            .build();
+        let model =
+            StateMachineBuilder::new(StateId(0)).add_state(State::new(StateId(0), "lone")).build();
         let engine = BmcEngine::new(&model);
         assert_eq!(engine.diameter_bound(), 0);
     }
@@ -620,10 +613,8 @@ mod tests {
 
     #[test]
     fn test_bmc_result_display_unsafe() {
-        let result = BmcResult::Unsafe {
-            trace: Trace::new(vec![StateId(0), StateId(1)]),
-            depth: 1,
-        };
+        let result =
+            BmcResult::Unsafe { trace: Trace::new(vec![StateId(0), StateId(1)]), depth: 1 };
         let s = result.to_string();
         assert!(s.contains("UNSAFE"));
         assert!(s.contains("depth 1"));

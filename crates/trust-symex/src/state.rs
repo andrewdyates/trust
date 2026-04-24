@@ -54,9 +54,7 @@ impl SymbolicValue {
             Self::Symbol(_) => false,
             Self::BinOp(l, _, r) => l.is_concrete() && r.is_concrete(),
             Self::Ite(c, t, e) => c.is_concrete() && t.is_concrete() && e.is_concrete(),
-            Self::Not(inner) | Self::BitwiseNot(inner) | Self::Neg(inner) => {
-                inner.is_concrete()
-            }
+            Self::Not(inner) | Self::BitwiseNot(inner) | Self::Neg(inner) => inner.is_concrete(),
         }
     }
 
@@ -110,9 +108,7 @@ impl SymbolicState {
 
     /// Look up a variable's symbolic value.
     pub fn get(&self, name: &str) -> Result<&SymbolicValue, SymexError> {
-        self.vars
-            .get(name)
-            .ok_or_else(|| SymexError::UndefinedVariable(name.to_owned()))
+        self.vars.get(name).ok_or_else(|| SymexError::UndefinedVariable(name.to_owned()))
     }
 
     /// Look up a variable, returning `None` if absent.
@@ -162,11 +158,7 @@ fn eval_inner(state: &SymbolicState, expr: &SymbolicValue) -> Option<i128> {
         }
         SymbolicValue::Ite(cond, then_val, else_val) => {
             let c = eval_inner(state, cond)?;
-            if c != 0 {
-                eval_inner(state, then_val)
-            } else {
-                eval_inner(state, else_val)
-            }
+            if c != 0 { eval_inner(state, then_val) } else { eval_inner(state, else_val) }
         }
         SymbolicValue::Not(inner) => {
             let v = eval_inner(state, inner)?;
@@ -221,7 +213,13 @@ fn eval_binop(l: i128, op: BinOp, r: i128) -> Option<i128> {
             Some(l.wrapping_shr(shift))
         }
         // tRust #383: Three-way comparison returns -1 (Less), 0 (Equal), or 1 (Greater).
-        BinOp::Cmp => Some(if l < r { -1 } else if l == r { 0 } else { 1 }),
+        BinOp::Cmp => Some(if l < r {
+            -1
+        } else if l == r {
+            0
+        } else {
+            1
+        }),
         _ => None, // Unhandled BinOp variant — return None to signal non-evaluability.
     }
 }
@@ -399,10 +397,8 @@ mod tests {
         state.set("x", SymbolicValue::Concrete(5));
         state.set("y", SymbolicValue::Symbol("sym_y".into()));
 
-        let mut bindings: Vec<_> = state
-            .iter()
-            .map(|(name, value)| (name.to_owned(), value.clone()))
-            .collect();
+        let mut bindings: Vec<_> =
+            state.iter().map(|(name, value)| (name.to_owned(), value.clone())).collect();
         bindings.sort_by(|lhs, rhs| lhs.0.cmp(&rhs.0));
 
         assert_eq!(

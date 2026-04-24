@@ -23,10 +23,7 @@ impl ConfidenceScore {
     /// Create a new confidence score, clamping value to [0.0, 1.0].
     #[must_use]
     pub fn new(value: f64, breakdown: ConfidenceBreakdown) -> Self {
-        Self {
-            value: value.clamp(0.0, 1.0),
-            breakdown,
-        }
+        Self { value: value.clamp(0.0, 1.0), breakdown }
     }
 }
 
@@ -189,10 +186,8 @@ impl ConfidenceEstimator {
             0.5 // neutral when no counterexamples available
         };
 
-        let historical_success = self
-            .calibration
-            .success_rate_for_kind(&proposal.kind)
-            .unwrap_or(0.5);
+        let historical_success =
+            self.calibration.success_rate_for_kind(&proposal.kind).unwrap_or(0.5);
 
         let breakdown = ConfidenceBreakdown {
             source_reliability,
@@ -256,18 +251,12 @@ pub struct ScoredProposal {
 ///
 /// Returns a new sorted vector with scored proposals. The input is not modified.
 #[must_use]
-pub fn rank_proposals(
-    scored: &[ScoredProposal],
-    strategy: RankingStrategy,
-) -> Vec<ScoredProposal> {
+pub fn rank_proposals(scored: &[ScoredProposal], strategy: RankingStrategy) -> Vec<ScoredProposal> {
     let mut sorted: Vec<ScoredProposal> = scored.to_vec();
     match strategy {
         RankingStrategy::ByConfidence => {
             sorted.sort_by(|a, b| {
-                b.score
-                    .value
-                    .partial_cmp(&a.score.value)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                b.score.value.partial_cmp(&a.score.value).unwrap_or(std::cmp::Ordering::Equal)
             });
         }
         RankingStrategy::BySimplicity => {
@@ -281,23 +270,16 @@ pub fn rank_proposals(
         }
         RankingStrategy::ByImpact => {
             sorted.sort_by(|a, b| {
-                b.counterexamples_addressed
-                    .cmp(&a.counterexamples_addressed)
-                    .then_with(|| {
-                        b.score
-                            .value
-                            .partial_cmp(&a.score.value)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                b.counterexamples_addressed.cmp(&a.counterexamples_addressed).then_with(|| {
+                    b.score.value.partial_cmp(&a.score.value).unwrap_or(std::cmp::Ordering::Equal)
+                })
             });
         }
         RankingStrategy::Combined => {
             sorted.sort_by(|a, b| {
                 let a_combined = combined_rank_score(a);
                 let b_combined = combined_rank_score(b);
-                b_combined
-                    .partial_cmp(&a_combined)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                b_combined.partial_cmp(&a_combined).unwrap_or(std::cmp::Ordering::Equal)
             });
         }
     }
@@ -364,9 +346,7 @@ impl CalibrationTracker {
     /// Create a new empty tracker.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            records: FxHashMap::default(),
-        }
+        Self { records: FxHashMap::default() }
     }
 
     /// Record an outcome for a proposal kind.
@@ -384,11 +364,7 @@ impl CalibrationTracker {
     pub fn success_rate_for_kind(&self, kind: &ProposalKind) -> Option<f64> {
         let category = kind_category(kind);
         self.records.get(category).and_then(|&(successes, total)| {
-            if total > 0 {
-                Some(successes as f64 / total as f64)
-            } else {
-                None
-            }
+            if total > 0 { Some(successes as f64 / total as f64) } else { None }
         })
     }
 
@@ -396,11 +372,7 @@ impl CalibrationTracker {
     #[must_use]
     pub fn success_rate(&self, category: &str) -> Option<f64> {
         self.records.get(category).and_then(|&(successes, total)| {
-            if total > 0 {
-                Some(successes as f64 / total as f64)
-            } else {
-                None
-            }
+            if total > 0 { Some(successes as f64 / total as f64) } else { None }
         })
     }
 
@@ -415,13 +387,11 @@ impl CalibrationTracker {
     pub fn all_rates(&self) -> Vec<(&'static str, f64)> {
         self.records
             .iter()
-            .filter_map(|(&cat, &(successes, total))| {
-                if total > 0 {
-                    Some((cat, successes as f64 / total as f64))
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(&cat, &(successes, total))| {
+                    if total > 0 { Some((cat, successes as f64 / total as f64)) } else { None }
+                },
+            )
             .collect()
     }
 }
@@ -448,12 +418,7 @@ mod tests {
     }
 
     fn precondition_proposal(spec: &str, confidence: f64) -> Proposal {
-        make_proposal(
-            ProposalKind::AddPrecondition {
-                spec_body: spec.into(),
-            },
-            confidence,
-        )
+        make_proposal(ProposalKind::AddPrecondition { spec_body: spec.into() }, confidence)
     }
 
     // --- ConfidenceScore ---
@@ -478,9 +443,14 @@ mod tests {
     #[test]
     fn test_source_default_reliabilities() {
         assert!((ProposalSource::Heuristic.default_reliability() - 0.6).abs() < f64::EPSILON);
-        assert!((ProposalSource::WeakestPrecondition.default_reliability() - 0.8).abs() < f64::EPSILON);
+        assert!(
+            (ProposalSource::WeakestPrecondition.default_reliability() - 0.8).abs() < f64::EPSILON
+        );
         assert!((ProposalSource::Llm.default_reliability() - 0.5).abs() < f64::EPSILON);
-        assert!((ProposalSource::CounterexampleGuided.default_reliability() - 0.75).abs() < f64::EPSILON);
+        assert!(
+            (ProposalSource::CounterexampleGuided.default_reliability() - 0.75).abs()
+                < f64::EPSILON
+        );
         assert!((ProposalSource::SignatureBased.default_reliability() - 0.4).abs() < f64::EPSILON);
     }
 
@@ -580,9 +550,8 @@ mod tests {
 
     #[test]
     fn test_simple_spec_scores_higher_complexity() {
-        let simple = score_complexity(&ProposalKind::AddPrecondition {
-            spec_body: "x != 0".into(),
-        });
+        let simple =
+            score_complexity(&ProposalKind::AddPrecondition { spec_body: "x != 0".into() });
         let complex = score_complexity(&ProposalKind::AddPrecondition {
             spec_body: "forall i, 0 <= i && i < len ==> arr[i] > 0 && arr[i] < MAX".into(),
         });
@@ -594,9 +563,8 @@ mod tests {
 
     #[test]
     fn test_complexity_penalizes_connectives() {
-        let no_connectives = score_complexity(&ProposalKind::AddPrecondition {
-            spec_body: "x > 0".into(),
-        });
+        let no_connectives =
+            score_complexity(&ProposalKind::AddPrecondition { spec_body: "x > 0".into() });
         let with_connectives = score_complexity(&ProposalKind::AddPrecondition {
             spec_body: "x > 0 && y > 0 && z > 0".into(),
         });
@@ -612,9 +580,7 @@ mod tests {
             "x > 0 && y > 0 && z > 0 || w == 0",
         ];
         for spec in specs {
-            let score = score_complexity(&ProposalKind::AddPrecondition {
-                spec_body: spec.into(),
-            });
+            let score = score_complexity(&ProposalKind::AddPrecondition { spec_body: spec.into() });
             assert!(
                 (0.0..=1.0).contains(&score),
                 "complexity score for '{spec}' should be in [0.0, 1.0], got {score}"
@@ -627,18 +593,14 @@ mod tests {
     #[test]
     fn test_calibration_empty_returns_none() {
         let tracker = CalibrationTracker::new();
-        let kind = ProposalKind::AddPrecondition {
-            spec_body: "x != 0".into(),
-        };
+        let kind = ProposalKind::AddPrecondition { spec_body: "x != 0".into() };
         assert_eq!(tracker.success_rate_for_kind(&kind), None);
     }
 
     #[test]
     fn test_calibration_tracks_success_rate() {
         let mut tracker = CalibrationTracker::new();
-        let kind = ProposalKind::AddPrecondition {
-            spec_body: "x != 0".into(),
-        };
+        let kind = ProposalKind::AddPrecondition { spec_body: "x != 0".into() };
 
         tracker.record(&kind, true);
         tracker.record(&kind, true);
@@ -651,12 +613,8 @@ mod tests {
     #[test]
     fn test_calibration_separate_categories() {
         let mut tracker = CalibrationTracker::new();
-        let pre = ProposalKind::AddPrecondition {
-            spec_body: "x != 0".into(),
-        };
-        let post = ProposalKind::AddPostcondition {
-            spec_body: "result > 0".into(),
-        };
+        let pre = ProposalKind::AddPrecondition { spec_body: "x != 0".into() };
+        let post = ProposalKind::AddPostcondition { spec_body: "result > 0".into() };
 
         tracker.record(&pre, true);
         tracker.record(&post, false);
@@ -671,9 +629,7 @@ mod tests {
     #[test]
     fn test_calibration_total_records() {
         let mut tracker = CalibrationTracker::new();
-        let kind = ProposalKind::AddPrecondition {
-            spec_body: "x".into(),
-        };
+        let kind = ProposalKind::AddPrecondition { spec_body: "x".into() };
         tracker.record(&kind, true);
         tracker.record(&kind, false);
         tracker.record(&kind, true);
@@ -684,18 +640,8 @@ mod tests {
     #[test]
     fn test_calibration_all_rates() {
         let mut tracker = CalibrationTracker::new();
-        tracker.record(
-            &ProposalKind::AddPrecondition {
-                spec_body: "x".into(),
-            },
-            true,
-        );
-        tracker.record(
-            &ProposalKind::AddPostcondition {
-                spec_body: "y".into(),
-            },
-            false,
-        );
+        tracker.record(&ProposalKind::AddPrecondition { spec_body: "x".into() }, true);
+        tracker.record(&ProposalKind::AddPostcondition { spec_body: "y".into() }, false);
 
         let rates = tracker.all_rates();
         assert_eq!(rates.len(), 2);
@@ -704,23 +650,13 @@ mod tests {
     #[test]
     fn test_calibration_influences_scoring() {
         let mut estimator = ConfidenceEstimator::new();
-        let good_kind = ProposalKind::AddPrecondition {
-            spec_body: "x != 0".into(),
-        };
-        let bad_kind = ProposalKind::AddPostcondition {
-            spec_body: "result > 0".into(),
-        };
+        let good_kind = ProposalKind::AddPrecondition { spec_body: "x != 0".into() };
+        let bad_kind = ProposalKind::AddPostcondition { spec_body: "result > 0".into() };
 
         // Record that preconditions succeed often, postconditions fail often
         for _ in 0..10 {
-            estimator.record_outcome(
-                &make_proposal(good_kind.clone(), 0.9),
-                true,
-            );
-            estimator.record_outcome(
-                &make_proposal(bad_kind.clone(), 0.9),
-                false,
-            );
+            estimator.record_outcome(&make_proposal(good_kind.clone(), 0.9), true);
+            estimator.record_outcome(&make_proposal(bad_kind.clone(), 0.9), false);
         }
 
         let good_proposal = make_proposal(good_kind, 0.9);
@@ -843,10 +779,7 @@ mod tests {
 
     #[test]
     fn test_rank_does_not_mutate_input() {
-        let scored = vec![
-            make_scored("x > 0", 0.5, 1),
-            make_scored("y != 0", 0.9, 0),
-        ];
+        let scored = vec![make_scored("x > 0", 0.5, 1), make_scored("y != 0", 0.9, 0)];
         let _ranked = rank_proposals(&scored, RankingStrategy::ByConfidence);
         // Original should still have 0.5 first
         assert!((scored[0].score.value - 0.5).abs() < f64::EPSILON);
@@ -861,12 +794,7 @@ mod tests {
         let proposals = vec![
             precondition_proposal("x != 0", 0.9),
             precondition_proposal("forall i, 0 <= i && i < n ==> arr[i] > 0", 0.7),
-            make_proposal(
-                ProposalKind::AddPostcondition {
-                    spec_body: "result > 0".into(),
-                },
-                0.6,
-            ),
+            make_proposal(ProposalKind::AddPostcondition { spec_body: "result > 0".into() }, 0.6),
         ];
 
         let scored: Vec<ScoredProposal> = proposals
@@ -874,11 +802,7 @@ mod tests {
             .enumerate()
             .map(|(i, p)| {
                 let score = estimator.score(&p, ProposalSource::Heuristic, i, 3);
-                ScoredProposal {
-                    proposal: p,
-                    score,
-                    counterexamples_addressed: i,
-                }
+                ScoredProposal { proposal: p, score, counterexamples_addressed: i }
             })
             .collect();
 
@@ -887,11 +811,7 @@ mod tests {
 
         // All scores should be in [0, 1]
         for sp in &ranked {
-            assert!(
-                (0.0..=1.0).contains(&sp.score.value),
-                "score {} out of range",
-                sp.score.value
-            );
+            assert!((0.0..=1.0).contains(&sp.score.value), "score {} out of range", sp.score.value);
         }
 
         // Should be sorted descending by confidence

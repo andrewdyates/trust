@@ -18,7 +18,7 @@ use crate::infer::region_constraints::{ConstraintKind, RegionConstraintData};
 use crate::regions::OutlivesEnvironmentBuildExt;
 use crate::traits::project::ProjectAndUnifyResult;
 
-// tRust: known issue (twk) — this is obviously not nice to duplicate like that
+// FIXME(twk): this is obviously not nice to duplicate like that
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum RegionTarget<'tcx> {
     Region(Region<'tcx>),
@@ -493,8 +493,8 @@ impl<'tcx> AutoTraitFinder<'tcx> {
         }
 
         while !vid_map.is_empty() {
-            let target = *vid_map.keys().next().expect("invariant: iterator is non-empty");
-            let deps = vid_map.swap_remove(&target).expect("invariant: value is present");
+            let target = *vid_map.keys().next().unwrap();
+            let deps = vid_map.swap_remove(&target).unwrap();
 
             for smaller in deps.smaller.iter() {
                 for larger in deps.larger.iter() {
@@ -802,7 +802,7 @@ impl<'tcx> AutoTraitFinder<'tcx> {
                 | ty::PredicateKind::AliasRelate(..)
                 | ty::PredicateKind::DynCompatible(..)
                 | ty::PredicateKind::Subtype(..)
-                // tRust: known issue (generic_const_exprs) — you can absolutely add this as a where clauses
+                // FIXME(generic_const_exprs): you can absolutely add this as a where clauses
                 | ty::PredicateKind::Clause(ty::ClauseKind::ConstEvaluatable(..))
                 | ty::PredicateKind::Coerce(..)
                 | ty::PredicateKind::Clause(ty::ClauseKind::UnstableFeature(_))

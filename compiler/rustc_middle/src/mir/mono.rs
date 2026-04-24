@@ -673,17 +673,17 @@ impl<'tcx> CodegenUnitNameBuilder<'tcx> {
             format!("{}.{:08x}{}", tcx.crate_name(cnum), stable_crate_id, local_crate_id)
         });
 
-        write!(cgu_name, "{crate_prefix}").expect("invariant: write to string/buffer succeeds");
+        write!(cgu_name, "{crate_prefix}").unwrap();
 
         // Add the components
         for component in components {
-            write!(cgu_name, "-{component}").expect("invariant: write to string/buffer succeeds");
+            write!(cgu_name, "-{component}").unwrap();
         }
 
         if let Some(special_suffix) = special_suffix {
             // We add a dot in here so it cannot clash with anything in a regular
             // Rust identifier
-            write!(cgu_name, ".{special_suffix}").expect("invariant: write to string/buffer succeeds");
+            write!(cgu_name, ".{special_suffix}").unwrap();
         }
 
         Symbol::intern(&cgu_name)

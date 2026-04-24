@@ -487,7 +487,7 @@ impl<'a, Ty> ArgAbi<'a, Ty> {
                 // `byval`. Account for that.
                 if let Some(byval_align) = byval_align {
                     // On all targets with byval align this is currently true, so let's assert it.
-                    debug_assert!(byval_align >= Align::from_bytes(4).expect("invariant: 4-byte alignment is a valid power of two")); // tRust: unwrap -> expect
+                    debug_assert!(byval_align >= Align::from_bytes(4).unwrap());
                     attrs.pointee_align = Some(byval_align);
                 }
             }
@@ -773,7 +773,7 @@ impl<'a, Ty> FnAbi<'a, Ty> {
                 // registers for the x86_64 sysv call conv rather than the
                 // officially specified 2 registers.
                 //
-                // tRust: known issue — Technically we should look at the amount of available
+                // FIXME: Technically we should look at the amount of available
                 // return registers rather than guessing that there are 2
                 // registers for return values. In practice only a couple of
                 // architectures have less than 2 return registers. None of
@@ -851,7 +851,7 @@ impl<'a, Ty> FnAbi<'a, Ty> {
 ///
 /// Conservative: returns `false` for anything it cannot prove fully initialized,
 /// including multi-variant enums and SIMD vectors.
-// tRust: known issue — extend to multi-variant enums (per-variant padding analysis needed).
+// FIXME: extend to multi-variant enums (per-variant padding analysis needed).
 fn layout_is_noundef<'a, Ty, C>(layout: TyAndLayout<'a, Ty>, cx: &C) -> bool
 where
     Ty: TyAbiInterface<'a, C> + Copy,

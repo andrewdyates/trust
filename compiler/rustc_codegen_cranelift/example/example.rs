@@ -77,15 +77,12 @@ pub fn use_size_of() -> usize {
 }
 
 pub unsafe fn use_copy_intrinsic(src: *const u8, dst: *mut u8) {
-    // SAFETY: the caller guarantees `src` and `dst` are valid for 1 byte,
-    // properly aligned, and do not overlap.
     unsafe {
         intrinsics::copy::<u8>(src, dst, 1);
     }
 }
 
 pub unsafe fn use_copy_intrinsic_ref(src: *const u8, dst: *mut u8) {
-    // SAFETY: the invariants required by this unsafe operation are upheld by the caller/context.
     unsafe {
         let copy2 = &intrinsics::copy::<u8>;
         copy2(src, dst, 1);
@@ -133,12 +130,10 @@ pub fn eq_char(a: char, b: char) -> bool {
 }
 
 pub unsafe fn transmute(c: char) -> u32 {
-    // SAFETY: transmute between types of identical size and compatible layout.
     unsafe { intrinsics::transmute(c) }
 }
 
 pub unsafe fn deref_str_ptr(s: *const str) -> &'static str {
-    // SAFETY: the invariants required by this unsafe operation are upheld by the caller/context.
     unsafe { &*s }
 }
 
@@ -155,7 +150,6 @@ pub fn array_as_slice(arr: &[u8; 3]) -> &[u8] {
 }
 
 pub unsafe fn use_ctlz_nonzero(a: u16) -> u32 {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe { intrinsics::ctlz_nonzero(a) }
 }
 

@@ -310,6 +310,7 @@ impl<'gcc, 'tcx> CodegenCx<'gcc, 'tcx> {
     }
 }
 /// Converts a given const alloc to a gcc Rvalue, without any caching or deduplication.
+
 /// Use `const_data_from_alloc` instead.
 pub(crate) fn const_alloc_to_gcc_uncached<'gcc>(
     cx: &CodegenCx<'gcc, '_>,

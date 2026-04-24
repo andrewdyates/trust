@@ -21,8 +21,6 @@ unsafe extern "C" {
 
 fn backtrace_stderr(buffer: &[*mut libc::c_void]) {
     let size = buffer.len().try_into().unwrap_or_default();
-    // SAFETY: The libc function is called with valid arguments
-    // that satisfy its documented preconditions.
     unsafe { backtrace_symbols_fd(buffer.as_ptr(), size, libc::STDERR_FILENO) };
 }
 
@@ -33,8 +31,6 @@ struct RawStderr(());
 
 impl fmt::Write for RawStderr {
     fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
-        // SAFETY: The libc function is called with valid arguments
-        // that satisfy its documented preconditions.
         let ret = unsafe { libc::write(libc::STDERR_FILENO, s.as_ptr().cast(), s.len()) };
         if ret == -1 { Err(fmt::Error) } else { Ok(()) }
     }
@@ -65,9 +61,6 @@ unsafe extern "C" fn print_stack_trace(signum: libc::c_int) {
         signame
     };
 
-    // SAFETY: The pointer and length are valid: the data pointer is
-    // non-null, properly aligned, and the length does not exceed the
-    // allocation size.
     let stack = unsafe {
         // Reserve data segment so we don't have to malloc in a signal handler, which might fail
         // in incredibly undesirable and unexpected ways due to e.g. the allocator deadlocking
@@ -151,12 +144,10 @@ unsafe extern "C" fn print_stack_trace(signum: libc::c_int) {
 
 /// When one of the KILL signals is delivered to the process, print a stack trace and then exit.
 pub(super) fn install() {
-    // SAFETY: The signal handler parameters are valid, and the
-    // handler function conforms to the expected signal handler ABI.
     unsafe {
         let alt_stack_size: usize = min_sigstack_size() + 64 * 1024;
         let mut alt_stack: libc::stack_t = mem::zeroed();
-        alt_stack.ss_sp = alloc(Layout::from_size_align(alt_stack_size, 1).expect("invariant: alignment of 1 is always valid for Layout")).cast(); // tRust: unwrap -> expect
+        alt_stack.ss_sp = alloc(Layout::from_size_align(alt_stack_size, 1).unwrap()).cast();
         alt_stack.ss_size = alt_stack_size;
         libc::sigaltstack(&alt_stack, ptr::null_mut());
 
@@ -175,8 +166,6 @@ pub(super) fn install() {
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn min_sigstack_size() -> usize {
     const AT_MINSIGSTKSZ: core::ffi::c_ulong = 51;
-    // SAFETY: The libc function is called with valid arguments
-    // that satisfy its documented preconditions.
     let dynamic_sigstksz = unsafe { libc::getauxval(AT_MINSIGSTKSZ) };
     // If getauxval couldn't find the entry, it returns 0,
     // so take the higher of the "constant" and auxval.

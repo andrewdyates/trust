@@ -482,7 +482,6 @@ pub trait FnMut<Args: Tuple>: FnOnce<Args> {
 #[lang = "panic"]
 #[track_caller]
 pub fn panic(_msg: &'static str) -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::puts("Panicking\n\0" as *const str as *const u8);
         intrinsics::abort();
@@ -520,7 +519,6 @@ panic_const! {
 
 #[lang = "panic_cannot_unwind"]
 fn panic_cannot_unwind() -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::puts("Panicking\n\0" as *const str as *const u8);
         intrinsics::abort();
@@ -530,7 +528,6 @@ fn panic_cannot_unwind() -> ! {
 #[lang = "panic_in_cleanup"]
 #[rustc_nounwind]
 fn panic_in_cleanup() -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf("panic in a destructor during cleanup\n\0" as *const str as *const i8);
         intrinsics::abort();
@@ -540,7 +537,6 @@ fn panic_in_cleanup() -> ! {
 #[lang = "panic_bounds_check"]
 #[track_caller]
 fn panic_bounds_check(index: usize, len: usize) -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf(
             "index out of bounds: the len is %d but the index is %d\n\0" as *const str as *const i8,
@@ -606,7 +602,6 @@ impl<T: ?Sized + Unsize<U>, U: ?Sized, A: Allocator> CoerceUnsized<Box<U, A>> fo
 
 impl<T> Box<T> {
     pub fn new(val: T) -> Box<T> {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             let size = size_of::<T>();
             let ptr = libc::malloc(size);
@@ -619,7 +614,6 @@ impl<T> Box<T> {
 impl<T: ?Sized, A: Allocator> Drop for Box<T, A> {
     fn drop(&mut self) {
         // inner value is dropped by compiler.
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             libc::free(self.0.pointer.0 as *mut u8);
         }

@@ -245,7 +245,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
         debug!(
             "give_region_a_name(fr={:?}, counter={:?})",
             fr,
-            self.next_region_name.try_borrow().expect("invariant: region name counter must not be mutably borrowed")
+            self.next_region_name.try_borrow().unwrap()
         );
 
         assert!(self.regioncx.universal_regions().is_universal_region(fr));
@@ -331,14 +331,12 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                         DefiningTy::CoroutineClosure(_, args) => args.as_coroutine_closure().kind(),
                         _ => {
                             // Can't have BrEnv in functions, constants or coroutines.
-                            // tRust: invariant — type system guarantee
                             bug!("BrEnv outside of closure.");
                         }
                     };
                     let hir::ExprKind::Closure(&hir::Closure { fn_decl_span, .. }) =
                         tcx.hir_expect_expr(self.mir_hir_id()).kind
                     else {
-                        // tRust: invariant — type system guarantee
                         bug!("Closure is not defined by a closure expr");
                     };
                     let region_name = self.synthesize_region_name();
@@ -352,7 +350,6 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                              can't escape the closure"
                         }
                         ty::ClosureKind::FnOnce => {
-                            // tRust: invariant — type system guarantee
                             bug!("BrEnv in a `FnOnce` closure");
                         }
                     };
@@ -364,7 +361,6 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                 }
 
                 ty::LateParamRegionKind::Anon(_) => None,
-                // tRust: invariant — pretty-printing only
                 ty::LateParamRegionKind::NamedAnon(_, _) => bug!("only used for pretty printing"),
             },
 
@@ -520,7 +516,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                 // `highlight_if_we_cannot_match_hir_ty` needs to know the number we will give to
                 // the anonymous region. If it succeeds, the `synthesize_region_name` call below
                 // will increment the counter, "reserving" the number we just used.
-                let counter = *self.next_region_name.try_borrow().expect("invariant: region name counter must not be mutably borrowed");
+                let counter = *self.next_region_name.try_borrow().unwrap();
                 self.highlight_if_we_cannot_match_hir_ty(fr, arg_ty, span, counter)
             });
 
@@ -638,7 +634,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                     match path.res {
                         // Type parameters of the type alias have no reason to
                         // be the same as those of the ADT.
-                        // // NOTE: we should be able to do something similar to to
+                        // FIXME: We should be able to do something similar to
                         // match_adt_and_segment in this case.
                         Res::Def(DefKind::TyAlias, _) => (),
                         _ => {
@@ -673,7 +669,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                 }
 
                 _ => {
-                    // // NOTE: there are other cases that we could trace
+                    // FIXME there are other cases that we could trace
                 }
             }
         }
@@ -918,7 +914,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
                 // `highlight_if_we_cannot_match_hir_ty` needs to know the number we will give to
                 // the anonymous region. If it succeeds, the `synthesize_region_name` call below
                 // will increment the counter, "reserving" the number we just used.
-                let counter = *self.next_region_name.try_borrow().expect("invariant: region name counter must not be mutably borrowed");
+                let counter = *self.next_region_name.try_borrow().unwrap();
                 self.highlight_if_we_cannot_match_hir_ty(fr, return_ty, return_span, counter)
             });
 
@@ -943,7 +939,6 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
     /// [`OpaqueDef`]: hir::TyKind::OpaqueDef
     fn get_future_inner_return_ty(&self, hir_ty: &'tcx hir::Ty<'tcx>) -> &'tcx hir::Ty<'tcx> {
         let hir::TyKind::OpaqueDef(opaque_ty) = hir_ty.kind else {
-            // tRust: invariant — region inference guarantee
             span_bug!(
                 hir_ty.span,
                 "lowered return type of async fn is not OpaqueDef: {:?}",
@@ -959,7 +954,6 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
         {
             ty
         } else {
-            // tRust: invariant — diagnostic precondition — borrowck state must be complete before diagnostic generation
             span_bug!(
                 hir_ty.span,
                 "bounds from lowered return type of async fn did not match expected format: {opaque_ty:?}",
@@ -984,7 +978,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
         }
 
         let mut highlight = RegionHighlightMode::default();
-        highlight.highlighting_region_vid(tcx, fr, *self.next_region_name.try_borrow().expect("invariant: region name counter must not be mutably borrowed"));
+        highlight.highlighting_region_vid(tcx, fr, *self.next_region_name.try_borrow().unwrap());
         let type_name = self
             .infcx
             .err_ctxt()
@@ -1038,7 +1032,7 @@ impl<'tcx> MirBorrowckCtxt<'_, '_, 'tcx> {
             name: self.synthesize_region_name(),
             source: RegionNameSource::AnonRegionFromImplSignature(
                 tcx.def_span(region_def),
-                // // NOTE(compiler-errors): Does this ever actually show up
+                // FIXME(compiler-errors): Does this ever actually show up
                 // anywhere other than the self type? I couldn't create an
                 // example of a `'_` in the impl's trait being referenceable.
                 if found { "self type" } else { "header" },

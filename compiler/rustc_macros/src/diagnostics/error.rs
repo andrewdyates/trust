@@ -75,7 +75,7 @@ pub(crate) use throw_span_err;
 
 /// Returns an error diagnostic for an invalid attribute.
 pub(crate) fn invalid_attr(attr: &Attribute) -> Diagnostic {
-    let span = attr.span().expect("invariant: attribute has a valid proc_macro span"); // tRust: unwrap -> expect
+    let span = attr.span().unwrap();
     let path = path_to_string(attr.path());
     match attr.meta {
         Meta::Path(_) => span_err(span, format!("`#[{path}]` is not a valid attribute")),

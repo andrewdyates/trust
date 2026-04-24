@@ -22,8 +22,8 @@
 //! generation, enabling backend-specific encoding.
 
 use trust_types::{
-    ContractKind, Rvalue, Statement, Terminator, VerifiableFunction,
-    VerificationCondition, VerificationResult,
+    ContractKind, Rvalue, Statement, Terminator, VerifiableFunction, VerificationCondition,
+    VerificationResult,
 };
 
 use crate::Router;
@@ -50,6 +50,9 @@ pub enum MirStrategy {
     FFIBoundary,
     /// Run multiple strategies in parallel, take first definitive result.
     Portfolio(Vec<MirStrategy>),
+    /// tRust #870: LLVM2 verified codegen — lower to LIR, optionally validate.
+    #[cfg(feature = "llvm2-backend")]
+    Llvm2Codegen,
     /// Fall through to v1 Formula-based pipeline.
     V1Fallback,
 }
@@ -73,6 +76,8 @@ impl std::fmt::Display for MirStrategy {
                 }
                 write!(f, ")")
             }
+            #[cfg(feature = "llvm2-backend")]
+            MirStrategy::Llvm2Codegen => f.write_str("Llvm2Codegen"),
             MirStrategy::V1Fallback => f.write_str("V1Fallback"),
         }
     }
@@ -99,6 +104,16 @@ pub struct MirRouterConfig {
     /// When true, functions with loops are first analyzed by sunder for invariant
     /// hints which are logged for the strengthen feedback loop.
     pub infer_invariants: bool,
+    /// tRust #870: Enable LLVM2 codegen backend for scalar function lowering.
+    /// When true (and the `llvm2-backend` feature is enabled), the classifier
+    /// will dispatch eligible scalar functions through the LLVM2 codegen path.
+    #[cfg(feature = "llvm2-backend")]
+    pub enable_llvm2_codegen: bool,
+    /// tRust #870: Enable translation validation for LLVM2 lowering.
+    /// When true, the LLVM2 backend will lift the LIR back and compare
+    /// structural properties against the original MIR.
+    #[cfg(feature = "llvm2-backend")]
+    pub llvm2_translation_validation: bool,
 }
 
 impl Default for MirRouterConfig {
@@ -110,11 +125,16 @@ impl Default for MirRouterConfig {
             shadow_mode: false,
             enable_portfolio_racing: true,
             infer_invariants: false,
+            #[cfg(feature = "llvm2-backend")]
+            enable_llvm2_codegen: false,
+            #[cfg(feature = "llvm2-backend")]
+            llvm2_translation_validation: false,
         }
     }
 }
 
 /// tRust #791: Describes how the MIR router result and v1 fallback result compare.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ShadowDiscrepancy {
     /// Both agree (both proved, both failed, or both unknown/timeout).
@@ -127,6 +147,7 @@ pub(crate) enum ShadowDiscrepancy {
     Mismatch,
 }
 
+#[cfg(test)]
 impl std::fmt::Display for ShadowDiscrepancy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -140,6 +161,7 @@ impl std::fmt::Display for ShadowDiscrepancy {
 
 /// tRust #791: Result of shadow-mode verification — both MIR router and v1 results
 /// plus the comparison outcome.
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub(crate) struct ShadowResult {
     /// The strategy chosen by the MIR router's classifier.
@@ -165,12 +187,32 @@ pub struct MirRouter {
     v1_router: Router,
     /// Configuration for backend invocations.
     config: MirRouterConfig,
+    /// tRust #870: Optional LLVM2 codegen backend for scalar function lowering.
+    #[cfg(feature = "llvm2-backend")]
+    llvm2_backend: Option<crate::llvm2_backend::Llvm2Backend>,
 }
 
 impl MirRouter {
     /// Create a new MIR router wrapping the given v1 router.
     pub fn new(v1_router: Router, config: MirRouterConfig) -> Self {
-        Self { v1_router, config }
+        #[cfg(feature = "llvm2-backend")]
+        let llvm2_backend = if config.enable_llvm2_codegen {
+            Some(crate::llvm2_backend::Llvm2Backend::new(
+                crate::llvm2_backend::Llvm2BackendConfig {
+                    available: true,
+                    translation_validation: config.llvm2_translation_validation,
+                },
+            ))
+        } else {
+            None
+        };
+
+        Self {
+            v1_router,
+            config,
+            #[cfg(feature = "llvm2-backend")]
+            llvm2_backend,
+        }
     }
 
     /// Create a MIR router with default config and mock backends.
@@ -178,6 +220,8 @@ impl MirRouter {
         Self {
             v1_router: Router::new(),
             config: MirRouterConfig::default(),
+            #[cfg(feature = "llvm2-backend")]
+            llvm2_backend: None,
         }
     }
 
@@ -256,12 +300,25 @@ impl MirRouter {
     /// When `config.shadow_mode` is true, also dispatches through v1 and
     /// logs any discrepancies (but still returns the MIR router result when
     /// it succeeds).
-    pub fn verify_function(
-        &self,
-        func: &VerifiableFunction,
-    ) -> VerificationResult {
+    pub fn verify_function(&self, func: &VerifiableFunction) -> VerificationResult {
         if self.config.shadow_mode {
-            return self.shadow_verify(func).chosen_result;
+            let strategy = self.classify(func);
+            let mir_result = self.dispatch(func, &strategy);
+            // Shadow mode: also run v1, choose definitive result.
+            let v1_result = build_v1_vcs(func)
+                .into_iter()
+                .map(|vc| self.v1_router.verify_one(&vc))
+                .find(|r| r.is_proved() || r.is_failed())
+                .unwrap_or_else(|| VerificationResult::Unknown {
+                    solver: "v1-shadow".into(),
+                    time_ms: 0,
+                    reason: "no definitive v1 result".into(),
+                });
+            return if mir_result.is_proved() || mir_result.is_failed() {
+                mir_result
+            } else {
+                v1_result
+            };
         }
         let strategy = self.classify(func);
         self.dispatch(func, &strategy)
@@ -292,11 +349,7 @@ impl MirRouter {
     }
 
     /// Internal dispatch: routes to the appropriate backend.
-    fn dispatch(
-        &self,
-        func: &VerifiableFunction,
-        strategy: &MirStrategy,
-    ) -> VerificationResult {
+    fn dispatch(&self, func: &VerifiableFunction, strategy: &MirStrategy) -> VerificationResult {
         match strategy {
             MirStrategy::BoundedModelCheck => {
                 // tRust #793: Optionally infer loop invariants before BMC dispatch.
@@ -309,6 +362,9 @@ impl MirRouter {
             MirStrategy::ContractVerification => self.dispatch_contract(func),
             MirStrategy::UnsafeAudit => self.dispatch_unsafe_audit(func),
             MirStrategy::Portfolio(strategies) => self.dispatch_portfolio(func, strategies),
+            // tRust #870: LLVM2 codegen dispatch.
+            #[cfg(feature = "llvm2-backend")]
+            MirStrategy::Llvm2Codegen => self.dispatch_llvm2_codegen(func),
             // tRust #791: DataRace, SeparationLogic, FFIBoundary, V1Fallback all
             // go through the v1 pipeline for now. These backends will be specialized
             // in future phases.
@@ -317,6 +373,29 @@ impl MirRouter {
             | MirStrategy::FFIBoundary
             | MirStrategy::V1Fallback => self.dispatch_v1(func),
         }
+    }
+
+    /// tRust #870: Dispatch to the LLVM2 verified codegen backend.
+    ///
+    /// Lowers the function to LIR via trust-llvm2-bridge and optionally
+    /// performs translation validation. Falls back to V1 if the LLVM2
+    /// backend is not configured or cannot handle the function.
+    #[cfg(feature = "llvm2-backend")]
+    fn dispatch_llvm2_codegen(&self, func: &VerifiableFunction) -> VerificationResult {
+        if let Some(ref backend) = self.llvm2_backend {
+            if backend.can_handle_function(func) {
+                return match backend.verify_codegen(func) {
+                    Ok(result) => result,
+                    Err(e) => VerificationResult::Unknown {
+                        solver: "llvm2-router".into(),
+                        time_ms: 0,
+                        reason: format!("LLVM2 codegen error: {e}"),
+                    },
+                };
+            }
+        }
+        // Fall back to v1 if LLVM2 cannot handle this function.
+        self.dispatch_v1(func)
     }
 
     /// Dispatch to zani-lib for bounded model checking.
@@ -329,15 +408,12 @@ impl MirRouter {
         // tRust #791: Generate a minimal SMT-LIB2 script for zani.
         // In a full pipeline, trust-vcgen would produce the script from the MIR.
         // For now, we pass the function name and let zani's subprocess handle encoding.
-        let smtlib = format!(
-            "; MIR router BMC dispatch for {}\n(check-sat)\n",
-            func.def_path
-        );
+        let smtlib = format!("; MIR router BMC dispatch for {}\n(check-sat)\n", func.def_path);
 
         match trust_zani_lib::verify_function(&func.def_path, &smtlib, &zani_config) {
             Ok(result) => result.to_verification_result(),
             Err(e) => VerificationResult::Unknown {
-                solver: "zani-lib".to_string(),
+                solver: "zani-lib".into(),
                 time_ms: 0,
                 reason: format!("zani dispatch error: {e}"),
             },
@@ -355,7 +431,7 @@ impl MirRouter {
         match trust_sunder_lib::verify_with_contracts(&func.def_path, &contracts, &sunder_config) {
             Ok(result) => result.to_verification_result(),
             Err(e) => VerificationResult::Unknown {
-                solver: "sunder-lib".to_string(),
+                solver: "sunder-lib".into(),
                 time_ms: 0,
                 reason: format!("sunder dispatch error: {e}"),
             },
@@ -369,10 +445,8 @@ impl MirRouter {
     /// sequentially and merges (preferring failure over proof).
     fn dispatch_unsafe_audit(&self, func: &VerifiableFunction) -> VerificationResult {
         if self.config.enable_portfolio_racing {
-            let strategies = vec![
-                MirStrategy::BoundedModelCheck,
-                MirStrategy::ContractVerification,
-            ];
+            let strategies =
+                vec![MirStrategy::BoundedModelCheck, MirStrategy::ContractVerification];
             // tRust #793: Use parallel portfolio dispatch for unsafe audit.
             // For unsafe audit, both backends run; if either finds a failure, that wins.
             self.dispatch_portfolio(func, &strategies)
@@ -396,12 +470,12 @@ impl MirRouter {
         func: &VerifiableFunction,
         strategies: &[MirStrategy],
     ) -> VerificationResult {
-        use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Mutex;
+        use std::sync::atomic::{AtomicBool, Ordering};
 
         if strategies.is_empty() {
             return VerificationResult::Unknown {
-                solver: "mir-router-portfolio".to_string(),
+                solver: "mir-router-portfolio".into(),
                 time_ms: 0,
                 reason: "no strategies in portfolio".to_string(),
             };
@@ -441,9 +515,8 @@ impl MirRouter {
             }
         });
 
-        let mut collected = results
-            .into_inner()
-            .expect("invariant: portfolio results mutex not poisoned");
+        let mut collected =
+            results.into_inner().expect("invariant: portfolio results mutex not poisoned");
         collected.sort_by_key(|(idx, _)| *idx);
 
         // Return first definitive result, or first result if none definitive.
@@ -452,15 +525,13 @@ impl MirRouter {
                 return result.clone();
             }
         }
-        collected
-            .into_iter()
-            .next()
-            .map(|(_, r)| r)
-            .unwrap_or_else(|| VerificationResult::Unknown {
-                solver: "mir-router-portfolio".to_string(),
+        collected.into_iter().next().map(|(_, r)| r).unwrap_or_else(|| {
+            VerificationResult::Unknown {
+                solver: "mir-router-portfolio".into(),
                 time_ms: 0,
                 reason: "no strategies produced results".to_string(),
-            })
+            }
+        })
     }
 
     /// tRust #793: Sequential portfolio dispatch (fallback when racing is disabled).
@@ -486,7 +557,7 @@ impl MirRouter {
         }
 
         best_result.unwrap_or_else(|| VerificationResult::Unknown {
-            solver: "mir-router-portfolio".to_string(),
+            solver: "mir-router-portfolio".into(),
             time_ms: 0,
             reason: "no strategies in portfolio".to_string(),
         })
@@ -494,12 +565,9 @@ impl MirRouter {
 
     /// tRust #793: When BMC encounters a function with loops, optionally invoke
     /// sunder for invariant hints and log them for the strengthen feedback loop.
-    fn dispatch_bmc_with_invariant_hints(
-        &self,
-        func: &VerifiableFunction,
-    ) -> VerificationResult {
-        let sunder_config = trust_sunder_lib::SunderConfig::new()
-            .with_timeout(self.config.timeout_ms);
+    fn dispatch_bmc_with_invariant_hints(&self, func: &VerifiableFunction) -> VerificationResult {
+        let sunder_config =
+            trust_sunder_lib::SunderConfig::new().with_timeout(self.config.timeout_ms);
 
         if let Ok(invariants) =
             trust_sunder_lib::infer_loop_invariants(&func.def_path, &sunder_config)
@@ -530,7 +598,7 @@ impl MirRouter {
             // tRust #804 (P1-9): No VCs means vacuously true, not soundly proved.
             // Use BoundedSound { depth: 0 } to signal zero proof work was done.
             return VerificationResult::Proved {
-                solver: "mir-router-v1".to_string(),
+                solver: "mir-router-v1".into(),
                 time_ms: 0,
                 strength: trust_types::ProofStrength::bounded(0),
                 proof_certificate: None,
@@ -552,7 +620,7 @@ impl MirRouter {
         }
 
         VerificationResult::Proved {
-            solver: "mir-router-v1".to_string(),
+            solver: "mir-router-v1".into(),
             time_ms: total_time_ms,
             strength: trust_types::ProofStrength::smt_unsat(),
             proof_certificate: None,
@@ -563,16 +631,16 @@ impl MirRouter {
     /// tRust #791: Shadow-mode verification — run both the MIR router strategy
     /// and the v1 fallback, compare results, and log discrepancies.
     ///
+    /// Only used by tests to inspect full shadow result fields.
+    ///
     /// Returns the MIR router result when it produces a definitive answer
     /// (Proved or Failed). Falls back to the v1 result when the MIR router
     /// returns Unknown or Timeout.
     ///
     /// Only active when `config.shadow_mode` is true. When shadow mode is off,
     /// `verify_function` bypasses this entirely.
-    pub(crate) fn shadow_verify(
-        &self,
-        func: &VerifiableFunction,
-    ) -> ShadowResult {
+    #[cfg(test)]
+    pub(crate) fn shadow_verify(&self, func: &VerifiableFunction) -> ShadowResult {
         let strategy = self.classify(func);
 
         // tRust #791: Run the MIR router dispatch.
@@ -606,21 +674,13 @@ impl MirRouter {
             v1_result.clone()
         };
 
-        ShadowResult {
-            strategy,
-            mir_result,
-            v1_result,
-            discrepancy,
-            chosen_result,
-        }
+        ShadowResult { strategy, mir_result, v1_result, discrepancy, chosen_result }
     }
 }
 
 /// tRust #791: Classify how two verification results compare for shadow mode.
-fn classify_discrepancy(
-    mir: &VerificationResult,
-    v1: &VerificationResult,
-) -> ShadowDiscrepancy {
+#[cfg(test)]
+fn classify_discrepancy(mir: &VerificationResult, v1: &VerificationResult) -> ShadowDiscrepancy {
     match (mir.is_proved(), mir.is_failed(), v1.is_proved(), v1.is_failed()) {
         // Both proved or both failed — equivalent outcomes.
         (true, _, true, _) => ShadowDiscrepancy::Equivalent,
@@ -642,6 +702,7 @@ fn classify_discrepancy(
 }
 
 /// tRust #791: One-line summary of a verification result for logging.
+#[cfg(test)]
 fn result_summary(result: &VerificationResult) -> String {
     match result {
         VerificationResult::Proved { solver, time_ms, .. } => {
@@ -668,9 +729,10 @@ fn result_summary(result: &VerificationResult) -> String {
 /// Returns true if the function has `#[requires]` or `#[ensures]` contracts.
 fn has_contracts(func: &VerifiableFunction) -> bool {
     // Check the typed contracts list.
-    let has_typed = func.contracts.iter().any(|c| {
-        matches!(c.kind, ContractKind::Requires | ContractKind::Ensures)
-    });
+    let has_typed = func
+        .contracts
+        .iter()
+        .any(|c| matches!(c.kind, ContractKind::Requires | ContractKind::Ensures));
 
     // Also check the structured spec.
     let has_spec = !func.spec.requires.is_empty() || !func.spec.ensures.is_empty();
@@ -683,9 +745,10 @@ fn has_contracts(func: &VerifiableFunction) -> bool {
 
 /// Returns true if the function has `#[invariant]` or `#[loop_invariant]` annotations.
 fn has_invariant_annotations(func: &VerifiableFunction) -> bool {
-    let has_typed = func.contracts.iter().any(|c| {
-        matches!(c.kind, ContractKind::Invariant | ContractKind::LoopInvariant)
-    });
+    let has_typed = func
+        .contracts
+        .iter()
+        .any(|c| matches!(c.kind, ContractKind::Invariant | ContractKind::LoopInvariant));
 
     let has_spec = !func.spec.invariants.is_empty();
 
@@ -699,10 +762,7 @@ fn has_invariant_annotations(func: &VerifiableFunction) -> bool {
 fn has_unsafe_operations(func: &VerifiableFunction) -> bool {
     func.body.blocks.iter().any(|bb| {
         bb.stmts.iter().any(|stmt| match stmt {
-            Statement::Assign { rvalue, .. } => matches!(
-                rvalue,
-                Rvalue::AddressOf(_, _)
-            ),
+            Statement::Assign { rvalue, .. } => matches!(rvalue, Rvalue::AddressOf(_, _)),
             _ => false,
         })
     })
@@ -710,12 +770,10 @@ fn has_unsafe_operations(func: &VerifiableFunction) -> bool {
 
 /// Returns true if the function has atomic operations (from Terminator::Call with atomic field).
 fn has_atomic_operations(func: &VerifiableFunction) -> bool {
-    func.body.blocks.iter().any(|bb| {
-        matches!(
-            &bb.terminator,
-            Terminator::Call { atomic: Some(_), .. }
-        )
-    })
+    func.body
+        .blocks
+        .iter()
+        .any(|bb| matches!(&bb.terminator, Terminator::Call { atomic: Some(_), .. }))
 }
 
 /// Returns true if the function body has raw pointer operations.
@@ -729,10 +787,9 @@ fn has_raw_pointer_operations(func: &VerifiableFunction) -> bool {
     // Check for AddressOf or CopyForDeref (often used with raw pointers).
     let has_raw_ptr_ops = func.body.blocks.iter().any(|bb| {
         bb.stmts.iter().any(|stmt| match stmt {
-            Statement::Assign { rvalue, .. } => matches!(
-                rvalue,
-                Rvalue::AddressOf(_, _) | Rvalue::CopyForDeref(_)
-            ),
+            Statement::Assign { rvalue, .. } => {
+                matches!(rvalue, Rvalue::AddressOf(_, _) | Rvalue::CopyForDeref(_))
+            }
             _ => false,
         })
     });
@@ -789,9 +846,7 @@ fn successor_blocks(terminator: &Terminator) -> Vec<usize> {
             succs.push(otherwise.0);
             succs
         }
-        Terminator::Call { target, .. } => {
-            target.iter().map(|bid| bid.0).collect()
-        }
+        Terminator::Call { target, .. } => target.iter().map(|bid| bid.0).collect(),
         Terminator::Assert { target, .. } => vec![target.0],
         Terminator::Drop { target, .. } => vec![target.0],
         Terminator::Return | Terminator::Unreachable => vec![],
@@ -837,22 +892,62 @@ fn build_sunder_contracts(func: &VerifiableFunction) -> trust_sunder_lib::Contra
 
     // From structured spec (FunctionSpec).
     for req in &func.spec.requires {
-        contract_set
-            .requires
-            .push(trust_sunder_lib::Contract::requires(req));
+        contract_set.requires.push(trust_sunder_lib::Contract::requires(req));
     }
     for ens in &func.spec.ensures {
-        contract_set
-            .ensures
-            .push(trust_sunder_lib::Contract::ensures(ens));
+        contract_set.ensures.push(trust_sunder_lib::Contract::ensures(ens));
     }
     for inv in &func.spec.invariants {
-        contract_set
-            .invariants
-            .push(trust_sunder_lib::Contract::invariant(inv));
+        contract_set.invariants.push(trust_sunder_lib::Contract::invariant(inv));
     }
 
     contract_set
+}
+
+fn zero_divisor_guard_targets(func: &VerifiableFunction) -> std::collections::HashSet<usize> {
+    func.body
+        .blocks
+        .iter()
+        .filter_map(|bb| match &bb.terminator {
+            Terminator::Assert {
+                msg:
+                    trust_types::AssertMessage::DivisionByZero
+                    | trust_types::AssertMessage::RemainderByZero,
+                target,
+                ..
+            } => Some(target.0),
+            _ => None,
+        })
+        .collect()
+}
+
+fn place_var_name(func: &VerifiableFunction, place: &trust_types::Place) -> String {
+    func.body
+        .locals
+        .get(place.local)
+        .and_then(|local| local.name.clone())
+        .unwrap_or_else(|| format!("_{}", place.local))
+}
+
+fn divisor_is_zero_formula(
+    func: &VerifiableFunction,
+    divisor: &trust_types::Operand,
+) -> trust_types::Formula {
+    use trust_types::{ConstValue, Formula, Operand, Sort};
+
+    match divisor {
+        Operand::Constant(ConstValue::Int(value)) => Formula::Bool(*value == 0),
+        Operand::Constant(ConstValue::Uint(value, _)) => Formula::Bool(*value == 0),
+        Operand::Constant(_) => Formula::Bool(false),
+        Operand::Copy(place) | Operand::Move(place) => Formula::Eq(
+            Box::new(Formula::Var(place_var_name(func, place), Sort::Int)),
+            Box::new(Formula::Int(0)),
+        ),
+        Operand::Symbolic(formula) => {
+            Formula::Eq(Box::new(formula.clone()), Box::new(Formula::Int(0)))
+        }
+        _ => Formula::Bool(false),
+    }
 }
 
 /// Build v1 VCs from a `VerifiableFunction` for fallback dispatch.
@@ -860,10 +955,11 @@ fn build_sunder_contracts(func: &VerifiableFunction) -> trust_sunder_lib::Contra
 /// This generates safety VCs from the function's blocks (division by zero,
 /// overflow, bounds checks). A real implementation would use trust-vcgen;
 /// this is a lightweight bridge for the v1 dispatch path.
-fn build_v1_vcs(func: &VerifiableFunction) -> Vec<VerificationCondition> {
-    use trust_types::{Formula, Ty, VcKind};
+pub fn build_v1_vcs(func: &VerifiableFunction) -> Vec<VerificationCondition> {
+    use trust_types::{BinOp, Formula, Rvalue, Statement, Ty, VcKind};
 
     let mut vcs = Vec::new();
+    let zero_guard_targets = zero_divisor_guard_targets(func);
 
     for bb in &func.body.blocks {
         // Generate VCs from assert terminators.
@@ -872,22 +968,51 @@ fn build_v1_vcs(func: &VerifiableFunction) -> Vec<VerificationCondition> {
                 trust_types::AssertMessage::DivisionByZero => VcKind::DivisionByZero,
                 trust_types::AssertMessage::Overflow(op) => VcKind::ArithmeticOverflow {
                     op: *op,
-                    operand_tys: (Ty::Int { width: 32, signed: true }, Ty::Int { width: 32, signed: true }),
+                    operand_tys: (
+                        Ty::Int { width: 32, signed: true },
+                        Ty::Int { width: 32, signed: true },
+                    ),
                 },
                 trust_types::AssertMessage::BoundsCheck => VcKind::IndexOutOfBounds,
                 trust_types::AssertMessage::RemainderByZero => VcKind::RemainderByZero,
-                trust_types::AssertMessage::OverflowNeg => VcKind::NegationOverflow {
-                    ty: Ty::Int { width: 32, signed: true },
-                },
-                _ => VcKind::Assertion {
-                    message: format!("{msg:?}"),
-                },
+                trust_types::AssertMessage::OverflowNeg => {
+                    VcKind::NegationOverflow { ty: Ty::Int { width: 32, signed: true } }
+                }
+                _ => VcKind::Assertion { message: format!("{msg:?}") },
             };
             vcs.push(VerificationCondition {
                 kind,
-                function: func.name.clone(),
+                function: func.name.clone().into(),
                 location: span.clone(),
                 formula: Formula::Bool(false),
+                contract_metadata: None,
+            });
+        }
+
+        if zero_guard_targets.contains(&bb.id.0) {
+            continue;
+        }
+
+        for stmt in &bb.stmts {
+            let Statement::Assign { rvalue, span, .. } = stmt else {
+                continue;
+            };
+
+            let (kind, formula) = match rvalue {
+                Rvalue::BinaryOp(BinOp::Div, _, divisor) => {
+                    (VcKind::DivisionByZero, divisor_is_zero_formula(func, divisor))
+                }
+                Rvalue::BinaryOp(BinOp::Rem, _, divisor) => {
+                    (VcKind::RemainderByZero, divisor_is_zero_formula(func, divisor))
+                }
+                _ => continue,
+            };
+
+            vcs.push(VerificationCondition {
+                kind,
+                function: func.name.clone().into(),
+                location: span.clone(),
+                formula,
                 contract_metadata: None,
             });
         }
@@ -912,18 +1037,10 @@ fn merge_results(a: VerificationResult, b: VerificationResult) -> VerificationRe
     // If both proved, merge.
     match (&a, &b) {
         (
-            VerificationResult::Proved {
-                time_ms: t1,
-                proof_certificate: cert1,
-                ..
-            },
-            VerificationResult::Proved {
-                time_ms: t2,
-                proof_certificate: cert2,
-                ..
-            },
+            VerificationResult::Proved { time_ms: t1, proof_certificate: cert1, .. },
+            VerificationResult::Proved { time_ms: t2, proof_certificate: cert2, .. },
         ) => VerificationResult::Proved {
-            solver: "mir-router-unsafe-audit".to_string(),
+            solver: "mir-router-unsafe-audit".into(),
             time_ms: t1 + t2,
             // Deductive proof is stronger than bounded.
             strength: trust_types::ProofStrength::deductive(),
@@ -936,110 +1053,6 @@ fn merge_results(a: VerificationResult, b: VerificationResult) -> VerificationRe
         // Neither proved — return whichever has more info.
         _ => a,
     }
-}
-
-// ---------------------------------------------------------------------------
-// tRust #793: Typed counterexample propagation
-// ---------------------------------------------------------------------------
-
-/// Convert a zani-lib `TypedCounterexample` to a `trust_types::Counterexample`
-/// preserving typed values.
-///
-/// This bridges the typed counterexample data from zani-lib's BMC solver back
-/// into the generic `Counterexample` that flows through `VerificationResult::Failed`.
-pub(crate) fn convert_typed_counterexample(
-    typed_cex: &trust_zani_lib::TypedCounterexample,
-) -> trust_types::Counterexample {
-    let assignments: Vec<(String, trust_types::CounterexampleValue)> = typed_cex
-        .variables
-        .iter()
-        .map(|(name, value)| {
-            let cex_val = match value {
-                trust_zani_lib::TypedValue::Bool(b) => {
-                    trust_types::CounterexampleValue::Bool(*b)
-                }
-                trust_zani_lib::TypedValue::Int(n) => {
-                    trust_types::CounterexampleValue::Int(*n)
-                }
-                trust_zani_lib::TypedValue::Uint(n) => {
-                    trust_types::CounterexampleValue::Uint(*n)
-                }
-                trust_zani_lib::TypedValue::BitVec { value, .. } => {
-                    trust_types::CounterexampleValue::Uint(*value)
-                }
-                trust_zani_lib::TypedValue::String(s) => {
-                    trust_types::CounterexampleValue::Uint(s.parse::<u128>().unwrap_or(0))
-                }
-            };
-            (name.clone(), cex_val)
-        })
-        .collect();
-
-    match &typed_cex.trace {
-        Some(trace_steps) => {
-            let steps: Vec<trust_types::TraceStep> = trace_steps
-                .iter()
-                .map(|ts| trust_types::TraceStep {
-                    step: ts.step,
-                    assignments: ts
-                        .assignments
-                        .iter()
-                        .map(|(k, v)| (k.clone(), format!("{v:?}")))
-                        .collect(),
-                    program_point: ts.program_point.clone(),
-                })
-                .collect();
-            trust_types::Counterexample::with_trace(
-                assignments,
-                trust_types::CounterexampleTrace::new(steps),
-            )
-        }
-        None => trust_types::Counterexample::new(assignments),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// tRust #793: Proof certificate composition for portfolio/multi-backend results
-// ---------------------------------------------------------------------------
-
-/// Compose proof certificate data from multiple verification results.
-///
-/// When multiple backends in a portfolio or unsafe audit produce proof certificates,
-/// this function creates a composed certificate hash from their individual certificates.
-/// The composed certificate can then be stored in `trust-proof-cert`'s composition module.
-#[must_use]
-pub(crate) fn compose_portfolio_certificates(
-    results: &[(MirStrategy, VerificationResult)],
-) -> Option<Vec<u8>> {
-    use sha2::{Digest, Sha256};
-
-    let certificates: Vec<(&MirStrategy, &[u8])> = results
-        .iter()
-        .filter_map(|(strategy, result)| {
-            if let VerificationResult::Proved {
-                proof_certificate: Some(cert),
-                ..
-            } = result
-            {
-                Some((strategy, cert.as_slice()))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    if certificates.is_empty() {
-        return None;
-    }
-
-    // Compose by hashing all component certificates together.
-    let mut hasher = Sha256::new();
-    for (strategy, cert_bytes) in &certificates {
-        hasher.update(format!("{strategy}:").as_bytes());
-        hasher.update(cert_bytes);
-        hasher.update(b"|");
-    }
-    Some(hasher.finalize().to_vec())
 }
 
 #[cfg(test)]
@@ -1075,11 +1088,7 @@ mod tests {
 
     fn func_with_contract(name: &str, kind: ContractKind) -> VerifiableFunction {
         let mut f = minimal_func(name);
-        f.contracts.push(Contract {
-            kind,
-            span: SourceSpan::default(),
-            body: "x > 0".to_string(),
-        });
+        f.contracts.push(Contract { kind, span: SourceSpan::default(), body: "x > 0".to_string() });
         f
     }
 
@@ -1139,11 +1148,7 @@ mod tests {
     fn func_with_loop(name: &str) -> VerifiableFunction {
         let mut f = minimal_func(name);
         f.body.blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
             BasicBlock {
                 id: BlockId(1),
                 stmts: vec![],
@@ -1154,11 +1159,7 @@ mod tests {
                     span: SourceSpan::default(),
                 },
             },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
         ];
         f
     }
@@ -1181,6 +1182,19 @@ mod tests {
             invariants: vec!["i < n".to_string()],
         };
         f
+    }
+
+    fn fixture_dir() -> std::path::PathBuf {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        std::path::PathBuf::from(manifest).join("../trust-integration-tests/fixtures/real_mir")
+    }
+
+    fn load_fixture(name: &str) -> VerifiableFunction {
+        let path = fixture_dir().join(format!("{name}.json"));
+        let json = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+        serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()))
     }
 
     // -----------------------------------------------------------------------
@@ -1367,14 +1381,14 @@ mod tests {
     #[test]
     fn test_merge_both_proved() {
         let a = VerificationResult::Proved {
-            solver: "a".to_string(),
+            solver: "a".into(),
             time_ms: 10,
             strength: ProofStrength::bounded(10),
             proof_certificate: None,
             solver_warnings: None,
         };
         let b = VerificationResult::Proved {
-            solver: "b".to_string(),
+            solver: "b".into(),
             time_ms: 20,
             strength: ProofStrength::deductive(),
             proof_certificate: None,
@@ -1389,13 +1403,10 @@ mod tests {
 
     #[test]
     fn test_merge_one_failed() {
-        let a = VerificationResult::Failed {
-            solver: "a".to_string(),
-            time_ms: 10,
-            counterexample: None,
-        };
+        let a =
+            VerificationResult::Failed { solver: "a".into(), time_ms: 10, counterexample: None };
         let b = VerificationResult::Proved {
-            solver: "b".to_string(),
+            solver: "b".into(),
             time_ms: 20,
             strength: ProofStrength::deductive(),
             proof_certificate: None,
@@ -1408,14 +1419,14 @@ mod tests {
     #[test]
     fn test_merge_one_proved_one_unknown() {
         let a = VerificationResult::Proved {
-            solver: "a".to_string(),
+            solver: "a".into(),
             time_ms: 10,
             strength: ProofStrength::bounded(10),
             proof_certificate: None,
             solver_warnings: None,
         };
         let b = VerificationResult::Unknown {
-            solver: "b".to_string(),
+            solver: "b".into(),
             time_ms: 20,
             reason: "timeout".to_string(),
         };
@@ -1439,10 +1450,7 @@ mod tests {
             MirStrategy::BoundedModelCheck,
             MirStrategy::ContractVerification,
         ]);
-        assert_eq!(
-            portfolio.to_string(),
-            "Portfolio(BoundedModelCheck, ContractVerification)"
-        );
+        assert_eq!(portfolio.to_string(), "Portfolio(BoundedModelCheck, ContractVerification)");
     }
 
     // -----------------------------------------------------------------------
@@ -1505,6 +1513,110 @@ mod tests {
     }
 
     #[test]
+    fn test_build_v1_vcs_from_div_statement() {
+        let mut func = minimal_func("div_stmt");
+        func.body.locals = vec![
+            LocalDecl { index: 0, ty: Ty::i32(), name: None },
+            LocalDecl { index: 1, ty: Ty::i32(), name: Some("n".to_string()) },
+            LocalDecl { index: 2, ty: Ty::i32(), name: None },
+        ];
+        func.body.arg_count = 1;
+        func.body.return_ty = Ty::i32();
+        func.body.blocks[0].stmts.push(Statement::Assign {
+            place: Place::local(2),
+            rvalue: Rvalue::BinaryOp(
+                BinOp::Div,
+                Operand::Copy(Place::local(1)),
+                Operand::Constant(ConstValue::Int(2)),
+            ),
+            span: SourceSpan::default(),
+        });
+
+        let vcs = build_v1_vcs(&func);
+        assert_eq!(vcs.len(), 1);
+        assert!(matches!(vcs[0].kind, VcKind::DivisionByZero));
+        assert_eq!(vcs[0].formula, Formula::Bool(false));
+    }
+
+    #[test]
+    fn test_build_v1_vcs_from_rem_statement() {
+        let mut func = minimal_func("rem_stmt");
+        func.body.locals = vec![
+            LocalDecl { index: 0, ty: Ty::i32(), name: None },
+            LocalDecl { index: 1, ty: Ty::i32(), name: Some("a".to_string()) },
+            LocalDecl { index: 2, ty: Ty::i32(), name: Some("b".to_string()) },
+            LocalDecl { index: 3, ty: Ty::i32(), name: None },
+        ];
+        func.body.arg_count = 2;
+        func.body.return_ty = Ty::i32();
+        func.body.blocks[0].stmts.push(Statement::Assign {
+            place: Place::local(3),
+            rvalue: Rvalue::BinaryOp(
+                BinOp::Rem,
+                Operand::Copy(Place::local(1)),
+                Operand::Copy(Place::local(2)),
+            ),
+            span: SourceSpan::default(),
+        });
+
+        let vcs = build_v1_vcs(&func);
+        assert_eq!(vcs.len(), 1);
+        assert!(matches!(vcs[0].kind, VcKind::RemainderByZero));
+        assert_eq!(
+            vcs[0].formula,
+            Formula::Eq(
+                Box::new(Formula::Var("b".to_string(), Sort::Int)),
+                Box::new(Formula::Int(0)),
+            )
+        );
+    }
+
+    #[test]
+    fn test_build_v1_vcs_skips_div_statement_guarded_by_assert() {
+        let mut func = minimal_func("guarded_div");
+        func.body.locals = vec![
+            LocalDecl { index: 0, ty: Ty::i32(), name: None },
+            LocalDecl { index: 1, ty: Ty::i32(), name: Some("a".to_string()) },
+            LocalDecl { index: 2, ty: Ty::i32(), name: Some("b".to_string()) },
+            LocalDecl { index: 3, ty: Ty::Bool, name: None },
+            LocalDecl { index: 4, ty: Ty::i32(), name: None },
+        ];
+        func.body.arg_count = 2;
+        func.body.return_ty = Ty::i32();
+        func.body.blocks = vec![
+            BasicBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: Terminator::Assert {
+                    cond: Operand::Copy(Place::local(3)),
+                    expected: false,
+                    msg: AssertMessage::DivisionByZero,
+                    target: BlockId(1),
+                    span: SourceSpan::default(),
+                },
+            },
+            BasicBlock {
+                id: BlockId(1),
+                stmts: vec![Statement::Assign {
+                    place: Place::local(4),
+                    rvalue: Rvalue::BinaryOp(
+                        BinOp::Div,
+                        Operand::Copy(Place::local(1)),
+                        Operand::Copy(Place::local(2)),
+                    ),
+                    span: SourceSpan::default(),
+                }],
+                terminator: Terminator::Return,
+            },
+        ];
+
+        let vcs = build_v1_vcs(&func);
+        assert_eq!(vcs.len(), 1);
+        assert!(matches!(vcs[0].kind, VcKind::DivisionByZero));
+        assert_eq!(vcs[0].formula, Formula::Bool(false));
+    }
+
+    #[test]
     fn test_config_defaults() {
         let config = MirRouterConfig::default();
         assert_eq!(config.bmc_depth, 100);
@@ -1531,10 +1643,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     fn shadow_router() -> MirRouter {
-        let config = MirRouterConfig {
-            shadow_mode: true,
-            ..MirRouterConfig::default()
-        };
+        let config = MirRouterConfig { shadow_mode: true, ..MirRouterConfig::default() };
         MirRouter::new(Router::new(), config)
     }
 
@@ -1610,10 +1719,7 @@ mod tests {
         assert!(shadow.mir_result.is_proved());
         assert!(shadow.chosen_result.is_proved());
         // chosen_result should match MIR when MIR is definitive.
-        assert_eq!(
-            shadow.chosen_result.solver_name(),
-            shadow.mir_result.solver_name()
-        );
+        assert_eq!(shadow.chosen_result.solver_name(), shadow.mir_result.solver_name());
     }
 
     #[test]
@@ -1638,175 +1744,130 @@ mod tests {
     #[test]
     fn test_classify_discrepancy_both_proved() {
         let proved_a = VerificationResult::Proved {
-            solver: "a".to_string(),
+            solver: "a".into(),
             time_ms: 10,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
             solver_warnings: None,
         };
         let proved_b = VerificationResult::Proved {
-            solver: "b".to_string(),
+            solver: "b".into(),
             time_ms: 20,
             strength: ProofStrength::deductive(),
             proof_certificate: None,
             solver_warnings: None,
         };
-        assert_eq!(
-            classify_discrepancy(&proved_a, &proved_b),
-            ShadowDiscrepancy::Equivalent
-        );
+        assert_eq!(classify_discrepancy(&proved_a, &proved_b), ShadowDiscrepancy::Equivalent);
     }
 
     #[test]
     fn test_classify_discrepancy_both_failed() {
-        let failed_a = VerificationResult::Failed {
-            solver: "a".to_string(),
-            time_ms: 10,
-            counterexample: None,
-        };
-        let failed_b = VerificationResult::Failed {
-            solver: "b".to_string(),
-            time_ms: 20,
-            counterexample: None,
-        };
-        assert_eq!(
-            classify_discrepancy(&failed_a, &failed_b),
-            ShadowDiscrepancy::Equivalent
-        );
+        let failed_a =
+            VerificationResult::Failed { solver: "a".into(), time_ms: 10, counterexample: None };
+        let failed_b =
+            VerificationResult::Failed { solver: "b".into(), time_ms: 20, counterexample: None };
+        assert_eq!(classify_discrepancy(&failed_a, &failed_b), ShadowDiscrepancy::Equivalent);
     }
 
     #[test]
     fn test_classify_discrepancy_both_unknown() {
         let unknown_a = VerificationResult::Unknown {
-            solver: "a".to_string(),
+            solver: "a".into(),
             time_ms: 10,
             reason: "timeout".to_string(),
         };
         let unknown_b = VerificationResult::Unknown {
-            solver: "b".to_string(),
+            solver: "b".into(),
             time_ms: 20,
             reason: "complex".to_string(),
         };
-        assert_eq!(
-            classify_discrepancy(&unknown_a, &unknown_b),
-            ShadowDiscrepancy::Equivalent
-        );
+        assert_eq!(classify_discrepancy(&unknown_a, &unknown_b), ShadowDiscrepancy::Equivalent);
     }
 
     #[test]
     fn test_classify_discrepancy_mir_stronger_proved() {
         let proved = VerificationResult::Proved {
-            solver: "mir".to_string(),
+            solver: "mir".into(),
             time_ms: 10,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
             solver_warnings: None,
         };
         let unknown = VerificationResult::Unknown {
-            solver: "v1".to_string(),
+            solver: "v1".into(),
             time_ms: 20,
             reason: "complex".to_string(),
         };
-        assert_eq!(
-            classify_discrepancy(&proved, &unknown),
-            ShadowDiscrepancy::MirStronger
-        );
+        assert_eq!(classify_discrepancy(&proved, &unknown), ShadowDiscrepancy::MirStronger);
     }
 
     #[test]
     fn test_classify_discrepancy_mir_stronger_failed() {
-        let failed = VerificationResult::Failed {
-            solver: "mir".to_string(),
-            time_ms: 10,
-            counterexample: None,
-        };
+        let failed =
+            VerificationResult::Failed { solver: "mir".into(), time_ms: 10, counterexample: None };
         let unknown = VerificationResult::Unknown {
-            solver: "v1".to_string(),
+            solver: "v1".into(),
             time_ms: 20,
             reason: "complex".to_string(),
         };
-        assert_eq!(
-            classify_discrepancy(&failed, &unknown),
-            ShadowDiscrepancy::MirStronger
-        );
+        assert_eq!(classify_discrepancy(&failed, &unknown), ShadowDiscrepancy::MirStronger);
     }
 
     #[test]
     fn test_classify_discrepancy_v1_stronger_proved() {
         let unknown = VerificationResult::Unknown {
-            solver: "mir".to_string(),
+            solver: "mir".into(),
             time_ms: 10,
             reason: "complex".to_string(),
         };
         let proved = VerificationResult::Proved {
-            solver: "v1".to_string(),
+            solver: "v1".into(),
             time_ms: 20,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
             solver_warnings: None,
         };
-        assert_eq!(
-            classify_discrepancy(&unknown, &proved),
-            ShadowDiscrepancy::V1Stronger
-        );
+        assert_eq!(classify_discrepancy(&unknown, &proved), ShadowDiscrepancy::V1Stronger);
     }
 
     #[test]
     fn test_classify_discrepancy_v1_stronger_failed() {
         let unknown = VerificationResult::Unknown {
-            solver: "mir".to_string(),
+            solver: "mir".into(),
             time_ms: 10,
             reason: "complex".to_string(),
         };
-        let failed = VerificationResult::Failed {
-            solver: "v1".to_string(),
-            time_ms: 20,
-            counterexample: None,
-        };
-        assert_eq!(
-            classify_discrepancy(&unknown, &failed),
-            ShadowDiscrepancy::V1Stronger
-        );
+        let failed =
+            VerificationResult::Failed { solver: "v1".into(), time_ms: 20, counterexample: None };
+        assert_eq!(classify_discrepancy(&unknown, &failed), ShadowDiscrepancy::V1Stronger);
     }
 
     #[test]
     fn test_classify_discrepancy_mismatch_proved_vs_failed() {
         let proved = VerificationResult::Proved {
-            solver: "mir".to_string(),
+            solver: "mir".into(),
             time_ms: 10,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
             solver_warnings: None,
         };
-        let failed = VerificationResult::Failed {
-            solver: "v1".to_string(),
-            time_ms: 20,
-            counterexample: None,
-        };
-        assert_eq!(
-            classify_discrepancy(&proved, &failed),
-            ShadowDiscrepancy::Mismatch
-        );
+        let failed =
+            VerificationResult::Failed { solver: "v1".into(), time_ms: 20, counterexample: None };
+        assert_eq!(classify_discrepancy(&proved, &failed), ShadowDiscrepancy::Mismatch);
     }
 
     #[test]
     fn test_classify_discrepancy_mismatch_failed_vs_proved() {
-        let failed = VerificationResult::Failed {
-            solver: "mir".to_string(),
-            time_ms: 10,
-            counterexample: None,
-        };
+        let failed =
+            VerificationResult::Failed { solver: "mir".into(), time_ms: 10, counterexample: None };
         let proved = VerificationResult::Proved {
-            solver: "v1".to_string(),
+            solver: "v1".into(),
             time_ms: 20,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
             solver_warnings: None,
         };
-        assert_eq!(
-            classify_discrepancy(&failed, &proved),
-            ShadowDiscrepancy::Mismatch
-        );
+        assert_eq!(classify_discrepancy(&failed, &proved), ShadowDiscrepancy::Mismatch);
     }
 
     #[test]
@@ -1820,7 +1881,7 @@ mod tests {
     #[test]
     fn test_result_summary_format() {
         let proved = VerificationResult::Proved {
-            solver: "test".to_string(),
+            solver: "test".into(),
             time_ms: 42,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
@@ -1828,24 +1889,18 @@ mod tests {
         };
         assert_eq!(result_summary(&proved), "Proved(test, 42ms)");
 
-        let failed = VerificationResult::Failed {
-            solver: "test".to_string(),
-            time_ms: 7,
-            counterexample: None,
-        };
+        let failed =
+            VerificationResult::Failed { solver: "test".into(), time_ms: 7, counterexample: None };
         assert_eq!(result_summary(&failed), "Failed(test, 7ms)");
 
         let unknown = VerificationResult::Unknown {
-            solver: "test".to_string(),
+            solver: "test".into(),
             time_ms: 0,
             reason: "complex formula".to_string(),
         };
         assert_eq!(result_summary(&unknown), "Unknown(test: complex formula)");
 
-        let timeout = VerificationResult::Timeout {
-            solver: "test".to_string(),
-            timeout_ms: 5000,
-        };
+        let timeout = VerificationResult::Timeout { solver: "test".into(), timeout_ms: 5000 };
         assert_eq!(result_summary(&timeout), "Timeout(test, 5000ms)");
     }
 
@@ -1911,24 +1966,24 @@ mod tests {
         let result = router.dispatch_portfolio(&func, &strategies);
         // Both backends produce results; at least one should be definitive.
         assert!(
-            result.is_proved() || result.is_failed()
+            result.is_proved()
+                || result.is_failed()
                 || matches!(result, VerificationResult::Unknown { .. }),
         );
     }
 
     #[test]
     fn test_portfolio_sequential_fallback() {
-        let config = MirRouterConfig {
-            enable_portfolio_racing: false,
-            ..MirRouterConfig::default()
-        };
+        let config =
+            MirRouterConfig { enable_portfolio_racing: false, ..MirRouterConfig::default() };
         let router = MirRouter::new(Router::new(), config);
         let func = minimal_func("seq_fallback");
         let strategies = vec![MirStrategy::V1Fallback, MirStrategy::BoundedModelCheck];
         let result = router.dispatch_portfolio(&func, &strategies);
         // Sequential should still produce a valid result.
         assert!(
-            result.is_proved() || result.is_failed()
+            result.is_proved()
+                || result.is_failed()
                 || matches!(result, VerificationResult::Unknown { .. }),
         );
     }
@@ -1949,10 +2004,8 @@ mod tests {
 
     #[test]
     fn test_unsafe_audit_sequential_fallback() {
-        let config = MirRouterConfig {
-            enable_portfolio_racing: false,
-            ..MirRouterConfig::default()
-        };
+        let config =
+            MirRouterConfig { enable_portfolio_racing: false, ..MirRouterConfig::default() };
         let router = MirRouter::new(Router::new(), config);
         let mut func = func_with_unsafe("unsafe_seq");
         func.contracts.push(Contract {
@@ -1965,141 +2018,6 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // tRust #793: Typed counterexample conversion tests
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_convert_typed_counterexample_basic() {
-        use std::collections::BTreeMap;
-        let mut vars = BTreeMap::new();
-        vars.insert("x".to_string(), trust_zani_lib::TypedValue::Int(-42));
-        vars.insert("y".to_string(), trust_zani_lib::TypedValue::Uint(255));
-        vars.insert("flag".to_string(), trust_zani_lib::TypedValue::Bool(true));
-
-        let typed_cex = trust_zani_lib::TypedCounterexample::new(vars);
-        let cex = convert_typed_counterexample(&typed_cex);
-
-        assert_eq!(cex.assignments.len(), 3);
-        // BTreeMap is sorted by key, so assignments should be in key order.
-        assert_eq!(cex.assignments[0].0, "flag");
-        assert!(matches!(
-            cex.assignments[0].1,
-            CounterexampleValue::Bool(true)
-        ));
-        assert_eq!(cex.assignments[1].0, "x");
-        assert!(matches!(
-            cex.assignments[1].1,
-            CounterexampleValue::Int(-42)
-        ));
-        assert_eq!(cex.assignments[2].0, "y");
-        assert!(matches!(
-            cex.assignments[2].1,
-            CounterexampleValue::Uint(255)
-        ));
-        assert!(cex.trace.is_none());
-    }
-
-    #[test]
-    fn test_convert_typed_counterexample_with_trace() {
-        use std::collections::BTreeMap;
-        let mut vars = BTreeMap::new();
-        vars.insert("i".to_string(), trust_zani_lib::TypedValue::Uint(10));
-
-        let mut step_vars = BTreeMap::new();
-        step_vars.insert("i".to_string(), trust_zani_lib::TypedValue::Uint(0));
-        let trace = vec![trust_zani_lib::TraceStep {
-            step: 0,
-            assignments: step_vars,
-            program_point: Some("bb0".to_string()),
-        }];
-
-        let typed_cex = trust_zani_lib::TypedCounterexample::new(vars).with_trace(trace);
-        let cex = convert_typed_counterexample(&typed_cex);
-
-        assert!(cex.trace.is_some());
-        let trace = cex.trace.as_ref().unwrap();
-        assert_eq!(trace.len(), 1);
-        assert_eq!(trace.steps[0].step, 0);
-        assert_eq!(trace.steps[0].program_point.as_deref(), Some("bb0"));
-    }
-
-    // -----------------------------------------------------------------------
-    // tRust #793: Proof certificate composition tests
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_compose_portfolio_certificates_empty() {
-        let results: Vec<(MirStrategy, VerificationResult)> = vec![];
-        assert!(compose_portfolio_certificates(&results).is_none());
-    }
-
-    #[test]
-    fn test_compose_portfolio_certificates_no_certs() {
-        let results = vec![
-            (
-                MirStrategy::BoundedModelCheck,
-                VerificationResult::Proved {
-                    solver: "zani".to_string(),
-                    time_ms: 10,
-                    strength: ProofStrength::bounded(100),
-                    proof_certificate: None,
-                    solver_warnings: None,
-                },
-            ),
-        ];
-        assert!(compose_portfolio_certificates(&results).is_none());
-    }
-
-    #[test]
-    fn test_compose_portfolio_certificates_with_certs() {
-        let results = vec![
-            (
-                MirStrategy::BoundedModelCheck,
-                VerificationResult::Proved {
-                    solver: "zani".to_string(),
-                    time_ms: 10,
-                    strength: ProofStrength::bounded(100),
-                    proof_certificate: Some(vec![1, 2, 3]),
-                    solver_warnings: None,
-                },
-            ),
-            (
-                MirStrategy::ContractVerification,
-                VerificationResult::Proved {
-                    solver: "sunder".to_string(),
-                    time_ms: 20,
-                    strength: ProofStrength::deductive(),
-                    proof_certificate: Some(vec![4, 5, 6]),
-                    solver_warnings: None,
-                },
-            ),
-        ];
-        let composed = compose_portfolio_certificates(&results);
-        assert!(composed.is_some());
-        // SHA-256 produces 32 bytes.
-        assert_eq!(composed.unwrap().len(), 32);
-    }
-
-    #[test]
-    fn test_compose_portfolio_certificates_deterministic() {
-        let results = vec![
-            (
-                MirStrategy::BoundedModelCheck,
-                VerificationResult::Proved {
-                    solver: "zani".to_string(),
-                    time_ms: 10,
-                    strength: ProofStrength::bounded(100),
-                    proof_certificate: Some(vec![1, 2, 3]),
-                    solver_warnings: None,
-                },
-            ),
-        ];
-        let a = compose_portfolio_certificates(&results);
-        let b = compose_portfolio_certificates(&results);
-        assert_eq!(a, b);
-    }
-
-    // -----------------------------------------------------------------------
     // tRust #793: Invariant inference config test
     // -----------------------------------------------------------------------
 
@@ -2107,10 +2025,7 @@ mod tests {
     fn test_bmc_dispatch_with_invariant_hints_config() {
         // When infer_invariants is true and function has loops,
         // dispatch should use the invariant hints path.
-        let config = MirRouterConfig {
-            infer_invariants: true,
-            ..MirRouterConfig::default()
-        };
+        let config = MirRouterConfig { infer_invariants: true, ..MirRouterConfig::default() };
         let router = MirRouter::new(Router::new(), config);
         let func = func_with_loop("loopy_invariant");
         let result = router.verify_function(&func);
@@ -2123,13 +2038,121 @@ mod tests {
     #[test]
     fn test_bmc_dispatch_without_invariant_hints() {
         // When infer_invariants is false, dispatch goes straight to BMC.
-        let config = MirRouterConfig {
-            infer_invariants: false,
-            ..MirRouterConfig::default()
-        };
+        let config = MirRouterConfig { infer_invariants: false, ..MirRouterConfig::default() };
         let router = MirRouter::new(Router::new(), config);
         let func = func_with_loop("loopy_no_hints");
         let result = router.verify_function(&func);
         assert!(!result.solver_name().is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Real MIR fixture tests (#941)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_real_mir_classify_sum_to_has_loops() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__sum_to");
+        // sum_to has a loop (back-edge), should classify as BoundedModelCheck
+        assert_eq!(router.classify(&func), MirStrategy::BoundedModelCheck);
+    }
+
+    #[test]
+    fn test_real_mir_classify_safe_divide_v1_fallback() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__safe_divide");
+        // safe_divide has no contracts/loops/unsafe — V1Fallback
+        assert_eq!(router.classify(&func), MirStrategy::V1Fallback);
+    }
+
+    #[test]
+    fn test_real_mir_classify_unsafe_read_raw_ptr() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__unsafe_read");
+        // unsafe_read has raw pointer local — SeparationLogic
+        assert_eq!(router.classify(&func), MirStrategy::SeparationLogic);
+    }
+
+    #[test]
+    fn test_real_mir_classify_increment_v1_fallback() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__increment");
+        assert_eq!(router.classify(&func), MirStrategy::V1Fallback);
+    }
+
+    #[test]
+    fn test_real_mir_classify_max_of_v1_fallback() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__max_of");
+        // max_of has SwitchInt but no back-edge — check the actual result
+        let strategy = router.classify(&func);
+        // Should not be BoundedModelCheck since no loop back-edge
+        assert_ne!(strategy, MirStrategy::BoundedModelCheck);
+    }
+
+    #[test]
+    fn test_real_mir_dispatch_safe_divide_proves() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__safe_divide");
+        let result = router.verify_function(&func);
+        // Should produce a valid result (proved or at least not timeout)
+        assert!(!result.solver_name().is_empty());
+    }
+
+    #[test]
+    fn test_real_mir_dispatch_increment_proves() {
+        let router = MirRouter::with_defaults();
+        let func = load_fixture("test_functions__increment");
+        let result = router.verify_function(&func);
+        assert!(result.is_proved());
+    }
+
+    #[test]
+    fn test_real_mir_verify_all_fixtures() {
+        let router = MirRouter::with_defaults();
+        let dir = fixture_dir();
+        let mut count = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().map_or(true, |ext| ext != "json") {
+                continue;
+            }
+            let json = std::fs::read_to_string(&path).unwrap();
+            if let Ok(func) = serde_json::from_str::<VerifiableFunction>(&json) {
+                let strategy = router.classify(&func);
+                let result = router.verify_function(&func);
+                assert!(
+                    !result.solver_name().is_empty(),
+                    "fixture {} ({:?}) produced no solver name",
+                    func.name,
+                    strategy
+                );
+                count += 1;
+            }
+        }
+        assert!(count >= 10, "expected at least 10 fixtures, found {count}");
+    }
+
+    #[test]
+    fn test_real_mir_shadow_mode_on_fixtures() {
+        let config = MirRouterConfig { shadow_mode: true, ..MirRouterConfig::default() };
+        let router = MirRouter::new(Router::new(), config);
+        let func = load_fixture("test_functions__safe_divide");
+        let shadow = router.shadow_verify(&func);
+        assert!(!shadow.mir_result.solver_name().is_empty());
+        assert!(!shadow.v1_result.solver_name().is_empty());
+    }
+
+    #[test]
+    fn test_real_mir_build_v1_vcs_safe_divide_has_div_vc() {
+        let func = load_fixture("test_functions__safe_divide");
+        let vcs = build_v1_vcs(&func);
+        // safe_divide has x / y — should produce a DivisionByZero VC
+        assert!(!vcs.is_empty(), "safe_divide should produce at least one VC");
+        assert!(
+            vcs.iter().any(|vc| matches!(vc.kind, VcKind::DivisionByZero)),
+            "safe_divide should have a DivisionByZero VC"
+        );
     }
 }

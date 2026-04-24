@@ -192,7 +192,7 @@ fn lookup_default_body_stability(
         return None;
     }
 
-    // tRust: known issue — check that this item can have body stability
+    // FIXME: check that this item can have body stability
     find_attr!(tcx, def_id, RustcBodyStability { stability, .. } => *stability)
 }
 
@@ -248,7 +248,7 @@ fn lookup_const_stability(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Option<ConstSt
     }
 
     // `impl const Trait for Type` items forward their const stability to their immediate children.
-    // tRust: known issue — (const_trait_impl) how is this supposed to interact with `#[rustc_const_stable_indirect]`?
+    // FIXME(const_trait_impl): how is this supposed to interact with `#[rustc_const_stable_indirect]`?
     // Currently, once that is set, we do not inherit anything from the parent any more.
     if inherit_const_stability(tcx, def_id) {
         let parent = tcx.opt_local_parent(def_id)?;
@@ -594,7 +594,7 @@ impl<'tcx> Visitor<'tcx> for Checker<'tcx> {
                     let attrs = self.tcx.hir_attrs(item.hir_id());
                     let stab = find_attr!(attrs, Stability{stability, span} => (*stability, *span));
 
-                    // tRust: known issue — (jdonszelmann) make it impossible to miss the or_else in the typesystem
+                    // FIXME(jdonszelmann): make it impossible to miss the or_else in the typesystem
                     let const_stab =
                         find_attr!(attrs, RustcConstStability{stability, ..} => *stability);
 
@@ -672,7 +672,7 @@ impl<'tcx> Visitor<'tcx> for Checker<'tcx> {
                         {
                             // the const stability of a trait impl must match the const stability on the trait.
                             if const_stab.is_const_stable() != stable_or_implied_stable {
-                                let trait_span = self.tcx.def_ident_span(trait_id).expect("invariant: trait has an ident span"); // tRust: unwrap -> expect
+                                let trait_span = self.tcx.def_ident_span(trait_id).unwrap();
 
                                 let impl_stability = if stable_or_implied_stable {
                                     errors::ImplConstStability::Stable { span: item.span }
@@ -698,7 +698,7 @@ impl<'tcx> Visitor<'tcx> for Checker<'tcx> {
                 if let hir::Constness::Const = constness
                     && let Some(def_id) = of_trait.trait_ref.trait_def_id()
                 {
-                    // tRust: known issue — (const_trait_impl) Improve the span here.
+                    // FIXME(const_trait_impl): Improve the span here.
                     self.tcx.check_const_stability(
                         def_id,
                         of_trait.trait_ref.path.span,
@@ -988,9 +988,9 @@ pub fn check_unused_or_stable_features(tcx: TyCtxt<'_>) {
     // recognise the feature when building std.
     // Likewise, libtest is handled specially, so `test` isn't
     // available as we'd like it to be.
-    // tRust: known issue — only remove `libc` when `stdbuild` is enabled.
-    // tRust: known issue — remove special casing for `test`.
-    // tRust: known issue — (#120456) - is `swap_remove` correct?
+    // FIXME: only remove `libc` when `stdbuild` is enabled.
+    // FIXME: remove special casing for `test`.
+    // FIXME(#120456) - is `swap_remove` correct?
     remaining_lib_features.swap_remove(&sym::libc);
     remaining_lib_features.swap_remove(&sym::test);
 
@@ -1033,7 +1033,7 @@ pub fn check_unused_or_stable_features(tcx: TyCtxt<'_>) {
                     unnecessary_stable_feature_lint(tcx, *span, feature, since);
                 }
             }
-            // tRust: known issue — (#120456) - is `swap_remove` correct?
+            // FIXME(#120456) - is `swap_remove` correct?
             remaining_lib_features.swap_remove(&feature);
 
             // `feature` is the feature doing the implying, but `implied_by` is the feature with
@@ -1124,7 +1124,7 @@ pub fn check_unused_or_stable_features(tcx: TyCtxt<'_>) {
         tcx.dcx().emit_err(errors::ImpliedFeatureNotExist { span, feature, implied_by });
     }
 
-    // tRust: known issue — (#44232) the `used_features` table no longer exists, so we
+    // FIXME(#44232): the `used_features` table no longer exists, so we
     // don't lint about unused features. We should re-enable this one day!
 }
 

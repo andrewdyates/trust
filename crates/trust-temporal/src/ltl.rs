@@ -92,10 +92,10 @@ enum Token {
     And,
     Or,
     Implies,
-    Next,     // X
-    Until,    // U
+    Next,       // X
+    Until,      // U
     Eventually, // F
-    Always,   // G
+    Always,     // G
     LParen,
     RParen,
 }
@@ -151,10 +151,7 @@ fn tokenize(input: &str) -> Result<Vec<(Token, usize)>, ParseError> {
                 tokens.push((tok, start));
             }
             _ => {
-                return Err(ParseError::UnexpectedToken {
-                    pos: i,
-                    found: chars[i].to_string(),
-                });
+                return Err(ParseError::UnexpectedToken { pos: i, found: chars[i].to_string() });
             }
         }
     }
@@ -355,8 +352,9 @@ pub fn negate(formula: &LtlFormula) -> LtlFormula {
 ///   Actually: `!(phi U psi)` = `(!psi) R (!phi)` where R is "release".
 ///   Since we don't have Release, we express it as: `G(!psi) || (!psi U (!phi && !psi))`
 /// - `!(phi -> psi)` => `phi && !psi`
+#[cfg(test)]
 #[must_use]
-pub(crate) fn to_positive_normal_form(formula: &LtlFormula) -> LtlFormula {
+fn to_positive_normal_form(formula: &LtlFormula) -> LtlFormula {
     match formula {
         LtlFormula::Atomic(_) => formula.clone(),
 
@@ -372,9 +370,7 @@ pub(crate) fn to_positive_normal_form(formula: &LtlFormula) -> LtlFormula {
             Box::new(to_positive_normal_form(r)),
         ),
 
-        LtlFormula::Next(inner) => {
-            LtlFormula::Next(Box::new(to_positive_normal_form(inner)))
-        }
+        LtlFormula::Next(inner) => LtlFormula::Next(Box::new(to_positive_normal_form(inner))),
 
         LtlFormula::Until(l, r) => LtlFormula::Until(
             Box::new(to_positive_normal_form(l)),
@@ -385,9 +381,7 @@ pub(crate) fn to_positive_normal_form(formula: &LtlFormula) -> LtlFormula {
             LtlFormula::Eventually(Box::new(to_positive_normal_form(inner)))
         }
 
-        LtlFormula::Always(inner) => {
-            LtlFormula::Always(Box::new(to_positive_normal_form(inner)))
-        }
+        LtlFormula::Always(inner) => LtlFormula::Always(Box::new(to_positive_normal_form(inner))),
 
         LtlFormula::Implies(l, r) => {
             // phi -> psi  =  !phi || psi
@@ -400,6 +394,7 @@ pub(crate) fn to_positive_normal_form(formula: &LtlFormula) -> LtlFormula {
 }
 
 /// Push a negation inward (helper for PNF conversion).
+#[cfg(test)]
 fn push_negation(inner: &LtlFormula) -> LtlFormula {
     match inner {
         // !!phi => phi
@@ -409,29 +404,23 @@ fn push_negation(inner: &LtlFormula) -> LtlFormula {
         LtlFormula::Atomic(_) => LtlFormula::Not(Box::new(inner.clone())),
 
         // !(phi && psi) => !phi || !psi
-        LtlFormula::And(l, r) => LtlFormula::Or(
-            Box::new(push_negation(l)),
-            Box::new(push_negation(r)),
-        ),
+        LtlFormula::And(l, r) => {
+            LtlFormula::Or(Box::new(push_negation(l)), Box::new(push_negation(r)))
+        }
 
         // !(phi || psi) => !phi && !psi
-        LtlFormula::Or(l, r) => LtlFormula::And(
-            Box::new(push_negation(l)),
-            Box::new(push_negation(r)),
-        ),
+        LtlFormula::Or(l, r) => {
+            LtlFormula::And(Box::new(push_negation(l)), Box::new(push_negation(r)))
+        }
 
         // !X phi => X !phi
         LtlFormula::Next(phi) => LtlFormula::Next(Box::new(push_negation(phi))),
 
         // !F phi => G !phi
-        LtlFormula::Eventually(phi) => {
-            LtlFormula::Always(Box::new(push_negation(phi)))
-        }
+        LtlFormula::Eventually(phi) => LtlFormula::Always(Box::new(push_negation(phi))),
 
         // !G phi => F !phi
-        LtlFormula::Always(phi) => {
-            LtlFormula::Eventually(Box::new(push_negation(phi)))
-        }
+        LtlFormula::Always(phi) => LtlFormula::Eventually(Box::new(push_negation(phi))),
 
         // !(phi U psi) => G(!psi) || (!psi U (!phi && !psi))
         LtlFormula::Until(l, r) => {
@@ -447,16 +436,16 @@ fn push_negation(inner: &LtlFormula) -> LtlFormula {
         }
 
         // !(phi -> psi) => phi && !psi
-        LtlFormula::Implies(l, r) => LtlFormula::And(
-            Box::new(to_positive_normal_form(l)),
-            Box::new(push_negation(r)),
-        ),
+        LtlFormula::Implies(l, r) => {
+            LtlFormula::And(Box::new(to_positive_normal_form(l)), Box::new(push_negation(r)))
+        }
     }
 }
 
 /// Check whether a formula is in positive normal form (negation only on atoms).
+#[cfg(test)]
 #[must_use]
-pub(crate) fn is_positive_normal_form(formula: &LtlFormula) -> bool {
+fn is_positive_normal_form(formula: &LtlFormula) -> bool {
     match formula {
         LtlFormula::Atomic(_) => true,
         LtlFormula::Not(inner) => matches!(inner.as_ref(), LtlFormula::Atomic(_)),
@@ -571,9 +560,9 @@ mod tests {
         let f = parse_ltl("G F alive").unwrap();
         assert_eq!(
             f,
-            LtlFormula::Always(Box::new(LtlFormula::Eventually(
-                Box::new(LtlFormula::Atomic("alive".into()))
-            )))
+            LtlFormula::Always(Box::new(LtlFormula::Eventually(Box::new(LtlFormula::Atomic(
+                "alive".into()
+            )))))
         );
     }
 
@@ -673,9 +662,9 @@ mod tests {
         let pnf = to_positive_normal_form(&f);
         assert_eq!(
             pnf,
-            LtlFormula::Eventually(Box::new(LtlFormula::Not(Box::new(
-                LtlFormula::Atomic("p".into())
-            ))))
+            LtlFormula::Eventually(Box::new(LtlFormula::Not(Box::new(LtlFormula::Atomic(
+                "p".into()
+            )))))
         );
         assert!(is_positive_normal_form(&pnf));
     }
@@ -687,9 +676,7 @@ mod tests {
         let pnf = to_positive_normal_form(&f);
         assert_eq!(
             pnf,
-            LtlFormula::Next(Box::new(LtlFormula::Not(Box::new(
-                LtlFormula::Atomic("p".into())
-            ))))
+            LtlFormula::Next(Box::new(LtlFormula::Not(Box::new(LtlFormula::Atomic("p".into())))))
         );
         assert!(is_positive_normal_form(&pnf));
     }

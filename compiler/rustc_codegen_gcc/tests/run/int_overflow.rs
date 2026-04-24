@@ -16,7 +16,6 @@ fn main() {
 
     // If overflow checking is disabled, we should reach here.
     #[cfg(not(debug_assertions))]
-    // SAFETY: calling libc exit/abort to terminate the process.
     unsafe {
         println!("Success");
         std::process::abort();

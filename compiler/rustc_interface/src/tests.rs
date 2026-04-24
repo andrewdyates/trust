@@ -717,6 +717,7 @@ fn test_unstable_options_tracking_hash() {
     untracked!(no_leak_check, true);
     untracked!(no_parallel_backend, true);
     untracked!(no_steal_thir, true);
+    untracked!(no_trust_verify, true);
     untracked!(parse_crate_root_only, true);
     // `pre_link_arg` is omitted because it just forwards to `pre_link_args`.
     untracked!(pre_link_args, vec![String::from("abc"), String::from("def")]);
@@ -740,8 +741,9 @@ fn test_unstable_options_tracking_hash() {
     untracked!(time_passes_format, TimePassesFormat::Json);
     untracked!(trace_macros, true);
     untracked!(track_diagnostics, true);
+    untracked!(trust_verify, true);
+    untracked!(trust_verify_level, 2);
     untracked!(trim_diagnostic_paths, false);
-    untracked!(trust_verify, true); // tRust: verification pass flag
     untracked!(ui_testing, true);
     untracked!(unpretty, Some("expanded".to_string()));
     untracked!(unstable_options, true);
@@ -834,6 +836,7 @@ fn test_unstable_options_tracking_hash() {
     tracked!(no_link, true);
     tracked!(no_profiler_runtime, true);
     tracked!(no_trait_vptr, true);
+    tracked!(no_trust_verify, true);
     tracked!(no_unique_section_names, true);
     tracked!(offload, vec![Offload::Device]);
     tracked!(on_broken_pipe, OnBrokenPipe::Kill);
@@ -877,6 +880,9 @@ fn test_unstable_options_tracking_hash() {
     tracked!(translate_remapped_path_to_local_path, false);
     tracked!(trap_unreachable, Some(false));
     tracked!(treat_err_as_bug, NonZero::new(1));
+    tracked!(trust_verify, true);
+    tracked!(trust_verify_level, 2);
+    tracked!(trust_verify_output, "json".to_string());
     tracked!(tune_cpu, Some(String::from("abc")));
     tracked!(ub_checks, Some(false));
     tracked!(uninit_const_chunk_threshold, 123);

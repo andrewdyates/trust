@@ -22,7 +22,6 @@ fn call_func(func: fn(i16) -> i8, param: i16) -> i8 {
 
 #[no_mangle]
 extern "C" fn main(argc: i32, _argv: *const *const u8) -> i32 {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         let result = call_func(i16_as_i8, argc as i16) as isize;
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, result);

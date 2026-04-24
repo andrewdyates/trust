@@ -29,50 +29,45 @@ pub fn select_logic(formula: &Formula) -> &'static str {
     let mut has_quantifier = false;
     let mut has_int = false;
 
-    formula.visit(&mut |f| {
-        match f {
-            Formula::BitVec { .. }
-            | Formula::BvAdd(..)
-            | Formula::BvSub(..)
-            | Formula::BvMul(..)
-            | Formula::BvUDiv(..)
-            | Formula::BvSDiv(..)
-            | Formula::BvURem(..)
-            | Formula::BvSRem(..)
-            | Formula::BvAnd(..)
-            | Formula::BvOr(..)
-            | Formula::BvXor(..)
-            | Formula::BvNot(..)
-            | Formula::BvShl(..)
-            | Formula::BvLShr(..)
-            | Formula::BvAShr(..)
-            | Formula::BvULt(..)
-            | Formula::BvULe(..)
-            | Formula::BvSLt(..)
-            | Formula::BvSLe(..)
-            | Formula::BvToInt(..)
-            | Formula::IntToBv(..)
-            | Formula::BvExtract { .. }
-            | Formula::BvConcat(..)
-            | Formula::BvZeroExt(..)
-            | Formula::BvSignExt(..) => has_bv = true,
-            Formula::Var(_, Sort::BitVec(_))
-            | Formula::SymVar(_, Sort::BitVec(_)) => has_bv = true,
-            Formula::Select(..) | Formula::Store(..) => has_array = true,
-            Formula::Var(_, Sort::Array(..))
-            | Formula::SymVar(_, Sort::Array(..)) => has_array = true,
-            Formula::Forall(..) | Formula::Exists(..) => has_quantifier = true,
-            Formula::Int(_) | Formula::UInt(_) => has_int = true,
-            Formula::Var(_, Sort::Int)
-            | Formula::SymVar(_, Sort::Int) => has_int = true,
-            Formula::Add(..)
-            | Formula::Sub(..)
-            | Formula::Mul(..)
-            | Formula::Div(..)
-            | Formula::Rem(..)
-            | Formula::Neg(..) => has_int = true,
-            _ => {}
-        }
+    formula.visit(&mut |f| match f {
+        Formula::BitVec { .. }
+        | Formula::BvAdd(..)
+        | Formula::BvSub(..)
+        | Formula::BvMul(..)
+        | Formula::BvUDiv(..)
+        | Formula::BvSDiv(..)
+        | Formula::BvURem(..)
+        | Formula::BvSRem(..)
+        | Formula::BvAnd(..)
+        | Formula::BvOr(..)
+        | Formula::BvXor(..)
+        | Formula::BvNot(..)
+        | Formula::BvShl(..)
+        | Formula::BvLShr(..)
+        | Formula::BvAShr(..)
+        | Formula::BvULt(..)
+        | Formula::BvULe(..)
+        | Formula::BvSLt(..)
+        | Formula::BvSLe(..)
+        | Formula::BvToInt(..)
+        | Formula::IntToBv(..)
+        | Formula::BvExtract { .. }
+        | Formula::BvConcat(..)
+        | Formula::BvZeroExt(..)
+        | Formula::BvSignExt(..) => has_bv = true,
+        Formula::Var(_, Sort::BitVec(_)) | Formula::SymVar(_, Sort::BitVec(_)) => has_bv = true,
+        Formula::Select(..) | Formula::Store(..) => has_array = true,
+        Formula::Var(_, Sort::Array(..)) | Formula::SymVar(_, Sort::Array(..)) => has_array = true,
+        Formula::Forall(..) | Formula::Exists(..) => has_quantifier = true,
+        Formula::Int(_) | Formula::UInt(_) => has_int = true,
+        Formula::Var(_, Sort::Int) | Formula::SymVar(_, Sort::Int) => has_int = true,
+        Formula::Add(..)
+        | Formula::Sub(..)
+        | Formula::Mul(..)
+        | Formula::Div(..)
+        | Formula::Rem(..)
+        | Formula::Neg(..) => has_int = true,
+        _ => {}
     });
 
     match (has_quantifier, has_array, has_bv, has_int) {
@@ -267,10 +262,11 @@ pub fn split_top_level(input: &str) -> Vec<&str> {
             ')' => {
                 depth = depth.saturating_sub(1);
                 if depth == 0
-                    && let Some(s) = start {
-                        parts.push(&input[s..=i]);
-                        start = None;
-                    }
+                    && let Some(s) = start
+                {
+                    parts.push(&input[s..=i]);
+                    start = None;
+                }
             }
             _ => {
                 if start.is_none() {
@@ -407,34 +403,19 @@ mod tests {
         assert_eq!(infer_sort(&Formula::Bool(true)), Sort::Bool);
         assert_eq!(infer_sort(&Formula::Int(42)), Sort::Int);
         assert_eq!(infer_sort(&Formula::UInt(100)), Sort::Int);
-        assert_eq!(
-            infer_sort(&Formula::BitVec { value: 255, width: 8 }),
-            Sort::BitVec(8)
-        );
+        assert_eq!(infer_sort(&Formula::BitVec { value: 255, width: 8 }), Sort::BitVec(8));
     }
 
     #[test]
     fn test_infer_sort_boolean_ops() {
-        assert_eq!(
-            infer_sort(&Formula::Not(Box::new(Formula::Bool(true)))),
-            Sort::Bool
-        );
-        assert_eq!(
-            infer_sort(&Formula::And(vec![var("a"), var("b")])),
-            Sort::Bool
-        );
-        assert_eq!(
-            infer_sort(&Formula::Eq(Box::new(var("x")), Box::new(var("y")))),
-            Sort::Bool
-        );
+        assert_eq!(infer_sort(&Formula::Not(Box::new(Formula::Bool(true)))), Sort::Bool);
+        assert_eq!(infer_sort(&Formula::And(vec![var("a"), var("b")])), Sort::Bool);
+        assert_eq!(infer_sort(&Formula::Eq(Box::new(var("x")), Box::new(var("y")))), Sort::Bool);
     }
 
     #[test]
     fn test_infer_sort_arithmetic() {
-        assert_eq!(
-            infer_sort(&Formula::Add(Box::new(var("x")), Box::new(var("y")))),
-            Sort::Int
-        );
+        assert_eq!(infer_sort(&Formula::Add(Box::new(var("x")), Box::new(var("y")))), Sort::Int);
     }
 
     #[test]
@@ -483,10 +464,7 @@ mod tests {
 
     #[test]
     fn test_split_top_level_nested_parens() {
-        assert_eq!(
-            split_top_level("and (> x 0) (< y 10)"),
-            vec!["and", "(> x 0)", "(< y 10)"]
-        );
+        assert_eq!(split_top_level("and (> x 0) (< y 10)"), vec!["and", "(> x 0)", "(< y 10)"]);
     }
 
     #[test]
@@ -501,9 +479,6 @@ mod tests {
 
     #[test]
     fn test_split_top_level_deeply_nested() {
-        assert_eq!(
-            split_top_level("+ (f (g x)) y"),
-            vec!["+", "(f (g x))", "y"]
-        );
+        assert_eq!(split_top_level("+ (f (g x)) y"), vec!["+", "(f (g x))", "y"]);
     }
 }

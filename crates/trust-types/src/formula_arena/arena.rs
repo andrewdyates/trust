@@ -7,8 +7,21 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use crate::formula::Formula;
+use crate::fx::FxHashMap;
 
 use super::types::{FormulaNode, FormulaRef};
+
+/// Hash-consing key for N-ary nodes (And/Or).
+///
+/// And/Or nodes store `(start, count)` indices into the arena's refs vec,
+/// which are arena-internal and differ for structurally identical nodes.
+/// This key captures the variant tag and actual child FormulaRefs so that
+/// identical And/Or expressions hash-cons correctly.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum NaryKey {
+    And(Vec<FormulaRef>),
+    Or(Vec<FormulaRef>),
+}
 
 /// Arena-allocated formula storage. All nodes in a formula tree live in
 /// contiguous memory, addressed by `FormulaRef` indices.
@@ -31,6 +44,30 @@ use super::types::{FormulaNode, FormulaRef};
 /// let roundtrip = arena.to_formula(root);
 /// assert_eq!(roundtrip, f);
 /// ```
+/// Hash-consing deduplication metrics.
+#[derive(Debug, Clone, Default)]
+pub struct HashConsMetrics {
+    /// Number of times a node was found in the dedup table (avoided allocation).
+    pub hits: u64,
+    /// Number of times a node was NOT in the table (new allocation).
+    pub misses: u64,
+}
+
+impl HashConsMetrics {
+    /// Total lookup attempts (hits + misses).
+    #[must_use]
+    pub fn total(&self) -> u64 {
+        self.hits + self.misses
+    }
+
+    /// Hit rate as a fraction in [0.0, 1.0]. Returns 0.0 if no lookups.
+    #[must_use]
+    pub fn hit_rate(&self) -> f64 {
+        let total = self.total();
+        if total == 0 { 0.0 } else { self.hits as f64 / total as f64 }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FormulaArena {
     /// All formula nodes, indexed by `FormulaRef`.
@@ -38,20 +75,42 @@ pub struct FormulaArena {
     /// Flat storage for N-ary children (And/Or operands).
     /// `FormulaNode::And(start, count)` indexes into this vec.
     pub(crate) refs: Vec<FormulaRef>,
+
+    // -- Hash-consing tables (tRust #885) --
+    /// Dedup table for non-N-ary nodes. Keyed by the `FormulaNode` itself
+    /// (which includes `FormulaRef` children that have identity semantics).
+    dedup: FxHashMap<FormulaNode, FormulaRef>,
+    /// Dedup table for N-ary nodes (And/Or), keyed by actual children
+    /// since the `(start, count)` indices are arena-internal.
+    nary_dedup: FxHashMap<NaryKey, FormulaRef>,
+    /// Deduplication hit/miss counters.
+    metrics: HashConsMetrics,
 }
 
 impl FormulaArena {
     /// Create an empty arena.
     #[must_use]
     pub fn new() -> Self {
-        Self { nodes: Vec::new(), refs: Vec::new() }
+        Self {
+            nodes: Vec::new(),
+            refs: Vec::new(),
+            dedup: FxHashMap::default(),
+            nary_dedup: FxHashMap::default(),
+            metrics: HashConsMetrics::default(),
+        }
     }
 
     /// Create an arena with pre-allocated capacity for `node_cap` nodes
     /// and `ref_cap` N-ary children references.
     #[must_use]
     pub fn with_capacity(node_cap: usize, ref_cap: usize) -> Self {
-        Self { nodes: Vec::with_capacity(node_cap), refs: Vec::with_capacity(ref_cap) }
+        Self {
+            nodes: Vec::with_capacity(node_cap),
+            refs: Vec::with_capacity(ref_cap),
+            dedup: FxHashMap::with_capacity_and_hasher(node_cap, Default::default()),
+            nary_dedup: FxHashMap::default(),
+            metrics: HashConsMetrics::default(),
+        }
     }
 
     /// Number of nodes in the arena.
@@ -66,20 +125,62 @@ impl FormulaArena {
         self.nodes.is_empty()
     }
 
-    /// Push a node and return its `FormulaRef`.
-    pub(crate) fn push(&mut self, node: FormulaNode) -> FormulaRef {
-        let idx = self.nodes.len();
-        assert!(idx <= u32::MAX as usize, "FormulaArena: too many nodes (>4B)");
-        self.nodes.push(node);
-        FormulaRef(idx as u32)
+    /// Access hash-consing deduplication metrics.
+    #[must_use]
+    pub fn metrics(&self) -> &HashConsMetrics {
+        &self.metrics
     }
 
-    /// Push a slice of refs for N-ary nodes and return (start, count).
-    pub(crate) fn push_refs(&mut self, children: &[FormulaRef]) -> (u32, u32) {
+    /// Push a non-N-ary node with hash-consing deduplication.
+    ///
+    /// If an identical node already exists, returns the existing `FormulaRef`
+    /// without allocating. This is the primary allocation entry point for all
+    /// node types except And/Or (which use `push_nary`).
+    pub(crate) fn push(&mut self, node: FormulaNode) -> FormulaRef {
+        debug_assert!(
+            !matches!(node, FormulaNode::And(_, _) | FormulaNode::Or(_, _)),
+            "And/Or nodes must use push_nary for correct hash-consing"
+        );
+        if let Some(&existing) = self.dedup.get(&node) {
+            self.metrics.hits += 1;
+            return existing;
+        }
+        self.metrics.misses += 1;
+        let idx = self.nodes.len();
+        assert!(idx <= u32::MAX as usize, "FormulaArena: too many nodes (>4B)");
+        let r = FormulaRef(idx as u32);
+        self.dedup.insert(node.clone(), r);
+        self.nodes.push(node);
+        r
+    }
+
+    /// Push an N-ary node (And/Or) with hash-consing deduplication.
+    ///
+    /// And/Or nodes store children as `(start, count)` indices into the refs
+    /// vec, which differ for structurally identical nodes. This method deduplicates
+    /// by the actual child `FormulaRef` list.
+    pub(crate) fn push_nary(&mut self, children: &[FormulaRef], is_and: bool) -> FormulaRef {
+        let key =
+            if is_and { NaryKey::And(children.to_vec()) } else { NaryKey::Or(children.to_vec()) };
+        if let Some(&existing) = self.nary_dedup.get(&key) {
+            self.metrics.hits += 1;
+            return existing;
+        }
+        self.metrics.misses += 1;
         let start = self.refs.len();
         assert!(start <= u32::MAX as usize, "FormulaArena: too many refs");
         self.refs.extend_from_slice(children);
-        (start as u32, children.len() as u32)
+        let node = if is_and {
+            FormulaNode::And(start as u32, children.len() as u32)
+        } else {
+            FormulaNode::Or(start as u32, children.len() as u32)
+        };
+        let idx = self.nodes.len();
+        assert!(idx <= u32::MAX as usize, "FormulaArena: too many nodes (>4B)");
+        let r = FormulaRef(idx as u32);
+        self.nary_dedup.insert(key, r);
+        self.nodes.push(node);
+        r
     }
 
     /// Look up a node by reference.
@@ -153,16 +254,14 @@ impl FormulaArena {
                 self.push(FormulaNode::BvExtract { inner, high: *high, low: *low })
             }
 
-            // N-ary
+            // N-ary (use push_nary for hash-consing)
             Formula::And(terms) => {
                 let child_refs: Vec<FormulaRef> = terms.iter().map(|t| self.intern(t)).collect();
-                let (start, count) = self.push_refs(&child_refs);
-                self.push(FormulaNode::And(start, count))
+                self.push_nary(&child_refs, true)
             }
             Formula::Or(terms) => {
                 let child_refs: Vec<FormulaRef> = terms.iter().map(|t| self.intern(t)).collect();
-                let (start, count) = self.push_refs(&child_refs);
-                self.push(FormulaNode::Or(start, count))
+                self.push_nary(&child_refs, false)
             }
 
             // Binary

@@ -10,7 +10,7 @@
 use trust_types::fx::FxHashMap;
 
 use trust_types::{Formula, Sort as FormulaSort};
-use z4::{BitVecSort, Logic, Sort as Z4Sort, Solver, Term};
+use z4::{BitVecSort, Logic, Solver, Sort as Z4Sort, Term};
 
 use crate::cfg::LiftedFunction;
 use crate::error::LiftError;
@@ -171,9 +171,9 @@ impl TranslationValidator {
         let mut solver = Solver::new(Logic::QfBv);
         let (prop_term, declared_vars) = {
             let mut env = EncodingEnv::new(&mut solver, self.default_bv_width);
-            let term = env.encode(property).map_err(|msg| {
-                LiftError::Ssa(format!("property encoding failed: {msg}"))
-            })?;
+            let term = env
+                .encode(property)
+                .map_err(|msg| LiftError::Ssa(format!("property encoding failed: {msg}")))?;
             (term, env.declared_vars.clone())
         };
 
@@ -192,21 +192,14 @@ impl TranslationValidator {
         let result = solver.check_sat();
 
         if result.is_unsat() {
-            Ok(ValidationResult::Verified {
-                proof_certificate: b"unsat: property holds".to_vec(),
-            })
+            Ok(ValidationResult::Verified { proof_certificate: b"unsat: property holds".to_vec() })
         } else if result.is_sat() {
             let inputs = if let Some(verified_model) = solver.model() {
                 let model = verified_model.model();
                 let mut assignments = Vec::new();
                 for name in declared_vars {
                     if let Some((big_val, _width)) = model.bv_val(name) {
-                        let val: u64 = big_val
-                            .to_u64_digits()
-                            .1
-                            .first()
-                            .copied()
-                            .unwrap_or(0);
+                        let val: u64 = big_val.to_u64_digits().1.first().copied().unwrap_or(0);
                         assignments.push((name.clone(), val));
                     }
                 }
@@ -242,10 +235,7 @@ impl TranslationValidator {
 
     /// Convert a Place to a Formula variable.
     fn place_to_formula(place: &trust_types::Place) -> Option<Formula> {
-        Some(Formula::Var(
-            format!("local_{}", place.local),
-            FormulaSort::BitVec(64),
-        ))
+        Some(Formula::Var(format!("local_{}", place.local), FormulaSort::BitVec(64)))
     }
 
     /// Convert an Rvalue to a Formula.
@@ -265,9 +255,7 @@ impl TranslationValidator {
                         Box::new(inner),
                         64,
                     )),
-                    trust_types::UnOp::Not => {
-                        Some(Formula::BvNot(Box::new(inner), 64))
-                    }
+                    trust_types::UnOp::Not => Some(Formula::BvNot(Box::new(inner), 64)),
                     _ => None,
                 }
             }
@@ -290,9 +278,7 @@ impl TranslationValidator {
     /// Convert a ConstValue to a Formula literal.
     fn const_to_formula(cv: &trust_types::ConstValue) -> Option<Formula> {
         match cv {
-            trust_types::ConstValue::Int(val) => {
-                Some(Formula::BitVec { value: *val, width: 64 })
-            }
+            trust_types::ConstValue::Int(val) => Some(Formula::BitVec { value: *val, width: 64 }),
             trust_types::ConstValue::Uint(val, width) => {
                 Some(Formula::BitVec { value: *val as i128, width: *width })
             }
@@ -302,12 +288,7 @@ impl TranslationValidator {
     }
 
     /// Convert a BinOp + operands to a BV formula.
-    fn binop_to_formula(
-        op: trust_types::BinOp,
-        lhs: Formula,
-        rhs: Formula,
-        width: u32,
-    ) -> Formula {
+    fn binop_to_formula(op: trust_types::BinOp, lhs: Formula, rhs: Formula, width: u32) -> Formula {
         use trust_types::BinOp;
         match op {
             BinOp::Add => Formula::BvAdd(Box::new(lhs), Box::new(rhs), width),
@@ -325,10 +306,7 @@ impl TranslationValidator {
             // Signed right-shift on negative values will be incorrect here.
             BinOp::Shr => Formula::BvLShr(Box::new(lhs), Box::new(rhs), width),
             BinOp::Eq => Formula::Eq(Box::new(lhs), Box::new(rhs)),
-            BinOp::Ne => Formula::Not(Box::new(Formula::Eq(
-                Box::new(lhs),
-                Box::new(rhs),
-            ))),
+            BinOp::Ne => Formula::Not(Box::new(Formula::Eq(Box::new(lhs), Box::new(rhs)))),
             BinOp::Lt => Formula::BvULt(Box::new(lhs), Box::new(rhs), width),
             BinOp::Le => Formula::BvULe(Box::new(lhs), Box::new(rhs), width),
             BinOp::Gt => Formula::BvULt(Box::new(rhs), Box::new(lhs), width),
@@ -357,12 +335,7 @@ struct EncodingEnv<'s> {
 
 impl<'s> EncodingEnv<'s> {
     fn new(solver: &'s mut Solver, default_bv_width: u32) -> Self {
-        Self {
-            solver,
-            vars: FxHashMap::default(),
-            declared_vars: Vec::new(),
-            default_bv_width,
-        }
+        Self { solver, vars: FxHashMap::default(), declared_vars: Vec::new(), default_bv_width }
     }
 
     /// Encode a `trust_types::Formula` into a z4 `Term`.
@@ -373,9 +346,7 @@ impl<'s> EncodingEnv<'s> {
             Formula::Bool(false) => Ok(self.solver.bool_const(false)),
             Formula::Int(n) => Ok(self.solver.int_const(*n as i64)),
             Formula::UInt(n) => Ok(self.solver.int_const(*n as i64)),
-            Formula::BitVec { value, width } => {
-                Ok(self.solver.bv_const(*value as i64, *width))
-            }
+            Formula::BitVec { value, width } => Ok(self.solver.bv_const(*value as i64, *width)),
 
             // --- Variables ---
             // tRust #723: Handle both Var and SymVar uniformly.
@@ -586,11 +557,7 @@ impl<'s> EncodingEnv<'s> {
     }
 
     /// Get or declare a z4 variable for the given name and sort.
-    fn get_or_declare_var(
-        &mut self,
-        name: &str,
-        sort: &FormulaSort,
-    ) -> Result<Term, String> {
+    fn get_or_declare_var(&mut self, name: &str, sort: &FormulaSort) -> Result<Term, String> {
         if let Some(&term) = self.vars.get(name) {
             return Ok(term);
         }
@@ -621,8 +588,8 @@ impl<'s> EncodingEnv<'s> {
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BlockId, BinOp, Formula, LocalDecl, Operand, Place,
-        Rvalue, Sort as FormulaSort, SourceSpan, Statement, Ty, VerifiableBody,
+        BasicBlock, BinOp, BlockId, Formula, LocalDecl, Operand, Place, Rvalue,
+        Sort as FormulaSort, SourceSpan, Statement, Ty, VerifiableBody,
     };
 
     /// Helper: build a minimal LiftedFunction with a single-block body.
@@ -703,11 +670,8 @@ mod tests {
             let a = Formula::Var("a".into(), FormulaSort::BitVec(64));
             let b = Formula::Var("b".into(), FormulaSort::BitVec(64));
             let sum = Formula::BvAdd(Box::new(a.clone()), Box::new(b.clone()), 64);
-            let overflow_free = Formula::Not(Box::new(Formula::BvULt(
-                Box::new(sum),
-                Box::new(a),
-                64,
-            )));
+            let overflow_free =
+                Formula::Not(Box::new(Formula::BvULt(Box::new(sum), Box::new(a), 64)));
 
             let body = make_body(vec![]);
             let lifted = make_lifted(body);
@@ -763,7 +727,13 @@ mod tests {
                 Operand::Copy(Place { local: 1, projections: vec![] }),
                 Operand::Copy(Place { local: 2, projections: vec![] }),
             ),
-            span: SourceSpan { file: String::new(), line_start: 0, col_start: 0, line_end: 0, col_end: 0 },
+            span: SourceSpan {
+                file: String::new(),
+                line_start: 0,
+                col_start: 0,
+                line_end: 0,
+                col_end: 0,
+            },
         }];
         let body = make_body(stmts);
         let lifted = make_lifted(body);
@@ -774,7 +744,10 @@ mod tests {
         });
         match result {
             Ok(vr) => assert!(
-                matches!(vr, ValidationResult::Verified { .. } | ValidationResult::CounterExample { .. }),
+                matches!(
+                    vr,
+                    ValidationResult::Verified { .. } | ValidationResult::CounterExample { .. }
+                ),
                 "should produce a definite result"
             ),
             Err(_) => { /* z4 BV solver backtrack panic — known limitation */ }
@@ -784,10 +757,8 @@ mod tests {
     #[test]
     fn test_encode_boolean_formulas() {
         // Encode: NOT(AND(true, false)) — should be SAT (true)
-        let formula = Formula::Not(Box::new(Formula::And(vec![
-            Formula::Bool(true),
-            Formula::Bool(false),
-        ])));
+        let formula =
+            Formula::Not(Box::new(Formula::And(vec![Formula::Bool(true), Formula::Bool(false)])));
 
         let body = make_body(vec![]);
         let lifted = make_lifted(body);
@@ -808,11 +779,7 @@ mod tests {
         // Property: ite(true, a, b) == a  (always true)
         let a = Formula::Var("a".into(), FormulaSort::BitVec(64));
         let b = Formula::Var("b".into(), FormulaSort::BitVec(64));
-        let ite = Formula::Ite(
-            Box::new(Formula::Bool(true)),
-            Box::new(a.clone()),
-            Box::new(b),
-        );
+        let ite = Formula::Ite(Box::new(Formula::Bool(true)), Box::new(a.clone()), Box::new(b));
         let property = Formula::Eq(Box::new(ite), Box::new(a));
 
         let body = make_body(vec![]);

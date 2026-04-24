@@ -1,6 +1,3 @@
-//! tRust: MIR lint that warns when `#[inline(always)]` calls cross mismatched
-//! tRust: target feature requirements.
-
 use rustc_hir::attrs::InlineAttr;
 use rustc_middle::middle::codegen_fn_attrs::{TargetFeature, TargetFeatureKind};
 use rustc_middle::mir::{Body, TerminatorKind};

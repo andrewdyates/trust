@@ -1,6 +1,3 @@
-//! tRust: MIR lint that warns about function item references passed to
-//! tRust: `fmt::Pointer` or `transmute`.
-
 use itertools::Itertools;
 use rustc_abi::ExternAbi;
 use rustc_hir::def_id::DefId;
@@ -153,7 +150,7 @@ impl<'tcx> FunctionItemRefChecker<'_, 'tcx> {
             .as_ref()
             .unwrap_crate_local()
             .lint_root;
-        // NOTE: Manual signature printing; could use existing display routines instead.
+        // FIXME: use existing printing routines to print the function signature
         let fn_sig = self.tcx.fn_sig(fn_id).instantiate(self.tcx, fn_args);
         let unsafety = fn_sig.safety().prefix_str();
         let abi = match fn_sig.abi() {

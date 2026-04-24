@@ -217,7 +217,6 @@ impl<'tcx> InferCtxt<'tcx> {
                 // This may actually be reachable. If so, we should convert
                 // this to a proper error/consider whether we should detect
                 // this somewhere else.
-                // tRust: invariant — region obligation processing must not overflow
                 bug!(
                     "unexpected overflowed when processing region obligations: {my_region_obligations:#?}"
                 );

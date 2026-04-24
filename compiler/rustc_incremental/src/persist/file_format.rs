@@ -71,7 +71,7 @@ where
         Ok(position) => {
             sess.prof.artifact_size(
                 &name.replace(' ', "_"),
-                path_buf.file_name().expect("invariant: path_buf was constructed with a filename").to_string_lossy(), // tRust: unwrap -> expect
+                path_buf.file_name().unwrap().to_string_lossy(),
                 position as u64,
             );
             debug!("save: data written to disk successfully");
@@ -127,8 +127,6 @@ pub(crate) fn open_incremental_file(
     // save_in and trying to remove the backing file.
     //
     // There is no way to prevent another process from modifying this file.
-    // SAFETY: We keep the file open and do not mutate or remove it within this process
-    // while this read-only mapping is alive.
     let mmap = unsafe { Mmap::map(file) }?;
 
     let mut file = io::Cursor::new(&*mmap);
@@ -180,7 +178,7 @@ fn report_format_mismatch(sess: &Session, file: &Path, message: &str) {
     if sess.opts.unstable_opts.incremental_info {
         eprintln!(
             "[incremental] ignoring cache artifact `{}`: {}",
-            file.file_name().expect("invariant: file path has a filename component").to_string_lossy(), // tRust: unwrap -> expect
+            file.file_name().unwrap().to_string_lossy(),
             message
         );
     }

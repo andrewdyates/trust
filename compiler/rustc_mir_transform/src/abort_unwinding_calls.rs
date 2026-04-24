@@ -56,7 +56,6 @@ impl<'tcx> crate::MirPass<'tcx> for AbortUnwindingCalls {
             ty::CoroutineClosure(..) => ExternAbi::RustCall,
             ty::Coroutine(..) => ExternAbi::Rust,
             ty::Error(_) => return,
-            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
             _ => span_bug!(body.span, "unexpected body ty: {:?}", body_ty),
         };
         let body_can_unwind = layout::fn_can_unwind(tcx, Some(def_id), body_abi);
@@ -94,7 +93,6 @@ impl<'tcx> crate::MirPass<'tcx> for AbortUnwindingCalls {
                     let fn_def_id = match ty.kind() {
                         ty::FnPtr(..) => None,
                         &ty::FnDef(def_id, _) => Some(def_id),
-                        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                         _ => span_bug!(span, "invalid callee of type {:?}", ty),
                     };
                     layout::fn_can_unwind(tcx, fn_def_id, sig.abi())
@@ -110,7 +108,6 @@ impl<'tcx> crate::MirPass<'tcx> for AbortUnwindingCalls {
                     options.contains(InlineAsmOptions::MAY_UNWIND)
                 }
                 _ if terminator.unwind().is_some() => {
-                    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                     span_bug!(span, "unexpected terminator that may unwind {:?}", terminator)
                 }
                 _ => continue,
@@ -121,7 +118,7 @@ impl<'tcx> crate::MirPass<'tcx> for AbortUnwindingCalls {
                 // support unwinding at all, then there's no need for it
                 // to have a landing pad. This means that we can remove any cleanup
                 // registered for it (and turn it into `UnwindAction::Unreachable`).
-                let cleanup = block.terminator_mut().unwind_mut().expect("invariant: terminator must have unwind action"); // tRust: unwrap elimination
+                let cleanup = block.terminator_mut().unwind_mut().unwrap();
                 *cleanup = UnwindAction::Unreachable;
             } else if !body_can_unwind
                 && matches!(terminator.unwind(), Some(UnwindAction::Continue))
@@ -132,7 +129,7 @@ impl<'tcx> crate::MirPass<'tcx> for AbortUnwindingCalls {
                 // is replaced with terminate. For those with `UnwindAction::Cleanup`,
                 // cleanup will still happen, and terminate will happen afterwards handled by
                 // the `UnwindResume` -> `UnwindTerminate` terminator replacement.
-                let cleanup = block.terminator_mut().unwind_mut().expect("invariant: terminator must have unwind action"); // tRust: unwrap elimination
+                let cleanup = block.terminator_mut().unwind_mut().unwrap();
                 *cleanup = UnwindAction::Terminate(UnwindTerminateReason::Abi);
             }
         }

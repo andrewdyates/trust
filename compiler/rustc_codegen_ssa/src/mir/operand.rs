@@ -1,6 +1,3 @@
-//! tRust: MIR operand representations and helpers for working with SSA values,
-//! tRust: including immediates, pairs, and references.
-
 use std::fmt;
 
 use itertools::Either;
@@ -91,7 +88,6 @@ impl<V: CodegenObject> OperandValue<V> {
     /// If you're making a place, use [`Self::deref`] instead.
     pub(crate) fn pointer_parts(self) -> (V, Option<V>) {
         self.try_pointer_parts()
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             .unwrap_or_else(|| bug!("OperandValue cannot be a pointer: {self:?}"))
     }
 
@@ -124,6 +120,7 @@ impl<V: CodegenObject> OperandValue<V> {
 /// An `OperandRef` is an "SSA" reference to a Rust value, along with
 /// its type.
 ///
+
 /// generate LLVM opcodes acting on it and instead act via methods,
 /// to avoid nasty edge cases. In particular, using `Builder::store`
 /// directly is sure to cause problems -- use `OperandRef::store`
@@ -163,7 +160,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
         let val = match val {
             ConstValue::Scalar(x) => {
                 let BackendRepr::Scalar(scalar) = layout.backend_repr else {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!("from_const: invalid ByVal layout: {:#?}", layout);
                 };
                 let llval = bx.scalar_to_backend(x, scalar, bx.immediate_backend_type(layout));
@@ -172,7 +168,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
             ConstValue::ZeroSized => return OperandRef::zero_sized(layout),
             ConstValue::Slice { alloc_id, meta } => {
                 let BackendRepr::ScalarPair(a_scalar, _) = layout.backend_repr else {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!("from_const: invalid ScalarPair layout: {:#?}", layout);
                 };
                 let a = Scalar::from_pointer(Pointer::new(alloc_id.into(), Size::ZERO), &bx.tcx());
@@ -263,7 +258,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
     pub fn immediate(self) -> V {
         match self.val {
             OperandValue::Immediate(s) => s,
-            // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
             _ => bug!("not immediate: {:?}", self),
         }
     }
@@ -280,7 +274,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
     pub fn deref<Cx: CodegenMethods<'tcx>>(self, cx: &Cx) -> PlaceRef<'tcx, V> {
         if self.layout.ty.is_box() {
             // Derefer should have removed all Box derefs
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             bug!("dereferencing {:?} in codegen", self.layout.ty);
         }
 
@@ -288,7 +281,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
             .layout
             .ty
             .builtin_deref(true)
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             .unwrap_or_else(|| bug!("deref of non-pointer {:?}", self));
 
         let layout = cx.layout_of(projected_ty);
@@ -360,7 +352,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
 
         if !bx.is_backend_ref(self.layout) && bx.is_backend_ref(field) {
             // Part of https://github.com/rust-lang/compiler-team/issues/838
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             span_bug!(
                 fx.mir.span,
                 "Non-ref type {self:?} cannot project to ref field type {field:?}",
@@ -387,7 +378,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
                 }
 
                 _ => {
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                     span_bug!(fx.mir.span, "OperandRef::extract_field({:?}): not applicable", self)
                 }
             };
@@ -395,7 +385,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
                 BackendRepr::SimdVector { .. } => imm,
                 BackendRepr::Scalar(out_scalar) => {
                     let Some(in_scalar) = in_scalar else {
-                        // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                         span_bug!(
                             fx.mir.span,
                             "OperandRef::extract_field({:?}): missing input scalar for output scalar",
@@ -415,7 +404,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
                 }
                 BackendRepr::ScalarPair(_, _)
                 | BackendRepr::Memory { .. }
-                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                 | BackendRepr::SimdScalableVector { .. } => bug!(),
             })
         };
@@ -465,7 +453,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
 
         // Read the tag/niche-encoded discriminant from memory.
         let tag_op = match self.val {
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             OperandValue::ZeroSized => bug!(),
             OperandValue::Immediate(_) | OperandValue::Pair(_, _) => {
                 self.extract_field(fx, bx, tag_field.as_usize())
@@ -494,7 +481,7 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
                 // Cast to an integer so we don't have to treat a pointer as a
                 // special case.
                 let (tag, tag_llty) = match tag_scalar.primitive() {
-                    // NOTE(erikdesjardins): Non-default address space pointer sizes not handled.
+                    // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
                     Primitive::Pointer(_) => {
                         let t = bx.type_from_integer(dl.ptr_sized_integer());
                         let tag = bx.ptrtoint(tag_imm, t);
@@ -552,7 +539,7 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
                     // assumes on the original input which is always multi-use. See
                     // <https://github.com/llvm/llvm-project/issues/134024#issuecomment-3131782555>
                     //
-                    // NOTE: Range assume operand bundles in LLVM would allow preserving
+                    // FIXME: If we ever get range assume operand bundles in LLVM (so we
                     // don't need the `icmp`s in the instruction stream any more), it
                     // might be worth moving this back to being on the switch argument
                     // where it's more obviously applicable.
@@ -708,7 +695,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                 OperandValueBuilder::Vector(Either::Right(()))
             }
             BackendRepr::Memory { .. } => {
-                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                 bug!("Cannot use non-ZST Memory-ABI type in operand builder: {layout:?}");
             }
         };
@@ -768,7 +754,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                     update(snd, v, from_scalar);
                 }
                 _ => {
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     bug!("Tried to insert {field_operand:?} into {variant:?}.{field:?} of {self:?}")
                 }
             },
@@ -777,7 +762,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                     *val = Either::Left(v);
                 }
                 _ => {
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     bug!("Tried to insert {field_operand:?} into {variant:?}.{field:?} of {self:?}")
                 }
             },
@@ -787,7 +771,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                         update(fst, a, from_sa);
                         update(snd, b, from_sb);
                     }
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     _ => bug!(
                         "Tried to insert {field_operand:?} into {variant:?}.{field:?} of {self:?}"
                     ),
@@ -800,11 +783,9 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                     *val = Either::Left(simd);
                 }
                 _ => {
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     bug!("Tried to insert {field_operand:?} into {variant:?}.{field:?} of {self:?}")
                 }
             },
-            // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
             _ => bug!("Operand cannot be used with `insert_field`: {field_operand:?}"),
         }
     }
@@ -827,7 +808,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
             OperandValueBuilder::Pair(_, snd @ Either::Right(_)) if !is_zero_offset => {
                 *snd = Either::Left(imm);
             }
-            // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
             _ => bug!("Tried to insert {imm:?} into field {f:?} of {self:?}"),
         }
     }
@@ -849,7 +829,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                 let bty = cx.type_from_scalar(s);
                 cx.const_undef(bty)
             }
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             Either::Right(_) => bug!("OperandRef::build called while fields are missing {self:?}"),
         };
 
@@ -867,7 +846,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandRefBuilder<'tcx, V> {
                     OperandValue::Immediate(cx.const_undef(bty))
                 }
                 Either::Right(()) => {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!("OperandRef::build called while fields are missing {self:?}")
                 }
             },
@@ -955,7 +933,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
             OperandValue::Ref(val) => {
                 assert!(dest.layout.is_sized(), "cannot directly store unsized values");
                 if val.llextra.is_some() {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!("cannot directly store unsized values");
                 }
                 bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
@@ -966,7 +943,6 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
             }
             OperandValue::Pair(a, b) => {
                 let BackendRepr::ScalarPair(a_scalar, b_scalar) = dest.layout.backend_repr else {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!("store_with_flags: invalid ScalarPair layout: {:#?}", dest.layout);
                 };
                 let b_offset = a_scalar.size(bx).align_to(b_scalar.align(bx).abi);
@@ -1021,7 +997,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 Some(o)
             }
             LocalRef::PendingOperand => {
-                // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                 bug!("use of {:?} before def", place_ref);
             }
             LocalRef::Place(..) | LocalRef::UnsizedPlace(..) => {
@@ -1081,7 +1056,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             mir::Operand::RuntimeChecks(checks) => {
                 let layout = bx.layout_of(bx.tcx().types.bool);
                 let BackendRepr::Scalar(scalar) = layout.backend_repr else {
-                    // tRust: invariant: structural invariant — operand variant is constrained by the match context
                     bug!("from_const: invalid ByVal layout: {:#?}", layout);
                 };
                 let x = Scalar::from_bool(checks.value(bx.tcx().sess));

@@ -23,7 +23,6 @@ extern "C" {
 }
 
 pub fn foo(x: f32x4) -> f32x4 {
-    // SAFETY: calling the extern SIMD function `vsqrt` with a valid f32x4 operand.
     unsafe { vsqrt(x) }
 }
 
@@ -57,7 +56,6 @@ extern "C" {
 }
 
 pub fn bar(a: i32x4, b: i32x4) -> i32x4 {
-    // SAFETY: calling the extern SIMD function `integer` with valid i32x4 operands.
     unsafe { integer(a, b) }
 }
 

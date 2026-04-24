@@ -238,7 +238,7 @@ impl<'tcx> TypeInformationCtxt<'tcx> for (&LateContext<'tcx>, LocalDefId) {
     }
 
     fn structurally_resolve_type(&self, _span: Span, ty: Ty<'tcx>) -> Ty<'tcx> {
-        // NOTE: may need to normalize here.
+        // FIXME: Maybe need to normalize here.
         ty
     }
 
@@ -247,7 +247,6 @@ impl<'tcx> TypeInformationCtxt<'tcx> for (&LateContext<'tcx>, LocalDefId) {
     }
 
     fn report_bug(&self, span: Span, msg: impl ToString) -> ! {
-        // tRust: invariant — callers invoke `report_bug` only after ExprUseVisitor has detected an impossible HIR/typeck state.
         span_bug!(span, "{}", msg.to_string())
     }
 
@@ -357,7 +356,7 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
         Ok(())
     }
 
-    // NOTE: this is public because clippy uses it; clippy should probably use `walk_expr`.
+    // FIXME: It's suspicious that this is public; clippy should probably use `walk_expr`.
     #[instrument(skip(self), level = "debug")]
     pub fn consume_expr(&self, expr: &hir::Expr<'_>) -> Result<(), Cx::Error> {
         let place_with_id = self.cat_expr(expr)?;
@@ -709,7 +708,6 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                 // may not. This will generate an error earlier in typeck,
                 // so we can just ignore it.
                 if self.cx.tainted_by_errors().is_ok() {
-                    // tRust: invariant — a well-typed functional record update base must evaluate to the struct being updated; only earlier type errors can make it non-struct.
                     span_bug!(with_expr.span, "with expression doesn't evaluate to a struct");
                 }
             }
@@ -892,7 +890,7 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                     // borrowing the bound place (since that inner place is inside the temporary that
                     // stores the result of calling `deref()`/`deref_mut()` so can't be captured).
                     // Deref patterns on boxes don't borrow, so we ignore them here.
-                    // tRust: known issue — this could be a fake pattern corresponding to a deref inserted by match
+                    // HACK: this could be a fake pattern corresponding to a deref inserted by match
                     // ergonomics, in which case `pat.hir_id` will be the id of the subpattern.
                     if let DerefPatBorrowMode::Borrow(mutability) =
                         self.cx.typeck_results().deref_pat_borrow_mode(place.place.ty(), subpattern)
@@ -917,7 +915,7 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                             // Named constants have to be equated with the value
                             // being matched, so that's a read of the value being matched.
                             //
-                            // NOTE: does the MIR code skip this read when matching on a ZST?
+                            // FIXME: Does the MIR code skip this read when matching on a ZST?
                             // If so, we can also skip it here.
                             read_discriminant();
                         }
@@ -938,7 +936,7 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                     // possible values, such as 0..=u8::MAX. This is because
                     // we don't want to depend on consteval here.
                     //
-                    // NOTE: what if the type being matched only has one
+                    // FIXME: What if the type being matched only has one
                     // possible value?
                     read_discriminant();
                 }
@@ -1046,7 +1044,6 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                         }
                     }
                     _ => {
-                        // tRust: invariant — nested-closure fake reads propagated here should only be for upvars; rvalues and statics are not capture bases for the enclosing closure.
                         bug!(
                             "Do not know how to get HirId out of Rvalue and StaticItem {:?}",
                             fake_read.base
@@ -1141,9 +1138,8 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                 Ok(ty)
             }
             None => {
-                // NOTE: we shouldn't be relying on the infcx being tainted.
+                // FIXME: We shouldn't be relying on the infcx being tainted.
                 self.cx.tainted_by_errors()?;
-                // tRust: invariant — every HIR node visited after type checking must have an entry in `typeck_results`, unless typeck already tainted the body with errors.
                 bug!("no type for node {} in ExprUseVisitor", self.cx.tcx().hir_id_to_string(id));
             }
         }
@@ -1433,7 +1429,6 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                 }
             }
 
-            // tRust: invariant — `cat_res` is only called for paths resolving to locals, upvars, statics, or the rvalue-like defs handled above.
             def => span_bug!(span, "unexpected definition in ExprUseVisitor: {:?}", def),
         }
     }
@@ -1501,7 +1496,6 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
         let ty::Ref(region, _, mutbl) =
             *self.cx.structurally_resolve_type(base.span, base_ty).kind()
         else {
-            // tRust: invariant — typeck only routes overloaded deref/index expressions here after adjusting the receiver to a shared or mutable reference.
             span_bug!(expr.span, "cat_overloaded_place: base is not a reference");
         };
         let ref_ty = Ty::new_ref(self.cx.tcx(), region, place_ty, mutbl);
@@ -1561,7 +1555,6 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                 // Structs and Unions have only have one variant.
                 Ok(FIRST_VARIANT)
             }
-            // tRust: invariant — a struct or tuple-struct pattern whose resolved type is an ADT must resolve to that ADT's variant or ctor-style path forms.
             _ => bug!("expected ADT path, found={:?}", res),
         }
     }
@@ -1656,7 +1649,7 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                     // borrows the scrutinee to call `Deref::deref` or `DerefMut::deref_mut`. Invoke
                     // the callback before setting `place_with_id` to the temporary storing the
                     // result of the deref.
-                    // tRust: known issue — giving the callback a fake deref pattern makes sure it behaves the (upstream HACK by dianne)
+                    // HACK(dianne): giving the callback a fake deref pattern makes sure it behaves the
                     // same as it would if this were an explicit deref pattern (including for boxes).
                     op(&place_with_id, &hir::Pat { kind: PatKind::Deref(pat), ..*pat })?;
                     let target_ty = match adjusts.peek() {

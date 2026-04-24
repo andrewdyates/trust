@@ -225,7 +225,6 @@ fn place_components_conflict<'tcx>(
                 }
                 (ProjectionElem::Deref, ty::Ref(_, _, hir::Mutability::Not), _) => {
                     // Shouldn't be tracked
-                    // tRust: invariant: structural invariant — borrows behind shared references are not tracked (already immutable)
                     bug!("Tracking borrow behind shared reference.");
                 }
                 (ProjectionElem::Deref, ty::Ref(_, _, hir::Mutability::Mut), AccessDepth::Drop) => {
@@ -514,14 +513,14 @@ fn place_projection_conflict<'tcx>(
             | ProjectionElem::Subslice { .. }
             | ProjectionElem::Downcast(..),
             _,
-        // tRust: invariant: structural invariant — mismatched projection variants at same depth indicates a compiler bug
         ) => bug!(
             "mismatched projections in place_element_conflict: {:?} and {:?}",
             pi1_elem,
             pi2_elem
         ),
 
-        // tRust: UnwrapUnsafeBinder is experimental; treat as equal-or-disjoint conservatively
-        (ProjectionElem::UnwrapUnsafeBinder(_), _) => Overlap::EqualOrDisjoint,
+        (ProjectionElem::UnwrapUnsafeBinder(_), _) => {
+            todo!()
+        }
     }
 }

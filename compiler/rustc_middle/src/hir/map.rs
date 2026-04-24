@@ -104,7 +104,6 @@ impl<'tcx> TyCtxt<'tcx> {
     #[inline]
     fn expect_hir_owner_nodes(self, def_id: LocalDefId) -> &'tcx OwnerNodes<'tcx> {
         self.opt_hir_owner_nodes(def_id)
-            // tRust: invariant: def must be an owner
             .unwrap_or_else(|| span_bug!(self.def_span(def_id), "{def_id:?} is not an owner"))
     }
 
@@ -165,7 +164,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn hir_root_module(self) -> &'tcx Mod<'tcx> {
         match self.hir_owner_node(CRATE_OWNER_ID) {
             OwnerNode::Crate(item) => item,
-            // tRust: invariant: unexpected state reached in hir_root_module
             _ => bug!(),
         }
     }
@@ -242,7 +240,6 @@ impl<'tcx> TyCtxt<'tcx> {
             }
         }
 
-        // tRust: invariant: no hir_enclosing_body_owner for hir_id <...>
         bug!("no `hir_enclosing_body_owner` for hir_id `{}`", hir_id);
     }
 
@@ -251,12 +248,12 @@ impl<'tcx> TyCtxt<'tcx> {
     /// item (possibly associated), a closure, or a `hir::AnonConst`.
     pub fn hir_body_owner(self, BodyId { hir_id }: BodyId) -> HirId {
         let parent = self.parent_hir_id(hir_id);
-        assert_eq!(self.hir_node(parent).body_id().expect("invariant: body_id returned a valid value").hir_id, hir_id, "{hir_id:?}");
+        assert_eq!(self.hir_node(parent).body_id().unwrap().hir_id, hir_id, "{hir_id:?}");
         parent
     }
 
     pub fn hir_body_owner_def_id(self, BodyId { hir_id }: BodyId) -> LocalDefId {
-        self.parent_hir_node(hir_id).associated_body().expect("invariant: associated_body returned a valid value").0
+        self.parent_hir_node(hir_id).associated_body().unwrap().0
     }
 
     /// Given a `LocalDefId`, returns the `BodyId` associated with it,
@@ -270,7 +267,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn hir_body_owned_by(self, id: LocalDefId) -> &'tcx Body<'tcx> {
         self.hir_maybe_body_owned_by(id).unwrap_or_else(|| {
             let hir_id = self.local_def_id_to_hir_id(id);
-            // tRust: invariant: unexpected state in hir_body_owned_by
             span_bug!(
                 self.hir_span(hir_id),
                 "body_owned_by: {} has no associated body",
@@ -303,7 +299,6 @@ impl<'tcx> TyCtxt<'tcx> {
                 BodyOwnerKind::Static(mutability)
             }
             DefKind::GlobalAsm => BodyOwnerKind::GlobalAsm,
-            // tRust: invariant: def must be an body
             dk => bug!("{:?} is not a body node: {:?}", def_id, dk),
         }
     }
@@ -352,7 +347,6 @@ impl<'tcx> TyCtxt<'tcx> {
             DefKind::LifetimeParam | DefKind::TyParam | DefKind::ConstParam => {
                 self.local_parent(def_id)
             }
-            // tRust: invariant: def must be an type
             _ => bug!("ty_param_owner: {:?} is a {:?} not a type parameter", def_id, def_kind),
         }
     }
@@ -364,7 +358,6 @@ impl<'tcx> TyCtxt<'tcx> {
             DefKind::LifetimeParam | DefKind::TyParam | DefKind::ConstParam => {
                 self.item_name(def_id.to_def_id())
             }
-            // tRust: invariant: def must be an type
             _ => bug!("ty_param_name: {:?} is a {:?} not a type parameter", def_id, def_kind),
         }
     }
@@ -784,7 +777,6 @@ impl<'tcx> TyCtxt<'tcx> {
         {
             return *abi;
         }
-        // tRust: invariant: unexpected state in hir_get_foreign_abi
         bug!(
             "expected foreign mod or inlined parent, found {}",
             self.hir_id_to_string(HirId::make_owner(parent.def_id))
@@ -794,7 +786,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn hir_expect_item(self, id: LocalDefId) -> &'tcx Item<'tcx> {
         match self.expect_hir_owner_node(id) {
             OwnerNode::Item(item) => item,
-            // tRust: invariant: expected item, found <...>
             _ => bug!("expected item, found {}", self.hir_id_to_string(HirId::make_owner(id))),
         }
     }
@@ -802,7 +793,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn hir_expect_impl_item(self, id: LocalDefId) -> &'tcx ImplItem<'tcx> {
         match self.expect_hir_owner_node(id) {
             OwnerNode::ImplItem(item) => item,
-            // tRust: invariant: expected impl item, found <...>
             _ => bug!("expected impl item, found {}", self.hir_id_to_string(HirId::make_owner(id))),
         }
     }
@@ -811,7 +801,6 @@ impl<'tcx> TyCtxt<'tcx> {
         match self.expect_hir_owner_node(id) {
             OwnerNode::TraitItem(item) => item,
             _ => {
-                // tRust: invariant: expected trait item, found <...>
                 bug!("expected trait item, found {}", self.hir_id_to_string(HirId::make_owner(id)))
             }
         }
@@ -826,7 +815,6 @@ impl<'tcx> TyCtxt<'tcx> {
         match self.hir_node_by_def_id(id) {
             Node::OpaqueTy(opaq) => opaq,
             _ => {
-                // tRust: invariant: unexpected state in hir_expect_opaque_ty
                 bug!(
                     "expected opaque type definition, found {}",
                     self.hir_id_to_string(self.local_def_id_to_hir_id(id))
@@ -838,7 +826,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn hir_expect_expr(self, id: HirId) -> &'tcx Expr<'tcx> {
         match self.hir_node(id) {
             Node::Expr(expr) => expr,
-            // tRust: invariant: expected expr, found <...>
             _ => bug!("expected expr, found {}", self.hir_id_to_string(id)),
         }
     }
@@ -854,7 +841,7 @@ impl<'tcx> TyCtxt<'tcx> {
             // A `Ctor` doesn't have an identifier itself, but its parent
             // struct/variant does. Compare with `hir::Map::span`.
             Node::Ctor(..) => match self.parent_hir_node(id) {
-                Node::Item(item) => Some(item.kind.ident().expect("invariant: ident returned a valid value")),
+                Node::Item(item) => Some(item.kind.ident().unwrap()),
                 Node::Variant(variant) => Some(variant.ident),
                 _ => unreachable!(),
             },
@@ -869,7 +856,7 @@ impl<'tcx> TyCtxt<'tcx> {
 
     #[inline]
     pub fn hir_ident(self, id: HirId) -> Ident {
-        self.hir_opt_ident(id).expect("invariant: hir_opt_ident returned a valid value")
+        self.hir_opt_ident(id).unwrap()
     }
 
     #[inline]
@@ -878,7 +865,6 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn hir_name(self, id: HirId) -> Symbol {
-        // tRust: invariant: HIR node must have a name
         self.hir_opt_name(id).unwrap_or_else(|| bug!("no name for {}", self.hir_id_to_string(id)))
     }
 
@@ -1199,7 +1185,7 @@ pub(super) fn crate_hash(tcx: TyCtxt<'_>, _: LocalCrate) -> Svh {
         tcx.sess.opts.dep_tracking_hash(true).hash_stable(&mut hcx, &mut stable_hasher);
         tcx.stable_crate_id(LOCAL_CRATE).hash_stable(&mut hcx, &mut stable_hasher);
         // Hash visibility information since it does not appear in HIR.
-        // tRust: known issue — Figure out how to remove `visibilities_for_hashing` by hashing visibilities on
+        // FIXME: Figure out how to remove `visibilities_for_hashing` by hashing visibilities on
         // the fly in the resolver, storing only their accumulated hash in `ResolverGlobalCtxt`,
         // and combining it with other hashes here.
         resolutions.visibilities_for_hashing.hash_stable(&mut hcx, &mut stable_hasher);

@@ -301,18 +301,18 @@ pub fn print<'tcx>(sess: &Session, ppm: PpMode, ex: PrintExtra<'tcx>) {
         }
         Mir => {
             let mut out = Vec::new();
-            write_mir_pretty(ex.tcx(), None, &mut out).expect("invariant: writing MIR to Vec<u8> should not fail"); // tRust: unwrap -> expect
-            String::from_utf8(out).expect("invariant: MIR pretty output is valid UTF-8") // tRust: unwrap -> expect
+            write_mir_pretty(ex.tcx(), None, &mut out).unwrap();
+            String::from_utf8(out).unwrap()
         }
         MirCFG => {
             let mut out = Vec::new();
-            write_mir_graphviz(ex.tcx(), None, &mut out).expect("invariant: writing MIR graphviz to Vec<u8> should not fail"); // tRust: unwrap -> expect
-            String::from_utf8(out).expect("invariant: MIR graphviz output is valid UTF-8") // tRust: unwrap -> expect
+            write_mir_graphviz(ex.tcx(), None, &mut out).unwrap();
+            String::from_utf8(out).unwrap()
         }
         StableMir => {
             let mut out = Vec::new();
-            write_smir_pretty(ex.tcx(), &mut out).expect("invariant: writing stable MIR to Vec<u8> should not fail"); // tRust: unwrap -> expect
-            String::from_utf8(out).expect("invariant: stable MIR pretty output is valid UTF-8") // tRust: unwrap -> expect
+            write_smir_pretty(ex.tcx(), &mut out).unwrap();
+            String::from_utf8(out).unwrap()
         }
         ThirTree => {
             let tcx = ex.tcx();

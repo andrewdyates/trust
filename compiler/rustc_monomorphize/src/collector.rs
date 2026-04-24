@@ -297,7 +297,7 @@ impl<'tcx> UsageMap<'tcx> {
     ) where
         F: FnMut(MonoItem<'tcx>),
     {
-        let used_items = self.used_map.get(&item).expect("invariant: item must exist in used_map since it was inserted during collection"); // tRust: unwrap -> expect
+        let used_items = self.used_map.get(&item).unwrap();
         for used_item in used_items.iter() {
             let is_inlined = used_item.instantiation_mode(tcx) == InstantiationMode::LocalCopy;
             if is_inlined {
@@ -414,7 +414,7 @@ fn collect_items_rec<'tcx>(
     // error count. If it has changed, a PME occurred, and we trigger some diagnostics about the
     // current step of mono items collection.
     //
-    // tRust: known issue — don't rely on global state, instead bubble up errors. Note: this is very hard to do.
+    // FIXME: don't rely on global state, instead bubble up errors. Note: this is very hard to do.
     let error_count = tcx.dcx().err_count();
 
     // In `mentioned_items` we collect items that were mentioned in this MIR but possibly do not
@@ -432,7 +432,6 @@ fn collect_items_rec<'tcx>(
                 // Sanity check whether this ended up being collected accidentally
                 debug_assert!(tcx.should_codegen_locally(instance));
 
-                // tRust: invariant — MonoItem::Static must have DefKind::Static
                 let DefKind::Static { nested, .. } = tcx.def_kind(def_id) else { bug!() };
                 // Nested statics have no type.
                 if !nested {
@@ -477,7 +476,7 @@ fn collect_items_rec<'tcx>(
             rustc_data_structures::stack::ensure_sufficient_stack(|| {
                 let Ok((used, mentioned)) = tcx.items_of_instance((instance, mode)) else {
                     // Normalization errors here are usually due to trait solving overflow.
-                    // tRust: known issue — I assume that there are few type errors at post-analysis stage, but not
+                    // FIXME: I assume that there are few type errors at post-analysis stage, but not
                     // entirely sure.
                     // We have to emit the error outside of `items_of_instance` to access the
                     // span of the `starting_item`.
@@ -527,13 +526,11 @@ fn collect_items_rec<'tcx>(
                         | hir::InlineAsmOperand::InOut { .. }
                         | hir::InlineAsmOperand::SplitInOut { .. }
                         | hir::InlineAsmOperand::Label { .. } => {
-                            // tRust: invariant — global_asm operands must be Const or SymFn, not In/Out/Label
                             span_bug!(*op_sp, "invalid operand type for global_asm!")
                         }
                     }
                 }
             } else {
-                // tRust: invariant — MonoItem::GlobalAsm must correspond to a hir::ItemKind::GlobalAsm
                 span_bug!(item.span, "Mismatch between hir::Item type and MonoItem type")
             }
 
@@ -662,7 +659,7 @@ fn check_recursion_limit<'tcx>(
     debug!(" => recursion depth={}", recursion_depth);
 
     let adjusted_recursion_depth = if tcx.is_lang_item(def_id, LangItem::DropInPlace) {
-        // tRust: known issue — drop_in_place creates tight monomorphization loops. Give
+        // HACK: drop_in_place creates tight monomorphization loops. Give
         // it more margin.
         recursion_depth / 4
     } else {
@@ -715,7 +712,6 @@ impl<'a, 'tcx> MirUsedCollector<'a, 'tcx> {
         // (codegen relies on this and ICEs will happen if this is violated.)
         match const_.eval(self.tcx, ty::TypingEnv::fully_monomorphized(), constant.span) {
             Ok(v) => Some(v),
-            // tRust: invariant — fully monomorphized constants must not be TooGeneric
             Err(ErrorHandled::TooGeneric(..)) => span_bug!(
                 constant.span,
                 "collection encountered polymorphic constant: {:?}",
@@ -792,7 +788,6 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirUsedCollector<'a, 'tcx> {
                         self.used_items.push(create_fn_mono_item(self.tcx, instance, span));
                     }
                 } else {
-                    // tRust: invariant — ClosureOnceShim must resolve to a valid instance
                     bug!()
                 }
             }
@@ -839,7 +834,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirUsedCollector<'a, 'tcx> {
                 self.used_mentioned_items.insert(MentionedItem::Fn(callee_ty));
                 let callee_ty = self.monomorphize(callee_ty);
 
-                // tRust: known issue (explicit_tail_calls) — collect tail calls to `#[track_caller]` functions as indirect,
+                // HACK(explicit_tail_calls): collect tail calls to `#[track_caller]` functions as indirect,
                 // because we later call them as such, to prevent issues with ABI incompatibility.
                 // Ideally we'd replace such tail calls with normal call + return, but this requires
                 // post-mono MIR optimizations, which we don't yet have.
@@ -921,7 +916,6 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirUsedCollector<'a, 'tcx> {
             | mir::TerminatorKind::UnwindResume
             | mir::TerminatorKind::Return
             | mir::TerminatorKind::Unreachable => {}
-            // tRust: invariant — CoroutineDrop/Yield/FalseEdge/FalseUnwind must not appear in monomorphized MIR
             mir::TerminatorKind::CoroutineDrop
             | mir::TerminatorKind::Yield { .. }
             | mir::TerminatorKind::FalseEdge { .. }
@@ -973,7 +967,6 @@ fn visit_fn_use<'tcx>(
                 args,
             ) {
                 Some(instance) => instance,
-                // tRust: invariant — trait method resolution must succeed for fully monomorphized types
                 _ => bug!("failed to resolve instance for {ty}"),
             }
         };
@@ -1019,12 +1012,10 @@ fn visit_instance_use<'tcx>(
     match instance.def {
         ty::InstanceKind::Virtual(..) | ty::InstanceKind::Intrinsic(_) => {
             if !is_direct_call {
-                // tRust: invariant — Virtual and Intrinsic instances must only appear as direct calls, never reified
                 bug!("{:?} being reified", instance);
             }
         }
         ty::InstanceKind::ThreadLocalShim(..) => {
-            // tRust: invariant — ThreadLocalShim instances must never be reified as function pointers
             bug!("{:?} being reified", instance);
         }
         ty::InstanceKind::DropGlue(_, None) => {
@@ -1189,7 +1180,6 @@ fn find_tails_for_unsizing<'tcx>(
             find_tails_for_unsizing(tcx, source_field, target_field)
         }
 
-        // tRust: invariant — unsizing coercion must be between structs, not arbitrary types
         _ => bug!(
             "find_vtable_types_for_unsizing: invalid coercion {:?} -> {:?}",
             source_ty,
@@ -1227,7 +1217,6 @@ fn create_mono_items_for_vtable_methods<'tcx>(
     assert!(!trait_ty.has_escaping_bound_vars() && !impl_ty.has_escaping_bound_vars());
 
     let ty::Dynamic(trait_ty, ..) = trait_ty.kind() else {
-        // tRust: invariant — vtable methods require a Dynamic (trait object) type
         bug!("create_mono_items_for_vtable_methods: {trait_ty:?} not a trait type");
     };
     if let Some(principal) = trait_ty.principal() {
@@ -1438,7 +1427,6 @@ fn visit_mentioned_item<'tcx>(
                     output.push(create_fn_mono_item(tcx, instance, span));
                 }
             } else {
-                // tRust: invariant — ClosureOnceShim in extra_mono_items must resolve to a valid instance
                 bug!()
             }
         }
@@ -1576,7 +1564,7 @@ impl<'v> RootCollector<'_, 'v> {
                     // Type Consts don't have bodies to evaluate
                     // nor do they make sense as a static.
                     if self.tcx.is_type_const(def_id) {
-                        // tRust: known issue (mgca) — Is this actually what we want? We may want to
+                        // FIXME(mgca): Is this actually what we want? We may want to
                         // normalize to a ValTree then convert to a const allocation and
                         // collect that?
                         return;
@@ -1709,7 +1697,7 @@ impl<'v> RootCollector<'_, 'v> {
         let Some(start_def_id) = self.tcx.lang_items().start_fn() else {
             self.tcx.dcx().emit_fatal(errors::StartNotFound);
         };
-        let main_ret_ty = self.tcx.fn_sig(main_def_id).no_bound_vars().expect("invariant: main fn signature has no late-bound vars").output(); // tRust: unwrap -> expect
+        let main_ret_ty = self.tcx.fn_sig(main_def_id).no_bound_vars().unwrap().output();
 
         // Given that `main()` has no arguments,
         // then its return type cannot have
@@ -1718,7 +1706,7 @@ impl<'v> RootCollector<'_, 'v> {
         // listing.
         let main_ret_ty = self.tcx.normalize_erasing_regions(
             ty::TypingEnv::fully_monomorphized(),
-            main_ret_ty.no_bound_vars().expect("invariant: main return type has no late-bound regions since main takes no arguments"), // tRust: unwrap -> expect
+            main_ret_ty.no_bound_vars().unwrap(),
         );
 
         let start_instance = Instance::expect_resolve(

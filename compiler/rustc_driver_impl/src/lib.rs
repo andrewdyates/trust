@@ -359,7 +359,7 @@ fn dump_feature_usage_metrics(tcx: TyCtxt<'_>, metrics_dir: &Path) {
     let metrics_file_name = format!("unstable_feature_usage_metrics-{crate_name}-{hash}.json");
     let metrics_path = metrics_dir.join(metrics_file_name);
     if let Err(error) = tcx.features().dump_feature_usage_metrics(metrics_path) {
-        // tRust: known issue (yaahc) — once metrics can be enabled by default we will want "failure to emit
+        // FIXME(yaahc): once metrics can be enabled by default we will want "failure to emit
         // default metrics" to only produce a warning when metrics are enabled by default and emit
         // an error only when the user manually enables metrics
         tcx.dcx().emit_err(UnstableFeatureUsage { error });
@@ -607,8 +607,8 @@ fn list_metadata(sess: &Session, metadata_loader: &dyn MetadataLoader) {
                 &sess.opts.unstable_opts.ls,
                 sess.cfg_version,
             )
-            .expect("invariant: listing file metadata should succeed for valid input"); // tRust: unwrap -> expect
-            safe_println!("{}", String::from_utf8(v).expect("invariant: metadata output is valid UTF-8")); // tRust: unwrap -> expect
+            .unwrap();
+            safe_println!("{}", String::from_utf8(v).unwrap());
         }
         Input::Str { .. } => {
             sess.dcx().fatal("cannot list metadata for stdin");
@@ -650,7 +650,7 @@ fn print_crate_info(
     for req in &sess.opts.prints {
         let mut crate_info = String::new();
         macro println_info($($arg:tt)*) {
-            crate_info.write_fmt(format_args!("{}\n", format_args!($($arg)*))).expect("invariant: writing to String should not fail") // tRust: unwrap -> expect
+            crate_info.write_fmt(format_args!("{}\n", format_args!($($arg)*))).unwrap()
         }
 
         match req.kind {
@@ -663,11 +663,11 @@ fn print_crate_info(
             Sysroot => println_info!("{}", sess.opts.sysroot.path().display()),
             TargetLibdir => println_info!("{}", sess.target_tlib_path.dir.display()),
             TargetSpecJson => {
-                println_info!("{}", serde_json::to_string_pretty(&sess.target.to_json()).expect("invariant: target JSON serializes to valid pretty string")); // tRust: unwrap -> expect
+                println_info!("{}", serde_json::to_string_pretty(&sess.target.to_json()).unwrap());
             }
             TargetSpecJsonSchema => {
                 let schema = rustc_target::spec::json_schema();
-                println_info!("{}", serde_json::to_string_pretty(&schema).expect("invariant: JSON schema serializes to valid pretty string")); // tRust: unwrap -> expect
+                println_info!("{}", serde_json::to_string_pretty(&schema).unwrap());
             }
             AllTargetSpecsJson => {
                 let mut targets = BTreeMap::new();
@@ -676,7 +676,7 @@ fn print_crate_info(
                     let target = Target::expect_builtin(&triple);
                     targets.insert(name, target.to_json());
                 }
-                println_info!("{}", serde_json::to_string_pretty(&targets).expect("invariant: targets JSON serializes to valid pretty string")); // tRust: unwrap -> expect
+                println_info!("{}", serde_json::to_string_pretty(&targets).unwrap());
             }
             FileNames => {
                 let Some(attrs) = attrs.as_ref() else {
@@ -696,7 +696,7 @@ fn print_crate_info(
                     let fname = rustc_session::output::filename_for_input(
                         sess, style, crate_name, &t_outputs,
                     );
-                    println_info!("{}", fname.as_path().file_name().expect("invariant: output filename has a file_name component").to_string_lossy()); // tRust: unwrap -> expect
+                    println_info!("{}", fname.as_path().file_name().unwrap().to_string_lossy());
                 }
             }
             CrateName => {
@@ -1450,7 +1450,7 @@ pub fn install_ice_hook(bug_report_url: &'static str, extra_info: fn(&DiagCtxt))
     // opt in to less-verbose backtraces by manually setting "RUST_BACKTRACE"
     // (e.g. `RUST_BACKTRACE=1`)
     if env::var_os("RUST_BACKTRACE").is_none() {
-        // tRust: known issue — this check is extremely dumb, but we don't really need it to be smarter since this should only happen in the test suite anyway.
+        // HACK: this check is extremely dumb, but we don't really need it to be smarter since this should only happen in the test suite anyway.
         let ui_testing = std::env::args().any(|arg| arg == "-Zui-testing");
         if env!("CFG_RELEASE_CHANNEL") == "dev" && !ui_testing {
             panic::set_backtrace_style(panic::BacktraceStyle::Short);
@@ -1488,7 +1488,7 @@ pub fn install_ice_hook(bug_report_url: &'static str, extra_info: fn(&DiagCtxt))
                     && let Ok(mut out) = File::options().create(true).append(true).open(ice_path)
                 {
                     // The current implementation always returns `Some`.
-                    let location = info.location().expect("invariant: panic info always has a location"); // tRust: unwrap -> expect
+                    let location = info.location().unwrap();
                     let msg = match info.payload().downcast_ref::<&'static str>() {
                         Some(s) => *s,
                         None => match info.payload().downcast_ref::<String>() {
@@ -1607,8 +1607,6 @@ fn report_ice(
     #[cfg(windows)]
     if env::var("RUSTC_BREAK_ON_ICE").is_ok() {
         // Trigger a debugger if we crashed during bootstrap
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         unsafe { windows::Win32::System::Diagnostics::Debug::DebugBreak() };
     }
 }

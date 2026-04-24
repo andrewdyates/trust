@@ -2170,9 +2170,11 @@ impl<T: ?Sized + fmt::Display> fmt::Display for RefMut<'_, T> {
 /// The precise Rust aliasing rules are somewhat in flux, but the main points are not contentious:
 ///
 /// - If you create a safe reference with lifetime `'a` (either a `&T` or `&mut T` reference), then
+
 ///   `'a`. For example, this means that if you take the `*mut T` from an `UnsafeCell<T>` and cast it
 ///   to an `&T`, then the data in `T` must remain immutable (modulo any `UnsafeCell` data found
 ///   within `T`, of course) until that reference's lifetime expires. Similarly, if you create a
+
 ///   `UnsafeCell` until that reference expires.
 ///
 /// - For both `&T` without `UnsafeCell<_>` and `&mut T`, you must also not deallocate the data

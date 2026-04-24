@@ -31,7 +31,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // possible.
         let cast_layout =
             if cast_ty == dest.layout.ty { dest.layout } else { self.layout_of(cast_ty)? };
-        // tRust: known issue — In which cases should we trigger UB when the source is uninit?
+        // FIXME: In which cases should we trigger UB when the source is uninit?
         match cast_kind {
             CastKind::PointerCoercion(PointerCoercion::Unsize, _) => {
                 self.unsize_into(src, cast_layout, dest)?;
@@ -71,7 +71,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 PointerCoercion::MutToConstPointer | PointerCoercion::ArrayToPointer,
                 _,
             ) => {
-                // tRust: invariant — borrowck-only cast kinds are eliminated before runtime MIR interpretation
                 bug!("{cast_kind:?} casts are for borrowck only, not runtime MIR");
             }
 
@@ -96,7 +95,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         let fn_ptr = self.fn_ptr(FnVal::Instance(instance));
                         self.write_pointer(fn_ptr, dest)?;
                     }
-                    // tRust: invariant — reify cast source must be a FnDef type
                     _ => span_bug!(self.cur_span(), "reify fn pointer on {}", src.layout.ty),
                 }
             }
@@ -108,7 +106,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         // No change to value
                         self.write_immediate(*src, dest)?;
                     }
-                    // tRust: invariant — unsafe fn cast target must be a FnPtr type
                     _ => span_bug!(self.cur_span(), "fn to unsafe fn cast on {}", cast_ty),
                 }
             }
@@ -132,7 +129,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         let fn_ptr = self.fn_ptr(FnVal::Instance(instance));
                         self.write_pointer(fn_ptr, dest)?;
                     }
-                    // tRust: invariant — closure-to-fn-pointer cast source must be a Closure type
                     _ => span_bug!(self.cur_span(), "closure fn pointer on {}", src.layout.ty),
                 }
             }
@@ -179,7 +175,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         cast_to: TyAndLayout<'tcx>,
     ) -> InterpResult<'tcx, ImmTy<'tcx, M::Provenance>> {
         let ty::Float(fty) = src.layout.ty.kind() else {
-            // tRust: invariant — FloatToFloat/FloatToInt cast source must be a float type
             bug!("FloatToFloat/FloatToInt cast: source type {} is not a float type", src.layout.ty)
         };
         let val = match fty {
@@ -210,7 +205,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             assert!(src.layout.ty.is_raw_ptr());
             return match **src {
                 Immediate::ScalarPair(data, _) => interp_ok(ImmTy::from_scalar(data, cast_to)),
-                // tRust: invariant — fat-to-thin pointer cast input must be a ScalarPair (fat pointer), not a Scalar
                 Immediate::Scalar(..) => span_bug!(
                     self.cur_span(),
                     "{:?} input to a fat-to-thin cast ({} -> {})",
@@ -277,7 +271,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             ty::Int(_) => scalar.to_int(src_layout.size)? as u128, // we will cast back to `i128` below if the sign matters
             ty::Bool => scalar.to_bool()?.into(),
             ty::Char => scalar.to_char()?.into(),
-            // tRust: invariant — int-like cast source must be an integer, char, bool, or pointer type
             _ => span_bug!(self.cur_span(), "invalid int-like cast from {}", src_layout.ty),
         };
 
@@ -287,7 +280,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let size = match *cast_ty.kind() {
                     ty::Int(t) => Integer::from_int_ty(self, t).size(),
                     ty::Uint(t) => Integer::from_uint_ty(self, t).size(),
-                    // tRust: invariant — match arms cover all valid cases for this type/value
                     _ => bug!(),
                 };
                 let v = size.truncate(v);
@@ -313,10 +305,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             },
 
             // u8 -> char
-            ty::Char => Scalar::from_u32(u8::try_from(v).expect("invariant: integer-to-char cast value fits in u8 for valid char conversion").into()),
+            ty::Char => Scalar::from_u32(u8::try_from(v).unwrap().into()),
 
             // Casts to bool are not permitted by rustc, no need to handle them here.
-            // tRust: invariant — integer cast target must be an integer, char, or float type
             _ => span_bug!(self.cur_span(), "invalid int to {} cast", cast_ty),
         })
     }
@@ -365,7 +356,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 }
             },
             // That's it.
-            // tRust: invariant — float cast target must be a float type
             _ => span_bug!(self.cur_span(), "invalid float to {} cast", dest_ty),
         }
     }
@@ -400,7 +390,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let val = self.read_immediate(src)?;
                 // MIR building generates odd NOP casts, prevent them from causing unexpected trouble.
                 // See <https://github.com/rust-lang/rust/issues/128880>.
-                // tRust: known issue — ideally we wouldn't have to do this.
+                // FIXME: ideally we wouldn't have to do this.
                 if data_a == data_b {
                     return self.write_immediate(*val, dest);
                 }
@@ -419,7 +409,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     let Some(&ty::VtblEntry::TraitVPtr(upcast_trait_ref)) =
                         vtable_entries.get(entry_idx)
                     else {
-                        // tRust: invariant — vtable entry index must be valid for the source-to-target trait upcast
                         span_bug!(
                             self.cur_span(),
                             "invalid vtable entry index in {} -> {} upcast",
@@ -459,7 +448,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 ensure_monomorphic_enough(*self.tcx, src.layout.ty)?;
                 ensure_monomorphic_enough(*self.tcx, cast_ty)?;
 
-                // tRust: invariant — pointer unsizing requires compatible source and target pointee types
                 span_bug!(
                     self.cur_span(),
                     "invalid pointer unsizing {} -> {}",
@@ -504,7 +492,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         self.copy_op(&src_field, &dst_field)?;
                     } else {
                         if found_cast_field {
-                            // tRust: invariant — unsizing coercion for ADTs targets exactly one field
                             span_bug!(self.cur_span(), "unsize_into: more than one field to cast");
                         }
                         found_cast_field = true;
@@ -518,7 +505,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 ensure_monomorphic_enough(*self.tcx, src.layout.ty)?;
                 ensure_monomorphic_enough(*self.tcx, cast_ty.ty)?;
 
-                // tRust: invariant — unsize_into only handles arrays, trait objects, and ADTs with unsized fields
                 span_bug!(
                     self.cur_span(),
                     "unsize_into: invalid conversion: {:?} -> {:?}",

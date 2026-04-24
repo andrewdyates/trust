@@ -36,9 +36,7 @@ impl PredicateSet {
     /// Create an empty predicate set.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            predicates: Vec::new(),
-        }
+        Self { predicates: Vec::new() }
     }
 
     /// Number of predicates in this set.
@@ -55,11 +53,7 @@ impl PredicateSet {
 
     /// Add a predicate to the set if it is not already present (by expression).
     pub fn add(&mut self, predicate: Predicate) {
-        if !self
-            .predicates
-            .iter()
-            .any(|p| p.expression == predicate.expression)
-        {
+        if !self.predicates.iter().any(|p| p.expression == predicate.expression) {
             self.predicates.push(predicate);
         }
     }
@@ -90,10 +84,7 @@ impl AbstractionState {
     /// Create a new non-error abstraction state with no predicate valuations.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            predicate_values: FxHashMap::default(),
-            is_error: false,
-        }
+        Self { predicate_values: FxHashMap::default(), is_error: false }
     }
 
     /// Number of predicates evaluated in this state.
@@ -159,7 +150,11 @@ impl PredicateDiscovery {
     /// Evaluates each predicate in the set against the concrete state and
     /// returns the resulting abstract state.
     #[must_use]
-    pub fn abstract_state(&self, concrete_state: &str, predicates: &PredicateSet) -> AbstractionState {
+    pub fn abstract_state(
+        &self,
+        concrete_state: &str,
+        predicates: &PredicateSet,
+    ) -> AbstractionState {
         let mut state = AbstractionState::new();
         for pred in &predicates.predicates {
             if let Some(val) = self.evaluate_predicate(pred, concrete_state) {
@@ -199,11 +194,7 @@ impl PredicateDiscovery {
     ///
     /// Extracts new predicates from the counterexample, adds them to the
     /// current set, and minimizes the result.
-    pub fn refine_predicates(
-        &self,
-        cex: &SpuriousCex,
-        current: &PredicateSet,
-    ) -> RefinementResult {
+    pub fn refine_predicates(&self, cex: &SpuriousCex, current: &PredicateSet) -> RefinementResult {
         let new_preds = self.extract_predicates_from_cex(cex);
         let mut combined = current.clone();
         let _initial_count = combined.len();
@@ -215,10 +206,8 @@ impl PredicateDiscovery {
         let minimized = self.minimize_predicate_set(&combined);
         let predicates_removed = combined.len().saturating_sub(minimized.len());
 
-        let actually_new: Vec<Predicate> = new_preds
-            .into_iter()
-            .filter(|p| !current.contains_expression(&p.expression))
-            .collect();
+        let actually_new: Vec<Predicate> =
+            new_preds.into_iter().filter(|p| !current.contains_expression(&p.expression)).collect();
 
         let converged = actually_new.is_empty();
 
@@ -265,11 +254,7 @@ impl PredicateDiscovery {
         if cex.reason.contains("!=") || cex.reason.contains("==") {
             let vars = extract_variable_names(&cex.reason);
             if !vars.is_empty() {
-                predicates.push(Predicate {
-                    id,
-                    expression: cex.reason.clone(),
-                    variables: vars,
-                });
+                predicates.push(Predicate { id, expression: cex.reason.clone(), variables: vars });
             }
         }
 
@@ -334,11 +319,7 @@ impl PredicateDiscovery {
             if step.contains(op) {
                 let vars = extract_variable_names(step);
                 if !vars.is_empty() {
-                    let pred = Predicate {
-                        id: *id,
-                        expression: step.to_string(),
-                        variables: vars,
-                    };
+                    let pred = Predicate { id: *id, expression: step.to_string(), variables: vars };
                     *id += 1;
                     return Some(pred);
                 }
@@ -403,9 +384,14 @@ fn is_variable_name(token: &str) -> bool {
 /// Handles patterns like "x > 0" when the state contains "x = 5".
 fn try_evaluate_comparison(expr: &str, state: &str) -> Option<bool> {
     // Parse "var op value" pattern
-    let operators = [(">=", Ordering::GtEq), ("<=", Ordering::LtEq),
-                     ("!=", Ordering::NotEq), ("==", Ordering::Eq),
-                     (">", Ordering::Gt), ("<", Ordering::Lt)];
+    let operators = [
+        (">=", Ordering::GtEq),
+        ("<=", Ordering::LtEq),
+        ("!=", Ordering::NotEq),
+        ("==", Ordering::Eq),
+        (">", Ordering::Gt),
+        ("<", Ordering::Lt),
+    ];
 
     for (op_str, op) in &operators {
         if let Some(pos) = expr.find(op_str) {
@@ -445,17 +431,12 @@ enum Ordering {
 /// Looks for patterns like "var = N" or "var=N" in the state string.
 fn find_value_in_state(var: &str, state: &str) -> Option<i64> {
     // Look for "var = N" or "var=N"
-    let patterns = [
-        format!("{var} = "),
-        format!("{var}="),
-    ];
+    let patterns = [format!("{var} = "), format!("{var}=")];
     for pat in &patterns {
         if let Some(pos) = state.find(pat.as_str()) {
             let after = &state[pos + pat.len()..];
-            let num_str: String = after
-                .chars()
-                .take_while(|c| c.is_ascii_digit() || *c == '-')
-                .collect();
+            let num_str: String =
+                after.chars().take_while(|c| c.is_ascii_digit() || *c == '-').collect();
             if let Ok(val) = num_str.parse::<i64>() {
                 return Some(val);
             }
@@ -470,11 +451,8 @@ mod tests {
 
     #[test]
     fn test_predicate_creation() {
-        let pred = Predicate {
-            id: 0,
-            expression: "x > 0".to_string(),
-            variables: vec!["x".to_string()],
-        };
+        let pred =
+            Predicate { id: 0, expression: "x > 0".to_string(), variables: vec!["x".to_string()] };
         assert_eq!(pred.id, 0);
         assert_eq!(pred.expression, "x > 0");
         assert_eq!(pred.variables, vec!["x"]);
@@ -490,21 +468,15 @@ mod tests {
     #[test]
     fn test_predicate_set_add_and_dedup() {
         let mut set = PredicateSet::new();
-        let p1 = Predicate {
-            id: 0,
-            expression: "x > 0".to_string(),
-            variables: vec!["x".to_string()],
-        };
+        let p1 =
+            Predicate { id: 0, expression: "x > 0".to_string(), variables: vec!["x".to_string()] };
         let p2 = Predicate {
             id: 1,
             expression: "x > 0".to_string(), // duplicate expression
             variables: vec!["x".to_string()],
         };
-        let p3 = Predicate {
-            id: 2,
-            expression: "y < 10".to_string(),
-            variables: vec!["y".to_string()],
-        };
+        let p3 =
+            Predicate { id: 2, expression: "y < 10".to_string(), variables: vec!["y".to_string()] };
 
         set.add(p1);
         set.add(p2); // should be ignored
@@ -600,8 +572,8 @@ mod tests {
         });
 
         let state = disc.abstract_state("x = 5, y = 3", &set);
-        assert_eq!(state.get(0), Some(true));  // x=5 > 0
-        assert_eq!(state.get(1), Some(true));  // y=3 < 10
+        assert_eq!(state.get(0), Some(true)); // x=5 > 0
+        assert_eq!(state.get(1), Some(true)); // y=3 < 10
         assert!(!state.is_error);
     }
 
@@ -671,9 +643,21 @@ mod tests {
         let disc = PredicateDiscovery::new();
         let set = PredicateSet {
             predicates: vec![
-                Predicate { id: 0, expression: "x > 0".to_string(), variables: vec!["x".to_string()] },
-                Predicate { id: 1, expression: "x > 0".to_string(), variables: vec!["x".to_string()] },
-                Predicate { id: 2, expression: "y < 5".to_string(), variables: vec!["y".to_string()] },
+                Predicate {
+                    id: 0,
+                    expression: "x > 0".to_string(),
+                    variables: vec!["x".to_string()],
+                },
+                Predicate {
+                    id: 1,
+                    expression: "x > 0".to_string(),
+                    variables: vec!["x".to_string()],
+                },
+                Predicate {
+                    id: 2,
+                    expression: "y < 5".to_string(),
+                    variables: vec!["y".to_string()],
+                },
             ],
         };
 
@@ -723,11 +707,8 @@ mod tests {
     #[test]
     fn test_evaluate_predicate_holds() {
         let disc = PredicateDiscovery::new();
-        let pred = Predicate {
-            id: 0,
-            expression: "x > 0".to_string(),
-            variables: vec!["x".to_string()],
-        };
+        let pred =
+            Predicate { id: 0, expression: "x > 0".to_string(), variables: vec!["x".to_string()] };
 
         assert_eq!(disc.evaluate_predicate(&pred, "x = 5"), Some(true));
         assert_eq!(disc.evaluate_predicate(&pred, "x = -1"), Some(false));
@@ -736,11 +717,8 @@ mod tests {
     #[test]
     fn test_evaluate_predicate_missing_variable() {
         let disc = PredicateDiscovery::new();
-        let pred = Predicate {
-            id: 0,
-            expression: "x > 0".to_string(),
-            variables: vec!["x".to_string()],
-        };
+        let pred =
+            Predicate { id: 0, expression: "x > 0".to_string(), variables: vec!["x".to_string()] };
 
         // Variable not in state -> indeterminate
         assert_eq!(disc.evaluate_predicate(&pred, "y = 5"), None);
@@ -767,9 +745,11 @@ mod tests {
     #[test]
     fn test_refinement_result_fields() {
         let result = RefinementResult {
-            new_predicates: vec![
-                Predicate { id: 0, expression: "a > 1".to_string(), variables: vec!["a".to_string()] },
-            ],
+            new_predicates: vec![Predicate {
+                id: 0,
+                expression: "a > 1".to_string(),
+                variables: vec!["a".to_string()],
+            }],
             predicates_removed: 2,
             iterations: 3,
             converged: false,

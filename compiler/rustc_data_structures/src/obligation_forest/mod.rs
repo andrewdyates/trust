@@ -368,7 +368,7 @@ impl<O: ForestObligation> ObligationForest<O> {
             Entry::Vacant(v) => {
                 let obligation_tree_id = match parent {
                     Some(parent_index) => self.nodes[parent_index].obligation_tree_id,
-                    None => self.obligation_tree_id_generator.next().expect("invariant: tree ID generator must not be exhausted"), // tRust: unwrap -> expect
+                    None => self.obligation_tree_id_generator.next().unwrap(),
                 };
 
                 let already_failed = parent.is_some()

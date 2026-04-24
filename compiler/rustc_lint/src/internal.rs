@@ -286,7 +286,7 @@ fn is_ty_or_ty_ctxt(cx: &LateContext<'_>, path: &hir::Path<'_>) -> Option<String
     match path.res {
         Res::Def(_, def_id) => {
             if let Some(name @ (sym::Ty | sym::TyCtxt)) = cx.tcx.get_diagnostic_name(def_id) {
-                return Some(format!("{}{}", name, gen_args(path.segments.last().expect("invariant: path segments non-empty for resolved paths")))); // tRust: unwrap -> expect
+                return Some(format!("{}{}", name, gen_args(path.segments.last().unwrap())));
             }
         }
         // Only lint on `&Ty` and `&TyCtxt` if it is used outside of a trait.
@@ -408,14 +408,14 @@ impl<'tcx> LateLintPass<'tcx> for TypeIr {
         {
             cx.emit_span_lint(
                 USAGE_OF_TYPE_IR_INHERENT,
-                path.segments.last().expect("invariant: path segments non-empty for resolved paths").ident.span, // tRust: unwrap -> expect
+                path.segments.last().unwrap().ident.span,
                 TypeIrInherentUsage,
             );
         }
 
         let (lo, hi, snippet) = match path.segments {
             [.., penultimate, segment] if is_mod_inherent(penultimate.res) => {
-                (segment.ident.span, item.kind.ident().expect("invariant: item has identifier").span, "*") // tRust: unwrap -> expect
+                (segment.ident.span, item.kind.ident().unwrap().span, "*")
             }
             [.., segment]
                 if let Some(type_ns) = path.res.type_ns

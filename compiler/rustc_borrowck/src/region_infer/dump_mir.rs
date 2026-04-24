@@ -24,7 +24,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         for region in self.regions() {
             if let NllRegionVariableOrigin::FreeRegion = self.definitions[region].origin {
                 let classification =
-                    self.universal_regions().region_classification(region).expect("invariant: region must have a classification");
+                    self.universal_regions().region_classification(region).unwrap();
                 let outlived_by = self.universal_region_relations.regions_outlived_by(region);
                 writeln!(
                     out,

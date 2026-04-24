@@ -119,21 +119,20 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 // Cast bits from tag layout to discriminant layout.
                 // After the checks we did above, this cannot fail, as
                 // discriminants are int-like.
-                let discr_val = self.int_to_int_or_float(&tag_val, discr_layout).expect("invariant: tag-to-discriminant integer conversion is infallible for valid tags");
+                let discr_val = self.int_to_int_or_float(&tag_val, discr_layout).unwrap();
                 let discr_bits = discr_val.to_scalar().to_bits(discr_layout.size)?;
                 // Convert discriminant to variant index. Since we validated the tag against the
                 // layout range above, this cannot fail.
                 let index = match *ty.kind() {
                     ty::Adt(adt, _) => {
-                        adt.discriminants(*self.tcx).find(|(_, var)| var.val == discr_bits).expect("invariant: discriminant value must match a known variant in the ADT definition")
+                        adt.discriminants(*self.tcx).find(|(_, var)| var.val == discr_bits).unwrap()
                     }
                     ty::Coroutine(def_id, args) => {
                         let args = args.as_coroutine();
                         args.discriminants(def_id, *self.tcx)
                             .find(|(_, var)| var.val == discr_bits)
-                            .expect("invariant: niche variant index is within the valid variant range")
+                            .unwrap()
                     }
-                    // tRust: invariant — tagged discriminant layout only exists for ADTs and coroutines
                     _ => span_bug!(self.cur_span(), "tagged layout for non-adt non-coroutine"),
                 };
                 // Return the cast value, and the index.
@@ -284,7 +283,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let discr_val = discr.to_scalar().to_bits(discr_size)?;
                 let tag_size = tag_layout.size(self);
                 let tag_val = tag_size.truncate(discr_val);
-                let tag = ScalarInt::try_from_uint(tag_val, tag_size).expect("invariant: tag value fits in tag_size after truncation");
+                let tag = ScalarInt::try_from_uint(tag_val, tag_size).unwrap();
                 interp_ok(Some((tag, tag_field)))
             }
 

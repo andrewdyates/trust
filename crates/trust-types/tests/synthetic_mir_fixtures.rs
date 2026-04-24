@@ -14,14 +14,20 @@ use trust_types::*;
 
 /// Source span pointing at a specific line for fixture clarity.
 fn span_at(file: &str, line: u32) -> SourceSpan {
-    SourceSpan { file: file.to_string(), line_start: line, col_start: 1, line_end: line, col_end: 1 }
+    SourceSpan {
+        file: file.to_string(),
+        line_start: line,
+        col_start: 1,
+        line_end: line,
+        col_end: 1,
+    }
 }
 
 /// Make a VC with kind, function name, and explicit formula.
 fn make_vc(kind: VcKind, function: &str, formula: Formula) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -658,10 +664,12 @@ fn fixture_index_out_of_bounds() {
     assert!(matches!(&vc.kind, VcKind::IndexOutOfBounds));
 
     // Verify Len rvalue is present
-    assert!(func.body.blocks[0].stmts.iter().any(|s| matches!(
-        s,
-        Statement::Assign { rvalue: Rvalue::Len(_), .. }
-    )));
+    assert!(
+        func.body.blocks[0]
+            .stmts
+            .iter()
+            .any(|s| matches!(s, Statement::Assign { rvalue: Rvalue::Len(_), .. }))
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -675,7 +683,8 @@ fn fixture_index_out_of_bounds() {
 
 #[test]
 fn fixture_slice_bounds_check() {
-    let slice_ty = Ty::Ref { mutable: false, inner: Box::new(Ty::Slice { elem: Box::new(Ty::u8()) }) };
+    let slice_ty =
+        Ty::Ref { mutable: false, inner: Box::new(Ty::Slice { elem: Box::new(Ty::u8()) }) };
     let func = VerifiableFunction {
         name: "slice_range".to_string(),
         def_path: "fixtures::slice_range".to_string(),
@@ -754,7 +763,10 @@ fn fixture_slice_bounds_check() {
                 },
             ],
             arg_count: 3,
-            return_ty: Ty::Ref { mutable: false, inner: Box::new(Ty::Slice { elem: Box::new(Ty::u8()) }) },
+            return_ty: Ty::Ref {
+                mutable: false,
+                inner: Box::new(Ty::Slice { elem: Box::new(Ty::u8()) }),
+            },
         },
         contracts: vec![],
         preconditions: vec![],
@@ -763,10 +775,14 @@ fn fixture_slice_bounds_check() {
     };
 
     // Two bounds-check asserts
-    let assert_count = func.body.blocks.iter().filter(|bb| matches!(
-        &bb.terminator,
-        Terminator::Assert { msg: AssertMessage::BoundsCheck, .. }
-    )).count();
+    let assert_count = func
+        .body
+        .blocks
+        .iter()
+        .filter(|bb| {
+            matches!(&bb.terminator, Terminator::Assert { msg: AssertMessage::BoundsCheck, .. })
+        })
+        .count();
     assert_eq!(assert_count, 2, "expected 2 bounds-check asserts for slice range");
 
     let vc = make_vc(
@@ -799,11 +815,7 @@ fn fixture_cast_overflow() {
     let func = make_func(
         "i32_to_u8",
         VerifiableBody {
-            locals: vec![
-                local(0, Ty::u8()),
-                named_local(1, "x", Ty::i32()),
-                local(2, Ty::Bool),
-            ],
+            locals: vec![local(0, Ty::u8()), named_local(1, "x", Ty::i32()), local(2, Ty::Bool)],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -851,10 +863,9 @@ fn fixture_cast_overflow() {
     assert!(matches!(&vc.kind, VcKind::CastOverflow { .. }));
 
     // Verify cast rvalue exists
-    assert!(func.body.blocks.iter().any(|bb| bb.stmts.iter().any(|s| matches!(
-        s,
-        Statement::Assign { rvalue: Rvalue::Cast(_, _), .. }
-    ))));
+    assert!(func.body.blocks.iter().any(|bb| {
+        bb.stmts.iter().any(|s| matches!(s, Statement::Assign { rvalue: Rvalue::Cast(_, _), .. }))
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -870,11 +881,7 @@ fn fixture_negation_overflow() {
     let func = make_func(
         "negate_i8",
         VerifiableBody {
-            locals: vec![
-                local(0, Ty::i8()),
-                named_local(1, "x", Ty::i8()),
-                local(2, Ty::Bool),
-            ],
+            locals: vec![local(0, Ty::i8()), named_local(1, "x", Ty::i8()), local(2, Ty::Bool)],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -926,10 +933,11 @@ fn fixture_negation_overflow() {
     assert!(matches!(&vc.kind, VcKind::NegationOverflow { .. }));
 
     // Verify Neg unary op exists
-    assert!(func.body.blocks.iter().any(|bb| bb.stmts.iter().any(|s| matches!(
-        s,
-        Statement::Assign { rvalue: Rvalue::UnaryOp(UnOp::Neg, _), .. }
-    ))));
+    assert!(func.body.blocks.iter().any(|bb| {
+        bb.stmts
+            .iter()
+            .any(|s| matches!(s, Statement::Assign { rvalue: Rvalue::UnaryOp(UnOp::Neg, _), .. }))
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -947,10 +955,7 @@ fn fixture_unreachable() {
     let func = make_func(
         "unreachable_after_match",
         VerifiableBody {
-            locals: vec![
-                local(0, Ty::i32()),
-                named_local(1, "x", Ty::Bool),
-            ],
+            locals: vec![local(0, Ty::i32()), named_local(1, "x", Ty::Bool)],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -980,11 +985,7 @@ fn fixture_unreachable() {
                     }],
                     terminator: Terminator::Return,
                 },
-                BasicBlock {
-                    id: BlockId(3),
-                    stmts: vec![],
-                    terminator: Terminator::Unreachable,
-                },
+                BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Unreachable },
             ],
             arg_count: 1,
             return_ty: Ty::i32(),
@@ -1028,11 +1029,7 @@ fn fixture_assertion() {
     let func = make_func(
         "assert_positive",
         VerifiableBody {
-            locals: vec![
-                local(0, Ty::Unit),
-                named_local(1, "x", Ty::i32()),
-                local(2, Ty::Bool),
-            ],
+            locals: vec![local(0, Ty::Unit), named_local(1, "x", Ty::i32()), local(2, Ty::Bool)],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -1053,11 +1050,7 @@ fn fixture_assertion() {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::Unit,
@@ -1092,10 +1085,7 @@ fn fixture_precondition() {
         def_path: "fixtures::checked_sqrt".to_string(),
         span: span_at("fixtures.rs", 60),
         body: VerifiableBody {
-            locals: vec![
-                local(0, Ty::f64_ty()),
-                named_local(1, "x", Ty::f64_ty()),
-            ],
+            locals: vec![local(0, Ty::f64_ty()), named_local(1, "x", Ty::f64_ty())],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -1109,11 +1099,7 @@ fn fixture_precondition() {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::f64_ty(),
@@ -1137,10 +1123,7 @@ fn fixture_precondition() {
     let vc = make_vc(
         VcKind::Precondition { callee: "std::f64::sqrt".to_string() },
         "checked_sqrt",
-        Formula::Lt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Lt(Box::new(Formula::Var("x".to_string(), Sort::Int)), Box::new(Formula::Int(0))),
     );
     assert!(matches!(&vc.kind, VcKind::Precondition { callee } if callee == "std::f64::sqrt"));
 }
@@ -1157,11 +1140,7 @@ fn fixture_postcondition() {
         def_path: "fixtures::abs_i32".to_string(),
         span: span_at("fixtures.rs", 70),
         body: VerifiableBody {
-            locals: vec![
-                local(0, Ty::i32()),
-                named_local(1, "x", Ty::i32()),
-                local(2, Ty::Bool),
-            ],
+            locals: vec![local(0, Ty::i32()), named_local(1, "x", Ty::i32()), local(2, Ty::Bool)],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -1199,11 +1178,7 @@ fn fixture_postcondition() {
                     }],
                     terminator: Terminator::Goto(BlockId(3)),
                 },
-                BasicBlock {
-                    id: BlockId(3),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::i32(),
@@ -1462,11 +1437,7 @@ fn content_hash_differs_across_fixtures() {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 2,
             return_ty: Ty::i32(),
@@ -1476,11 +1447,7 @@ fn content_hash_differs_across_fixtures() {
     let divzero_func = make_func(
         "div_i32",
         VerifiableBody {
-            locals: vec![
-                local(0, Ty::i32()),
-                local(1, Ty::i32()),
-                local(2, Ty::i32()),
-            ],
+            locals: vec![local(0, Ty::i32()), local(1, Ty::i32()), local(2, Ty::i32())],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),

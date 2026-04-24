@@ -1,0 +1,112 @@
+# Top 100 most-downloaded crates from crates.io (as of 2026-04)
+# Used by scripts/compat_check.sh and crates/trust-integration-tests/tests/compat_check.rs
+# Format: one crate name per line. Lines starting with # are comments.
+#
+# Source: https://crates.io/crates?sort=downloads
+# Criteria: pure-Rust or widely-used, no heavy C build deps
+#
+# --- Tier 1: Foundational (1-20) ---
+serde
+rand
+log
+lazy_static
+regex
+clap
+tokio
+anyhow
+thiserror
+syn
+quote
+proc-macro2
+libc
+once_cell
+serde_json
+memchr
+itoa
+ryu
+cfg-if
+bytes
+# --- Tier 2: Core ecosystem (21-40) ---
+futures
+futures-core
+futures-io
+futures-sink
+futures-channel
+futures-task
+futures-util
+url
+base64
+num-traits
+num-integer
+http
+crossbeam-utils
+crossbeam-epoch
+crossbeam-channel
+either
+indexmap
+hashbrown
+smallvec
+parking_lot
+# --- Tier 3: Unicode & encoding (41-60) ---
+bitflags
+unicode-ident
+unicode-bidi
+unicode-normalization
+percent-encoding
+form_urlencoded
+tinyvec
+tinyvec_macros
+tracing
+tracing-core
+pin-project-lite
+pin-utils
+slab
+mio
+socket2
+num_cpus
+getrandom
+ppv-lite86
+semver
+strsim
+# --- Tier 4: Utilities (61-80) ---
+tempfile
+walkdir
+glob
+same-file
+scopeguard
+lock_api
+ahash
+version_check
+rustc-demangle
+addr2line
+gimli
+object
+miniz_oxide
+adler
+crc32fast
+flate2
+heck
+toml
+toml_edit
+winnow
+# --- Tier 5: Applications & frameworks (81-100) ---
+uuid
+chrono
+time
+http-body
+tower-service
+tower-layer
+tower
+serde_derive
+fastrand
+rustix
+errno
+linux-raw-sys
+cc
+memoffset
+signal-hook-registry
+autocfg
+textwrap
+phf
+fnv
+paste

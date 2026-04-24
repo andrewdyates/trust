@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-backprop: Source rewriting engine for the prove-strengthen-backprop loop.
 //!
 //! Takes proposals from trust-strengthen and applies them to source code:
@@ -27,58 +27,58 @@ pub(crate) mod substitution;
 pub(crate) mod type_guided;
 pub(crate) mod validation;
 
-pub use caller_propagation::{
-    build_types_call_graph, CallerPropagator, FunctionVisibility, PropagationAction,
-    PropagationConfig, PropagationError, PropagationResult, PropagationSuggestion, Provenance,
-};
-pub use cross_module::{plan_cross_module_rewrites, CrossModulePlan};
-pub use dependency::{build_call_graph, topological_order, CallGraph};
-pub use substitution::{
-    free_variables, simplify, substitute, substitute_with_depth, rename_variable,
-    SubstitutionError, SubstitutionMap,
-};
-pub use file_io::{
-    apply_plan_to_files, apply_plan_to_source, proposals_to_plan, read_source, write_source,
-    FileRewriteError, FileRewriteResult,
-};
 pub use approval::{
-    classify_rewrite, default_rules, ApprovalPolicy, ApprovalQueue, PendingRewrite, PolicyRule,
-    RewriteKindFilter,
-};
-pub use governance::{
-    check_cross_module_invariants, GovernancePolicy, GovernanceViolation, RewriteTracker,
-};
-pub use locator::{find_function, find_function_first, FunctionLocation};
-pub use proposal_converter::{convert_proposal, ConvertError};
-pub use rewriter::{RewriteEngine, RewriteError};
-pub use rollback::{
-    changed_since_checkpoint, create_checkpoint, rollback, sha256_hex, CheckpointStore,
-    FileSnapshot, RewriteCheckpoint, RollbackError,
-};
-pub use audit_trail::{
-    AuditAction, AuditEntry, AuditEntryBuilder, AuditSummary, AuditTrail, ApprovalStatus,
-    ReverificationResult,
-};
-pub use validation::{
-    check_semantic_preservation, parse_simplified_ast, validate_rewrite,
-    validate_rewrite_with_config, AstNode, CheckResult, SemanticDiff, ValidationCheck,
-    ValidationConfig, ValidationResult,
+    ApprovalPolicy, ApprovalQueue, PendingRewrite, PolicyRule, RewriteKindFilter, classify_rewrite,
+    default_rules,
 };
 pub use ast_rewriter::{
-    compute_indentation, detect_indent_unit, resolve_target, AstRewriteError, AstRewriteTarget,
-    SemanticRewrite,
+    AstRewriteError, AstRewriteTarget, SemanticRewrite, compute_indentation, detect_indent_unit,
+    resolve_target,
 };
 pub use ast_validation::{
-    validate_rewrite_ast, AstValidationError, AstValidationResult, ParseTarget,
+    AstValidationError, AstValidationResult, ParseTarget, validate_rewrite_ast,
+};
+pub use audit_trail::{
+    ApprovalStatus, AuditAction, AuditEntry, AuditEntryBuilder, AuditSummary, AuditTrail,
+    ReverificationResult,
+};
+pub use caller_propagation::{
+    CallerPropagator, FunctionVisibility, PropagationAction, PropagationConfig, PropagationError,
+    PropagationResult, PropagationSuggestion, Provenance, build_types_call_graph,
+};
+pub use cross_module::{CrossModulePlan, plan_cross_module_rewrites};
+pub use dependency::{CallGraph, build_call_graph, topological_order};
+pub use diff_gen::{
+    DiffApplyError, DiffGenerator, DiffHunk, UnifiedDiff, apply_diff, format_colored,
+    format_github, format_unified, generate_diff, merge_diffs, reverse_diff,
+};
+pub use file_io::{
+    FileRewriteError, FileRewriteResult, apply_plan_to_files, apply_plan_to_source,
+    proposals_to_plan, read_source, write_source,
+};
+pub use governance::{
+    GovernancePolicy, GovernanceViolation, RewriteTracker, check_cross_module_invariants,
+};
+pub use locator::{FunctionLocation, find_function, find_function_first};
+pub use proposal_converter::{ConvertError, convert_proposal};
+pub use rewriter::{RewriteEngine, RewriteError};
+pub use rollback::{
+    CheckpointStore, FileSnapshot, RewriteCheckpoint, RollbackError, changed_since_checkpoint,
+    create_checkpoint, rollback, sha256_hex,
+};
+pub use substitution::{
+    SubstitutionError, SubstitutionMap, free_variables, rename_variable, simplify, substitute,
+    substitute_with_depth,
 };
 pub use type_guided::{
-    generate_ensures_from_types, generate_requires_from_types, infer_bounds_from_type,
-    infer_lifetime_constraints, infer_nullability, match_patterns, FormulaHint, SignatureHints,
-    TypeAnalyzer, TypePattern,
+    FormulaHint, SignatureHints, TypeAnalyzer, TypePattern, generate_ensures_from_types,
+    generate_requires_from_types, infer_bounds_from_type, infer_lifetime_constraints,
+    infer_nullability, match_patterns,
 };
-pub use diff_gen::{
-    apply_diff, format_colored, format_github, format_unified, generate_diff, merge_diffs,
-    reverse_diff, DiffApplyError, DiffGenerator, DiffHunk, UnifiedDiff,
+pub use validation::{
+    AstNode, CheckResult, SemanticDiff, ValidationCheck, ValidationConfig, ValidationResult,
+    check_semantic_preservation, parse_simplified_ast, validate_rewrite,
+    validate_rewrite_with_config,
 };
 
 use serde::{Deserialize, Serialize};
@@ -97,10 +97,7 @@ impl RewritePlan {
     /// Create a new empty rewrite plan.
     #[must_use]
     pub fn new(summary: impl Into<String>) -> Self {
-        Self {
-            rewrites: Vec::new(),
-            summary: summary.into(),
-        }
+        Self { rewrites: Vec::new(), summary: summary.into() }
     }
 
     /// Number of rewrites in this plan.
@@ -118,11 +115,7 @@ impl RewritePlan {
     /// Sort rewrites so they can be applied bottom-up (descending offset)
     /// within each file, preventing offset invalidation.
     pub fn sort_for_application(&mut self) {
-        self.rewrites.sort_by(|a, b| {
-            a.file_path
-                .cmp(&b.file_path)
-                .then(b.offset.cmp(&a.offset))
-        });
+        self.rewrites.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(b.offset.cmp(&a.offset)));
     }
 }
 
@@ -148,10 +141,7 @@ pub enum RewriteKind {
     /// Insert an attribute before a function: `#[requires("...")]` or `#[ensures("...")]`.
     InsertAttribute { attribute: String },
     /// Replace an expression with a new one (e.g., `a + b` -> `a.checked_add(b).unwrap()`).
-    ReplaceExpression {
-        old_text: String,
-        new_text: String,
-    },
+    ReplaceExpression { old_text: String, new_text: String },
     /// Insert an assertion before a statement.
     InsertAssertion { assertion: String },
 }
@@ -171,10 +161,7 @@ pub fn apply_plan(
     proposals: &[Proposal],
     policy: &GovernancePolicy,
 ) -> Result<RewritePlan, RewriteError> {
-    let mut plan = RewritePlan::new(format!(
-        "Backprop plan: {} proposals",
-        proposals.len()
-    ));
+    let mut plan = RewritePlan::new(format!("Backprop plan: {} proposals", proposals.len()));
 
     for proposal in proposals {
         // Check governance rules
@@ -248,10 +235,7 @@ fn proposal_to_rewrites(proposal: &Proposal) -> Vec<SourceRewrite> {
                 rationale: proposal.rationale.clone(),
             }]
         }
-        ProposalKind::SafeArithmetic {
-            original,
-            replacement,
-        } => {
+        ProposalKind::SafeArithmetic { original, replacement } => {
             // For expression replacement, search for the expression after the fn keyword
             let expr_offset = std::fs::read_to_string(&proposal.function_path)
                 .ok()
@@ -274,9 +258,7 @@ fn proposal_to_rewrites(proposal: &Proposal) -> Vec<SourceRewrite> {
             vec![SourceRewrite {
                 file_path: proposal.function_path.clone(),
                 offset: fn_offset,
-                kind: RewriteKind::InsertAssertion {
-                    assertion: check_expr.clone(),
-                },
+                kind: RewriteKind::InsertAssertion { assertion: check_expr.clone() },
                 function_name: proposal.function_name.clone(),
                 rationale: proposal.rationale.clone(),
             }]
@@ -285,9 +267,7 @@ fn proposal_to_rewrites(proposal: &Proposal) -> Vec<SourceRewrite> {
             vec![SourceRewrite {
                 file_path: proposal.function_path.clone(),
                 offset: fn_offset,
-                kind: RewriteKind::InsertAssertion {
-                    assertion: check_expr.clone(),
-                },
+                kind: RewriteKind::InsertAssertion { assertion: check_expr.clone() },
                 function_name: proposal.function_name.clone(),
                 rationale: proposal.rationale.clone(),
             }]
@@ -304,9 +284,7 @@ mod tests {
         Proposal {
             function_path: format!("test::{func}"),
             function_name: func.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: spec.into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: spec.into() },
             confidence: 0.9,
             rationale: "test proposal".into(),
         }
@@ -397,9 +375,7 @@ mod tests {
             Proposal {
                 function_path: "test::fn_c".into(),
                 function_name: "fn_c".into(),
-                kind: ProposalKind::AddBoundsCheck {
-                    check_expr: "assert!(i < v.len())".into(),
-                },
+                kind: ProposalKind::AddBoundsCheck { check_expr: "assert!(i < v.len())".into() },
                 confidence: 0.8,
                 rationale: "bounds check".into(),
             },
@@ -415,27 +391,21 @@ mod tests {
             SourceRewrite {
                 file_path: "a.rs".into(),
                 offset: 10,
-                kind: RewriteKind::InsertAssertion {
-                    assertion: "first".into(),
-                },
+                kind: RewriteKind::InsertAssertion { assertion: "first".into() },
                 function_name: "f".into(),
                 rationale: String::new(),
             },
             SourceRewrite {
                 file_path: "a.rs".into(),
                 offset: 50,
-                kind: RewriteKind::InsertAssertion {
-                    assertion: "second".into(),
-                },
+                kind: RewriteKind::InsertAssertion { assertion: "second".into() },
                 function_name: "f".into(),
                 rationale: String::new(),
             },
             SourceRewrite {
                 file_path: "a.rs".into(),
                 offset: 30,
-                kind: RewriteKind::InsertAssertion {
-                    assertion: "third".into(),
-                },
+                kind: RewriteKind::InsertAssertion { assertion: "third".into() },
                 function_name: "f".into(),
                 rationale: String::new(),
             },
@@ -453,9 +423,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "test::f".into(),
             function_name: "f".into(),
-            kind: ProposalKind::AddPostcondition {
-                spec_body: "result >= 0".into(),
-            },
+            kind: ProposalKind::AddPostcondition { spec_body: "result >= 0".into() },
             confidence: 0.7,
             rationale: "test".into(),
         };
@@ -472,9 +440,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "test::f".into(),
             function_name: "f".into(),
-            kind: ProposalKind::AddInvariant {
-                spec_body: "i < n".into(),
-            },
+            kind: ProposalKind::AddInvariant { spec_body: "i < n".into() },
             confidence: 0.6,
             rationale: "test".into(),
         };
@@ -491,9 +457,7 @@ mod tests {
         let proposal = Proposal {
             function_path: "test::f".into(),
             function_name: "f".into(),
-            kind: ProposalKind::AddNonZeroCheck {
-                check_expr: "assert!(d != 0)".into(),
-            },
+            kind: ProposalKind::AddNonZeroCheck { check_expr: "assert!(d != 0)".into() },
             confidence: 0.8,
             rationale: "test".into(),
         };

@@ -77,7 +77,6 @@ impl<'tcx> LateLintPass<'tcx> for NonPanicFmt {
                         match &arg.kind {
                             // Get the borrowed arg not the borrow
                             hir::ExprKind::AddrOf(ast::BorrowKind::Ref, _, arg) => arg,
-                            // tRust: invariant — unreachable_display callee must receive its argument via borrow
                             _ => bug!("call to unreachable_display without borrow"),
                         },
                     );

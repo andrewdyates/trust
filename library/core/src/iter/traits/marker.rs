@@ -18,6 +18,7 @@ pub unsafe trait TrustedFused {}
 /// to return [`None`] again. This trait should be implemented by all iterators
 /// that behave this way because it allows optimizing [`Iterator::fuse()`].
 ///
+
 /// you need a fused iterator. Instead, you should just call [`Iterator::fuse()`]
 /// on the iterator. If the iterator is already fused, the additional [`Fuse`]
 /// wrapper will be a no-op with no performance penalty.

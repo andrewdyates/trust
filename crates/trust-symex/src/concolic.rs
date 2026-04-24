@@ -185,15 +185,9 @@ impl<S: ConstraintSolver> ConcolicEngine<S> {
 
             // Record coverage.
             if self.config.track_coverage {
-                let branch_decisions: Vec<(usize, bool)> = executor
-                    .symbolic_branches
-                    .iter()
-                    .map(|b| (b.block_id, b.taken))
-                    .collect();
-                self.coverage.record_path(
-                    &branch_decisions,
-                    executor.path.depth(),
-                );
+                let branch_decisions: Vec<(usize, bool)> =
+                    executor.symbolic_branches.iter().map(|b| (b.block_id, b.taken)).collect();
+                self.coverage.record_path(&branch_decisions, executor.path.depth());
             }
 
             // Check VCs against the current path.
@@ -276,12 +270,8 @@ pub fn explore(
     vcs: &[VerificationCondition],
     config: &ConcolicConfig,
 ) -> Vec<Counterexample> {
-    let mut engine = ConcolicEngine::new(
-        blocks.to_vec(),
-        vcs.to_vec(),
-        MockSolver::default(),
-        config.clone(),
-    );
+    let mut engine =
+        ConcolicEngine::new(blocks.to_vec(), vcs.to_vec(), MockSolver::default(), config.clone());
 
     // Seed with default symbolic inputs for function arguments.
     // In a real integration, the caller provides input names from the function signature.
@@ -300,12 +290,7 @@ pub fn explore_with_solver<S: ConstraintSolver>(
     solver: S,
     input_names: &[&str],
 ) -> ExplorationResult {
-    let mut engine = ConcolicEngine::new(
-        blocks.to_vec(),
-        vcs.to_vec(),
-        solver,
-        config.clone(),
-    );
+    let mut engine = ConcolicEngine::new(blocks.to_vec(), vcs.to_vec(), solver, config.clone());
     engine.add_symbolic_seeds(input_names);
     engine.explore()
 }
@@ -339,10 +324,7 @@ impl ConcolicState {
     /// Create a state seeded with initial concrete values.
     #[must_use]
     pub fn with_values(concrete_values: FxHashMap<String, i128>) -> Self {
-        Self {
-            concrete_values,
-            symbolic_constraints: Vec::new(),
-        }
+        Self { concrete_values, symbolic_constraints: Vec::new() }
     }
 
     /// Add a symbolic constraint to this path.
@@ -407,15 +389,17 @@ pub fn negate_branch(state: &ConcolicState, branch_idx: usize) -> Option<Formula
     }
 
     // Negate the constraint at branch_idx.
-    clauses.push(Formula::Not(Box::new(
-        state.symbolic_constraints[branch_idx].clone(),
-    )));
+    clauses.push(Formula::Not(Box::new(state.symbolic_constraints[branch_idx].clone())));
 
     match clauses.len() {
         0 => Some(Formula::Bool(true)),
         // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-        1 => Some(clauses.into_iter().next()
-            .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))),
+        1 => Some(
+            clauses
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
+        ),
         _ => Some(Formula::And(clauses)),
     }
 }
@@ -483,10 +467,7 @@ pub fn generate_test_input(constraints: &[Formula]) -> Option<FxHashMap<String, 
 /// 3. Collects symbolic constraints from the current path.
 /// 4. Negates each branch constraint to generate new inputs.
 /// 5. Repeats until the iteration budget is reached or paths are exhausted.
-pub fn concolic_search(
-    vc: &VerificationCondition,
-    max_iterations: usize,
-) -> ConcolicResult {
+pub fn concolic_search(vc: &VerificationCondition, max_iterations: usize) -> ConcolicResult {
     // Collect free variables from the VC formula.
     let vars: Vec<String> = {
         let mut v: Vec<String> = vc.formula.free_variables().into_iter().collect();
@@ -496,10 +477,7 @@ pub fn concolic_search(
 
     // Initialise the worklist with a zero-seeded state.
     let mut worklist: Vec<ConcolicState> = Vec::new();
-    let initial_values: FxHashMap<String, i128> = vars
-        .iter()
-        .map(|v| (v.clone(), 0i128))
-        .collect();
+    let initial_values: FxHashMap<String, i128> = vars.iter().map(|v| (v.clone(), 0i128)).collect();
     worklist.push(ConcolicState::with_values(initial_values));
 
     // Also try to directly satisfy the VC formula: if we can extract
@@ -514,24 +492,19 @@ pub fn concolic_search(
     }
 
     // Track explored path signatures to avoid re-exploration.
-    let mut explored: FxHashSet<Vec<i128>> =
-        FxHashSet::default();
+    let mut explored: FxHashSet<Vec<i128>> = FxHashSet::default();
 
     for iteration in 0..max_iterations {
         let state = match worklist.pop() {
             Some(s) => s,
             None => {
-                return ConcolicResult::Exhausted {
-                    iterations: iteration,
-                };
+                return ConcolicResult::Exhausted { iterations: iteration };
             }
         };
 
         // Build a path signature from concrete values for dedup.
-        let sig: Vec<i128> = vars
-            .iter()
-            .map(|v| *state.concrete_values.get(v).unwrap_or(&0))
-            .collect();
+        let sig: Vec<i128> =
+            vars.iter().map(|v| *state.concrete_values.get(v).unwrap_or(&0)).collect();
         if !explored.insert(sig) {
             continue; // Already tried this input combination.
         }
@@ -541,10 +514,7 @@ pub fn concolic_search(
         // If it evaluates to true (non-zero) under concrete inputs, the
         // property is violated and we have a counterexample.
         if execute_concrete(&vc.formula, &state.concrete_values) {
-            return ConcolicResult::FoundBug {
-                counterexample: state.concrete_values,
-                iteration,
-            };
+            return ConcolicResult::FoundBug { counterexample: state.concrete_values, iteration };
         }
 
         // Step 2: build symbolic constraints from the VC sub-formulas.
@@ -588,43 +558,23 @@ fn eval_formula(formula: &Formula, inputs: &FxHashMap<String, i128>) -> i128 {
             let v = eval_formula(inner, inputs);
             i128::from(v == 0)
         }
-        Formula::And(clauses) => {
-            i128::from(clauses.iter().all(|c| eval_formula(c, inputs) != 0))
-        }
-        Formula::Or(clauses) => {
-            i128::from(clauses.iter().any(|c| eval_formula(c, inputs) != 0))
-        }
+        Formula::And(clauses) => i128::from(clauses.iter().all(|c| eval_formula(c, inputs) != 0)),
+        Formula::Or(clauses) => i128::from(clauses.iter().any(|c| eval_formula(c, inputs) != 0)),
         Formula::Implies(lhs, rhs) => {
             let l = eval_formula(lhs, inputs);
             let r = eval_formula(rhs, inputs);
             i128::from(l == 0 || r != 0)
         }
 
-        Formula::Eq(l, r) => {
-            i128::from(eval_formula(l, inputs) == eval_formula(r, inputs))
-        }
-        Formula::Lt(l, r) => {
-            i128::from(eval_formula(l, inputs) < eval_formula(r, inputs))
-        }
-        Formula::Le(l, r) => {
-            i128::from(eval_formula(l, inputs) <= eval_formula(r, inputs))
-        }
-        Formula::Gt(l, r) => {
-            i128::from(eval_formula(l, inputs) > eval_formula(r, inputs))
-        }
-        Formula::Ge(l, r) => {
-            i128::from(eval_formula(l, inputs) >= eval_formula(r, inputs))
-        }
+        Formula::Eq(l, r) => i128::from(eval_formula(l, inputs) == eval_formula(r, inputs)),
+        Formula::Lt(l, r) => i128::from(eval_formula(l, inputs) < eval_formula(r, inputs)),
+        Formula::Le(l, r) => i128::from(eval_formula(l, inputs) <= eval_formula(r, inputs)),
+        Formula::Gt(l, r) => i128::from(eval_formula(l, inputs) > eval_formula(r, inputs)),
+        Formula::Ge(l, r) => i128::from(eval_formula(l, inputs) >= eval_formula(r, inputs)),
 
-        Formula::Add(l, r) => {
-            eval_formula(l, inputs).wrapping_add(eval_formula(r, inputs))
-        }
-        Formula::Sub(l, r) => {
-            eval_formula(l, inputs).wrapping_sub(eval_formula(r, inputs))
-        }
-        Formula::Mul(l, r) => {
-            eval_formula(l, inputs).wrapping_mul(eval_formula(r, inputs))
-        }
+        Formula::Add(l, r) => eval_formula(l, inputs).wrapping_add(eval_formula(r, inputs)),
+        Formula::Sub(l, r) => eval_formula(l, inputs).wrapping_sub(eval_formula(r, inputs)),
+        Formula::Mul(l, r) => eval_formula(l, inputs).wrapping_mul(eval_formula(r, inputs)),
         Formula::Div(l, r) => {
             let rv = eval_formula(r, inputs);
             if rv == 0 { 0 } else { eval_formula(l, inputs).wrapping_div(rv) }
@@ -646,15 +596,9 @@ fn eval_formula(formula: &Formula, inputs: &FxHashMap<String, i128>) -> i128 {
         // Bitvector arithmetic: evaluate as wrapping i128 (width ignored
         // for the concrete evaluation -- precision loss is acceptable in
         // the fast bug-finding lane).
-        Formula::BvAdd(l, r, _) => {
-            eval_formula(l, inputs).wrapping_add(eval_formula(r, inputs))
-        }
-        Formula::BvSub(l, r, _) => {
-            eval_formula(l, inputs).wrapping_sub(eval_formula(r, inputs))
-        }
-        Formula::BvMul(l, r, _) => {
-            eval_formula(l, inputs).wrapping_mul(eval_formula(r, inputs))
-        }
+        Formula::BvAdd(l, r, _) => eval_formula(l, inputs).wrapping_add(eval_formula(r, inputs)),
+        Formula::BvSub(l, r, _) => eval_formula(l, inputs).wrapping_sub(eval_formula(r, inputs)),
+        Formula::BvMul(l, r, _) => eval_formula(l, inputs).wrapping_mul(eval_formula(r, inputs)),
         Formula::BvUDiv(l, r, _) => {
             let rv = eval_formula(r, inputs);
             if rv == 0 { 0 } else { eval_formula(l, inputs).wrapping_div(rv) }
@@ -688,10 +632,7 @@ fn extract_equalities(formula: &Formula, assignments: &mut FxHashMap<String, i12
 }
 
 /// Try simple fixes for unsatisfied constraints: e.g. for `Var < N`, try N-1.
-fn try_fix_assignment(
-    formula: &Formula,
-    assignments: &mut FxHashMap<String, i128>,
-) -> bool {
+fn try_fix_assignment(formula: &Formula, assignments: &mut FxHashMap<String, i128>) -> bool {
     match formula {
         Formula::Lt(l, r) => {
             if let (Formula::Var(name, _), Formula::Int(n)) = (l.as_ref(), r.as_ref()) {
@@ -721,10 +662,10 @@ fn try_fix_assignment(
             // Not(Eq(Var, Int)): try value + 1
             if let Formula::Eq(l, r) = inner.as_ref()
                 && let (Formula::Var(name, _), Formula::Int(n)) = (l.as_ref(), r.as_ref())
-                {
-                    assignments.insert(name.clone(), n + 1);
-                    return eval_formula(formula, assignments) != 0;
-                }
+            {
+                assignments.insert(name.clone(), n + 1);
+                return eval_formula(formula, assignments) != 0;
+            }
         }
         _ => {}
     }
@@ -733,10 +674,7 @@ fn try_fix_assignment(
 
 /// Build path constraints by decomposing the VC formula into branch-like
 /// sub-formulas that can be individually negated.
-fn build_path_constraints(
-    formula: &Formula,
-    inputs: &FxHashMap<String, i128>,
-) -> ConcolicState {
+fn build_path_constraints(formula: &Formula, inputs: &FxHashMap<String, i128>) -> ConcolicState {
     let mut state = ConcolicState::with_values(inputs.clone());
 
     match formula {
@@ -793,11 +731,7 @@ mod tests {
                 }],
                 terminator: Terminator::Goto(BlockId(1)),
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
         ]
     }
 
@@ -843,12 +777,7 @@ mod tests {
             strategy: NegationStrategy::Generational,
             track_coverage: true,
         };
-        let mut engine = ConcolicEngine::new(
-            blocks,
-            vec![],
-            MockSolver::default(),
-            config,
-        );
+        let mut engine = ConcolicEngine::new(blocks, vec![], MockSolver::default(), config);
         engine.worklist.push(FxHashMap::default());
         let result = engine.explore();
         assert!(result.counterexamples.is_empty());
@@ -895,12 +824,7 @@ mod tests {
             strategy: NegationStrategy::Generational,
             track_coverage: false,
         };
-        let mut engine = ConcolicEngine::new(
-            blocks,
-            vec![],
-            MockSolver::default(),
-            config,
-        );
+        let mut engine = ConcolicEngine::new(blocks, vec![], MockSolver::default(), config);
         engine.worklist.push(FxHashMap::default());
         let result = engine.explore();
         assert_eq!(result.paths_explored, 1);
@@ -915,12 +839,7 @@ mod tests {
             strategy: NegationStrategy::Generational,
             track_coverage: false,
         };
-        let mut engine = ConcolicEngine::new(
-            blocks,
-            vec![],
-            MockSolver::default(),
-            config,
-        );
+        let mut engine = ConcolicEngine::new(blocks, vec![], MockSolver::default(), config);
         // Don't add any inputs.
         // explore() adds a default empty input.
         let result = engine.explore();
@@ -947,18 +866,9 @@ mod tests {
     #[test]
     fn test_concolic_explore_with_solver() {
         let blocks = simple_blocks();
-        let config = ConcolicConfig {
-            max_iterations: 5,
-            step_limit: 100,
-            ..ConcolicConfig::default()
-        };
-        let result = explore_with_solver(
-            &blocks,
-            &[],
-            &config,
-            MockSolver::default(),
-            &["x"],
-        );
+        let config =
+            ConcolicConfig { max_iterations: 5, step_limit: 100, ..ConcolicConfig::default() };
+        let result = explore_with_solver(&blocks, &[], &config, MockSolver::default(), &["x"]);
         assert!(result.counterexamples.is_empty());
         assert!(result.paths_explored >= 1);
     }
@@ -986,10 +896,7 @@ mod tests {
 
     #[test]
     fn test_concolic_assignments_to_inputs() {
-        let assignments = vec![
-            ("x".to_string(), 5),
-            ("y".to_string(), -3),
-        ];
+        let assignments = vec![("x".to_string(), 5), ("y".to_string(), -3)];
         let inputs = assignments_to_inputs(&assignments);
         assert_eq!(inputs.len(), 2);
         assert_eq!(inputs["x"].concrete, 5);
@@ -1041,12 +948,7 @@ mod tests {
             strategy: NegationStrategy::Generational,
             track_coverage: false,
         };
-        let mut engine = ConcolicEngine::new(
-            blocks,
-            vec![],
-            MockSolver::default(),
-            config,
-        );
+        let mut engine = ConcolicEngine::new(blocks, vec![], MockSolver::default(), config);
         engine.worklist.push(FxHashMap::default());
         let result = engine.explore();
         // Path hits step limit and is skipped; engine keeps going.
@@ -1112,10 +1014,7 @@ mod tests {
         let mut inputs = FxHashMap::default();
         inputs.insert("x".into(), 5);
         assert!(execute_concrete(
-            &Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(3)),
-            ),
+            &Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(3)),),
             &inputs,
         ));
     }
@@ -1125,10 +1024,7 @@ mod tests {
         let inputs = FxHashMap::default();
         // x defaults to 0; 0 < 10 is true.
         assert!(execute_concrete(
-            &Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            &Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)),),
             &inputs,
         ));
     }
@@ -1154,14 +1050,8 @@ mod tests {
         let mut inputs = FxHashMap::default();
         inputs.insert("x".into(), 5);
         let formula = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
         assert!(execute_concrete(&formula, &inputs));
     }
@@ -1171,14 +1061,8 @@ mod tests {
         let mut inputs = FxHashMap::default();
         inputs.insert("x".into(), 15);
         let formula = Formula::Or(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
         assert!(execute_concrete(&formula, &inputs));
     }
@@ -1187,10 +1071,8 @@ mod tests {
     fn test_execute_concrete_implies() {
         let inputs = FxHashMap::default();
         // false => anything is true
-        let formula = Formula::Implies(
-            Box::new(Formula::Bool(false)),
-            Box::new(Formula::Bool(false)),
-        );
+        let formula =
+            Formula::Implies(Box::new(Formula::Bool(false)), Box::new(Formula::Bool(false)));
         assert!(execute_concrete(&formula, &inputs));
     }
 
@@ -1209,10 +1091,7 @@ mod tests {
     #[test]
     fn test_execute_concrete_div_by_zero_returns_zero() {
         let inputs = FxHashMap::default();
-        let formula = Formula::Div(
-            Box::new(Formula::Int(10)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula = Formula::Div(Box::new(Formula::Int(10)), Box::new(Formula::Int(0)));
         assert!(!execute_concrete(&formula, &inputs));
     }
 
@@ -1315,14 +1194,8 @@ mod tests {
     #[test]
     fn test_generate_test_input_multiple_constraints() {
         let constraints = vec![
-            Formula::Eq(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(5)),
-            ),
-            Formula::Eq(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5))),
+            Formula::Eq(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ];
         let inputs = generate_test_input(&constraints).expect("should find assignment");
         assert_eq!(inputs["x"], 5);
@@ -1335,14 +1208,8 @@ mod tests {
         // light solver tries to fix: x=10 fails x<5, so it tries x=4.
         // However x=4 != 10 so the Eq fails. Should return None.
         let constraints = vec![
-            Formula::Eq(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(5)),
-            ),
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5))),
         ];
         assert!(generate_test_input(&constraints).is_none());
     }
@@ -1352,10 +1219,8 @@ mod tests {
         // VC: x == 42 (property violation when x=42).
         // concolic_search starts with x=0 (not a bug), then negates
         // to try x != 0 and through equality extraction finds x=42.
-        let formula = Formula::Eq(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(42)),
-        );
+        let formula =
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(42)));
         let vc = make_vc(formula);
         let result = concolic_search(&vc, 100);
         match result {
@@ -1407,10 +1272,8 @@ mod tests {
     fn test_concolic_search_finds_lt_bug() {
         // VC: x < 0 -- the direct-satisfaction seed tries x=-1 which
         // satisfies x < 0, so the engine finds a bug immediately.
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let vc = make_vc(formula);
         let result = concolic_search(&vc, 50);
         match result {
@@ -1441,10 +1304,8 @@ mod tests {
     #[test]
     fn test_concolic_result_enum_variants() {
         // Ensure all variants are constructible.
-        let _found = ConcolicResult::FoundBug {
-            counterexample: FxHashMap::default(),
-            iteration: 0,
-        };
+        let _found =
+            ConcolicResult::FoundBug { counterexample: FxHashMap::default(), iteration: 0 };
         let _exhausted = ConcolicResult::Exhausted { iterations: 5 };
         let _limit = ConcolicResult::ResourceLimit;
     }
@@ -1459,30 +1320,21 @@ mod tests {
     #[test]
     fn test_eval_formula_rem() {
         let inputs = FxHashMap::default();
-        let formula = Formula::Rem(
-            Box::new(Formula::Int(10)),
-            Box::new(Formula::Int(3)),
-        );
+        let formula = Formula::Rem(Box::new(Formula::Int(10)), Box::new(Formula::Int(3)));
         assert_eq!(eval_formula(&formula, &inputs), 1);
     }
 
     #[test]
     fn test_eval_formula_mul() {
         let inputs = FxHashMap::default();
-        let formula = Formula::Mul(
-            Box::new(Formula::Int(6)),
-            Box::new(Formula::Int(7)),
-        );
+        let formula = Formula::Mul(Box::new(Formula::Int(6)), Box::new(Formula::Int(7)));
         assert_eq!(eval_formula(&formula, &inputs), 42);
     }
 
     #[test]
     fn test_eval_formula_sub() {
         let inputs = FxHashMap::default();
-        let formula = Formula::Sub(
-            Box::new(Formula::Int(10)),
-            Box::new(Formula::Int(3)),
-        );
+        let formula = Formula::Sub(Box::new(Formula::Int(10)), Box::new(Formula::Int(3)));
         assert_eq!(eval_formula(&formula, &inputs), 7);
     }
 
@@ -1523,10 +1375,8 @@ mod tests {
 
     #[test]
     fn test_build_path_constraints_atomic() {
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(5)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5)));
         let inputs = FxHashMap::default();
         let state = build_path_constraints(&formula, &inputs);
         assert_eq!(state.depth(), 1);

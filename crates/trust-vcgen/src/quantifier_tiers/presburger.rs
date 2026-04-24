@@ -16,7 +16,7 @@ use super::types::QuantifierError;
 
 /// Check whether a formula body (under the given bindings) is in Presburger
 /// arithmetic -- i.e., only uses linear integer operations and comparisons.
-pub(super) fn is_presburger(bindings: &[(String, Sort)], body: &Formula) -> bool {
+pub(super) fn is_presburger(bindings: &[(trust_types::Symbol, Sort)], body: &Formula) -> bool {
     // All bound variables must be Int.
     if !bindings.iter().all(|(_, s)| matches!(s, Sort::Int)) {
         return false;
@@ -31,16 +31,15 @@ pub(super) fn is_presburger_formula(f: &Formula, bound: &FxHashSet<&str>) -> boo
         Formula::Bool(_) | Formula::Int(_) => true,
         Formula::Var(_, sort) => matches!(sort, Sort::Int | Sort::Bool),
         Formula::Not(inner) => is_presburger_formula(inner, bound),
-        Formula::And(cs) | Formula::Or(cs) => {
-            cs.iter().all(|c| is_presburger_formula(c, bound))
-        }
+        Formula::And(cs) | Formula::Or(cs) => cs.iter().all(|c| is_presburger_formula(c, bound)),
         Formula::Implies(a, b) => {
             is_presburger_formula(a, bound) && is_presburger_formula(b, bound)
         }
-        Formula::Eq(a, b) | Formula::Lt(a, b) | Formula::Le(a, b)
-        | Formula::Gt(a, b) | Formula::Ge(a, b) => {
-            is_presburger_term(a, bound) && is_presburger_term(b, bound)
-        }
+        Formula::Eq(a, b)
+        | Formula::Lt(a, b)
+        | Formula::Le(a, b)
+        | Formula::Gt(a, b)
+        | Formula::Ge(a, b) => is_presburger_term(a, bound) && is_presburger_term(b, bound),
         Formula::Add(a, b) | Formula::Sub(a, b) => {
             is_presburger_term(a, bound) && is_presburger_term(b, bound)
         }
@@ -109,11 +108,10 @@ pub(super) fn free_vars(f: &Formula) -> FxHashSet<String> {
 
 fn collect_free_vars(f: &Formula, bound: &FxHashSet<String>, out: &mut FxHashSet<String>) {
     match f {
-        Formula::Var(name, _) => {
-            if !bound.contains(name) {
-                out.insert(name.clone());
-            }
+        Formula::Var(name, _) if !bound.contains(name) => {
+            out.insert(name.clone());
         }
+        Formula::Var(_, _) => {}
         Formula::Bool(_) | Formula::Int(_) | Formula::BitVec { .. } => {}
         Formula::Not(inner) | Formula::Neg(inner) => collect_free_vars(inner, bound, out),
         Formula::And(cs) | Formula::Or(cs) => {
@@ -147,7 +145,7 @@ fn collect_free_vars(f: &Formula, bound: &FxHashSet<String>, out: &mut FxHashSet
         Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
             let mut extended = bound.clone();
             for (n, _) in bindings {
-                extended.insert(n.clone());
+                extended.insert(n.as_str().to_string());
             }
             collect_free_vars(body, &extended, out);
         }
@@ -255,9 +253,7 @@ fn has_array_ops(f: &Formula) -> bool {
         | Formula::Mul(a, b)
         | Formula::Div(a, b)
         | Formula::Rem(a, b) => has_array_ops(a) || has_array_ops(b),
-        Formula::Ite(c, t, e) => {
-            has_array_ops(c) || has_array_ops(t) || has_array_ops(e)
-        }
+        Formula::Ite(c, t, e) => has_array_ops(c) || has_array_ops(t) || has_array_ops(e),
         Formula::Forall(_, body) | Formula::Exists(_, body) => has_array_ops(body),
         _ => false,
     }
@@ -268,9 +264,7 @@ fn array_indices_linear(f: &Formula) -> bool {
     let bound = FxHashSet::default();
     match f {
         Formula::Select(_, idx) => is_presburger_term(idx, &bound),
-        Formula::Store(_, idx, val) => {
-            is_presburger_term(idx, &bound) && array_indices_linear(val)
-        }
+        Formula::Store(_, idx, val) => is_presburger_term(idx, &bound) && array_indices_linear(val),
         Formula::And(cs) | Formula::Or(cs) => cs.iter().all(array_indices_linear),
         Formula::Implies(a, b) | Formula::Eq(a, b) => {
             array_indices_linear(a) && array_indices_linear(b)
@@ -287,7 +281,7 @@ fn array_indices_linear(f: &Formula) -> bool {
 
 /// Try to eliminate a universal quantifier via Cooper's method.
 pub(super) fn cooper_eliminate_forall(
-    bindings: &[(String, Sort)],
+    bindings: &[(trust_types::Symbol, Sort)],
     body: &Formula,
 ) -> Result<Formula, QuantifierError> {
     if bindings.len() != 1 {
@@ -300,12 +294,13 @@ pub(super) fn cooper_eliminate_forall(
 
     // Extract the structure: Implies(guard, inner) for forall
     if let Formula::Implies(guard, inner) = body
-        && let Some(bounds) = extract_linear_bounds(guard, var_name) {
-            return cooper_check_universal(var_name, &bounds, inner);
-        }
+        && let Some(bounds) = extract_linear_bounds(guard, var_name.as_str())
+    {
+        return cooper_check_universal(var_name.as_str(), &bounds, inner);
+    }
 
     // For simple formulas like `forall x. a*x + b > 0`, try direct analysis.
-    if let Some(result) = try_simple_linear_forall(var_name, body) {
+    if let Some(result) = try_simple_linear_forall(var_name.as_str(), body) {
         return Ok(result);
     }
 
@@ -316,7 +311,7 @@ pub(super) fn cooper_eliminate_forall(
 
 /// Try to eliminate an existential quantifier via Cooper's method.
 pub(super) fn cooper_eliminate_exists(
-    bindings: &[(String, Sort)],
+    bindings: &[(trust_types::Symbol, Sort)],
     body: &Formula,
 ) -> Result<Formula, QuantifierError> {
     if bindings.len() != 1 {
@@ -325,7 +320,7 @@ pub(super) fn cooper_eliminate_exists(
         });
     }
 
-    let var_name = &bindings[0].0;
+    let var_name = bindings[0].0.as_str();
 
     // Collect all atomic constraints as a conjunction.
     let atoms = flatten_conjunction(body);
@@ -351,10 +346,8 @@ pub(super) fn cooper_eliminate_exists(
     let disjuncts: Vec<Formula> = b_set
         .iter()
         .map(|bound| {
-            let substituted: Vec<Formula> = atoms
-                .iter()
-                .map(|atom| substitute(atom, var_name, bound))
-                .collect();
+            let substituted: Vec<Formula> =
+                atoms.iter().map(|atom| substitute(atom, var_name, bound)).collect();
             if substituted.len() == 1 {
                 substituted.into_iter().next().unwrap_or(Formula::Bool(true))
             } else {
@@ -397,11 +390,7 @@ fn extract_linear_bounds(guard: &Formula, var_name: &str) -> Option<LinearBounds
         }
     }
 
-    if lo.is_some() || hi.is_some() {
-        Some(LinearBounds { lo, hi })
-    } else {
-        None
-    }
+    if lo.is_some() || hi.is_some() { Some(LinearBounds { lo, hi }) } else { None }
 }
 
 /// Cooper check for universal quantifier with known bounds.
@@ -419,12 +408,12 @@ fn cooper_check_universal(
     if let Some(lo) = &bounds.lo {
         guard_parts.push(Formula::Le(
             Box::new(lo.clone()),
-            Box::new(Formula::Var(var_name.to_string(), Sort::Int)),
+            Box::new(Formula::Var(var_name.into(), Sort::Int)),
         ));
     }
     if let Some(hi) = &bounds.hi {
         guard_parts.push(Formula::Lt(
-            Box::new(Formula::Var(var_name.to_string(), Sort::Int)),
+            Box::new(Formula::Var(var_name.into(), Sort::Int)),
             Box::new(hi.clone()),
         ));
     }
@@ -446,9 +435,10 @@ fn try_simple_linear_forall(var_name: &str, body: &Formula) -> Option<Formula> {
     }
 
     if let Formula::Eq(a, b) = body
-        && a == b {
-            return Some(Formula::Bool(true));
-        }
+        && a == b
+    {
+        return Some(Formula::Bool(true));
+    }
 
     None
 }

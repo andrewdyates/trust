@@ -116,17 +116,20 @@ impl PatternLibrary {
                 // is_sorted precondition inference.
                 PatternEntry {
                     pattern: CodePattern::BinarySearch,
-                    name_keywords: vec!["binary_search", "bsearch", "bisect", "lower_bound", "upper_bound"],
+                    name_keywords: vec![
+                        "binary_search",
+                        "bsearch",
+                        "bisect",
+                        "lower_bound",
+                        "upper_bound",
+                    ],
                     typical_vc_kinds: vec![
                         VcKindClass::ArithmeticOverflow,
                         VcKindClass::IndexOutOfBounds,
                     ],
                     name_confidence: 0.85,
                     vc_boost: 0.10,
-                    preconditions: vec![
-                        "slice.is_sorted()",
-                        "!slice.is_empty()",
-                    ],
+                    preconditions: vec!["slice.is_sorted()", "!slice.is_empty()"],
                     postconditions: vec![
                         "result.is_some() ==> slice[result.unwrap()] == target",
                         "result.is_none() ==> forall |i| 0 <= i && i < slice.len() ==> slice[i] != target",
@@ -139,7 +142,14 @@ impl PatternLibrary {
                 },
                 PatternEntry {
                     pattern: CodePattern::Sort,
-                    name_keywords: vec!["sort", "quicksort", "mergesort", "heapsort", "insertion_sort", "bubble_sort"],
+                    name_keywords: vec![
+                        "sort",
+                        "quicksort",
+                        "mergesort",
+                        "heapsort",
+                        "insertion_sort",
+                        "bubble_sort",
+                    ],
                     typical_vc_kinds: vec![
                         VcKindClass::IndexOutOfBounds,
                         VcKindClass::ArithmeticOverflow,
@@ -151,10 +161,7 @@ impl PatternLibrary {
                         "result is a permutation of input",
                         "result is sorted: forall i < result.len()-1, result[i] <= result[i+1]",
                     ],
-                    invariants: vec![
-                        "0 <= i && i <= slice.len()",
-                        "slice[..i] is sorted",
-                    ],
+                    invariants: vec!["0 <= i && i <= slice.len()", "slice[..i] is sorted"],
                 },
                 PatternEntry {
                     pattern: CodePattern::BoundedLoop,
@@ -166,12 +173,8 @@ impl PatternLibrary {
                     ],
                     name_confidence: 0.60,
                     vc_boost: 0.15,
-                    preconditions: vec![
-                        "n >= 0 (loop bound is non-negative)",
-                    ],
-                    postconditions: vec![
-                        "loop executed exactly n iterations",
-                    ],
+                    preconditions: vec!["n >= 0 (loop bound is non-negative)"],
+                    postconditions: vec!["loop executed exactly n iterations"],
                     invariants: vec![
                         "0 <= i && i <= n",
                         "loop variant: n - i decreases each iteration",
@@ -179,21 +182,33 @@ impl PatternLibrary {
                 },
                 PatternEntry {
                     pattern: CodePattern::Iterator,
-                    name_keywords: vec!["iter", "map", "filter", "fold", "reduce", "collect", "enumerate", "zip"],
-                    typical_vc_kinds: vec![
-                        VcKindClass::ArithmeticOverflow,
+                    name_keywords: vec![
+                        "iter",
+                        "map",
+                        "filter",
+                        "fold",
+                        "reduce",
+                        "collect",
+                        "enumerate",
+                        "zip",
                     ],
+                    typical_vc_kinds: vec![VcKindClass::ArithmeticOverflow],
                     name_confidence: 0.65,
                     vc_boost: 0.10,
                     preconditions: vec![],
-                    postconditions: vec![
-                        "result.len() <= input.len()",
-                    ],
+                    postconditions: vec!["result.len() <= input.len()"],
                     invariants: vec![],
                 },
                 PatternEntry {
                     pattern: CodePattern::ErrorHandling,
-                    name_keywords: vec!["try_", "parse", "validate", "check", "handle_error", "from_str"],
+                    name_keywords: vec![
+                        "try_",
+                        "parse",
+                        "validate",
+                        "check",
+                        "handle_error",
+                        "from_str",
+                    ],
                     typical_vc_kinds: vec![
                         VcKindClass::Assertion,
                         VcKindClass::Postcondition,
@@ -217,9 +232,7 @@ impl PatternLibrary {
                     ],
                     name_confidence: 0.60,
                     vc_boost: 0.10,
-                    preconditions: vec![
-                        "vec.len() < usize::MAX",
-                    ],
+                    preconditions: vec!["vec.len() < usize::MAX"],
                     postconditions: vec![
                         "vec.len() == old(vec.len()) + 1",
                         "vec.last() == Some(&item)",
@@ -228,11 +241,14 @@ impl PatternLibrary {
                 },
                 PatternEntry {
                     pattern: CodePattern::HashLookup,
-                    name_keywords: vec!["lookup", "get_entry", "find_key", "contains_key", "hash_get"],
-                    typical_vc_kinds: vec![
-                        VcKindClass::Assertion,
-                        VcKindClass::Postcondition,
+                    name_keywords: vec![
+                        "lookup",
+                        "get_entry",
+                        "find_key",
+                        "contains_key",
+                        "hash_get",
                     ],
+                    typical_vc_kinds: vec![VcKindClass::Assertion, VcKindClass::Postcondition],
                     name_confidence: 0.55,
                     vc_boost: 0.10,
                     preconditions: vec![],
@@ -244,7 +260,21 @@ impl PatternLibrary {
                 },
                 PatternEntry {
                     pattern: CodePattern::MathOp,
-                    name_keywords: vec!["add", "sub", "mul", "div", "rem", "pow", "sqrt", "abs", "midpoint", "average", "mean", "clamp", "saturating"],
+                    name_keywords: vec![
+                        "add",
+                        "sub",
+                        "mul",
+                        "div",
+                        "rem",
+                        "pow",
+                        "sqrt",
+                        "abs",
+                        "midpoint",
+                        "average",
+                        "mean",
+                        "clamp",
+                        "saturating",
+                    ],
                     typical_vc_kinds: vec![
                         VcKindClass::ArithmeticOverflow,
                         VcKindClass::DivisionByZero,
@@ -256,14 +286,21 @@ impl PatternLibrary {
                         "operands do not overflow result type",
                         "divisor != 0 (if division involved)",
                     ],
-                    postconditions: vec![
-                        "result is within bounds of result type",
-                    ],
+                    postconditions: vec!["result is within bounds of result type"],
                     invariants: vec![],
                 },
                 PatternEntry {
                     pattern: CodePattern::StringParse,
-                    name_keywords: vec!["parse", "from_str", "to_string", "format", "encode", "decode", "serialize", "deserialize"],
+                    name_keywords: vec![
+                        "parse",
+                        "from_str",
+                        "to_string",
+                        "format",
+                        "encode",
+                        "decode",
+                        "serialize",
+                        "deserialize",
+                    ],
                     typical_vc_kinds: vec![
                         VcKindClass::Assertion,
                         VcKindClass::Postcondition,
@@ -271,29 +308,29 @@ impl PatternLibrary {
                     ],
                     name_confidence: 0.60,
                     vc_boost: 0.10,
-                    preconditions: vec![
-                        "input is valid UTF-8",
-                    ],
-                    postconditions: vec![
-                        "parse(format(x)) == x (roundtrip)",
-                    ],
+                    preconditions: vec!["input is valid UTF-8"],
+                    postconditions: vec!["parse(format(x)) == x (roundtrip)"],
                     invariants: vec![],
                 },
                 PatternEntry {
                     pattern: CodePattern::FileIO,
-                    name_keywords: vec!["read_file", "write_file", "open_file", "read_from", "write_to", "flush", "close_file", "connect", "send_data", "recv_data"],
-                    typical_vc_kinds: vec![
-                        VcKindClass::Assertion,
-                        VcKindClass::Postcondition,
+                    name_keywords: vec![
+                        "read_file",
+                        "write_file",
+                        "open_file",
+                        "read_from",
+                        "write_to",
+                        "flush",
+                        "close_file",
+                        "connect",
+                        "send_data",
+                        "recv_data",
                     ],
+                    typical_vc_kinds: vec![VcKindClass::Assertion, VcKindClass::Postcondition],
                     name_confidence: 0.55,
                     vc_boost: 0.10,
-                    preconditions: vec![
-                        "file path exists and is readable (for read operations)",
-                    ],
-                    postconditions: vec![
-                        "result.is_ok() ==> operation completed successfully",
-                    ],
+                    preconditions: vec!["file path exists and is readable (for read operations)"],
+                    postconditions: vec!["result.is_ok() ==> operation completed successfully"],
                     invariants: vec![],
                 },
             ],
@@ -348,10 +385,7 @@ pub fn recognize_patterns_with_library(
         .iter()
         .filter_map(|entry| {
             // Check if function name matches any keyword
-            let name_hit = entry
-                .name_keywords
-                .iter()
-                .any(|kw| lower_name.contains(kw));
+            let name_hit = entry.name_keywords.iter().any(|kw| lower_name.contains(kw));
 
             if !name_hit {
                 return None;
@@ -359,10 +393,8 @@ pub fn recognize_patterns_with_library(
 
             // Calculate confidence: base from name, boosted by VC match
             let mut confidence = entry.name_confidence;
-            let vc_match = entry
-                .typical_vc_kinds
-                .iter()
-                .any(|expected| vc_classes.contains(expected));
+            let vc_match =
+                entry.typical_vc_kinds.iter().any(|expected| vc_classes.contains(expected));
             if vc_match {
                 confidence = (confidence + entry.vc_boost).min(1.0);
             }
@@ -378,7 +410,9 @@ pub fn recognize_patterns_with_library(
         .collect();
 
     // Sort by confidence descending
-    matches.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    matches.sort_by(|a, b| {
+        b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
+    });
     matches
 }
 
@@ -399,15 +433,9 @@ pub fn pattern_matches_to_proposals(
             proposals.push(Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: pre.clone(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: pre.clone() },
                 confidence: m.confidence,
-                rationale: format!(
-                    "Pattern '{}': {}",
-                    m.pattern.description(),
-                    pre
-                ),
+                rationale: format!("Pattern '{}': {}", m.pattern.description(), pre),
             });
         }
 
@@ -415,15 +443,9 @@ pub fn pattern_matches_to_proposals(
             proposals.push(Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddPostcondition {
-                    spec_body: post.clone(),
-                },
+                kind: ProposalKind::AddPostcondition { spec_body: post.clone() },
                 confidence: m.confidence * 0.9, // slightly lower for postconditions
-                rationale: format!(
-                    "Pattern '{}': {}",
-                    m.pattern.description(),
-                    post
-                ),
+                rationale: format!("Pattern '{}': {}", m.pattern.description(), post),
             });
         }
 
@@ -431,15 +453,9 @@ pub fn pattern_matches_to_proposals(
             proposals.push(Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddInvariant {
-                    spec_body: inv.clone(),
-                },
+                kind: ProposalKind::AddInvariant { spec_body: inv.clone() },
                 confidence: m.confidence * 0.85, // slightly lower for invariants
-                rationale: format!(
-                    "Pattern '{}': {}",
-                    m.pattern.description(),
-                    inv
-                ),
+                rationale: format!("Pattern '{}': {}", m.pattern.description(), inv),
             });
         }
     }
@@ -449,8 +465,9 @@ pub fn pattern_matches_to_proposals(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{BinOp, Ty};
+
+    use super::*;
 
     // --- CodePattern description ---
 
@@ -490,7 +507,10 @@ mod tests {
     fn test_recognize_binary_search_with_vc_boost() {
         let vc_kinds = vec![VcKind::ArithmeticOverflow {
             op: BinOp::Add,
-            operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+            operand_tys: (
+                Ty::Int { width: 64, signed: false },
+                Ty::Int { width: 64, signed: false },
+            ),
         }];
         let matches = recognize_patterns("binary_search", &vc_kinds);
         assert_eq!(matches.len(), 1);
@@ -613,7 +633,10 @@ mod tests {
         let vc_kinds = vec![
             VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             VcKind::IndexOutOfBounds,
         ];
@@ -635,16 +658,15 @@ mod tests {
     #[test]
     fn test_pattern_matches_to_proposals_binary_search() {
         let matches = recognize_patterns("binary_search", &[]);
-        let proposals = pattern_matches_to_proposals(
-            "crate::binary_search",
-            "binary_search",
-            &matches,
-        );
+        let proposals =
+            pattern_matches_to_proposals("crate::binary_search", "binary_search", &matches);
         assert!(!proposals.is_empty());
 
         // Should have preconditions, postconditions, and invariants
-        let has_pre = proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPrecondition { .. }));
-        let has_post = proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }));
+        let has_pre =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPrecondition { .. }));
+        let has_post =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }));
         let has_inv = proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddInvariant { .. }));
         assert!(has_pre, "binary search should have precondition proposals");
         assert!(has_post, "binary search should have postcondition proposals");
@@ -660,22 +682,22 @@ mod tests {
     #[test]
     fn test_pattern_matches_to_proposals_confidence_ordering() {
         let matches = recognize_patterns("binary_search", &[]);
-        let proposals = pattern_matches_to_proposals(
-            "crate::binary_search",
-            "binary_search",
-            &matches,
-        );
+        let proposals =
+            pattern_matches_to_proposals("crate::binary_search", "binary_search", &matches);
 
         // Preconditions should have highest confidence, then postconditions, then invariants
-        let pre_conf: Vec<f64> = proposals.iter()
+        let pre_conf: Vec<f64> = proposals
+            .iter()
             .filter(|p| matches!(p.kind, ProposalKind::AddPrecondition { .. }))
             .map(|p| p.confidence)
             .collect();
-        let post_conf: Vec<f64> = proposals.iter()
+        let post_conf: Vec<f64> = proposals
+            .iter()
             .filter(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }))
             .map(|p| p.confidence)
             .collect();
-        let inv_conf: Vec<f64> = proposals.iter()
+        let inv_conf: Vec<f64> = proposals
+            .iter()
             .filter(|p| matches!(p.kind, ProposalKind::AddInvariant { .. }))
             .map(|p| p.confidence)
             .collect();
@@ -691,9 +713,16 @@ mod tests {
     #[test]
     fn test_all_proposals_have_valid_confidence() {
         let test_names = vec![
-            "binary_search", "quicksort", "count_items", "filter_active",
-            "try_parse", "push_element", "lookup_user", "midpoint",
-            "parse_json", "read_file",
+            "binary_search",
+            "quicksort",
+            "count_items",
+            "filter_active",
+            "try_parse",
+            "push_element",
+            "lookup_user",
+            "midpoint",
+            "parse_json",
+            "read_file",
         ];
         for name in test_names {
             let matches = recognize_patterns(name, &[]);
@@ -712,11 +741,8 @@ mod tests {
     #[test]
     fn test_proposals_reference_correct_function() {
         let matches = recognize_patterns("binary_search", &[]);
-        let proposals = pattern_matches_to_proposals(
-            "my_crate::binary_search",
-            "binary_search",
-            &matches,
-        );
+        let proposals =
+            pattern_matches_to_proposals("my_crate::binary_search", "binary_search", &matches);
         for p in &proposals {
             assert_eq!(p.function_path, "my_crate::binary_search");
             assert_eq!(p.function_name, "binary_search");
@@ -729,7 +755,10 @@ mod tests {
     fn test_classify_vc_arithmetic_overflow() {
         let kind = VcKind::ArithmeticOverflow {
             op: BinOp::Add,
-            operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+            operand_tys: (
+                Ty::Int { width: 64, signed: false },
+                Ty::Int { width: 64, signed: false },
+            ),
         };
         assert_eq!(classify_vc(&kind), Some(VcKindClass::ArithmeticOverflow));
     }

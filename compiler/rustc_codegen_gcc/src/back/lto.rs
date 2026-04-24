@@ -66,8 +66,6 @@ fn prepare_lto(
     let mut upstream_modules = Vec::new();
     if cgcx.lto != Lto::ThinLocal {
         for path in each_linked_rlib_for_lto {
-            // SAFETY: The file is valid and remains open for the duration of
-            // the mapping. The mapped memory is only used for reading.
             let archive_data = unsafe {
                 Mmap::map(File::open(path).expect("couldn't open rlib")).expect("couldn't map rlib")
             };
@@ -174,8 +172,6 @@ fn fat_lto(
         .enumerate()
         .filter(|&(_, module)| module.kind == ModuleKind::Regular)
         .map(|(i, _module)| {
-            // SAFETY: `_module.module_llvm.llmod()` would be a live backend-owned module handle
-            // here, and querying its cost would only read backend metadata.
             //let cost = unsafe { llvm::LLVMRustModuleCost(module.module_llvm.llmod()) };
             // FIXME(antoyo): compute the cost of a module if GCC allows this.
             (0, i)
@@ -248,8 +244,6 @@ fn fat_lto(
         save_temp_bitcode(cgcx, &module, "lto.input");
 
         // Internalize everything below threshold to help strip out more modules and such.
-        // SAFETY: `llmod` would be the current module's valid backend handle, and the symbol
-        // pointers would come from `CString`s kept alive for the duration of the FFI call.
         /*unsafe {
         let ptr = symbols_below_threshold.as_ptr();
         llvm::LLVMRustRunRestrictionPass(

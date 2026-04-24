@@ -920,7 +920,7 @@ impl BorrowKind {
         match self {
             BorrowKind::Mut { .. } => Mutability::Mut,
             BorrowKind::Shared => Mutability::Not,
-            // tRust: known issue — There's no type corresponding to a shallow borrow, so use `&` as an approximation.
+            // FIXME: There's no type corresponding to a shallow borrow, so use `&` as an approximation.
             BorrowKind::Fake(_) => Mutability::Not,
         }
     }
@@ -938,7 +938,7 @@ impl RawPtrKind {
         match self {
             RawPtrKind::Mut { .. } => Mutability::Mut,
             RawPtrKind::Const => Mutability::Not,
-            // tRust: known issue — There's no type corresponding to a shallow borrow, so use `&` as an approximation.
+            // FIXME: There's no type corresponding to a shallow borrow, so use `&` as an approximation.
             RawPtrKind::FakeForPtrMetadata => Mutability::Not,
         }
     }
@@ -1003,7 +1003,7 @@ pub enum PointerCoercion {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 pub enum CastKind {
-    // tRust: known issue (smir-rename) — rename this to PointerExposeProvenance
+    // FIXME(smir-rename): rename this to PointerExposeProvenance
     PointerExposeAddress,
     PointerWithExposedProvenance,
     PointerCoercion(PointerCoercion),

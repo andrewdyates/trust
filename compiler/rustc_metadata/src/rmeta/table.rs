@@ -343,7 +343,7 @@ impl<T> FixedSizeEncoding for Option<LazyValue<T>> {
             None => unreachable!(),
             Some(lazy) => {
                 let position = lazy.position.get();
-                let position: u64 = position.try_into().expect("invariant: metadata position fits in u64"); // tRust: unwrap→expect
+                let position: u64 = position.try_into().unwrap();
                 position.write_to_bytes(b)
             }
         }
@@ -406,7 +406,7 @@ impl<T> FixedSizeEncoding for LazyArray<T> {
         if meta == [0; 8] {
             return Default::default();
         }
-        LazyArray::from_bytes_impl(&position, &meta).expect("invariant: non-default lazy array has valid position and metadata") // tRust: unwrap→expect
+        LazyArray::from_bytes_impl(&position, &meta).unwrap()
     }
 
     #[inline]
@@ -472,7 +472,7 @@ impl<I: Idx, const N: usize, T: FixedSizeEncoding<ByteArray = [u8; N]>> TableBui
             );
         }
         if !value.is_default() {
-            // tRust: known issue — investigate more compact encodings for sparse tables. (upstream FIXME by eddyb)
+            // FIXME(eddyb) investigate more compact encodings for sparse tables.
             // On the PR @michaelwoerister mentioned:
             // > Space requirements could perhaps be optimized by using the HAMT `popcnt`
             // > trick (i.e. divide things into buckets of 32 or 64 items and then
@@ -498,7 +498,7 @@ impl<I: Idx, const N: usize, T: FixedSizeEncoding<ByteArray = [u8; N]>> TableBui
         }
 
         LazyTable::from_position_and_encoded_size(
-            NonZero::new(pos).expect("invariant: table position is non-zero after encoding"), // tRust: unwrap→expect
+            NonZero::new(pos).unwrap(),
             width,
             self.blocks.len(),
         )

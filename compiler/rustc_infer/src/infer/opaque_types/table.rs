@@ -38,11 +38,10 @@ impl<'tcx> OpaqueTypeStorage<'tcx> {
         prev: Option<ProvisionalHiddenType<'tcx>>,
     ) {
         if let Some(prev) = prev {
-            *self.opaque_types.get_mut(&key).expect("invariant: opaque type key must exist when restoring previous hidden type") = prev; // tRust:
+            *self.opaque_types.get_mut(&key).unwrap() = prev;
         } else {
-            // tRust: known issue —(#120456) - is `swap_remove` correct?
+            // FIXME(#120456) - is `swap_remove` correct?
             match self.opaque_types.swap_remove(&key) {
-                // tRust: invariant — opaque type being reverted must have been previously registered
                 None => bug!("reverted opaque type inference that was never registered: {:?}", key),
                 Some(_) => {}
             }

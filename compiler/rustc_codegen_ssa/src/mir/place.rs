@@ -1,6 +1,3 @@
-//! tRust: MIR place codegen for describing and computing memory locations through
-//! tRust: `PlaceRef` pointers, alignments, and layouts.
-
 use rustc_abi::{
     Align, BackendRepr, FieldIdx, FieldsShape, Size, TagEncoding, VariantIdx, Variants,
 };
@@ -106,7 +103,7 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         PlaceValue::new_sized(llval, align).with_type(layout)
     }
 
-    // NOTE(eddyb): Empty string name avoids unnecessary work in struct_gep.
+    // FIXME(eddyb) pass something else for the name so no work is done
     // unless LLVM IR names are turned on (e.g. for `--emit=llvm-ir`).
     pub fn alloca<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         bx: &mut Bx,
@@ -129,7 +126,7 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
     }
 
     /// Returns a place for an indirect reference to an unsized place.
-    // NOTE(eddyb): Empty string name avoids unnecessary work in struct_gep.
+    // FIXME(eddyb) pass something else for the name so no work is done
     // unless LLVM IR names are turned on (e.g. for `--emit=llvm-ir`).
     pub fn alloca_unsized_indirect<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         bx: &mut Bx,
@@ -145,12 +142,11 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         if let FieldsShape::Array { count, .. } = self.layout.fields {
             if self.layout.is_unsized() {
                 assert_eq!(count, 0);
-                self.val.llextra.expect("invariant: llextra must succeed")
+                self.val.llextra.unwrap()
             } else {
                 cx.const_usize(count)
             }
         } else {
-            // tRust: invariant: structural invariant — this variant should not appear at this point in the compilation pipeline
             bug!("unexpected layout `{:#?}` in PlaceRef::len", self.layout)
         }
     }
@@ -346,12 +342,10 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     );
                     cg_base.deref(bx.cx())
                 } else {
-                    // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                     bug!("using operand local {:?} as place", place_ref);
                 }
             }
             LocalRef::PendingOperand => {
-                // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                 bug!("using still-pending operand local {:?} as place", place_ref);
             }
         };
@@ -367,7 +361,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     cg_base.project_field(bx, field.index())
                 }
                 mir::ProjectionElem::OpaqueCast(ty) => {
-                    // tRust: invariant: type system guarantee — place projection types are validated by type checking
                     bug!("encountered OpaqueCast({ty}) in codegen")
                 }
                 mir::ProjectionElem::UnwrapUnsafeBinder(ty) => {
@@ -398,7 +391,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     if subslice.layout.is_unsized() {
                         assert!(from_end, "slice subslices should be `from_end`");
                         subslice.val.llextra = Some(
-                            bx.sub(cg_base.val.llextra.expect("invariant: type must have computable layout"), bx.cx().const_usize(from + to)),
+                            bx.sub(cg_base.val.llextra.unwrap(), bx.cx().const_usize(from + to)),
                         );
                     }
 
@@ -489,7 +482,7 @@ pub(super) fn codegen_tag_value<'tcx, V>(
 
         Variants::Multiple { tag_encoding: TagEncoding::Direct, tag_field, .. } => {
             let discr = layout.ty.discriminant_for_variant(cx.tcx(), variant_index);
-            let to = discr.expect("invariant: discr must succeed").val;
+            let to = discr.unwrap().val;
             let tag_layout = layout.field(cx, tag_field.as_usize());
             let tag_llty = cx.immediate_backend_type(tag_layout);
             let imm = cx.const_uint_big(tag_llty, to);
@@ -504,7 +497,6 @@ pub(super) fn codegen_tag_value<'tcx, V>(
                 let niche_layout = layout.field(cx, tag_field.as_usize());
                 let niche_llty = cx.immediate_backend_type(niche_layout);
                 let BackendRepr::Scalar(scalar) = niche_layout.backend_repr else {
-                    // tRust: invariant: type system guarantee — place projection types are validated by type checking
                     bug!("expected a scalar placeref for the niche");
                 };
                 // We are supposed to compute `niche_value.wrapping_add(niche_start)` wrapping

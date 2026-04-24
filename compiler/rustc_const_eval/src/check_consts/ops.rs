@@ -158,7 +158,7 @@ impl<'tcx> NonConstOp<'tcx> for FnCallNonConst<'tcx> {
             self.call_source,
             "non",
             |err, self_ty, trait_id| {
-                // tRust: known issue (const_trait_impl) — Do we need any of this on the non-const codepath?
+                // FIXME(const_trait_impl): Do we need any of this on the non-const codepath?
 
                 let trait_ref = TraitRef::from_assoc(tcx, trait_id, self.args);
 
@@ -189,7 +189,7 @@ impl<'tcx> NonConstOp<'tcx> for FnCallNonConst<'tcx> {
                         let mut selcx = SelectionContext::new(&infcx);
                         let implsrc = selcx.select(&obligation);
                         if let Ok(Some(ImplSource::UserDefined(data))) = implsrc {
-                            // tRust: known issue (const_trait_impl) — revisit this
+                            // FIXME(const_trait_impl) revisit this
                             if !tcx.is_const_trait_impl(data.impl_def_id) {
                                 let span = tcx.def_span(data.impl_def_id);
                                 err.subdiagnostic(errors::NonConstImplNote { span });
@@ -245,7 +245,7 @@ fn build_error_for_const_call<'tcx>(
             }
 
             // Don't point at the trait if this is a desugaring...
-            // tRust: known issue (const_trait_impl) — we could perhaps do this for `Iterator`.
+            // FIXME(const_trait_impl): we could perhaps do this for `Iterator`.
             match kind {
                 CallDesugaringKind::ForLoopIntoIter | CallDesugaringKind::ForLoopNext => {
                     error!(NonConstForLoopIntoIter)
@@ -270,7 +270,6 @@ fn build_error_for_const_call<'tcx>(
                 FnDef(def_id, ..) => {
                     let span = tcx.def_span(*def_id);
                     if ccx.tcx.is_const_fn(*def_id) {
-                        // tRust: invariant — const FnDef call should not produce an error after validation
                         span_bug!(span, "calling const FnDef errored when it shouldn't");
                     }
 
@@ -541,7 +540,7 @@ impl<'tcx> NonConstOp<'tcx> for Coroutine {
                 hir::CoroutineDesugaring::Async,
                 hir::CoroutineSource::Block,
             )
-            // tRust: known issue (coroutines) — eventually we want to gate const coroutine coroutines behind a
+            // FIXME(coroutines): eventually we want to gate const coroutine coroutines behind a
             // different feature.
             | hir::CoroutineKind::Coroutine(_) => Status::Unstable {
                 gate: sym::const_async_blocks,
@@ -667,7 +666,7 @@ impl<'tcx> NonConstOp<'tcx> for PanicNonStr {
 pub(crate) struct RawPtrComparison;
 impl<'tcx> NonConstOp<'tcx> for RawPtrComparison {
     fn build_error(&self, ccx: &ConstCx<'_, 'tcx>, span: Span) -> Diag<'tcx> {
-        // tRust: known issue (const_trait_impl) — revert to span_bug?
+        // FIXME(const_trait_impl): revert to span_bug?
         ccx.dcx().create_err(errors::RawPtrComparisonErr { span })
     }
 }

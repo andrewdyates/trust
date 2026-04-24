@@ -23,8 +23,6 @@ macro_rules! flat_map_in_place {
 
             impl<'a, T $(: $bound)?> Drop for LeakGuard<'a, T> {
                 fn drop(&mut self) {
-                    // SAFETY: The new length is within the allocated capacity, and
-                    // all elements up to the new length are properly initialized.
                     unsafe {
                         self.0.set_len(0); // make sure we just leak elements in case of panic
                     }
@@ -35,8 +33,6 @@ macro_rules! flat_map_in_place {
 
             let mut read_i = 0;
             let mut write_i = 0;
-            // SAFETY: The pointer is valid, properly aligned, and points to
-            // an initialized value of the correct type.
             unsafe {
                 while read_i < this.0.len() {
                     // move the read_i'th item out of the vector and map it

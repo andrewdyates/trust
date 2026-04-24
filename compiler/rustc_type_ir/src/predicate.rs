@@ -28,7 +28,7 @@ pub struct OutlivesPredicate<I: Interner, A>(pub A, pub I::Region);
 
 impl<I: Interner, A: Eq> Eq for OutlivesPredicate<I, A> {}
 
-// tRust: known issue -- We manually derive `Lift` because the `derive(Lift_Generic)` doesn't
+// FIXME: We manually derive `Lift` because the `derive(Lift_Generic)` doesn't
 // understand how to turn `A` to `A::Lifted` in the output `type Lifted`.
 impl<I: Interner, U: Interner, A> Lift<U> for OutlivesPredicate<I, A>
 where
@@ -456,7 +456,7 @@ impl<I: Interner> ExistentialProjection<I> {
         let def_id = interner.parent(self.def_id);
         let args_count = interner.generics_of(def_id).count() - 1;
         let args = interner.mk_args(&self.args.as_slice()[..args_count]);
-        ExistentialTraitRef::new_from_args(interner, def_id.try_into().expect("invariant: def_id conversion succeeds for valid trait"), args) // tRust: unwrap -> expect
+        ExistentialTraitRef::new_from_args(interner, def_id.try_into().unwrap(), args)
     }
 
     pub fn with_self_ty(&self, interner: I, self_ty: I::Ty) -> ProjectionPredicate<I> {
@@ -674,7 +674,7 @@ impl<I: Interner> AliasTerm<I> {
             | AliasTermKind::UnevaluatedConst
             | AliasTermKind::ProjectionConst => I::Const::new_unevaluated(
                 interner,
-                ty::UnevaluatedConst::new(self.def_id.try_into().expect("invariant: def_id conversion succeeds for valid const"), self.args), // tRust: unwrap -> expect
+                ty::UnevaluatedConst::new(self.def_id.try_into().unwrap(), self.args),
             )
             .into(),
         }
@@ -703,7 +703,7 @@ impl<I: Interner> AliasTerm<I> {
             ),
             "expected a projection"
         );
-        interner.parent(self.def_id).try_into().expect("invariant: parent def_id conversion succeeds for valid item") // tRust: unwrap -> expect
+        interner.parent(self.def_id).try_into().unwrap()
     }
 
     /// Extracts the underlying trait reference and own args from this projection.

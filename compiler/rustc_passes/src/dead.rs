@@ -180,7 +180,6 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
             }
             ty::Tuple(..) => {}
             ty::Error(_) => {}
-            // tRust: invariant — named field access requires an ADT (struct/enum/union) type
             kind => span_bug!(lhs.span, "named field access on non-ADT: {kind:?}"),
         }
     }
@@ -260,7 +259,6 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
                 self.check_def_id(adt.did());
                 adt.variant_of_res(res)
             }
-            // tRust: invariant — struct pattern destructuring requires an ADT type
             _ => span_bug!(lhs.span, "non-ADT in struct pattern"),
         };
         for pat in pats {
@@ -318,7 +316,6 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
                 // we don't need to mark tuple fields as live,
                 // but we may need to mark subfields
                 ty::Tuple(_) => {}
-                // tRust: invariant — named field access expression requires an ADT type
                 _ => span_bug!(expr.span, "named field access on non-ADT"),
             }
         }
@@ -500,7 +497,6 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
             DefKind::Impl { of_trait: true } => {
                 (local_def_id, self.tcx.impl_trait_id(local_def_id).as_local())
             }
-            // tRust: invariant — DefKind must be AssocFn or Impl{of_trait:true} in this match arm
             _ => bug!(),
         };
 
@@ -795,7 +791,6 @@ fn maybe_record_as_seed<'tcx>(
                         // but inherent associated items can be visited and marked directly.
                         unsolved_items.push(owner_id.def_id);
                     }
-                    // tRust: invariant — impl items in liveness worklist must be AssocFn or Impl{of_trait:true}
                     _ => bug!(),
                 }
             }
@@ -982,7 +977,7 @@ impl<'tcx> DeadVisitor<'tcx> {
             .map(|item| {
                 let span = tcx.def_span(item.def_id);
                 let ident_span = tcx.def_ident_span(item.def_id);
-                // tRust: known issue — (cjgillot) this SyntaxContext manipulation does not make any sense.
+                // FIXME(cjgillot) this SyntaxContext manipulation does not make any sense.
                 ident_span.map(|s| s.with_ctxt(span.ctxt())).unwrap_or(span)
             })
             .collect();
@@ -1003,7 +998,7 @@ impl<'tcx> DeadVisitor<'tcx> {
             let span = if let DefKind::Impl { .. } = tcx.def_kind(parent_item) {
                 tcx.def_span(parent_item)
             } else {
-                tcx.def_ident_span(parent_item).expect("invariant: parent item has an ident span") // tRust: unwrap -> expect
+                tcx.def_ident_span(parent_item).unwrap()
             };
             ParentInfo { num, descr, parent_descr, span }
         });
@@ -1129,7 +1124,7 @@ impl<'tcx> DeadVisitor<'tcx> {
         if dead_codes.is_empty() {
             return;
         }
-        // tRust: known issue — `dead_codes` should probably be morally equivalent to `IndexMap<(Level, LintExpectationId), (DefId, Symbol)>`
+        // FIXME: `dead_codes` should probably be morally equivalent to `IndexMap<(Level, LintExpectationId), (DefId, Symbol)>`
         dead_codes.sort_by_key(|v| v.level.0);
         for group in dead_codes.chunk_by(|a, b| a.level == b.level) {
             self.lint_at_single_level(&group, participle, Some(def_id), report_on);
@@ -1162,7 +1157,6 @@ impl<'tcx> DeadVisitor<'tcx> {
             | DefKind::ForeignTy
             | DefKind::Trait => self.warn_dead_code(def_id, "used"),
             DefKind::Struct => self.warn_dead_code(def_id, "constructed"),
-            // tRust: invariant — Variant and Field liveness must be handled by their parent ADT check
             DefKind::Variant | DefKind::Field => bug!("should be handled specially"),
             _ => {}
         }

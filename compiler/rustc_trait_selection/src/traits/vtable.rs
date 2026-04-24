@@ -21,7 +21,7 @@ pub enum VtblSegment<'tcx> {
 }
 
 /// Prepare the segments for a vtable
-// tRust: known issue — This should take a `PolyExistentialTraitRef`, since we don't care
+// FIXME: This should take a `PolyExistentialTraitRef`, since we don't care
 // about our `Self` type here.
 pub fn prepare_vtable_segments<'tcx, T>(
     tcx: TyCtxt<'tcx>,
@@ -118,7 +118,7 @@ fn prepare_vtable_segments_inner<'tcx, T>(
     'outer: loop {
         // dive deeper into the stack, recording the path
         'diving_in: loop {
-            let &(inner_most_trait_ref, _, _) = stack.last().expect("invariant: non-empty collection");
+            let &(inner_most_trait_ref, _, _) = stack.last().unwrap();
 
             let mut direct_super_traits_iter = tcx
                 .explicit_super_predicates_of(inner_most_trait_ref.def_id)
@@ -260,7 +260,7 @@ fn vtable_entries<'tcx>(
                     debug!("vtable_entries: trait_method={:?}", def_id);
 
                     // The method may have some early-bound lifetimes; add regions for those.
-                    // tRust: known issue — Is this normalize needed?
+                    // FIXME: Is this normalize needed?
                     let args = tcx.normalize_erasing_regions(
                         ty::TypingEnv::fully_monomorphized(),
                         GenericArgs::for_item(tcx, def_id, |param, _| match param.kind {
@@ -323,11 +323,10 @@ pub(crate) fn first_method_vtable_slot<'tcx>(tcx: TyCtxt<'tcx>, key: ty::TraitRe
     );
 
     let ty::Dynamic(source, _) = *key.self_ty().kind() else {
-        // tRust: invariant — this code path should be unreachable in first_method_vtable_slot
         bug!();
     };
     let source_principal = tcx.instantiate_bound_regions_with_erased(
-        source.principal().expect("invariant: value is present").with_self_ty(tcx, key.self_ty()),
+        source.principal().unwrap().with_self_ty(tcx, key.self_ty()),
     );
 
     // We're monomorphizing a call to a dyn trait object that can never be constructed.
@@ -366,7 +365,7 @@ pub(crate) fn first_method_vtable_slot<'tcx>(tcx: TyCtxt<'tcx>, key: ty::TraitRe
         }
     };
 
-    prepare_vtable_segments(tcx, source_principal, vtable_segment_callback).expect("invariant: value is present")
+    prepare_vtable_segments(tcx, source_principal, vtable_segment_callback).unwrap()
 }
 
 /// Given a `dyn Subtrait` and `dyn Supertrait` trait object, find the slot of
@@ -391,18 +390,16 @@ pub(crate) fn supertrait_vtable_slot<'tcx>(
 
     // If the target principal is `None`, we can just return `None`.
     let ty::Dynamic(target_data, _) = *target.kind() else {
-        // tRust: invariant — this code path should be unreachable in supertrait_vtable_slot
         bug!();
     };
     let target_principal = tcx.instantiate_bound_regions_with_erased(target_data.principal()?);
 
     // Given that we have a target principal, it is a bug for there not to be a source principal.
     let ty::Dynamic(source_data, _) = *source.kind() else {
-        // tRust: invariant — this code path should be unreachable in supertrait_vtable_slot
         bug!();
     };
     let source_principal = tcx.instantiate_bound_regions_with_erased(
-        source_data.principal().expect("invariant: value is present").with_self_ty(tcx, source),
+        source_data.principal().unwrap().with_self_ty(tcx, source),
     );
 
     // We're monomorphizing a dyn trait object upcast that can never be constructed.

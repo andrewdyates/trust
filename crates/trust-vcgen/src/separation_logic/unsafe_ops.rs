@@ -9,19 +9,61 @@
 
 use trust_types::{Formula, Sort, SourceSpan, VcKind, VerificationCondition};
 
-use crate::unsafe_vc::UnsafeOpKind;
-
-use super::vc_gen::{deref_vc, raw_write_vc, transmute_vc};
+#[cfg(test)]
+use super::vc_gen::transmute_vc;
+use super::vc_gen::{deref_vc, raw_write_vc};
 
 // ────────────────────────────────────────────────────────────────────────────
-// UnsafeOpKind integration
+// Unsafe operation classification (test-only: no production code constructs these)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Classification of detected unsafe operations in MIR.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum UnsafeOpKind {
+    /// Raw pointer dereference via Deref projection.
+    RawPointerDeref { pointer_name: String },
+    /// Call to a known transmute function (mem::transmute, etc.).
+    Transmute { callee: String },
+    /// Call to a known FFI/extern function.
+    FfiCall { callee: String },
+    /// Call to other known unsafe functions (ptr::read, ptr::write, etc.).
+    UnsafeFnCall { callee: String },
+    /// AddressOf rvalue (&raw const / &raw mut).
+    RawAddressOf { mutable: bool, place_name: String },
+}
+
+#[cfg(test)]
+impl UnsafeOpKind {
+    /// Human-readable description for the VcKind::UnsafeOperation desc field.
+    pub(crate) fn description(&self) -> String {
+        match self {
+            UnsafeOpKind::RawPointerDeref { pointer_name } => {
+                format!("raw pointer dereference of `{pointer_name}`")
+            }
+            UnsafeOpKind::Transmute { callee } => {
+                format!("transmute via `{callee}`")
+            }
+            UnsafeOpKind::FfiCall { callee } => {
+                format!("FFI call to `{callee}`")
+            }
+            UnsafeOpKind::UnsafeFnCall { callee } => {
+                format!("unsafe function call to `{callee}`")
+            }
+            UnsafeOpKind::RawAddressOf { mutable, place_name } => {
+                let kind = if *mutable { "&raw mut" } else { "&raw const" };
+                format!("{kind} on `{place_name}`")
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// UnsafeOpKind integration (test-only)
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Generate separation logic VCs from an `UnsafeOpKind` classification.
-///
-/// Bridges the unsafe operation classifier from `unsafe_vc.rs` into the
-/// separation logic verification framework. Each `UnsafeOpKind` variant
-/// maps to specific separation logic preconditions and safety checks.
+#[cfg(test)]
 #[must_use]
 pub(crate) fn vcs_from_unsafe_op(
     op: &UnsafeOpKind,
@@ -29,34 +71,21 @@ pub(crate) fn vcs_from_unsafe_op(
     span: &SourceSpan,
 ) -> Vec<VerificationCondition> {
     match op {
-        UnsafeOpKind::RawPointerDeref { pointer_name } => {
-            deref_vc(func_name, pointer_name, span)
-        }
+        UnsafeOpKind::RawPointerDeref { pointer_name } => deref_vc(func_name, pointer_name, span),
         UnsafeOpKind::Transmute { callee } => {
-            // Extract type info from callee name if possible,
-            // otherwise use generic type labels.
             let (src, dst) = parse_transmute_types(callee);
             transmute_vc(func_name, &src, &dst, span)
         }
-        UnsafeOpKind::FfiCall { callee } => {
-            ffi_call_sep_vc(func_name, callee, span)
-        }
-        UnsafeOpKind::UnsafeFnCall { callee } => {
-            unsafe_fn_call_sep_vc(func_name, callee, span)
-        }
+        UnsafeOpKind::FfiCall { callee } => ffi_call_sep_vc(func_name, callee, span),
+        UnsafeOpKind::UnsafeFnCall { callee } => unsafe_fn_call_sep_vc(func_name, callee, span),
         UnsafeOpKind::RawAddressOf { mutable, place_name } => {
             address_of_sep_vc(func_name, place_name, *mutable, span)
         }
     }
 }
 
-/// Parse transmute type names from a callee string.
-///
-/// Falls back to generic labels if the callee doesn't contain
-/// recognizable type info.
+#[cfg(test)]
 fn parse_transmute_types(callee: &str) -> (String, String) {
-    // For now, use generic labels. A future enhancement could parse
-    // type parameters from the MIR callee string.
     let _ = callee;
     ("Src".to_string(), "Dst".to_string())
 }
@@ -76,17 +105,12 @@ pub fn ffi_call_sep_vc(
     let mut vcs = Vec::new();
 
     // VC 1: FFI pointer argument null check
-    let ffi_ptr = Formula::Var(
-        format!("ffi_ptr_arg_{}", callee.replace("::", "_")),
-        Sort::Int,
-    );
+    let ffi_ptr = Formula::Var(format!("ffi_ptr_arg_{}", callee.replace("::", "_")), Sort::Int);
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:ffi] null pointer argument check for {callee}"
-            ),
+            message: format!("[unsafe:sep:ffi] null pointer argument check for {callee}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Eq(Box::new(ffi_ptr), Box::new(Formula::Int(0))),
         contract_metadata: None,
@@ -95,11 +119,9 @@ pub fn ffi_call_sep_vc(
     // VC 2: FFI may invalidate heap assumptions (conservative)
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:ffi] heap invariant after {callee} (unverified)"
-            ),
+            message: format!("[unsafe:sep:ffi] heap invariant after {callee} (unverified)"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -126,7 +148,7 @@ pub fn unsafe_fn_call_sep_vc(
     } else if lower.contains("ptr::write") {
         // ptr::write requires a valid, aligned, non-null, writable destination.
         let ptr_name = format!("arg0_{}", callee.replace("::", "_"));
-        let value = Formula::Var("write_value".to_string(), Sort::Int);
+        let value = Formula::Var("write_value".into(), Sort::Int);
         vcs.extend(raw_write_vc(func_name, &ptr_name, &value, span));
     } else if lower.contains("slice::from_raw_parts") {
         // from_raw_parts requires non-null pointer + valid length.
@@ -134,33 +156,23 @@ pub fn unsafe_fn_call_sep_vc(
         vcs.extend(deref_vc(func_name, &ptr_name, span));
 
         // Length must not overflow: ptr + len * elem_size <= allocation end.
-        let len = Formula::Var(
-            format!("len_{}", callee.replace("::", "_")),
-            Sort::Int,
-        );
+        let len = Formula::Var(format!("len_{}", callee.replace("::", "_")), Sort::Int);
         vcs.push(VerificationCondition {
             kind: VcKind::Assertion {
-                message: format!(
-                    "[unsafe:sep:call] slice length overflow check for {callee}"
-                ),
+                message: format!("[unsafe:sep:call] slice length overflow check for {callee}"),
             },
-            function: func_name.to_string(),
+            function: func_name.into(),
             location: span.clone(),
-            formula: Formula::Lt(
-                Box::new(len),
-                Box::new(Formula::Int(0)),
-            ),
+            formula: Formula::Lt(Box::new(len), Box::new(Formula::Int(0))),
             contract_metadata: None,
         });
     } else {
         // Generic unsafe fn: conservative flag.
         vcs.push(VerificationCondition {
             kind: VcKind::Assertion {
-                message: format!(
-                    "[unsafe:sep:call] unsafe function call to {callee} (unverified)"
-                ),
+                message: format!("[unsafe:sep:call] unsafe function call to {callee} (unverified)"),
             },
-            function: func_name.to_string(),
+            function: func_name.into(),
             location: span.clone(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -190,7 +202,7 @@ pub fn address_of_sep_vc(
                 "[unsafe:sep:addr_of] {kind_str} on `{place_name}` (source liveness unverified)"
             ),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         // Conservative: source liveness cannot be verified without
         // full lifetime analysis at this layer.

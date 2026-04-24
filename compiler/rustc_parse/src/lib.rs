@@ -210,7 +210,7 @@ pub fn source_str_to_stream(
     override_span: Option<Span>,
 ) -> Result<TokenStream, Vec<Diag<'_>>> {
     let source_file = psess.source_map().new_source_file(name, source);
-    // tRust: known issue —(frontmatter): Consider stripping frontmatter in a future edition. We can't strip them
+    // FIXME(frontmatter): Consider stripping frontmatter in a future edition. We can't strip them
     // in the current edition since that would be breaking.
     // See also <https://github.com/rust-lang/rust/issues/145520>.
     // Alternatively, stop stripping shebangs here, too, if T-lang and crater approve.

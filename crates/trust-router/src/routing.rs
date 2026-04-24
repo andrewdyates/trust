@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use trust_types::*;
 
-use crate::{BackendRole, BackendSelection, VerificationBackend};
 use crate::ownership_encoding;
 use crate::termination_dispatch;
+use crate::{BackendRole, BackendSelection, VerificationBackend};
 
 pub(crate) fn backend_plan(
     backends: &[Arc<dyn VerificationBackend>],
@@ -21,7 +21,7 @@ pub(crate) fn backend_plan(
             let backend = &backends[index];
             BackendSelection {
                 index,
-                name: backend.name().to_string(),
+                name: backend.name().to_string().into(),
                 role: backend.role(),
                 can_handle: backend.can_handle(vc),
             }
@@ -132,7 +132,7 @@ fn backend_preference_rank(role: BackendRole, level: ProofLevel, is_ownership: b
             BackendRole::BoundedModelChecker => 7,
             BackendRole::General => 9,
         },
-            // Default rank for any future ProofLevel variants.
-            _ => 8,
+        // Default rank for any future ProofLevel variants.
+        _ => 8,
     }
 }

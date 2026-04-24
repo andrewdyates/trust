@@ -36,7 +36,7 @@ pub struct Binder<I: Interner, T> {
 
 impl<I: Interner, T: Eq> Eq for Binder<I, T> {}
 
-// tRust: known issue -- We manually derive `Lift` because the `derive(Lift_Generic)` doesn't
+// FIXME: We manually derive `Lift` because the `derive(Lift_Generic)` doesn't
 // understand how to turn `T` to `T::Lifted` in the output `type Lifted`.
 impl<I: Interner, U: Interner, T> Lift<U> for Binder<I, T>
 where
@@ -311,7 +311,7 @@ impl<I: Interner> TypeVisitor<I> for ValidateBoundVars<I> {
                 if self.bound_vars.len() <= idx {
                     panic!("Not enough bound vars: {:?} not found in {:?}", t, self.bound_vars);
                 }
-                bound_ty.assert_eq(self.bound_vars.get(idx).expect("invariant: bound var index is valid for binder")); // tRust: unwrap -> expect
+                bound_ty.assert_eq(self.bound_vars.get(idx).unwrap());
             }
             _ => {}
         };
@@ -331,7 +331,7 @@ impl<I: Interner> TypeVisitor<I> for ValidateBoundVars<I> {
                 if self.bound_vars.len() <= idx {
                     panic!("Not enough bound vars: {:?} not found in {:?}", c, self.bound_vars);
                 }
-                bound_const.assert_eq(self.bound_vars.get(idx).expect("invariant: bound var index is valid for binder")); // tRust: unwrap -> expect
+                bound_const.assert_eq(self.bound_vars.get(idx).unwrap());
             }
             _ => {}
         };
@@ -346,7 +346,7 @@ impl<I: Interner> TypeVisitor<I> for ValidateBoundVars<I> {
                 if self.bound_vars.len() <= idx {
                     panic!("Not enough bound vars: {:?} not found in {:?}", r, self.bound_vars);
                 }
-                br.assert_eq(self.bound_vars.get(idx).expect("invariant: bound var index is valid for binder")); // tRust: unwrap -> expect
+                br.assert_eq(self.bound_vars.get(idx).unwrap());
             }
 
             _ => (),

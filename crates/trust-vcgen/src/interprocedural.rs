@@ -72,10 +72,7 @@ impl InterproceduralAnalyzer {
     #[must_use]
     pub fn new(graph: &CallGraph) -> Self {
         let order = compute_verification_order(graph);
-        Self {
-            order,
-            summaries: FxHashMap::default(),
-        }
+        Self { order, summaries: FxHashMap::default() }
     }
 
     /// Returns the computed verification order.
@@ -179,27 +176,22 @@ pub fn analyze_functions(functions: &[VerifiableFunction]) -> AnalysisResult {
         // Strengthen VCs with callee summaries at call sites
         for block in &func.body.blocks {
             if let Terminator::Call { func: callee_name, .. } = &block.terminator
-                && let Some(callee_summary) = store
-                    .get(callee_name)
-                    .or_else(|| store.get_by_name(callee_name))
-                    && callee_summary.has_postconditions() {
-                        func_vcs = func_vcs
-                            .into_iter()
-                            .map(|vc| summaries::substitute_callee_summary(vc, callee_summary))
-                            .collect();
-                    }
+                && let Some(callee_summary) =
+                    store.get(callee_name).or_else(|| store.get_by_name(callee_name))
+                && callee_summary.has_postconditions()
+            {
+                func_vcs = func_vcs
+                    .into_iter()
+                    .map(|vc| summaries::substitute_callee_summary(vc, callee_summary))
+                    .collect();
+            }
         }
 
         all_vcs.extend(func_vcs);
         store.insert(summary);
     }
 
-    AnalysisResult {
-        summaries: store,
-        verification_order: order,
-        recursive: rec_funcs,
-        all_vcs,
-    }
+    AnalysisResult { summaries: store, verification_order: order, recursive: rec_funcs, all_vcs }
 }
 
 /// Compute a topological verification order from a call graph.
@@ -221,9 +213,7 @@ pub fn compute_verification_order(graph: &CallGraph) -> Vec<String> {
     }
     for edge in &graph.edges {
         if let Some(callee) = resolve_callee(&node_set, &edge.callee) {
-            adj.entry(edge.caller.as_str())
-                .or_default()
-                .push(callee);
+            adj.entry(edge.caller.as_str()).or_default().push(callee);
         }
     }
 
@@ -369,11 +359,7 @@ pub fn compute_summary(func: &VerifiableFunction) -> InterproceduralSummary {
     writes.sort();
     writes.dedup();
 
-    summary.side_effects = SideEffects {
-        writes,
-        may_panic,
-        may_diverge: has_calls,
-    };
+    summary.side_effects = SideEffects { writes, may_panic, may_diverge: has_calls };
 
     // A function is pure if it has no side effects
     summary.is_pure = summary.side_effects.writes.is_empty()
@@ -403,7 +389,9 @@ pub fn apply_callee_summary(
 
     let assumption = if assumptions.len() == 1 {
         // SAFETY: len == 1 guarantees .next() returns Some.
-        assumptions.into_iter().next()
+        assumptions
+            .into_iter()
+            .next()
             .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
     } else {
         Formula::And(assumptions)
@@ -444,11 +432,9 @@ mod tests {
                 span: span(),
             });
         }
-        for (caller, callee) in [
-            ("crate::main", "crate::a"),
-            ("crate::a", "crate::b"),
-            ("crate::b", "crate::c"),
-        ] {
+        for (caller, callee) in
+            [("crate::main", "crate::a"), ("crate::a", "crate::b"), ("crate::b", "crate::c")]
+        {
             g.add_edge(CallGraphEdge {
                 caller: caller.to_string(),
                 callee: callee.to_string(),
@@ -467,18 +453,9 @@ mod tests {
 
         // c must come before b, b before a, a before main
         let pos = |name: &str| order.iter().position(|s| s == name).unwrap();
-        assert!(
-            pos("crate::c") < pos("crate::b"),
-            "c should be verified before b"
-        );
-        assert!(
-            pos("crate::b") < pos("crate::a"),
-            "b should be verified before a"
-        );
-        assert!(
-            pos("crate::a") < pos("crate::main"),
-            "a should be verified before main"
-        );
+        assert!(pos("crate::c") < pos("crate::b"), "c should be verified before b");
+        assert!(pos("crate::b") < pos("crate::a"), "b should be verified before a");
+        assert!(pos("crate::a") < pos("crate::main"), "a should be verified before main");
     }
 
     #[test]
@@ -618,10 +595,8 @@ mod tests {
 
     #[test]
     fn test_compute_summary_with_contracts() {
-        let pre = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let pre =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let post = Formula::Ge(
             Box::new(Formula::Var("result".into(), Sort::Int)),
             Box::new(Formula::Int(1)),
@@ -691,7 +666,7 @@ mod tests {
     fn test_apply_callee_summary_proved_with_postconditions() {
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: Formula::Eq(
                 Box::new(Formula::Var("y".into(), Sort::Int)),
@@ -700,10 +675,8 @@ mod tests {
             contract_metadata: None,
         };
 
-        let postcond = Formula::Ge(
-            Box::new(Formula::Var("y".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let postcond =
+            Formula::Ge(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(1)));
 
         let mut summary = InterproceduralSummary::new("callee");
         summary.base.postconditions.push(postcond.clone());
@@ -724,7 +697,7 @@ mod tests {
         let original_formula = Formula::Bool(true);
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: original_formula.clone(),
             contract_metadata: None,
@@ -743,7 +716,7 @@ mod tests {
         let original_formula = Formula::Bool(true);
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: original_formula.clone(),
             contract_metadata: None,
@@ -764,20 +737,16 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "caller".to_string(),
+            function: "caller".into(),
             location: span(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
 
-        let post1 = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
-        let post2 = Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        );
+        let post1 =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
+        let post2 =
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100)));
 
         let mut summary = InterproceduralSummary::new("callee");
         summary.base.postconditions.push(post1.clone());
@@ -787,16 +756,14 @@ mod tests {
         let result = apply_callee_summary(vc, &summary);
 
         match &result.formula {
-            Formula::Implies(premise, _) => {
-                match premise.as_ref() {
-                    Formula::And(clauses) => {
-                        assert_eq!(clauses.len(), 2);
-                        assert_eq!(clauses[0], post1);
-                        assert_eq!(clauses[1], post2);
-                    }
-                    other => panic!("expected And, got: {other:?}"),
+            Formula::Implies(premise, _) => match premise.as_ref() {
+                Formula::And(clauses) => {
+                    assert_eq!(clauses.len(), 2);
+                    assert_eq!(clauses[0], post1);
+                    assert_eq!(clauses[1], post2);
                 }
-            }
+                other => panic!("expected And, got: {other:?}"),
+            },
             other => panic!("expected Implies, got: {other:?}"),
         }
     }
@@ -932,10 +899,8 @@ mod tests {
     /// A calls B and should get B's postcondition as assumption.
     #[test]
     fn test_analyze_linear_chain_a_b_c() {
-        let post_c = Formula::Ge(
-            Box::new(Formula::Var("y".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let post_c =
+            Formula::Ge(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(1)));
 
         let funcs = vec![
             make_func_with_div("a", "crate::a", &["crate::b"], vec![], vec![]),
@@ -946,9 +911,7 @@ mod tests {
         let result = analyze_functions(&funcs);
 
         // Verification order: C first, then B, then A
-        let pos = |name: &str| {
-            result.verification_order.iter().position(|s| s == name).unwrap()
-        };
+        let pos = |name: &str| result.verification_order.iter().position(|s| s == name).unwrap();
         assert!(pos("crate::c") < pos("crate::b"), "C before B");
         assert!(pos("crate::b") < pos("crate::a"), "B before A");
 
@@ -976,10 +939,8 @@ mod tests {
     /// A calls both B and C.
     #[test]
     fn test_analyze_diamond_pattern() {
-        let post_d = Formula::Ge(
-            Box::new(Formula::Var("y".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let post_d =
+            Formula::Ge(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(1)));
 
         let funcs = vec![
             make_func_with_div("a", "crate::a", &["crate::b", "crate::c"], vec![], vec![]),
@@ -991,9 +952,7 @@ mod tests {
         let result = analyze_functions(&funcs);
 
         // D must come before B and C, both before A
-        let pos = |name: &str| {
-            result.verification_order.iter().position(|s| s == name).unwrap()
-        };
+        let pos = |name: &str| result.verification_order.iter().position(|s| s == name).unwrap();
         assert!(pos("crate::d") < pos("crate::b"));
         assert!(pos("crate::d") < pos("crate::c"));
         assert!(pos("crate::b") < pos("crate::a"));
@@ -1007,9 +966,7 @@ mod tests {
         assert_eq!(d_sum.postconditions, vec![post_d.clone()]);
 
         // B's VCs should be strengthened with D's postcondition
-        let b_vcs: Vec<_> = result.all_vcs.iter()
-            .filter(|vc| vc.function == "b")
-            .collect();
+        let b_vcs: Vec<_> = result.all_vcs.iter().filter(|vc| vc.function == "b").collect();
         for vc in &b_vcs {
             assert!(
                 matches!(&vc.formula, Formula::Implies(..)),
@@ -1018,9 +975,7 @@ mod tests {
         }
 
         // C's VCs should also be strengthened with D's postcondition
-        let c_vcs: Vec<_> = result.all_vcs.iter()
-            .filter(|vc| vc.function == "c")
-            .collect();
+        let c_vcs: Vec<_> = result.all_vcs.iter().filter(|vc| vc.function == "c").collect();
         for vc in &c_vcs {
             assert!(
                 matches!(&vc.formula, Formula::Implies(..)),
@@ -1036,18 +991,16 @@ mod tests {
     #[test]
     fn test_analyze_simple_recursion_factorial() {
         // factorial calls itself
-        let funcs = vec![
-            make_func_with_div(
-                "factorial",
-                "crate::factorial",
-                &["crate::factorial"],
-                vec![Formula::Ge(
-                    Box::new(Formula::Var("x".into(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                )],
-                vec![],  // No postconditions (would need user-provided invariant)
-            ),
-        ];
+        let funcs = vec![make_func_with_div(
+            "factorial",
+            "crate::factorial",
+            &["crate::factorial"],
+            vec![Formula::Ge(
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Int(0)),
+            )],
+            vec![], // No postconditions (would need user-provided invariant)
+        )];
 
         let result = analyze_functions(&funcs);
 
@@ -1067,9 +1020,7 @@ mod tests {
         );
 
         // VCs should NOT be wrapped in Implies (no callee postconditions)
-        let f_vcs: Vec<_> = result.all_vcs.iter()
-            .filter(|vc| vc.function == "factorial")
-            .collect();
+        let f_vcs: Vec<_> = result.all_vcs.iter().filter(|vc| vc.function == "factorial").collect();
         assert!(!f_vcs.is_empty(), "factorial should produce VCs");
         for vc in &f_vcs {
             assert!(

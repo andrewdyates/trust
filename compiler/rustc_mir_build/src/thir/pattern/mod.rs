@@ -270,7 +270,7 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
             (RangeEnd::Included, Some(Ordering::Less)) => {}
             // `x..=y` where `x == y` and `x` and `y` are finite.
             (RangeEnd::Included, Some(Ordering::Equal)) if lo.is_finite() && hi.is_finite() => {
-                let value = ty::Value { ty, valtree: lo.as_finite().expect("invariant: pattern bound is finite") }; // tRust: unwrap -> expect
+                let value = ty::Value { ty, valtree: lo.as_finite().unwrap() };
                 kind = PatKind::Constant { value };
             }
             // `..=x` where `x == ty::MIN`.
@@ -363,7 +363,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
 
             hir::PatKind::Tuple(pats, ddpos) => {
                 let ty::Tuple(tys) = ty.kind() else {
-                    // tRust: invariant — tuple HIR patterns are type-checked to tuple scrutinee types before THIR lowering.
                     span_bug!(pat.span, "unexpected type for tuple pattern: {:?}", ty);
                 };
                 let subpatterns = self.lower_tuple_subpats(pats, tys.len(), ddpos);
@@ -401,7 +400,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
                         hir::Pinnedness::Not if let &ty::Ref(_, rty, _) = ty.kind() => {
                             thir_pat_ty = rty;
                         }
-                        // tRust: invariant — a by-ref binding is only lowered from `&T` or `Pin<&T>`/`Pin<&mut T>` scrutinee types matching its pinnedness.
                         _ => bug!("`ref {}` has wrong type {}", ident, ty),
                     }
                 };
@@ -423,7 +421,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
             hir::PatKind::TupleStruct(ref qpath, pats, ddpos) => {
                 let res = self.typeck_results.qpath_res(qpath, pat.hir_id);
                 let ty::Adt(adt_def, _) = ty.kind() else {
-                    // tRust: invariant — tuple-struct patterns resolve to ADT constructors, so the pattern type must be that ADT.
                     span_bug!(pat.span, "tuple struct pattern not applied to an ADT {:?}", ty);
                 };
                 let variant_def = adt_def.variant_of_res(res);
@@ -510,7 +507,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
                 assert!(len >= prefix.len() as u64 + suffix.len() as u64);
                 PatKind::Array { prefix, slice, suffix }
             }
-            // tRust: invariant — slice pattern syntax is only type-checked against slice or array scrutinees.
             _ => span_bug!(span, "bad slice pattern type {ty:?}"),
         };
         Box::new(Pat { ty, span, kind, extra: None })
@@ -562,7 +558,6 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
                                 extra: None,
                             });
                         }
-                        // tRust: invariant — enum variant patterns only lower with the enum ADT/FnDef type arguments, unless type checking already produced `ty::Error`.
                         _ => bug!("inappropriate type for def: {:?}", ty),
                     };
                     PatKind::Variant {
@@ -660,7 +655,7 @@ impl<'tcx, 'ptcx> PatCtxt<'tcx, 'ptcx> {
 
         // Lower the named constant to a THIR pattern.
         let args = self.typeck_results.node_args(id);
-        // tRust: known issue — we will need to special case IACs here to have type system compatible (upstream FIXME by mgca)
+        // FIXME(mgca): we will need to special case IACs here to have type system compatible
         // generic args, instead of how we represent them in body expressions.
         let c = ty::Const::new_unevaluated(self.tcx, ty::UnevaluatedConst { def: def_id, args });
         let mut pattern = self.const_to_pat(c, ty, id, span);

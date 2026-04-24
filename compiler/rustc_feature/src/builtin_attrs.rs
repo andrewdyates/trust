@@ -113,7 +113,7 @@ pub enum AttributeGate {
     Ungated,
 }
 
-// tRust: known issue (jdonszelmann) — move to rustc_hir::attrs
+// FIXME(jdonszelmann): move to rustc_hir::attrs
 /// A template that the attribute input must match.
 /// Only top-level shape (`#[attr]` vs `#[attr(...)]` vs `#[attr = ...]`) is considered now.
 #[derive(Clone, Copy, Default)]
@@ -636,7 +636,7 @@ pub static BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
         ),
         DuplicatesOk, EncodeCrossCrate::No
     ),
-    // tRust: known issue (#82232, #143834) — temporarily renamed to mitigate `#[align]` nameres ambiguity
+    // FIXME(#82232, #143834): temporarily renamed to mitigate `#[align]` nameres ambiguity
     gated!(rustc_align, Normal, template!(List: &["alignment"]), DuplicatesOk, EncodeCrossCrate::No, fn_align, experimental!(rustc_align)),
     gated!(rustc_align_static, Normal, template!(List: &["alignment"]), DuplicatesOk, EncodeCrossCrate::No, static_align, experimental!(rustc_align_static)),
     ungated!(
@@ -1326,7 +1326,7 @@ pub static BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
 
     BuiltinAttribute {
         name: sym::rustc_diagnostic_item,
-        // tRust: known issue — This can be `true` once we always use `tcx.is_diagnostic_item`.
+        // FIXME: This can be `true` once we always use `tcx.is_diagnostic_item`.
         encode_cross_crate: EncodeCrossCrate::Yes,
         type_: Normal,
         safety: AttributeSafety::Normal,

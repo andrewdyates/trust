@@ -178,7 +178,7 @@ impl<'tcx> LazyOpaqueTyEnv<'tcx> {
             },
         );
 
-        // tRust: known issue (#132279) — It feels wrong to use `non_body_analysis` here given that we're
+        // FIXME(#132279): It feels wrong to use `non_body_analysis` here given that we're
         // in a body here.
         let infcx = tcx.infer_ctxt().build(TypingMode::non_body_analysis());
         let ocx = ObligationCtxt::new(&infcx);
@@ -204,7 +204,7 @@ impl<'tcx> LazyOpaqueTyEnv<'tcx> {
                 r1
             }
         });
-        self.canonical_args.set(canonical_args).expect("invariant: value not yet set");
+        self.canonical_args.set(canonical_args).unwrap();
         canonical_args
     }
 }

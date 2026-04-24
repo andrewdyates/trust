@@ -14,9 +14,6 @@ static GLOBAL_CLIENT: LazyLock<Result<Client, String>> = LazyLock::new(|| {
     // the beginning of the process though to ensure we don't get false
     // positives, or in other words we try to execute this before we open
     // any file descriptors ourselves.
-    // SAFETY: The invariants required by this unsafe operation are
-    // satisfied because this runs during lazy global initialization, before
-    // rustc opens its own file descriptors that could be misidentified.
     let FromEnv { client, var } = unsafe { Client::from_env_ext(true) };
 
     let error = match client {
@@ -36,7 +33,7 @@ static GLOBAL_CLIENT: LazyLock<Result<Client, String>> = LazyLock::new(|| {
 
     // Environment specifies jobserver, but it looks incorrect.
     // Safety: `error.kind()` should be `NoEnvVar` if `var == None`.
-    let (name, value) = var.expect("invariant: CARGO_MAKEFLAGS must be set"); // tRust: unwrap -> expect
+    let (name, value) = var.unwrap();
     Err(format!(
         "failed to connect to jobserver from environment variable `{name}={:?}`: {error}",
         value
@@ -125,7 +122,7 @@ impl Proxy {
                 }
             })
             .expect("failed to create helper thread");
-        proxy.helper.set(helper).expect("invariant: jobserver helper must only be set once"); // tRust: unwrap -> expect
+        proxy.helper.set(helper).unwrap();
         proxy
     }
 
@@ -141,7 +138,7 @@ impl Proxy {
             // Request a token from the helper thread. We can't directly use `acquire_raw`
             // as we also need to be able to wait for the final token in the process which
             // does not get a corresponding `release_raw` call.
-            self.helper.get().expect("invariant: jobserver helper must be initialized").request_token(); // tRust: unwrap -> expect
+            self.helper.get().unwrap().request_token();
             data.pending += 1;
             self.wake_pending.wait(&mut data);
         }

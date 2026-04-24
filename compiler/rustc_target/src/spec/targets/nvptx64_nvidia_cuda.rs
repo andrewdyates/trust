@@ -24,7 +24,7 @@ pub(crate) fn target() -> Target {
             // With `ptx-linker` approach, it can be later overridden via link flags.
             cpu: "sm_30".into(),
 
-            // tRust: known issue — create tests for the atomics.
+            // FIXME: create tests for the atomics.
             max_atomic_width: Some(64),
 
             // Unwinding on CUDA is neither feasible nor useful.

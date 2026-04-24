@@ -44,9 +44,9 @@ pub use analysis::{
 // Internal re-exports for tests — these were module-private in the original
 // single-file layout and are used by the test module below.
 #[cfg(test)]
-use presburger::{cooper_eliminate_exists, cooper_eliminate_forall, free_vars, is_presburger};
-#[cfg(test)]
 use eliminator::worse_strategy;
+#[cfg(test)]
+use presburger::{cooper_eliminate_exists, cooper_eliminate_forall, free_vars, is_presburger};
 
 #[cfg(test)]
 mod tests {
@@ -57,26 +57,26 @@ mod tests {
     /// Helper: make a forall formula in the style the spec parser produces.
     /// `forall(i, lo..hi, body)` => `Forall([(i, Int)], Implies(And([Le(lo,i), Lt(i,hi)]), body))`
     fn make_bounded_forall(var: &str, lo: i128, hi: i128, body: Formula) -> Formula {
-        let var_f = Formula::Var(var.to_string(), Sort::Int);
+        let var_f = Formula::Var(var.into(), Sort::Int);
         let guard = Formula::And(vec![
             Formula::Le(Box::new(Formula::Int(lo)), Box::new(var_f.clone())),
             Formula::Lt(Box::new(var_f), Box::new(Formula::Int(hi))),
         ]);
         Formula::Forall(
-            vec![(var.to_string(), Sort::Int)],
+            vec![(var.into(), Sort::Int)],
             Box::new(Formula::Implies(Box::new(guard), Box::new(body))),
         )
     }
 
     /// Helper: make a bounded exists.
     fn make_bounded_exists(var: &str, lo: i128, hi: i128, body: Formula) -> Formula {
-        let var_f = Formula::Var(var.to_string(), Sort::Int);
+        let var_f = Formula::Var(var.into(), Sort::Int);
         let range_guard = Formula::And(vec![
             Formula::Le(Box::new(Formula::Int(lo)), Box::new(var_f.clone())),
             Formula::Lt(Box::new(var_f), Box::new(Formula::Int(hi))),
         ]);
         Formula::Exists(
-            vec![(var.to_string(), Sort::Int)],
+            vec![(var.into(), Sort::Int)],
             Box::new(Formula::And(vec![range_guard, body])),
         )
     }
@@ -85,10 +85,8 @@ mod tests {
 
     #[test]
     fn test_classify_bounded_forall_tier1() {
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let f = make_bounded_forall("i", 0, 10, body_inner);
         let elim = QuantifierEliminator::new();
         if let Formula::Forall(bindings, body) = &f {
@@ -102,10 +100,8 @@ mod tests {
 
     #[test]
     fn test_classify_large_domain_falls_to_tier2() {
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         // Range 0..1000 exceeds default max_unroll=64
         let f = make_bounded_forall("i", 0, 1000, body_inner);
         let elim = QuantifierEliminator::new();
@@ -120,12 +116,12 @@ mod tests {
     #[test]
     fn test_classify_non_linear_is_full() {
         // forall x. x * x > 0  (non-linear — not Presburger)
-        let var_x = Formula::Var("x".to_string(), Sort::Int);
+        let var_x = Formula::Var("x".into(), Sort::Int);
         let body = Formula::Gt(
             Box::new(Formula::Mul(Box::new(var_x.clone()), Box::new(var_x))),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         let elim = QuantifierEliminator::new();
         let class = elim.classify(&bindings, &body);
         assert_eq!(class.tier, QuantifierTier::Full);
@@ -135,10 +131,8 @@ mod tests {
 
     #[test]
     fn test_unroll_forall_small_range() {
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let f = make_bounded_forall("i", 0, 3, body_inner);
         let mut elim = QuantifierEliminator::new();
         let result = elim.eliminate(&f);
@@ -156,10 +150,8 @@ mod tests {
 
     #[test]
     fn test_unroll_exists_small_range() {
-        let body_inner = Formula::Eq(
-            Box::new(Formula::Var("j".to_string(), Sort::Int)),
-            Box::new(Formula::Int(5)),
-        );
+        let body_inner =
+            Formula::Eq(Box::new(Formula::Var("j".into(), Sort::Int)), Box::new(Formula::Int(5)));
         let f = make_bounded_exists("j", 0, 3, body_inner);
         let mut elim = QuantifierEliminator::new();
         let result = elim.eliminate(&f);
@@ -182,10 +174,7 @@ mod tests {
         let result = elim.eliminate(&f);
 
         // Single value — no And wrapper needed.
-        assert!(
-            !matches!(&result, Formula::Forall(..)),
-            "should not remain quantified"
-        );
+        assert!(!matches!(&result, Formula::Forall(..)), "should not remain quantified");
         assert_eq!(elim.stats().tier1_eliminated, 1);
     }
 
@@ -238,24 +227,22 @@ mod tests {
 
     #[test]
     fn test_substitute_var() {
-        let f = Formula::Var("x".to_string(), Sort::Int);
+        let f = Formula::Var("x".into(), Sort::Int);
         let result = substitute(&f, "x", &Formula::Int(42));
         assert!(matches!(result, Formula::Int(42)));
     }
 
     #[test]
     fn test_substitute_different_var_unchanged() {
-        let f = Formula::Var("y".to_string(), Sort::Int);
+        let f = Formula::Var("y".into(), Sort::Int);
         let result = substitute(&f, "x", &Formula::Int(42));
         assert!(matches!(result, Formula::Var(name, _) if name == "y"));
     }
 
     #[test]
     fn test_substitute_in_comparison() {
-        let f = Formula::Lt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let f =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         let result = substitute(&f, "x", &Formula::Int(5));
         match result {
             Formula::Lt(a, b) => {
@@ -269,11 +256,9 @@ mod tests {
     #[test]
     fn test_substitute_respects_binding() {
         // forall x. x > 0  — substituting x should NOT affect the bound x
-        let inner = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
-        let f = Formula::Forall(vec![("x".to_string(), Sort::Int)], Box::new(inner));
+        let inner =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(inner));
         let result = substitute(&f, "x", &Formula::Int(99));
         // Should remain unchanged.
         assert!(matches!(result, Formula::Forall(..)));
@@ -282,8 +267,8 @@ mod tests {
     #[test]
     fn test_substitute_in_arithmetic() {
         let f = Formula::Add(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         let result = substitute(&f, "x", &Formula::Int(3));
         match result {
@@ -304,25 +289,25 @@ mod tests {
             Box::new(Formula::Add(
                 Box::new(Formula::Mul(
                     Box::new(Formula::Int(2)),
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                 )),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(is_presburger(&bindings, &f));
     }
 
     #[test]
     fn test_is_not_presburger_nonlinear() {
         // x * x > 0 is NOT Presburger
-        let x = Formula::Var("x".to_string(), Sort::Int);
+        let x = Formula::Var("x".into(), Sort::Int);
         let f = Formula::Gt(
             Box::new(Formula::Mul(Box::new(x.clone()), Box::new(x))),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(!is_presburger(&bindings, &f));
     }
 
@@ -331,12 +316,12 @@ mod tests {
         // x / 2 > 0 IS Presburger (div by constant)
         let f = Formula::Gt(
             Box::new(Formula::Div(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(2)),
             )),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(is_presburger(&bindings, &f));
     }
 
@@ -345,15 +330,15 @@ mod tests {
         // Select(arr, x) > 0 is NOT Presburger
         let f = Formula::Gt(
             Box::new(Formula::Select(
-                Box::new(Formula::Var("arr".to_string(), Sort::Array(
-                    Box::new(Sort::Int),
-                    Box::new(Sort::Int),
-                ))),
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var(
+                    "arr".into(),
+                    Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
+                )),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(!is_presburger(&bindings, &f));
     }
 
@@ -362,12 +347,12 @@ mod tests {
         // x % 3 == 0 IS Presburger (divisibility constraint)
         let f = Formula::Eq(
             Box::new(Formula::Rem(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(3)),
             )),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(is_presburger(&bindings, &f));
     }
 
@@ -377,7 +362,7 @@ mod tests {
     fn test_classify_presburger() {
         let f = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(1)),
             )),
             Box::new(Formula::Int(0)),
@@ -388,7 +373,7 @@ mod tests {
     #[test]
     fn test_classify_bitvector() {
         let f = Formula::BvAdd(
-            Box::new(Formula::Var("x".to_string(), Sort::BitVec(32))),
+            Box::new(Formula::Var("x".into(), Sort::BitVec(32))),
             Box::new(Formula::BitVec { value: 1, width: 32 }),
             32,
         );
@@ -404,7 +389,7 @@ mod tests {
                     Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
                 )),
                 Box::new(Formula::Add(
-                    Box::new(Formula::Var("i".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("i".into(), Sort::Int)),
                     Box::new(Formula::Int(1)),
                 )),
             )),
@@ -418,8 +403,8 @@ mod tests {
         // Non-linear: x * y
         let f = Formula::Gt(
             Box::new(Formula::Mul(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
@@ -431,13 +416,13 @@ mod tests {
     #[test]
     fn test_cooper_exists_simple() {
         // exists x. x >= 0 && x < 5 && x == 3
-        let var_x = Formula::Var("x".to_string(), Sort::Int);
+        let var_x = Formula::Var("x".into(), Sort::Int);
         let body = Formula::And(vec![
             Formula::Ge(Box::new(var_x.clone()), Box::new(Formula::Int(0))),
             Formula::Lt(Box::new(var_x.clone()), Box::new(Formula::Int(5))),
             Formula::Eq(Box::new(var_x), Box::new(Formula::Int(3))),
         ]);
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         let result = cooper_eliminate_exists(&bindings, &body);
         assert!(result.is_ok(), "Cooper should handle simple exists");
     }
@@ -448,11 +433,11 @@ mod tests {
         let body = Formula::Implies(
             Box::new(Formula::Bool(true)),
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             )),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         let result = cooper_eliminate_forall(&bindings, &body);
         // Should succeed since x doesn't appear.
         assert!(result.is_ok());
@@ -461,10 +446,7 @@ mod tests {
     #[test]
     fn test_cooper_multi_var_fails() {
         let body = Formula::Bool(true);
-        let bindings = vec![
-            ("x".to_string(), Sort::Int),
-            ("y".to_string(), Sort::Int),
-        ];
+        let bindings = vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)];
         let result = cooper_eliminate_forall(&bindings, &body);
         assert!(result.is_err());
     }
@@ -476,8 +458,8 @@ mod tests {
         // forall i in 0..2. forall j in 0..2. i + j >= 0
         let inner_body = Formula::Ge(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("i".to_string(), Sort::Int)),
-                Box::new(Formula::Var("j".to_string(), Sort::Int)),
+                Box::new(Formula::Var("i".into(), Sort::Int)),
+                Box::new(Formula::Var("j".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
@@ -495,14 +477,8 @@ mod tests {
     #[test]
     fn test_eliminate_non_quantified_passthrough() {
         let f = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
         let mut elim = QuantifierEliminator::new();
         let result = elim.eliminate(&f);
@@ -519,15 +495,12 @@ mod tests {
             "i",
             0,
             3,
-            Formula::Ge(
-                Box::new(Formula::Var("i".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0))),
         );
         let f = Formula::Implies(
             Box::new(inner),
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             )),
         );
@@ -542,12 +515,12 @@ mod tests {
     #[test]
     fn test_free_vars() {
         let f = Formula::And(vec![
-            Formula::Var("x".to_string(), Sort::Int),
+            Formula::Var("x".into(), Sort::Int),
             Formula::Forall(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                vec![("y".into(), Sort::Int)],
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             ),
-            Formula::Var("z".to_string(), Sort::Bool),
+            Formula::Var("z".into(), Sort::Bool),
         ]);
         let fv = free_vars(&f);
         assert!(fv.contains("x"));
@@ -560,13 +533,13 @@ mod tests {
         // exists x. forall y. x + y > z
         let body = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
-            Box::new(Formula::Var("z".to_string(), Sort::Int)),
+            Box::new(Formula::Var("z".into(), Sort::Int)),
         );
-        let inner = Formula::Forall(vec![("y".to_string(), Sort::Int)], Box::new(body));
-        let outer = Formula::Exists(vec![("x".to_string(), Sort::Int)], Box::new(inner));
+        let inner = Formula::Forall(vec![("y".into(), Sort::Int)], Box::new(body));
+        let outer = Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(inner));
         let fv = free_vars(&outer);
         assert!(fv.contains("z"));
         assert!(!fv.contains("x"));
@@ -593,10 +566,8 @@ mod tests {
     #[test]
     fn test_tier2_disabled() {
         let config = QuantifierConfig { max_unroll: 5, enable_tier2: false };
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         // Range 0..100 exceeds max_unroll=5, tier2 disabled => Full
         let f = make_bounded_forall("i", 0, 100, body_inner);
         let elim = QuantifierEliminator::with_config(config);
@@ -612,15 +583,15 @@ mod tests {
     fn test_sorted_array_bounds_presburger() {
         // forall i. 0 <= i && i < n => i >= 0
         // This is a Presburger formula (no arrays, linear integer arithmetic)
-        let i = Formula::Var("i".to_string(), Sort::Int);
-        let n = Formula::Var("n".to_string(), Sort::Int);
+        let i = Formula::Var("i".into(), Sort::Int);
+        let n = Formula::Var("n".into(), Sort::Int);
         let guard = Formula::And(vec![
             Formula::Le(Box::new(Formula::Int(0)), Box::new(i.clone())),
             Formula::Lt(Box::new(i.clone()), Box::new(n)),
         ]);
         let body = Formula::Ge(Box::new(i), Box::new(Formula::Int(0)));
         let formula = Formula::Forall(
-            vec![("i".to_string(), Sort::Int)],
+            vec![("i".into(), Sort::Int)],
             Box::new(Formula::Implies(Box::new(guard), Box::new(body))),
         );
 
@@ -640,7 +611,7 @@ mod tests {
             Box::new(Formula::Add(
                 Box::new(Formula::Mul(
                     Box::new(Formula::Int(2)),
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
                 )),
                 Box::new(Formula::Int(1)),
             )),
@@ -652,7 +623,7 @@ mod tests {
     #[test]
     fn test_is_decidable_arithmetic_bitvector() {
         let f = Formula::BvAdd(
-            Box::new(Formula::Var("x".to_string(), Sort::BitVec(32))),
+            Box::new(Formula::Var("x".into(), Sort::BitVec(32))),
             Box::new(Formula::BitVec { value: 1, width: 32 }),
             32,
         );
@@ -664,8 +635,8 @@ mod tests {
         // x * y — non-linear, not decidable
         let f = Formula::Gt(
             Box::new(Formula::Mul(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
@@ -680,7 +651,7 @@ mod tests {
                     "arr".to_string(),
                     Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
                 )),
-                Box::new(Formula::Var("i".to_string(), Sort::Int)),
+                Box::new(Formula::Var("i".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
@@ -691,19 +662,14 @@ mod tests {
 
     #[test]
     fn test_has_quantifiers_none() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         assert!(!has_quantifiers(&f));
     }
 
     #[test]
     fn test_has_quantifiers_forall() {
-        let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         assert!(has_quantifiers(&f));
     }
 
@@ -711,14 +677,11 @@ mod tests {
     fn test_has_quantifiers_nested() {
         // And(x > 0, forall y. y > 0)
         let f = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Forall(
-                vec![("y".to_string(), Sort::Int)],
+                vec![("y".into(), Sort::Int)],
                 Box::new(Formula::Gt(
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("y".into(), Sort::Int)),
                     Box::new(Formula::Int(0)),
                 )),
             ),
@@ -729,9 +692,9 @@ mod tests {
     #[test]
     fn test_has_quantifiers_exists() {
         let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Eq(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(42)),
             )),
         );
@@ -742,10 +705,8 @@ mod tests {
 
     #[test]
     fn test_strategy_quantifier_free() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let config = QuantifierConfig::default();
         assert_eq!(apply_tier_strategy(&f, &config), SolverStrategy::QuantifierFree);
     }
@@ -753,10 +714,8 @@ mod tests {
     #[test]
     fn test_strategy_unroll_small_bounded() {
         // forall i in 0..5. i >= 0 — small finite domain => Unroll
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let f = make_bounded_forall("i", 0, 5, body_inner);
         let config = QuantifierConfig::default();
         assert_eq!(apply_tier_strategy(&f, &config), SolverStrategy::Unroll);
@@ -765,10 +724,8 @@ mod tests {
     #[test]
     fn test_strategy_decidable_large_bounded() {
         // forall i in 0..1000. i >= 0 — too large to unroll, but Presburger
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let f = make_bounded_forall("i", 0, 1000, body_inner);
         let config = QuantifierConfig::default();
         assert_eq!(apply_tier_strategy(&f, &config), SolverStrategy::DecidableTheory);
@@ -777,12 +734,12 @@ mod tests {
     #[test]
     fn test_strategy_full_quantifier_nonlinear() {
         // forall x. x * x > 0 — non-linear, not Presburger
-        let var_x = Formula::Var("x".to_string(), Sort::Int);
+        let var_x = Formula::Var("x".into(), Sort::Int);
         let body = Formula::Gt(
             Box::new(Formula::Mul(Box::new(var_x.clone()), Box::new(var_x))),
             Box::new(Formula::Int(0)),
         );
-        let f = Formula::Forall(vec![("x".to_string(), Sort::Int)], Box::new(body));
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(body));
         let config = QuantifierConfig::default();
         assert_eq!(apply_tier_strategy(&f, &config), SolverStrategy::FullQuantifier);
     }
@@ -795,16 +752,10 @@ mod tests {
             "i",
             0,
             3,
-            Formula::Ge(
-                Box::new(Formula::Var("i".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0))),
         );
         let f = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
             inner,
         ]);
         let config = QuantifierConfig::default();
@@ -819,14 +770,11 @@ mod tests {
             "i",
             0,
             3,
-            Formula::Ge(
-                Box::new(Formula::Var("i".to_string(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0))),
         );
-        let var_x = Formula::Var("x".to_string(), Sort::Int);
+        let var_x = Formula::Var("x".into(), Sort::Int);
         let tier_full = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(
                 Box::new(Formula::Mul(Box::new(var_x.clone()), Box::new(var_x))),
                 Box::new(Formula::Int(0)),
@@ -843,14 +791,14 @@ mod tests {
     fn test_unroll_with_ge_upper_bound() {
         // forall i. i >= 0 && i <= 2 => body
         // Le(i, 2) means hi = 2 + 1 = 3 (exclusive), so domain = [0, 1, 2]
-        let var_i = Formula::Var("i".to_string(), Sort::Int);
+        let var_i = Formula::Var("i".into(), Sort::Int);
         let guard = Formula::And(vec![
             Formula::Ge(Box::new(var_i.clone()), Box::new(Formula::Int(0))),
             Formula::Le(Box::new(var_i.clone()), Box::new(Formula::Int(2))),
         ]);
         let body = Formula::Gt(Box::new(var_i), Box::new(Formula::Int(-1)));
         let f = Formula::Forall(
-            vec![("i".to_string(), Sort::Int)],
+            vec![("i".into(), Sort::Int)],
             Box::new(Formula::Implies(Box::new(guard), Box::new(body))),
         );
         let mut elim = QuantifierEliminator::new();
@@ -867,14 +815,14 @@ mod tests {
         // forall i. i > 0 && i < 4 => body
         // Gt(i, 0) means lo = 0 + 1 = 1 (strict), Lt(i, 4) means hi = 4
         // Domain = [1, 2, 3]
-        let var_i = Formula::Var("i".to_string(), Sort::Int);
+        let var_i = Formula::Var("i".into(), Sort::Int);
         let guard = Formula::And(vec![
             Formula::Gt(Box::new(var_i.clone()), Box::new(Formula::Int(0))),
             Formula::Lt(Box::new(var_i.clone()), Box::new(Formula::Int(4))),
         ]);
         let body = Formula::Gt(Box::new(var_i), Box::new(Formula::Int(0)));
         let f = Formula::Forall(
-            vec![("i".to_string(), Sort::Int)],
+            vec![("i".into(), Sort::Int)],
             Box::new(Formula::Implies(Box::new(guard), Box::new(body))),
         );
         let mut elim = QuantifierEliminator::new();
@@ -893,16 +841,13 @@ mod tests {
         // exists x. x >= 0 && x >= 3 && x < 1000
         // Domain 0..1000 exceeds default max_unroll=64, so Tier 2 (Cooper) fires.
         // Two lower bounds: 0 and 3. Cooper generates substitutions for both.
-        let var_x = Formula::Var("x".to_string(), Sort::Int);
+        let var_x = Formula::Var("x".into(), Sort::Int);
         let body = Formula::And(vec![
             Formula::Ge(Box::new(var_x.clone()), Box::new(Formula::Int(0))),
             Formula::Ge(Box::new(var_x.clone()), Box::new(Formula::Int(3))),
             Formula::Lt(Box::new(var_x), Box::new(Formula::Int(1000))),
         ]);
-        let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(body),
-        );
+        let f = Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(body));
         let mut elim = QuantifierEliminator::new();
         let result = elim.eliminate(&f);
         assert_eq!(elim.stats().tier2_eliminated, 1);
@@ -913,12 +858,9 @@ mod tests {
     #[test]
     fn test_cooper_forall_tautology_x_eq_x() {
         // forall x. x == x
-        let var_x = Formula::Var("x".to_string(), Sort::Int);
+        let var_x = Formula::Var("x".into(), Sort::Int);
         let body = Formula::Eq(Box::new(var_x.clone()), Box::new(var_x));
-        let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(body),
-        );
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(body));
         let mut elim = QuantifierEliminator::new();
         let result = elim.eliminate(&f);
         assert_eq!(elim.stats().tier2_eliminated, 1);
@@ -933,43 +875,36 @@ mod tests {
         // Both quantifiers bind Int vars with linear body — Presburger.
         let body = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
-        let inner = Formula::Exists(
-            vec![("y".to_string(), Sort::Int)],
-            Box::new(body),
-        );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let inner = Formula::Exists(vec![("y".into(), Sort::Int)], Box::new(body));
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(is_presburger(&bindings, &inner));
     }
 
     #[test]
     fn test_is_not_presburger_bool_bound_var() {
         // forall b: Bool. b  — Bool bound var, not Presburger
-        let body = Formula::Var("b".to_string(), Sort::Bool);
-        let bindings = vec![("b".to_string(), Sort::Bool)];
+        let body = Formula::Var("b".into(), Sort::Bool);
+        let bindings = vec![("b".into(), Sort::Bool)];
         assert!(!is_presburger(&bindings, &body));
     }
 
     #[test]
     fn test_is_presburger_ite_linear() {
         // ite(x > 0, x + 1, x - 1) > 0 — linear, with Ite
-        let x = Formula::Var("x".to_string(), Sort::Int);
+        let x = Formula::Var("x".into(), Sort::Int);
         let cond = Formula::Gt(Box::new(x.clone()), Box::new(Formula::Int(0)));
         let then_br = Formula::Add(Box::new(x.clone()), Box::new(Formula::Int(1)));
         let else_br = Formula::Sub(Box::new(x), Box::new(Formula::Int(1)));
         let body = Formula::Gt(
-            Box::new(Formula::Ite(
-                Box::new(cond),
-                Box::new(then_br),
-                Box::new(else_br),
-            )),
+            Box::new(Formula::Ite(Box::new(cond), Box::new(then_br), Box::new(else_br))),
             Box::new(Formula::Int(0)),
         );
-        let bindings = vec![("x".to_string(), Sort::Int)];
+        let bindings = vec![("x".into(), Sort::Int)];
         assert!(is_presburger(&bindings, &body));
     }
 
@@ -978,8 +913,8 @@ mod tests {
     #[test]
     fn test_substitute_in_ite() {
         let f = Formula::Ite(
-            Box::new(Formula::Var("x".to_string(), Sort::Bool)),
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Bool)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
             Box::new(Formula::Int(0)),
         );
         let result = substitute(&f, "x", &Formula::Int(1));
@@ -994,13 +929,8 @@ mod tests {
 
     #[test]
     fn test_substitute_in_select_store() {
-        let arr = Formula::Var("a".to_string(), Sort::Array(
-            Box::new(Sort::Int), Box::new(Sort::Int),
-        ));
-        let f = Formula::Select(
-            Box::new(arr),
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-        );
+        let arr = Formula::Var("a".into(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)));
+        let f = Formula::Select(Box::new(arr), Box::new(Formula::Var("i".into(), Sort::Int)));
         let result = substitute(&f, "i", &Formula::Int(7));
         match result {
             Formula::Select(_, idx) => {
@@ -1065,10 +995,8 @@ mod tests {
 
     #[test]
     fn test_analyze_quantifiers_no_quantifiers() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let stats = analyze_quantifiers(&f);
         assert_eq!(stats.num_forall, 0);
         assert_eq!(stats.num_exists, 0);
@@ -1078,10 +1006,7 @@ mod tests {
 
     #[test]
     fn test_analyze_quantifiers_single_forall() {
-        let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         let stats = analyze_quantifiers(&f);
         assert_eq!(stats.num_forall, 1);
         assert_eq!(stats.num_exists, 0);
@@ -1091,10 +1016,7 @@ mod tests {
 
     #[test]
     fn test_analyze_quantifiers_single_exists() {
-        let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         let stats = analyze_quantifiers(&f);
         assert_eq!(stats.num_forall, 0);
         assert_eq!(stats.num_exists, 1);
@@ -1106,11 +1028,8 @@ mod tests {
     fn test_analyze_quantifiers_nested_same_kind() {
         // forall x. forall y. true
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Forall(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(Formula::Bool(true)),
-            )),
+            vec![("x".into(), Sort::Int)],
+            Box::new(Formula::Forall(vec![("y".into(), Sort::Int)], Box::new(Formula::Bool(true)))),
         );
         let stats = analyze_quantifiers(&f);
         assert_eq!(stats.num_forall, 2);
@@ -1124,17 +1043,14 @@ mod tests {
         // forall x. exists y. x + y > 0
         let body = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Exists(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(body),
-            )),
+            vec![("x".into(), Sort::Int)],
+            Box::new(Formula::Exists(vec![("y".into(), Sort::Int)], Box::new(body))),
         );
         let stats = analyze_quantifiers(&f);
         assert_eq!(stats.num_forall, 1);
@@ -1147,15 +1063,12 @@ mod tests {
     fn test_analyze_quantifiers_alternation_exists_forall() {
         // exists x. forall y. x > y
         let body = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Forall(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(body),
-            )),
+            vec![("x".into(), Sort::Int)],
+            Box::new(Formula::Forall(vec![("y".into(), Sort::Int)], Box::new(body))),
         );
         let stats = analyze_quantifiers(&f);
         assert!(stats.has_alternation);
@@ -1166,14 +1079,8 @@ mod tests {
     fn test_analyze_quantifiers_sibling_quantifiers() {
         // And(forall x. P(x), exists y. Q(y)) — siblings, no alternation
         let f = Formula::And(vec![
-            Formula::Forall(
-                vec![("x".to_string(), Sort::Int)],
-                Box::new(Formula::Bool(true)),
-            ),
-            Formula::Exists(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(Formula::Bool(false)),
-            ),
+            Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true))),
+            Formula::Exists(vec![("y".into(), Sort::Int)], Box::new(Formula::Bool(false))),
         ]);
         let stats = analyze_quantifiers(&f);
         assert_eq!(stats.num_forall, 1);
@@ -1195,29 +1102,23 @@ mod tests {
 
     #[test]
     fn test_classify_quantifiers_ground() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         assert_eq!(classify_quantifiers(&f), QuantifierTier::QuantifierFree);
     }
 
     #[test]
     fn test_classify_quantifiers_bounded_forall() {
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let f = make_bounded_forall("i", 0, 5, body_inner);
         assert_eq!(classify_quantifiers(&f), QuantifierTier::FiniteUnrolling);
     }
 
     #[test]
     fn test_classify_quantifiers_linear() {
-        let body_inner = Formula::Ge(
-            Box::new(Formula::Var("i".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let body_inner =
+            Formula::Ge(Box::new(Formula::Var("i".into(), Sort::Int)), Box::new(Formula::Int(0)));
         // Range too large to unroll, but Presburger
         let f = make_bounded_forall("i", 0, 1000, body_inner);
         assert_eq!(classify_quantifiers(&f), QuantifierTier::DecidableArithmetic);
@@ -1225,12 +1126,12 @@ mod tests {
 
     #[test]
     fn test_classify_quantifiers_nonlinear() {
-        let x = Formula::Var("x".to_string(), Sort::Int);
+        let x = Formula::Var("x".into(), Sort::Int);
         let body = Formula::Gt(
             Box::new(Formula::Mul(Box::new(x.clone()), Box::new(x))),
             Box::new(Formula::Int(0)),
         );
-        let f = Formula::Forall(vec![("x".to_string(), Sort::Int)], Box::new(body));
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(body));
         assert_eq!(classify_quantifiers(&f), QuantifierTier::Full);
     }
 
@@ -1239,9 +1140,9 @@ mod tests {
     #[test]
     fn test_skolemize_no_exists() {
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             )),
         );
@@ -1254,9 +1155,9 @@ mod tests {
     fn test_skolemize_simple_exists() {
         // exists x. x > 0  =>  skolem_x_N > 0
         let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             )),
         );
@@ -1285,15 +1186,12 @@ mod tests {
         // forall y. exists x. x > y
         // => forall y. skolem_x_N(y) > y
         let body = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         let f = Formula::Forall(
-            vec![("y".to_string(), Sort::Int)],
-            Box::new(Formula::Exists(
-                vec![("x".to_string(), Sort::Int)],
-                Box::new(body),
-            )),
+            vec![("y".into(), Sort::Int)],
+            Box::new(Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(body))),
         );
         let result = skolemize(&f);
         // Should still have Forall, but no Exists.
@@ -1323,15 +1221,13 @@ mod tests {
         // exists x, y. x + y > 0  => skolem_x + skolem_y > 0
         let body = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
-        let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Int)],
-            Box::new(body),
-        );
+        let f =
+            Formula::Exists(vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)], Box::new(body));
         let result = skolemize(&f);
         assert!(!matches!(result, Formula::Exists(..)));
         let mut skolem_count = 0;
@@ -1347,10 +1243,8 @@ mod tests {
 
     #[test]
     fn test_skolemize_no_quantifiers() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let result = skolemize(&f);
         assert_eq!(result, f);
     }
@@ -1361,9 +1255,9 @@ mod tests {
     fn test_instantiate_universal_simple() {
         // forall x. x > 0, instantiate with [Int(5)]
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             )),
         );
@@ -1381,11 +1275,11 @@ mod tests {
     fn test_instantiate_universal_multi_binding() {
         // forall x, y. x + y > 0, instantiate with [Int(3), Int(4)]
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)],
             Box::new(Formula::Gt(
                 Box::new(Formula::Add(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
+                    Box::new(Formula::Var("y".into(), Sort::Int)),
                 )),
                 Box::new(Formula::Int(0)),
             )),
@@ -1393,15 +1287,13 @@ mod tests {
         let result = instantiate_universal(&f, &[Formula::Int(3), Formula::Int(4)]);
         // Should be 3 + 4 > 0
         match &result {
-            Formula::Gt(a, _) => {
-                match a.as_ref() {
-                    Formula::Add(l, r) => {
-                        assert_eq!(**l, Formula::Int(3));
-                        assert_eq!(**r, Formula::Int(4));
-                    }
-                    other => panic!("expected Add, got: {other:?}"),
+            Formula::Gt(a, _) => match a.as_ref() {
+                Formula::Add(l, r) => {
+                    assert_eq!(**l, Formula::Int(3));
+                    assert_eq!(**r, Formula::Int(4));
                 }
-            }
+                other => panic!("expected Add, got: {other:?}"),
+            },
             other => panic!("expected Gt, got: {other:?}"),
         }
     }
@@ -1411,10 +1303,10 @@ mod tests {
         // forall x, y. body, instantiate with only [Int(1)]
         // x gets replaced, y stays bound
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)],
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
         );
         let result = instantiate_universal(&f, &[Formula::Int(7)]);
@@ -1437,20 +1329,15 @@ mod tests {
 
     #[test]
     fn test_instantiate_universal_empty_terms() {
-        let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         let result = instantiate_universal(&f, &[]);
         assert!(matches!(result, Formula::Forall(..)));
     }
 
     #[test]
     fn test_instantiate_universal_non_forall_passthrough() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let result = instantiate_universal(&f, &[Formula::Int(5)]);
         assert_eq!(result, f);
     }
@@ -1460,10 +1347,7 @@ mod tests {
     #[test]
     fn test_simplify_vacuous_forall() {
         // forall x. true  =>  true (x not free in body)
-        let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         let result = simplify_quantified(&f);
         assert_eq!(result, Formula::Bool(true));
     }
@@ -1471,10 +1355,7 @@ mod tests {
     #[test]
     fn test_simplify_vacuous_exists() {
         // exists x. false  =>  false
-        let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Bool(false)),
-        );
+        let f = Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(false)));
         let result = simplify_quantified(&f);
         assert_eq!(result, Formula::Bool(false));
     }
@@ -1483,9 +1364,9 @@ mod tests {
     fn test_simplify_vacuous_partial() {
         // forall x, y. y > 0  =>  forall y. y > 0  (x is vacuous, y is not)
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)],
             Box::new(Formula::Gt(
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             )),
         );
@@ -1505,17 +1386,14 @@ mod tests {
         // forall x. forall y. x + y > 0  =>  forall x, y. x + y > 0
         let body = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Forall(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(body),
-            )),
+            vec![("x".into(), Sort::Int)],
+            Box::new(Formula::Forall(vec![("y".into(), Sort::Int)], Box::new(body))),
         );
         let result = simplify_quantified(&f);
         match &result {
@@ -1532,15 +1410,12 @@ mod tests {
     fn test_simplify_merge_nested_exists() {
         // exists x. exists y. x == y  =>  exists x, y. x == y
         let body = Formula::Eq(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         let f = Formula::Exists(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Exists(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(body),
-            )),
+            vec![("x".into(), Sort::Int)],
+            Box::new(Formula::Exists(vec![("y".into(), Sort::Int)], Box::new(body))),
         );
         let result = simplify_quantified(&f);
         match &result {
@@ -1555,15 +1430,12 @@ mod tests {
     fn test_simplify_no_merge_different_kinds() {
         // forall x. exists y. body — should NOT merge
         let body = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Var("y".to_string(), Sort::Int)),
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
         );
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
-            Box::new(Formula::Exists(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(body),
-            )),
+            vec![("x".into(), Sort::Int)],
+            Box::new(Formula::Exists(vec![("y".into(), Sort::Int)], Box::new(body))),
         );
         let result = simplify_quantified(&f);
         // Should remain forall x. exists y. ...
@@ -1579,20 +1451,15 @@ mod tests {
     #[test]
     fn test_simplify_empty_bindings() {
         // forall(). P => P
-        let f = Formula::Forall(
-            vec![],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Forall(vec![], Box::new(Formula::Bool(true)));
         let result = simplify_quantified(&f);
         assert_eq!(result, Formula::Bool(true));
     }
 
     #[test]
     fn test_simplify_non_quantified_passthrough() {
-        let f = Formula::Gt(
-            Box::new(Formula::Var("x".to_string(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let f =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let result = simplify_quantified(&f);
         assert_eq!(result, f);
     }
@@ -1604,21 +1471,18 @@ mod tests {
         let body = Formula::Gt(
             Box::new(Formula::Add(
                 Box::new(Formula::Add(
-                    Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                    Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                    Box::new(Formula::Var("x".into(), Sort::Int)),
+                    Box::new(Formula::Var("y".into(), Sort::Int)),
                 )),
-                Box::new(Formula::Var("z".to_string(), Sort::Int)),
+                Box::new(Formula::Var("z".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Forall(
-                vec![("y".to_string(), Sort::Int)],
-                Box::new(Formula::Forall(
-                    vec![("z".to_string(), Sort::Int)],
-                    Box::new(body),
-                )),
+                vec![("y".into(), Sort::Int)],
+                Box::new(Formula::Forall(vec![("z".into(), Sort::Int)], Box::new(body))),
             )),
         );
         let result = simplify_quantified(&f);
@@ -1640,19 +1504,16 @@ mod tests {
         // Step 2: remove vacuous `unused` => forall x, y
         let body = Formula::Gt(
             Box::new(Formula::Add(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
-                Box::new(Formula::Var("y".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
             )),
             Box::new(Formula::Int(0)),
         );
         let f = Formula::Forall(
-            vec![("unused".to_string(), Sort::Int)],
+            vec![("unused".into(), Sort::Int)],
             Box::new(Formula::Forall(
-                vec![("x".to_string(), Sort::Int)],
-                Box::new(Formula::Forall(
-                    vec![("y".to_string(), Sort::Int)],
-                    Box::new(body),
-                )),
+                vec![("x".into(), Sort::Int)],
+                Box::new(Formula::Forall(vec![("y".into(), Sort::Int)], Box::new(body))),
             )),
         );
         let result = simplify_quantified(&f);

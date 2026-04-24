@@ -21,7 +21,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         debug!("get_var_name_and_span_for_region: attempting upvar");
         self.get_upvar_index_for_region(tcx, fr)
             .map(|index| {
-                // // NOTE(project-rfc-2229#8): Use place span for diagnostics
+                // FIXME(project-rfc-2229#8): Use place span for diagnostics
                 let (name, span) = self.get_upvar_name_and_span_for_region(tcx, upvars, index);
                 (Some(name), span)
             })

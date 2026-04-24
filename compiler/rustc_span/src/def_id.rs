@@ -31,7 +31,7 @@ impl CrateNum {
         CrateNum::from_usize(x)
     }
 
-    // tRust: known issue (typed_def_id) — Replace this with `as_mod_def_id`.
+    // FIXME(typed_def_id): Replace this with `as_mod_def_id`.
     #[inline]
     pub fn as_def_id(self) -> DefId {
         DefId { krate: self, index: CRATE_DEF_INDEX }

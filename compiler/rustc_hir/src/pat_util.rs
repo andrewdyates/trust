@@ -130,7 +130,7 @@ impl hir::Pat<'_> {
     /// Checks if the pattern contains any `ref` or `ref mut` bindings, and if
     /// yes whether it contains mutable or just immutables ones.
     //
-    // tRust: known issue — (tschottdorf) this is problematic as the HIR is being scraped, but
+    // FIXME(tschottdorf): this is problematic as the HIR is being scraped, but
     // ref bindings are be implicit after #42640 (default match binding modes). See issue #44848.
     pub fn contains_explicit_ref_binding(&self) -> Option<hir::Mutability> {
         let mut result = None;

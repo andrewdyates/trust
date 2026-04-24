@@ -38,31 +38,19 @@ impl<A: AbstractDomainOps, B: AbstractDomainOps> ReducedProduct<A, B> {
 
 impl<A: AbstractDomainOps, B: AbstractDomainOps> AbstractDomainOps for ReducedProduct<A, B> {
     fn join(&self, other: &Self) -> Self {
-        Self {
-            first: self.first.join(&other.first),
-            second: self.second.join(&other.second),
-        }
+        Self { first: self.first.join(&other.first), second: self.second.join(&other.second) }
     }
 
     fn meet(&self, other: &Self) -> Self {
-        Self {
-            first: self.first.meet(&other.first),
-            second: self.second.meet(&other.second),
-        }
+        Self { first: self.first.meet(&other.first), second: self.second.meet(&other.second) }
     }
 
     fn widen(&self, new: &Self) -> Self {
-        Self {
-            first: self.first.widen(&new.first),
-            second: self.second.widen(&new.second),
-        }
+        Self { first: self.first.widen(&new.first), second: self.second.widen(&new.second) }
     }
 
     fn narrow(&self, new: &Self) -> Self {
-        Self {
-            first: self.first.narrow(&new.first),
-            second: self.second.narrow(&new.second),
-        }
+        Self { first: self.first.narrow(&new.first), second: self.second.narrow(&new.second) }
     }
 
     fn is_bottom(&self) -> bool {
@@ -74,17 +62,11 @@ impl<A: AbstractDomainOps, B: AbstractDomainOps> AbstractDomainOps for ReducedPr
     }
 
     fn bottom() -> Self {
-        Self {
-            first: A::bottom(),
-            second: B::bottom(),
-        }
+        Self { first: A::bottom(), second: B::bottom() }
     }
 
     fn top() -> Self {
-        Self {
-            first: A::top(),
-            second: B::top(),
-        }
+        Self { first: A::top(), second: B::top() }
     }
 
     fn is_subset_of(&self, other: &Self) -> bool {
@@ -131,10 +113,7 @@ pub fn reduce_interval_octagon(
 ///
 /// For example, if interval is [3, 10] and congruence is `x === 0 (mod 4)`,
 /// then we can tighten to [4, 8] (the range of multiples of 4 in [3, 10]).
-pub fn reduce_interval_congruence(
-    interval: &mut IntervalDomain,
-    congruence: &CongruenceValue,
-) {
+pub fn reduce_interval_congruence(interval: &mut IntervalDomain, congruence: &CongruenceValue) {
     if interval.is_bottom() || matches!(congruence, CongruenceValue::Bottom) {
         *interval = IntervalDomain::Bottom;
         return;
@@ -156,22 +135,19 @@ pub fn reduce_interval_congruence(
                 let r = *residue as i128;
                 // Find smallest x >= lo such that x === r (mod m)
                 let remainder = ((lo % m) + m) % m;
-                let new_lo = if remainder <= r {
-                    lo + (r - remainder)
-                } else {
-                    lo + (m - remainder + r)
-                };
+                let new_lo =
+                    if remainder <= r { lo + (r - remainder) } else { lo + (m - remainder + r) };
                 if let Some(hi) = interval.high()
-                    && new_lo > hi {
-                        *interval = IntervalDomain::Bottom;
-                        return;
-                    }
+                    && new_lo > hi
+                {
+                    *interval = IntervalDomain::Bottom;
+                    return;
+                }
                 *interval = match interval {
                     IntervalDomain::Bottom => IntervalDomain::Bottom,
-                    IntervalDomain::Interval { high, .. } => IntervalDomain::Interval {
-                        low: Bound::Finite(new_lo),
-                        high: *high,
-                    },
+                    IntervalDomain::Interval { high, .. } => {
+                        IntervalDomain::Interval { low: Bound::Finite(new_lo), high: *high }
+                    }
                 };
             }
             // Tighten upper bound down to previous value in congruence class
@@ -180,22 +156,19 @@ pub fn reduce_interval_congruence(
                 let r = *residue as i128;
                 // Find largest x <= hi such that x === r (mod m)
                 let remainder = ((hi % m) + m) % m;
-                let new_hi = if remainder >= r {
-                    hi - (remainder - r)
-                } else {
-                    hi - (m - r + remainder)
-                };
+                let new_hi =
+                    if remainder >= r { hi - (remainder - r) } else { hi - (m - r + remainder) };
                 if let Some(lo) = interval.low()
-                    && new_hi < lo {
-                        *interval = IntervalDomain::Bottom;
-                        return;
-                    }
+                    && new_hi < lo
+                {
+                    *interval = IntervalDomain::Bottom;
+                    return;
+                }
                 *interval = match interval {
                     IntervalDomain::Bottom => IntervalDomain::Bottom,
-                    IntervalDomain::Interval { low, .. } => IntervalDomain::Interval {
-                        low: *low,
-                        high: Bound::Finite(new_hi),
-                    },
+                    IntervalDomain::Interval { low, .. } => {
+                        IntervalDomain::Interval { low: *low, high: Bound::Finite(new_hi) }
+                    }
                 };
             }
         }

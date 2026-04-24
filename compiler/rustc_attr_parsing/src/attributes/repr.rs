@@ -12,7 +12,7 @@ use crate::session_diagnostics::{self, IncorrectReprFormatGenericCause};
 /// the same discriminant size that the corresponding C enum would or C
 /// structure layout, `packed` to remove padding, and `transparent` to delegate representation
 /// concerns to the only non-ZST field.
-// tRust: known issue — (jdonszelmann) is a vec the right representation here even? isn't it just a struct?
+// FIXME(jdonszelmann): is a vec the right representation here even? isn't it just a struct?
 pub(crate) struct ReprParser;
 
 impl<S: Stage> CombineAttributeParser<S> for ReprParser {
@@ -20,7 +20,7 @@ impl<S: Stage> CombineAttributeParser<S> for ReprParser {
     const PATH: &[Symbol] = &[sym::repr];
     const CONVERT: ConvertFn<Self::Item> =
         |items, first_span| AttributeKind::Repr { reprs: items, first_span };
-    // tRust: known issue — (jdonszelmann) never used
+    // FIXME(jdonszelmann): never used
     const TEMPLATE: AttributeTemplate = template!(
         List: &["C", "Rust", "transparent", "align(...)", "packed(...)", "<integer type>"],
         "https://doc.rust-lang.org/reference/type-layout.html#representations"
@@ -56,7 +56,7 @@ impl<S: Stage> CombineAttributeParser<S> for ReprParser {
         reprs
     }
 
-    //tRust: known issue — Still checked fully in `check_attr.rs`
+    //FIXME Still checked fully in `check_attr.rs`
     //This one is slightly more complicated because the allowed targets depend on the arguments
     const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS);
 }
@@ -101,7 +101,7 @@ fn int_type_of_word(s: Symbol) -> Option<IntType> {
 fn parse_repr<S: Stage>(cx: &AcceptContext<'_, '_, S>, param: &MetaItemParser) -> Option<ReprAttr> {
     use ReprAttr::*;
 
-    // tRust: known issue — (jdonszelmann) invert the parsing here to match on the word first and then the
+    // FIXME(jdonszelmann): invert the parsing here to match on the word first and then the
     // structure.
     let (name, ident_span) = if let Some(ident) = param.path().word() {
         (Some(ident.name), ident.span)
@@ -128,7 +128,7 @@ fn parse_repr<S: Stage>(cx: &AcceptContext<'_, '_, S>, param: &MetaItemParser) -
         (Some(name @ sym::align | name @ sym::packed), ArgParser::NameValue(l)) => {
             cx.emit_err(session_diagnostics::IncorrectReprFormatGeneric {
                 span: param.span(),
-                // tRust: known issue — (jdonszelmann) can just be a string in the diag type
+                // FIXME(jdonszelmann) can just be a string in the diag type
                 repr_arg: name,
                 cause: IncorrectReprFormatGenericCause::from_lit_kind(
                     param.span(),
@@ -145,7 +145,7 @@ fn parse_repr<S: Stage>(cx: &AcceptContext<'_, '_, S>, param: &MetaItemParser) -
         (Some(sym::transparent), ArgParser::NoArgs) => Some(ReprTransparent),
         (Some(name @ int_pat!()), ArgParser::NoArgs) => {
             // int_pat!() should make sure it always parses
-            Some(ReprInt(int_type_of_word(name).expect("invariant: int_pat!() match guarantees int_type_of_word returns Some"))) // tRust: unwrap -> expect
+            Some(ReprInt(int_type_of_word(name).unwrap()))
         }
 
         (

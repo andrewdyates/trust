@@ -138,7 +138,7 @@ pub enum MustUsePath {
 /// `ControlFlow<Uninhabited, T>` the same as `T` (we don't set this *yet* in rustc, but expose this
 /// so clippy can use this).
 //
-// tRust: known issue — remove `simplify_uninhabited` once clippy had a release with the new semantics.
+// FIXME: remove `simplify_uninhabited` once clippy had a release with the new semantics.
 #[instrument(skip(cx, expr), level = "debug", ret)]
 pub fn is_ty_must_use<'tcx>(
     cx: &LateContext<'tcx>,

@@ -104,7 +104,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         // because they can be fetched by glob imports from those modules, and bring traits
         // into scope both directly and through glob imports.
         let key =
-            BindingKey::new_disambiguated(ident, ns, || (child_index + 1).try_into().expect("invariant: value fits target type")); // 0 indicates no underscore
+            BindingKey::new_disambiguated(ident, ns, || (child_index + 1).try_into().unwrap()); // 0 indicates no underscore
         if self
             .resolution_or_default(parent, key, orig_ident_span)
             .borrow_mut_unchecked()
@@ -112,7 +112,6 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             .replace(decl)
             .is_some()
         {
-            // tRust: invariant — external bindings are defined at most once per (ident, ns) key
             span_bug!(span, "an external binding was already defined");
         }
     }
@@ -172,7 +171,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                         ModuleKind::Def(def_kind, def_id, Some(self.tcx.item_name(def_id))),
                         expn_id,
                         self.def_span(def_id),
-                        // NOTE: `#[no_implicit_prelude]` attributes are not accounted for here.
+                        // FIXME: Account for `#[no_implicit_prelude]` attributes.
                         parent.is_some_and(|module| module.no_implicit_prelude),
                     ));
                 }
@@ -359,7 +358,6 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             | Res::SelfTyAlias { .. }
             | Res::SelfCtor(..)
             | Res::OpenMod(..)
-            // tRust: invariant — all valid Res variants for name binding handled above; these variants cannot appear in import resolution
             | Res::Err => bug!("unexpected resolution: {:?}", res),
         }
     }
@@ -627,7 +625,7 @@ impl<'a, 'ra, 'tcx> BuildReducedGraphVisitor<'a, 'ra, 'tcx> {
             ast::UseTreeKind::Simple(rename) => {
                 let mut ident = use_tree.ident();
                 let mut module_path = prefix;
-                let mut source = module_path.pop().expect("invariant: non-empty collection");
+                let mut source = module_path.pop().unwrap();
 
                 // `true` for `...::{self [as target]}` imports, `false` otherwise.
                 let type_ns_only = nested && source.ident.name == kw::SelfLower;
@@ -1009,7 +1007,7 @@ impl<'a, 'ra, 'tcx> BuildReducedGraphVisitor<'a, 'ra, 'tcx> {
         }
         .map(|module| {
             let used = self.process_macro_use_imports(item, module);
-            let decl = self.r.arenas.new_pub_def_decl(module.res().expect("invariant: module has resolution"), sp, expansion);
+            let decl = self.r.arenas.new_pub_def_decl(module.res().unwrap(), sp, expansion);
             (used, Some(ModuleOrUniformRoot::Module(module)), decl)
         })
         .unwrap_or((true, None, self.r.dummy_decl));
@@ -1034,7 +1032,7 @@ impl<'a, 'ra, 'tcx> BuildReducedGraphVisitor<'a, 'ra, 'tcx> {
         let import_decl = self.r.new_import_decl(decl, import);
         let ident = IdentKey::new(orig_ident);
         if ident.name != kw::Underscore && parent == self.r.graph_root {
-            // NOTE: this error is technically unnecessary now when extern prelude is split into
+            // FIXME: this error is technically unnecessary now when extern prelude is split into
             // two scopes, remove it with lang team approval.
             if let Some(entry) = self.r.extern_prelude.get(&ident)
                 && expansion != LocalExpnId::ROOT
@@ -1171,7 +1169,7 @@ impl<'a, 'ra, 'tcx> BuildReducedGraphVisitor<'a, 'ra, 'tcx> {
                         if this.r.is_accessible_from(binding.vis(), this.parent_scope.module) {
                             import
                         } else {
-                            // NOTE: this branch is used for reporting the `private_macro_use` lint
+                            // FIXME: This branch is used for reporting the `private_macro_use` lint
                             // and should eventually be removed.
                             if this.r.macro_use_prelude.contains_key(&ident.name) {
                                 // Do not override already existing entries with compatibility entries.
@@ -1479,7 +1477,6 @@ impl<'a, 'ra, 'tcx> Visitor<'a> for BuildReducedGraphVisitor<'a, 'ra, 'tcx> {
             }
 
             AssocItemKind::DelegationMac(..) => {
-                // tRust: invariant — delegation macro invocations are expanded before building the reduced graph
                 span_bug!(item.span, "delegation mac should already have been removed")
             }
         };

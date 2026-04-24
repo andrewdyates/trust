@@ -135,13 +135,6 @@ impl Prefixes {
     pub(crate) fn has_rep(&self) -> bool {
         self.legacy.group1 == Some(0xF3)
     }
-
-    /// True if the mandatory prefix is 0xF2 (used for SSE2 opcode map entries).
-    #[must_use]
-    #[allow(dead_code)] // Will be used when SSE instructions are added
-    pub(crate) fn has_repne(&self) -> bool {
-        self.legacy.group1 == Some(0xF2)
-    }
 }
 
 #[cfg(test)]

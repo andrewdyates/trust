@@ -4,7 +4,7 @@ pub(crate) fn target() -> Target {
     let mut base = base::linux_musl::opts();
     base.cpu = "hexagonv60".into();
     base.max_atomic_width = Some(32);
-    // tRust: known issue — HVX length defaults are per-CPU
+    // FIXME: HVX length defaults are per-CPU
     base.features = "-small-data,+hvx-length128b".into();
 
     base.has_rpath = true;

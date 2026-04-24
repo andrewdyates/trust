@@ -549,6 +549,7 @@ impl<T: ?Sized> Mutex<T> {
     /// Determines whether the mutex is poisoned.
     ///
     /// If another thread is active, the mutex can still become poisoned at any
+    
     /// without additional synchronization.
     ///
     /// # Examples

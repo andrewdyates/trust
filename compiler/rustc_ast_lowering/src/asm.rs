@@ -262,7 +262,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                         if class == asm::InlineAsmRegClass::Err {
                             continue;
                         }
-                        let valid_modifiers = class.valid_modifiers(asm_arch.expect("invariant: asm_arch is set when processing inline asm operands")); // tRust:;
+                        let valid_modifiers = class.valid_modifiers(asm_arch.unwrap());
                         if !valid_modifiers.contains(&modifier) {
                             let sub = if valid_modifiers.is_empty() {
                                 InvalidAsmTemplateModifierRegClassSub::DoesNotSupportModifier {
@@ -319,10 +319,10 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                 // means that we disallow passing a value in/out of the asm and
                 // require that the operand name an explicit register, not a
                 // register class.
-                if reg_class.is_clobber_only(asm_arch.expect("invariant: asm_arch is set when processing inline asm"), allow_experimental_reg) // tRust:
+                if reg_class.is_clobber_only(asm_arch.unwrap(), allow_experimental_reg)
                     && !op.is_clobber()
                 {
-                    if allow_experimental_reg || reg_class.is_clobber_only(asm_arch.expect("invariant: asm_arch is set when processing inline asm"), true) // tRust:
+                    if allow_experimental_reg || reg_class.is_clobber_only(asm_arch.unwrap(), true)
                     {
                         // always clobber-only
                         self.dcx().emit_err(RegisterClassOnlyClobber {

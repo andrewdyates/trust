@@ -251,12 +251,12 @@ impl<'tcx> FnCtxt<'_, 'tcx> {
     /// no known code where this actually happens, even with the new solver which
     /// does normalize types in writeback after cloning the opaque type storage.
     ///
-    /// NOTE(@lcnr): I believe this should be possible in theory and would like
+    /// FIXME(@lcnr): I believe this should be possible in theory and would like
     /// an actual test here. After playing around with this for an hour, I wasn't
     /// able to do anything which didn't already try to normalize the opaque before
     /// then, either allowing compilation to succeed or causing an ambiguity error.
     pub(super) fn detect_opaque_types_added_during_writeback(&self) {
-        let num_entries = self.checked_opaque_types_storage_entries.take().expect("invariant: value was present");
+        let num_entries = self.checked_opaque_types_storage_entries.take().unwrap();
         for (key, hidden_type) in
             self.inner.borrow_mut().opaque_types().opaque_types_added_since(num_entries)
         {

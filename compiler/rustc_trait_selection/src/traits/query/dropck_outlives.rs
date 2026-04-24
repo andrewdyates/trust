@@ -22,7 +22,7 @@ use crate::traits::{FromSolverError, Normalized, ObligationCause, ObligationCtxt
 /// Note also that `needs_drop` requires a "global" type (i.e., one
 /// with erased regions), but this function does not.
 ///
-// tRust: known issue (@lcnr) — remove this module and move this function somewhere else.
+// FIXME(@lcnr): remove this module and move this function somewhere else.
 pub fn trivial_dropck_outlives<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> bool {
     match ty.kind() {
         // None of these types have a destructor and hence they do not
@@ -351,7 +351,7 @@ pub fn dtorck_constraint_for_ty_inner<'tcx>(
             // redundant; there is no storage for the resume type, so if it is actually stored
             // in the interior, we'll already detect the need for a drop by checking the interior.
             //
-            // tRust: known issue (@lcnr) — Why do we erase regions in the env here? Seems odd
+            // FIXME(@lcnr): Why do we erase regions in the env here? Seems odd
             let typing_env = tcx.erase_and_anonymize_regions(typing_env);
             let needs_drop = tcx.mir_coroutine_witnesses(def_id).is_some_and(|witness| {
                 witness.field_tys.iter().any(|field| field.ty.needs_drop(tcx, typing_env))
@@ -386,7 +386,7 @@ pub fn dtorck_constraint_for_ty_inner<'tcx>(
         ty::Adt(def, args) => {
             let DropckConstraint { dtorck_types, outlives, overflows } =
                 tcx.at(span).adt_dtorck_constraint(def.did());
-            // tRust: known issue — we can try to recursively `dtorck_constraint_on_ty`
+            // FIXME: we can try to recursively `dtorck_constraint_on_ty`
             // there, but that needs some way to handle cycles.
             constraints
                 .dtorck_types

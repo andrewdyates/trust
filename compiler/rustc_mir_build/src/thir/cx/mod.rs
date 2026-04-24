@@ -99,7 +99,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
         Self {
             tcx,
             thir: Thir::new(body_type),
-            // tRust: known issue — We're in a body, we should use a typing (upstream #132279)
+            // FIXME(#132279): We're in a body, we should use a typing
             // mode which reveals the opaque types defined by that body.
             typing_env: ty::TypingEnv::non_body_analysis(tcx, def),
             typeck_results,
@@ -165,7 +165,6 @@ impl<'tcx> ThirBuildCx<'tcx> {
                     hir_id: None,
                 }
             }
-            // tRust: invariant — closure owners only type-check to `Closure`, `Coroutine`, or `CoroutineClosure` when synthesizing the implicit environment parameter.
             _ => bug!("unexpected closure type: {closure_ty}"),
         })
     }

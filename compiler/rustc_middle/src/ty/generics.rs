@@ -67,7 +67,6 @@ impl GenericParamDef {
         if let GenericParamDefKind::Lifetime = self.kind {
             ty::EarlyParamRegion { index: self.index, name: self.name }
         } else {
-            // tRust: invariant: cannot convert a non-lifetime parameter def to an early bound region
             bug!("cannot convert a non-lifetime parameter def to an early bound region")
         }
     }
@@ -245,7 +244,6 @@ impl<'tcx> Generics {
         match param.kind {
             GenericParamDefKind::Lifetime => param,
             _ => {
-                // tRust: invariant: expected lifetime parameter, but found another generic parameter: <...>
                 bug!("expected lifetime parameter, but found another generic parameter: {param:#?}")
             }
         }
@@ -256,7 +254,6 @@ impl<'tcx> Generics {
         let param = self.param_at(param.index as usize, tcx);
         match param.kind {
             GenericParamDefKind::Type { .. } => param,
-            // tRust: invariant: expected type parameter, but found another generic parameter: <...>
             _ => bug!("expected type parameter, but found another generic parameter: {param:#?}"),
         }
     }
@@ -266,7 +263,6 @@ impl<'tcx> Generics {
         let param = self.param_at(param.index as usize, tcx);
         match param.kind {
             GenericParamDefKind::Const { .. } => param,
-            // tRust: invariant: expected const parameter, but found another generic parameter: <...>
             _ => bug!("expected const parameter, but found another generic parameter: {param:#?}"),
         }
     }

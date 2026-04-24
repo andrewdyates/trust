@@ -20,11 +20,13 @@ pub(crate) enum OverlayKind {
     Rust,
     Llvm,
     Cargo,
+    CargoTrust,
     Clippy,
     Miri,
     Rustfmt,
     RustAnalyzer,
     RustcCodegenCranelift,
+    RustcCodegenLlvm2,
     RustcCodegenGcc,
     Gcc,
     LlvmBitcodeLinker,
@@ -45,6 +47,9 @@ impl OverlayKind {
                 "src/tools/cargo/LICENSE-APACHE",
                 "src/tools/cargo/LICENSE-THIRD-PARTY",
             ],
+            OverlayKind::CargoTrust => {
+                &["COPYRIGHT", "LICENSE-APACHE", "LICENSE-MIT", "cargo-trust/README.md"]
+            }
             OverlayKind::Clippy => &[
                 "src/tools/clippy/README.md",
                 "src/tools/clippy/LICENSE-APACHE",
@@ -70,6 +75,7 @@ impl OverlayKind {
                 "compiler/rustc_codegen_cranelift/LICENSE-APACHE",
                 "compiler/rustc_codegen_cranelift/LICENSE-MIT",
             ],
+            OverlayKind::RustcCodegenLlvm2 => &["COPYRIGHT", "LICENSE-APACHE", "LICENSE-MIT"],
             OverlayKind::RustcCodegenGcc => &[
                 "compiler/rustc_codegen_gcc/Readme.md",
                 "compiler/rustc_codegen_gcc/LICENSE-APACHE",
@@ -99,6 +105,7 @@ impl OverlayKind {
             OverlayKind::Cargo => {
                 builder.cargo_info.version(builder, &builder.release_num("cargo"))
             }
+            OverlayKind::CargoTrust => builder.rust_version(),
             OverlayKind::Clippy => {
                 builder.clippy_info.version(builder, &builder.release_num("clippy"))
             }
@@ -110,6 +117,7 @@ impl OverlayKind {
                 .rust_analyzer_info
                 .version(builder, &builder.release_num("rust-analyzer/crates/rust-analyzer")),
             OverlayKind::RustcCodegenCranelift => builder.rust_version(),
+            OverlayKind::RustcCodegenLlvm2 => builder.rust_version(),
             OverlayKind::RustcCodegenGcc => builder.rust_version(),
             OverlayKind::LlvmBitcodeLinker => builder.rust_version(),
             OverlayKind::Gcc => builder.rust_version(),
@@ -468,5 +476,26 @@ impl GeneratedTarball {
 
     pub(crate) fn work_dir(&self) -> &Path {
         &self.work
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OverlayKind;
+
+    #[test]
+    fn cargo_trust_overlay_uses_component_readme() {
+        assert_eq!(
+            OverlayKind::CargoTrust.legal_and_readme(),
+            &["COPYRIGHT", "LICENSE-APACHE", "LICENSE-MIT", "cargo-trust/README.md"]
+        );
+    }
+
+    #[test]
+    fn llvm2_overlay_ships_repo_licenses() {
+        assert_eq!(
+            OverlayKind::RustcCodegenLlvm2.legal_and_readme(),
+            &["COPYRIGHT", "LICENSE-APACHE", "LICENSE-MIT"]
+        );
     }
 }

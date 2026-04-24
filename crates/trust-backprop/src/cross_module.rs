@@ -13,8 +13,8 @@ use trust_types::fx::FxHashMap;
 use serde::{Deserialize, Serialize};
 use trust_strengthen::{Proposal, ProposalKind};
 
-use crate::dependency::{topological_order, CallGraph};
 use crate::SourceRewrite;
+use crate::dependency::{CallGraph, topological_order};
 
 /// A cross-module rewrite plan: an ordered list of per-file rewrites.
 ///
@@ -74,10 +74,7 @@ pub fn plan_cross_module_rewrites(
     // Index proposals by function name for quick lookup.
     let mut proposals_by_fn: FxHashMap<&str, Vec<&Proposal>> = FxHashMap::default();
     for proposal in proposals {
-        proposals_by_fn
-            .entry(proposal.function_name.as_str())
-            .or_default()
-            .push(proposal);
+        proposals_by_fn.entry(proposal.function_name.as_str()).or_default().push(proposal);
     }
 
     // Collect per-file rewrites, maintaining callee-first order.
@@ -154,11 +151,7 @@ pub fn plan_cross_module_rewrites(
         .into_iter()
         .filter_map(|f| {
             let rw = file_rewrites_map.remove(&f)?;
-            if rw.is_empty() {
-                None
-            } else {
-                Some((f, rw))
-            }
+            if rw.is_empty() { None } else { Some((f, rw)) }
         })
         .collect();
 
@@ -203,12 +196,7 @@ mod tests {
             name: name.to_string(),
             def_path: format!("crate::{name}"),
             span: SourceSpan::default(),
-            body: VerifiableBody {
-                locals: vec![],
-                blocks,
-                arg_count: 0,
-                return_ty: Ty::Unit,
-            },
+            body: VerifiableBody { locals: vec![], blocks, arg_count: 0, return_ty: Ty::Unit },
             contracts: vec![],
             preconditions: vec![],
             postconditions: vec![],
@@ -220,19 +208,14 @@ mod tests {
         Proposal {
             function_path: format!("src/{func}.rs"),
             function_name: func.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: spec.into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: spec.into() },
             confidence: 0.9,
             rationale: "test".into(),
         }
     }
 
     fn make_file_map(entries: &[(&str, &str)]) -> FxHashMap<String, String> {
-        entries
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
+        entries.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
     }
 
     #[test]
@@ -260,15 +243,9 @@ mod tests {
     #[test]
     fn test_plan_cross_module_propagates_to_caller() {
         // caller -> callee. Add precondition to callee. Caller should get a check.
-        let funcs = vec![
-            make_function("caller", &["callee"]),
-            make_function("callee", &[]),
-        ];
+        let funcs = vec![make_function("caller", &["callee"]), make_function("callee", &[])];
         let graph = build_call_graph(&funcs);
-        let file_map = make_file_map(&[
-            ("caller", "src/caller.rs"),
-            ("callee", "src/callee.rs"),
-        ]);
+        let file_map = make_file_map(&[("caller", "src/caller.rs"), ("callee", "src/callee.rs")]);
         let proposals = vec![make_precondition_proposal("callee", "x > 0")];
 
         let plan = plan_cross_module_rewrites(&proposals, &graph, &file_map);
@@ -297,17 +274,10 @@ mod tests {
     #[test]
     fn test_plan_cross_module_multiple_callers() {
         // a -> c, b -> c. Add precondition to c. Both a and b get checks.
-        let funcs = vec![
-            make_function("a", &["c"]),
-            make_function("b", &["c"]),
-            make_function("c", &[]),
-        ];
+        let funcs =
+            vec![make_function("a", &["c"]), make_function("b", &["c"]), make_function("c", &[])];
         let graph = build_call_graph(&funcs);
-        let file_map = make_file_map(&[
-            ("a", "src/a.rs"),
-            ("b", "src/b.rs"),
-            ("c", "src/c.rs"),
-        ]);
+        let file_map = make_file_map(&[("a", "src/a.rs"), ("b", "src/b.rs"), ("c", "src/c.rs")]);
         let proposals = vec![make_precondition_proposal("c", "n != 0")];
 
         let plan = plan_cross_module_rewrites(&proposals, &graph, &file_map);
@@ -322,17 +292,10 @@ mod tests {
     fn test_plan_cross_module_chain_ordering() {
         // a -> b -> c. Add precondition to c.
         // c gets the precondition, b gets a check, a does NOT (a doesn't call c directly).
-        let funcs = vec![
-            make_function("a", &["b"]),
-            make_function("b", &["c"]),
-            make_function("c", &[]),
-        ];
+        let funcs =
+            vec![make_function("a", &["b"]), make_function("b", &["c"]), make_function("c", &[])];
         let graph = build_call_graph(&funcs);
-        let file_map = make_file_map(&[
-            ("a", "src/a.rs"),
-            ("b", "src/b.rs"),
-            ("c", "src/c.rs"),
-        ]);
+        let file_map = make_file_map(&[("a", "src/a.rs"), ("b", "src/b.rs"), ("c", "src/c.rs")]);
         let proposals = vec![make_precondition_proposal("c", "i < len")];
 
         let plan = plan_cross_module_rewrites(&proposals, &graph, &file_map);
@@ -347,15 +310,9 @@ mod tests {
     #[test]
     fn test_plan_cross_module_non_precondition_no_propagation() {
         // caller -> callee. Add safe arithmetic to callee. No caller propagation.
-        let funcs = vec![
-            make_function("caller", &["callee"]),
-            make_function("callee", &[]),
-        ];
+        let funcs = vec![make_function("caller", &["callee"]), make_function("callee", &[])];
         let graph = build_call_graph(&funcs);
-        let file_map = make_file_map(&[
-            ("caller", "src/caller.rs"),
-            ("callee", "src/callee.rs"),
-        ]);
+        let file_map = make_file_map(&[("caller", "src/caller.rs"), ("callee", "src/callee.rs")]);
         let proposals = vec![Proposal {
             function_path: "src/callee.rs".into(),
             function_name: "callee".into(),
@@ -376,15 +333,9 @@ mod tests {
     #[test]
     fn test_plan_cross_module_same_file() {
         // Two functions in the same file.
-        let funcs = vec![
-            make_function("outer", &["inner"]),
-            make_function("inner", &[]),
-        ];
+        let funcs = vec![make_function("outer", &["inner"]), make_function("inner", &[])];
         let graph = build_call_graph(&funcs);
-        let file_map = make_file_map(&[
-            ("outer", "src/lib.rs"),
-            ("inner", "src/lib.rs"),
-        ]);
+        let file_map = make_file_map(&[("outer", "src/lib.rs"), ("inner", "src/lib.rs")]);
         let proposals = vec![make_precondition_proposal("inner", "x >= 0")];
 
         let plan = plan_cross_module_rewrites(&proposals, &graph, &file_map);

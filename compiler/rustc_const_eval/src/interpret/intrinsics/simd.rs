@@ -120,7 +120,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         Op::Abs => {
                             // Works for f32 and f64.
                             let ty::Float(float_ty) = op.layout.ty.kind() else {
-                                // tRust: invariant — SIMD float operation requires float-typed elements
                                 span_bug!(
                                     self.cur_span(),
                                     "{} operand is not a float",
@@ -138,7 +137,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         }
                         Op::Round(rounding) => {
                             let ty::Float(float_ty) = op.layout.ty.kind() else {
-                                // tRust: invariant — SIMD float operation requires float-typed elements
                                 span_bug!(
                                     self.cur_span(),
                                     "{} operand is not a float",
@@ -252,7 +250,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                             ) {
                                 // Special handling for boolean-returning operations
                                 assert_eq!(val.layout.ty, self.tcx.types.bool);
-                                let val = val.to_scalar().to_bool().expect("invariant: SIMD mask element is a valid boolean scalar");
+                                let val = val.to_scalar().to_bool().unwrap();
                                 bool_to_simd_element(val, dest.layout.size)
                             } else {
                                 assert_ne!(val.layout.ty, self.tcx.types.bool);
@@ -264,10 +262,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         Op::WrappingOffset => {
                             let ptr = left.to_scalar().to_pointer(self)?;
                             let offset_count = right.to_scalar().to_target_isize(self)?;
-                            let pointee_ty = left.layout.ty.builtin_deref(true).expect("invariant: SIMD gather/scatter pointer element is a pointer type with deref target");
+                            let pointee_ty = left.layout.ty.builtin_deref(true).unwrap();
 
                             let pointee_size =
-                                i64::try_from(self.layout_of(pointee_ty)?.size.bytes()).expect("invariant: SIMD pointee size fits in i64 (cannot exceed isize::MAX)");
+                                i64::try_from(self.layout_of(pointee_ty)?.size.bytes()).unwrap();
                             let offset_bytes = offset_count.wrapping_mul(pointee_size);
                             let offset_ptr = ptr.wrapping_signed_offset(offset_bytes, self);
                             Scalar::from_maybe_pointer(offset_ptr, self)
@@ -291,7 +289,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let imm_from_bool = |b| {
                     ImmTy::from_scalar(
                         Scalar::from_bool(b),
-                        self.layout_of(self.tcx.types.bool).expect("invariant: bool type layout is always available"),
+                        self.layout_of(self.tcx.types.bool).unwrap(),
                     )
                 };
 
@@ -405,7 +403,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     ty::Uint(_) => {
                         // Any larger integer type is fine.
                         assert!(mask.layout.size.bits() >= bitmask_len);
-                        self.read_scalar(mask)?.to_bits(mask.layout.size)?.try_into().expect("invariant: SIMD mask scalar bits fit in u32")
+                        self.read_scalar(mask)?.to_bits(mask.layout.size)?.try_into().unwrap()
                     }
                     ty::Array(elem, _len) if elem == &self.tcx.types.u8 => {
                         // The array must have exactly the right size.
@@ -431,11 +429,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                             }
                         }
                     }
-                    // tRust: invariant — simd_select_bitmask mask must be an integer or array type
                     _ => bug!("simd_select_bitmask: invalid mask type {}", mask.layout.ty),
                 };
 
-                let dest_len = u32::try_from(dest_len).expect("invariant: SIMD dest vector length fits in u32");
+                let dest_len = u32::try_from(dest_len).unwrap();
                 for i in 0..dest_len {
                     let bit_i = simd_bitmask_index(i, dest_len, self.tcx.data_layout.endian);
                     let mask = mask & 1u64.strict_shl(bit_i);
@@ -458,7 +455,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     );
                 }
 
-                let op_len = u32::try_from(op_len).expect("invariant: SIMD operand vector length fits in u32");
+                let op_len = u32::try_from(op_len).unwrap();
                 let mut res = 0u64;
                 for i in 0..op_len {
                     let op = self.read_immediate(&self.project_index(&op, i.into())?)?;
@@ -493,7 +490,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         };
                         self.write_bytes_ptr(dest.ptr(), res_bytes_slice.iter().cloned())?;
                     }
-                    // tRust: invariant — simd_bitmask return type must be an integer or array type
                     _ => bug!("simd_bitmask: invalid return type {}", dest.layout.ty),
                 }
             }
@@ -562,11 +558,11 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let index_len = index.len();
 
                 assert_eq!(left_len, right_len);
-                assert_eq!(u64::try_from(index_len)u64::try_from(index_len).expect("invariant: SIMD index length fits in u64"), dest_len);
+                assert_eq!(u64::try_from(index_len).unwrap(), dest_len);
 
                 for i in 0..dest_len {
                     let src_index: u64 =
-                        index[usize::try_from(i).expect("invariant: SIMD shuffle index fits in usize")].to_leaf().to_u32().into();
+                        index[usize::try_from(i).unwrap()].to_leaf().to_u32().into();
                     let dest = self.project_index(&dest, i)?;
 
                     let val = if src_index < left_len {
@@ -741,7 +737,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     let dest = self.project_index(&dest, i)?;
 
                     let ty::Float(float_ty) = dest.layout.ty.kind() else {
-                        // tRust: invariant — SIMD float operation requires float-typed operands
                         span_bug!(self.cur_span(), "{} operand is not a float", intrinsic_name)
                     };
 
@@ -779,7 +774,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                             "overflowing shift by {shift_bits} in `{intrinsic_name}` in lane {i}"
                         );
                     }
-                    let inv_shift_bits = u32::try_from(elem_size_bits - shift_bits).expect("invariant: elem_size_bits > shift_bits so difference fits in u32");
+                    let inv_shift_bits = u32::try_from(elem_size_bits - shift_bits).unwrap();
 
                     // A funnel shift left by S can be implemented as `(x << S) | y.unbounded_shr(SIZE - S)`.
                     // The `unbounded_shr` is needed because otherwise if `S = 0`, it would be `x | y`
@@ -824,7 +819,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     ) -> InterpResult<'tcx, Scalar<M::Provenance>> {
         assert_eq!(left.layout.ty, right.layout.ty);
         let ty::Float(float_ty) = left.layout.ty.kind() else {
-            // tRust: invariant — SIMD float operation requires float-typed operands
             bug!("fmax operand is not a float")
         };
         let left = left.to_scalar();
@@ -845,12 +839,11 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     ) -> InterpResult<'tcx> {
         // Packed SIMD types with non-power-of-two element counts use BackendRepr::Memory
         // instead of BackendRepr::SimdVector. We need to handle both cases.
-        // tRust: known issue — remove the BackendRepr::Memory case when SIMD vectors are always passed as BackendRepr::SimdVector.
+        // FIXME: remove the BackendRepr::Memory case when SIMD vectors are always passed as BackendRepr::SimdVector.
         assert!(vector_layout.ty.is_simd(), "check_simd_ptr_alignment called on non-SIMD type");
         match vector_layout.backend_repr {
             BackendRepr::SimdVector { .. } | BackendRepr::Memory { .. } => {}
             _ => {
-                // tRust: invariant — SIMD type must have a SimdVector or ScalarPair backend representation
                 span_bug!(
                     self.cur_span(),
                     "SIMD type has unexpected backend_repr: {:?}",

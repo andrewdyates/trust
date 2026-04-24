@@ -99,7 +99,6 @@ fn main() {
 
     #[cfg(target_arch="x86_64")]
     #[cfg(feature="master")]
-    // SAFETY: calling unsafe test function in a controlled test environment.
     unsafe {
         test_simd();
     }
@@ -224,7 +223,6 @@ unsafe fn test_mm_add_pd() {
 #[cfg(feature="master")]
 #[cfg(target_arch="x86_64")]
 fn assert_eq_m128i(x: std::arch::x86_64::__m128i, y: std::arch::x86_64::__m128i) {
-    // SAFETY: transmute between types of identical size and compatible layout.
     unsafe {
         assert_eq!(std::mem::transmute::<_, [u8; 16]>(x), std::mem::transmute::<_, [u8; 16]>(y));
     }

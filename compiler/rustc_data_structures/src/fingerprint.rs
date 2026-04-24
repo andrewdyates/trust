@@ -94,10 +94,10 @@ impl Fingerprint {
         // `unsafe { mem::transmute(*k) }`. Well done, LLVM! :)
         let mut result = [0u8; 16];
 
-        let first_half: &mut [u8; 8] = (&mut result[0..8]).try_into().expect("invariant: 8-byte slice must convert to [u8; 8]"); // tRust: unwrap -> expect
+        let first_half: &mut [u8; 8] = (&mut result[0..8]).try_into().unwrap();
         *first_half = self.0.to_le_bytes();
 
-        let second_half: &mut [u8; 8] = (&mut result[8..16]).try_into().expect("invariant: 8-byte slice must convert to [u8; 8]"); // tRust: unwrap -> expect
+        let second_half: &mut [u8; 8] = (&mut result[8..16]).try_into().unwrap();
         *second_half = self.1.to_le_bytes();
 
         result
@@ -106,8 +106,8 @@ impl Fingerprint {
     #[inline]
     pub fn from_le_bytes(bytes: [u8; 16]) -> Fingerprint {
         Fingerprint(
-            u64::from_le_bytes(bytes[0..8].try_into().expect("invariant: 8-byte slice must convert to [u8; 8]")), // tRust: unwrap -> expect
-            u64::from_le_bytes(bytes[8..16].try_into().expect("invariant: 8-byte slice must convert to [u8; 8]")), // tRust: unwrap -> expect
+            u64::from_le_bytes(bytes[0..8].try_into().unwrap()),
+            u64::from_le_bytes(bytes[8..16].try_into().unwrap()),
         )
     }
 }
@@ -177,7 +177,7 @@ impl<E: Encoder> Encodable<E> for Fingerprint {
 impl<D: Decoder> Decodable<D> for Fingerprint {
     #[inline]
     fn decode(d: &mut D) -> Self {
-        Fingerprint::from_le_bytes(d.read_raw_bytes(16).try_into().expect("invariant: 16-byte read must convert to [u8; 16]")) // tRust: unwrap -> expect
+        Fingerprint::from_le_bytes(d.read_raw_bytes(16).try_into().unwrap())
     }
 }
 

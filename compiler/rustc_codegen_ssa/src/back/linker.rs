@@ -1,6 +1,3 @@
-//! tRust: Linker command-line builders for the supported linker flavors, including
-//! tRust: GNU-like, MSVC, and macOS-specific linkers.
-
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io::prelude::*;
@@ -99,7 +96,7 @@ pub(crate) fn get_linker<'a>(
                     _ => None,
                 };
                 if let Some(ref a) = arch {
-                    // NOTE: Could be moved to fn linker_with_args for better organization.
+                    // FIXME: Move this to `fn linker_with_args`.
                     let mut arg = OsString::from("/LIBPATH:");
                     arg.push(format!("{}\\lib\\{}\\store", root_lib_path.display(), a));
                     cmd.arg(&arg);
@@ -134,10 +131,9 @@ pub(crate) fn get_linker<'a>(
     if !msvc_changed_path && let Some(path) = env::var_os("PATH") {
         new_path.extend(env::split_paths(&path));
     }
-    cmd.env("PATH", env::join_paths(new_path).expect("invariant: path join must produce valid path"));
+    cmd.env("PATH", env::join_paths(new_path).unwrap());
 
-    // NOTE: /LIBPATH for uwp targets is added here during construction rather than in
-    // linker_with_args.
+    // FIXME: Move `/LIBPATH` addition for uwp targets from the linker construction
     // to the linker args construction.
     assert!(cmd.get_args().is_empty() || sess.target.cfg_abi == CfgAbi::Uwp);
     match flavor {
@@ -311,15 +307,12 @@ pub(crate) trait Linker {
         out_filename: &Path,
     );
     fn link_dylib_by_name(&mut self, _name: &str, _verbatim: bool, _as_needed: bool) {
-        // tRust: invariant: structural invariant — linker configuration constrains valid options at this point
         bug!("dylib linked with unsupported linker")
     }
     fn link_dylib_by_path(&mut self, _path: &Path, _as_needed: bool) {
-        // tRust: invariant: structural invariant — linker configuration constrains valid options at this point
         bug!("dylib linked with unsupported linker")
     }
     fn link_framework_by_name(&mut self, _name: &str, _verbatim: bool, _as_needed: bool) {
-        // tRust: invariant: structural invariant — linker configuration constrains valid options at this point
         bug!("framework linked with unsupported linker")
     }
     fn link_staticlib_by_name(&mut self, name: &str, verbatim: bool, whole_archive: bool);
@@ -328,7 +321,6 @@ pub(crate) trait Linker {
         link_or_cc_args(link_or_cc_args(self, &["-L"]), &[path]);
     }
     fn framework_path(&mut self, _path: &Path) {
-        // tRust: invariant: structural invariant — linker configuration constrains valid options at this point
         bug!("framework path set with unsupported linker")
     }
     fn output_filename(&mut self, path: &Path) {
@@ -464,7 +456,7 @@ impl<'a> GccLinker<'a> {
             // the right `-Wl,-install_name` with an `@rpath` in it.
             if self.sess.opts.cg.rpath || self.sess.opts.unstable_opts.osx_rpath_install_name {
                 let mut rpath = OsString::from("@rpath/");
-                rpath.push(out_filename.file_name().expect("invariant: path must have filename"));
+                rpath.push(out_filename.file_name().unwrap());
                 self.link_arg("-install_name").link_arg(rpath);
             }
         } else {
@@ -496,7 +488,7 @@ impl<'a> GccLinker<'a> {
     fn with_as_needed(&mut self, as_needed: bool, f: impl FnOnce(&mut Self)) {
         if !as_needed {
             if self.sess.target.is_like_darwin {
-                // NOTE(#81490): ld64 doesn't support these flags but macOS 11
+                // FIXME(81490): ld64 doesn't support these flags but macOS 11
                 // has -needed-l{} / -needed_library {}
                 // but we have no way to detect that here.
                 self.sess.dcx().emit_warn(errors::Ld64UnimplementedModifier);
@@ -511,7 +503,7 @@ impl<'a> GccLinker<'a> {
 
         if !as_needed {
             if self.sess.target.is_like_darwin {
-                // See above NOTE comment
+                // See above FIXME comment
             } else if self.is_gnu && !self.sess.target.is_like_windows {
                 self.link_arg("--as-needed");
             }
@@ -582,7 +574,7 @@ impl<'a> Linker for GccLinker<'a> {
         // VxWorks compiler driver introduced `--static-crt` flag specifically for rustc,
         // it switches linking for libc and similar system libraries to static without using
         // any `#[link]` attributes in the `libc` crate, see #72782 for details.
-        // NOTE: Uses explicit linker args instead of #[link] attributes in libc crate.
+        // FIXME: Switch to using `#[link]` attributes in the `libc` crate
         // similarly to other targets.
         if self.sess.target.os == Os::VxWorks
             && matches!(
@@ -609,7 +601,7 @@ impl<'a> Linker for GccLinker<'a> {
         if self.sess.target.os == Os::Illumos && name == "c" {
             // libc will be added via late_link_args on illumos so that it will
             // appear last in the library search order.
-            // NOTE: Should be replaced by a more complete and generic
+            // FIXME: This should be replaced by a more complete and generic
             // mechanism for controlling the order of library arguments passed
             // to the linker.
             return;
@@ -631,7 +623,7 @@ impl<'a> Linker for GccLinker<'a> {
     fn link_framework_by_name(&mut self, name: &str, _verbatim: bool, as_needed: bool) {
         self.hint_dynamic();
         if !as_needed {
-            // NOTE(#81490): ld64 as of macOS 11 supports -needed_framework
+            // FIXME(81490): ld64 as of macOS 11 supports the -needed_framework
             // flag but we have no way to detect that here.
             // self.link_or_cc_arg("-needed_framework").link_or_cc_arg(name);
             self.sess.dcx().emit_warn(errors::Ld64UnimplementedModifier);
@@ -1335,7 +1327,7 @@ impl<'a> Linker for EmLinker<'a> {
         let encoded = serde_json::to_string(
             &symbols.iter().map(|(sym, _)| "_".to_owned() + sym).collect::<Vec<_>>(),
         )
-        .expect("invariant: JSON serialization of exported symbols must succeed");
+        .unwrap();
         debug!("{encoded}");
 
         arg.push(encoded);
@@ -1661,8 +1653,7 @@ impl<'a> AixLinker<'a> {
 
     fn build_dylib(&mut self, _out_filename: &Path) {
         self.link_args(&["-bM:SRE", "-bnoentry"]);
-        // tRust: Upstream TODO -- AIX linker export list generation.
-        // TODO: Use CreateExportList utility to create export list.
+        // FIXME: Use CreateExportList utility to create export list
         // and remove -bexpfull.
         self.link_arg("-bexpfull");
     }
@@ -1761,8 +1752,7 @@ impl<'a> Linker for AixLinker<'a> {
         let path = tmpdir.join("list.exp");
         let res = try {
             let mut f = File::create_buffered(&path)?;
-            // tRust: Upstream TODO -- AIX linker export list via llvm-nm.
-            // TODO: Use llvm-nm to generate export list.
+            // FIXME: use llvm-nm to generate export list.
             for (symbol, _) in symbols {
                 debug!("  _{symbol}");
                 writeln!(f, "  {symbol}")?;
@@ -1771,7 +1761,7 @@ impl<'a> Linker for AixLinker<'a> {
         if let Err(e) = res {
             self.sess.dcx().fatal(format!("failed to write export file: {e}"));
         }
-        self.link_arg(format!("-bE:{}", path.to_str().expect("invariant: path must be valid UTF-8")));
+        self.link_arg(format!("-bE:{}", path.to_str().unwrap()));
     }
 
     fn windows_subsystem(&mut self, _subsystem: WindowsSubsystemKind) {}
@@ -1820,7 +1810,7 @@ pub(crate) fn exported_symbols(
             .map(|name| {
                 (
                     name.to_string(),
-                    // NOTE: Uses generic export kind; should match the symbol's actual export kind.
+                    // FIXME use the correct export kind for this symbol. override_export_symbols
                     // can't directly specify the SymbolExportKind as it is defined in rustc_middle
                     // which rustc_target can't depend on.
                     SymbolExportKind::Text,

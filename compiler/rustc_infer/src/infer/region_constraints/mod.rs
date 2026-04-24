@@ -271,7 +271,7 @@ type CombineMap<'tcx> = FxHashMap<TwoRegions<'tcx>, RegionVid>;
 #[derive(Debug, Clone, Copy)]
 pub struct RegionVariableInfo<'tcx> {
     pub origin: RegionVariableOrigin<'tcx>,
-    // tRust: known issue —: This is only necessary for `fn take_and_reset_data` and
+    // FIXME: This is only necessary for `fn take_and_reset_data` and
     // `lexical_region_resolve`. We should rework `lexical_region_resolve`
     // in the near/medium future anyways and could move the unverse info
     // for `fn take_and_reset_data` into a separate table which is
@@ -471,7 +471,6 @@ impl<'tcx> RegionConstraintCollector<'_, 'tcx> {
 
         match (sub.kind(), sup.kind()) {
             (ReBound(..), _) | (_, ReBound(..)) => {
-                // tRust: invariant — bound regions must be resolved before relating sub/sup constraints
                 span_bug!(origin.span(), "cannot relate bound region: {:?} <= {:?}", sub, sup);
             }
             (_, ReStatic) => {
@@ -621,7 +620,6 @@ impl<'tcx> RegionConstraintCollector<'_, 'tcx> {
                 Ok(value) => self.universe(value),
                 Err(universe) => universe,
             },
-            // tRust: invariant — bound regions have no universe; must be resolved before querying
             ty::ReBound(..) => bug!("universe(): encountered bound region {:?}", region),
         }
     }
@@ -732,11 +730,11 @@ impl<'tcx> Rollback<UndoLog<'tcx>> for RegionConstraintStorage<'tcx> {
     fn reverse(&mut self, undo: UndoLog<'tcx>) {
         match undo {
             AddVar(vid) => {
-                self.var_infos.pop().expect("invariant: var_infos must be non-empty when rolling back AddVar"); // tRust:
+                self.var_infos.pop().unwrap();
                 assert_eq!(self.var_infos.len(), vid.index());
             }
             AddConstraint(index) => {
-                self.data.constraints.pop().expect("invariant: constraints must be non-empty when rolling back AddConstraint"); // tRust:
+                self.data.constraints.pop().unwrap();
                 assert_eq!(self.data.constraints.len(), index);
             }
             AddVerify(index) => {

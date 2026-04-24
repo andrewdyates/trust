@@ -1,9 +1,8 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/m5_real_loop.rs: M5 real loop integration tests
 //
 // Exercises the full prove-strengthen-backprop loop with REAL z4 solver calls.
 // Unlike m5_acceptance.rs (which uses simulated solver results), these tests
-// wire the actual pipeline: trust-vcgen -> trust-router (SmtLibBackend/z4) ->
+// wire the actual pipeline: trust-vcgen -> trust-router (IncrementalZ4Session/z4) ->
 // trust-strengthen -> trust-backprop -> re-verify -> trust-convergence.
 //
 // Requirements: z4 binary on PATH (tests panic if absent).
@@ -23,7 +22,7 @@ use trust_backprop::{GovernancePolicy, RewriteKind};
 use trust_convergence::{
     ConvergenceDecision, ConvergenceTracker, IterationSnapshot, ProofFrontier,
 };
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_strengthen::{NoOpLlm, ProposalKind, StrengthenConfig};
 use trust_types::*;
@@ -33,13 +32,13 @@ use trust_types::*;
 // ===========================================================================
 
 /// Check that z4 is available on PATH. Panics if not found.
-fn require_z4() -> SmtLibBackend {
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("[m5_real_loop] z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH — install z4 to run these tests"),
     }
@@ -63,11 +62,7 @@ fn buggy_midpoint_mir() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::usize(), name: None },
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("lo".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("hi".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::usize(), name: None },
                 LocalDecl { index: 5, ty: Ty::usize(), name: None },
             ],
@@ -152,12 +147,12 @@ fn safe_midpoint_mir_with_precondition() -> VerifiableFunction {
         span: SourceSpan::default(),
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::usize(), name: None },          // return
+                LocalDecl { index: 0, ty: Ty::usize(), name: None }, // return
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("lo".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("hi".into()) },
-                LocalDecl { index: 3, ty: Ty::usize(), name: None },          // hi - lo
-                LocalDecl { index: 4, ty: Ty::usize(), name: None },          // (hi - lo) / 2
-                LocalDecl { index: 5, ty: Ty::usize(), name: None },          // lo + (hi-lo)/2
+                LocalDecl { index: 3, ty: Ty::usize(), name: None }, // hi - lo
+                LocalDecl { index: 4, ty: Ty::usize(), name: None }, // (hi - lo) / 2
+                LocalDecl { index: 5, ty: Ty::usize(), name: None }, // lo + (hi-lo)/2
             ],
             blocks: vec![
                 // bb0: diff = hi - lo (plain sub, precondition guarantees hi >= lo)
@@ -311,11 +306,7 @@ fn test_real_z4_full_prove_strengthen_backprop_loop() {
         functions: vec![FunctionVerificationResult {
             function_path: "search::buggy_midpoint".into(),
             function_name: "buggy_midpoint".into(),
-            results: iter1_results_vec
-                .iter()
-                .filter(|(_, r)| r.is_failed())
-                .cloned()
-                .collect(),
+            results: iter1_results_vec.iter().filter(|(_, r)| r.is_failed()).cloned().collect(),
             from_notes: 0,
             with_assumptions: 0,
         }],
@@ -324,19 +315,18 @@ fn test_real_z4_full_prove_strengthen_backprop_loop() {
     };
 
     let strengthen_config = StrengthenConfig::default();
-    let strengthen_output =
-        trust_strengthen::run(&crate_results, &strengthen_config, &NoOpLlm);
+    let strengthen_output = trust_strengthen::run(&crate_results, &strengthen_config, &NoOpLlm);
 
-    eprintln!("  strengthen: {} proposals, {} failures analyzed",
-        strengthen_output.proposals.len(), strengthen_output.failures_analyzed);
+    eprintln!(
+        "  strengthen: {} proposals, {} failures analyzed",
+        strengthen_output.proposals.len(),
+        strengthen_output.failures_analyzed
+    );
     assert!(
         strengthen_output.has_proposals,
         "strengthen must propose fixes for the overflow detected by real z4"
     );
-    assert!(
-        strengthen_output.failures_analyzed >= 1,
-        "should analyze at least 1 failure"
-    );
+    assert!(strengthen_output.failures_analyzed >= 1, "should analyze at least 1 failure");
 
     // Verify the proposals target the overflow
     let has_overflow_fix = strengthen_output.proposals.iter().any(|p| {
@@ -413,16 +403,10 @@ fn test_real_z4_full_prove_strengthen_backprop_loop() {
         }
     }
 
-    eprintln!(
-        "  z4 results: {} proved, {} failed",
-        safe_proved, safe_failed
-    );
+    eprintln!("  z4 results: {} proved, {} failed", safe_proved, safe_failed);
     // The safe midpoint with precondition should have fewer failures
     // (ideally zero, but some VCs may not be fully encodable yet)
-    assert!(
-        safe_proved > 0,
-        "z4 must prove at least some VCs for the safe midpoint"
-    );
+    assert!(safe_proved > 0, "z4 must prove at least some VCs for the safe midpoint");
 
     // ===================================================================
     // CONVERGENCE: Track proof frontier across iterations
@@ -438,8 +422,7 @@ fn test_real_z4_full_prove_strengthen_backprop_loop() {
         failed: failed_count,
         unknown: unknown_count,
     };
-    let snap0 = IterationSnapshot::new(0, frontier0.clone())
-        .with_fingerprint("buggy_midpoint");
+    let snap0 = IterationSnapshot::new(0, frontier0.clone()).with_fingerprint("buggy_midpoint");
     let decision0 = tracker.observe(snap0);
     eprintln!(
         "  Iteration 0: proved={}, failed={}, unknown={}, decision={:?}",
@@ -458,8 +441,7 @@ fn test_real_z4_full_prove_strengthen_backprop_loop() {
         failed: safe_failed,
         unknown: 0,
     };
-    let snap1 = IterationSnapshot::new(1, frontier1.clone())
-        .with_fingerprint("safe_midpoint");
+    let snap1 = IterationSnapshot::new(1, frontier1.clone()).with_fingerprint("safe_midpoint");
     let decision1 = tracker.observe(snap1);
     eprintln!(
         "  Iteration 1: proved={}, failed={}, decision={:?}",
@@ -470,19 +452,29 @@ fn test_real_z4_full_prove_strengthen_backprop_loop() {
     assert!(
         frontier1.trusted >= frontier0.trusted || frontier1.failed < frontier0.failed,
         "proof frontier must improve after strengthen: iter0=(p={},f={}) iter1=(p={},f={})",
-        frontier0.trusted, frontier0.failed, frontier1.trusted, frontier1.failed
+        frontier0.trusted,
+        frontier0.failed,
+        frontier1.trusted,
+        frontier1.failed
     );
 
     // ===================================================================
     // SUMMARY
     // ===================================================================
     eprintln!("\n=== M5 Real Loop: SUMMARY ===");
-    eprintln!("  PROVE (z4):        buggy={} VCs ({} failed) -> safe={} VCs ({} proved)",
-        buggy_vcs.len(), failed_count, safe_vcs.len(), safe_proved);
+    eprintln!(
+        "  PROVE (z4):        buggy={} VCs ({} failed) -> safe={} VCs ({} proved)",
+        buggy_vcs.len(),
+        failed_count,
+        safe_vcs.len(),
+        safe_proved
+    );
     eprintln!("  STRENGTHEN:        {} proposals", strengthen_output.proposals.len());
     eprintln!("  BACKPROP:          {} rewrites", plan.len());
-    eprintln!("  CONVERGENCE:       frontier improved (p: {}->{}  f: {}->{})",
-        frontier0.trusted, frontier1.trusted, frontier0.failed, frontier1.failed);
+    eprintln!(
+        "  CONVERGENCE:       frontier improved (p: {}->{}  f: {}->{})",
+        frontier0.trusted, frontier1.trusted, frontier0.failed, frontier1.failed
+    );
     eprintln!("=== M5 Real Loop PASSED ===");
 }
 
@@ -619,7 +611,7 @@ fn test_real_z4_safe_vs_unsafe_arithmetic_formulas() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "buggy_midpoint".to_string(),
+        function: "buggy_midpoint".into(),
         location: SourceSpan::default(),
         formula: unsafe_formula,
         contract_metadata: None,
@@ -656,7 +648,7 @@ fn test_real_z4_safe_vs_unsafe_arithmetic_formulas() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "safe_midpoint".to_string(),
+        function: "safe_midpoint".into(),
         location: SourceSpan::default(),
         formula: safe_check_formula,
         contract_metadata: None,
@@ -679,7 +671,7 @@ fn test_real_z4_safe_vs_unsafe_arithmetic_formulas() {
 // TEST 4: Router integration — verify_all with real z4 backend
 // ===========================================================================
 
-/// Wires SmtLibBackend into the Router and uses `verify_all` to dispatch
+/// Wires IncrementalZ4Session into the Router and uses `verify_all` to dispatch
 /// multiple VCs to real z4 in a single call, matching the production flow.
 #[test]
 fn test_real_z4_router_verify_all_dispatch() {
@@ -705,13 +697,20 @@ fn test_real_z4_router_verify_all_dispatch() {
             VerificationResult::Failed { .. } => failed += 1,
             _ => {}
         }
-        eprintln!("  {:?} -> {}", vc.kind, if result.is_proved() { "PROVED" } else if result.is_failed() { "FAILED" } else { "UNKNOWN" });
+        eprintln!(
+            "  {:?} -> {}",
+            vc.kind,
+            if result.is_proved() {
+                "PROVED"
+            } else if result.is_failed() {
+                "FAILED"
+            } else {
+                "UNKNOWN"
+            }
+        );
     }
 
-    assert!(
-        failed > 0,
-        "router+z4 must find at least one failure in buggy midpoint"
-    );
+    assert!(failed > 0, "router+z4 must find at least one failure in buggy midpoint");
     eprintln!("=== Router verify_all: {} proved, {} failed ===", proved, failed);
 }
 
@@ -747,8 +746,13 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     let iter0_failed = iter0_results.iter().filter(|(_, r)| r.is_failed()).count() as u32;
     let iter0_unknown = iter0_results.len() as u32 - iter0_proved - iter0_failed;
 
-    eprintln!("  VCs: {} total, {} proved, {} failed, {} unknown",
-        iter0_results.len(), iter0_proved, iter0_failed, iter0_unknown);
+    eprintln!(
+        "  VCs: {} total, {} proved, {} failed, {} unknown",
+        iter0_results.len(),
+        iter0_proved,
+        iter0_failed,
+        iter0_unknown
+    );
     assert!(iter0_failed > 0, "iteration 0 must have failures");
 
     // Convergence check
@@ -767,11 +771,7 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     );
 
     // Strengthen
-    let failures: Vec<_> = iter0_results
-        .iter()
-        .filter(|(_, r)| r.is_failed())
-        .cloned()
-        .collect();
+    let failures: Vec<_> = iter0_results.iter().filter(|(_, r)| r.is_failed()).cloned().collect();
     let crate_result = CrateVerificationResult {
         crate_name: "search".into(),
         functions: vec![FunctionVerificationResult {
@@ -789,8 +789,8 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     eprintln!("  Strengthen: {} proposals", strengthen_out.proposals.len());
 
     // Backprop
-    let plan = trust_backprop::apply_plan(&strengthen_out.proposals, &governance)
-        .expect("backprop plan");
+    let plan =
+        trust_backprop::apply_plan(&strengthen_out.proposals, &governance).expect("backprop plan");
     assert!(!plan.is_empty());
     eprintln!("  Backprop: {} rewrites", plan.len());
 
@@ -801,8 +801,8 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     let safe = safe_midpoint_mir_with_precondition();
     let safe_vcs = trust_vcgen::generate_vcs(&safe);
 
-    // Re-create router (SmtLibBackend is consumed by Router::with_backends)
-    let z4_2 = SmtLibBackend::new();
+    // Re-create router (IncrementalZ4Session is consumed by Router::with_backends)
+    let z4_2 = IncrementalZ4Session::new();
     let router2 = trust_router::Router::with_backends(vec![Box::new(z4_2)]);
     let iter1_results = router2.verify_all(&safe_vcs);
 
@@ -810,8 +810,13 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     let iter1_failed = iter1_results.iter().filter(|(_, r)| r.is_failed()).count() as u32;
     let iter1_unknown = iter1_results.len() as u32 - iter1_proved - iter1_failed;
 
-    eprintln!("  VCs: {} total, {} proved, {} failed, {} unknown",
-        iter1_results.len(), iter1_proved, iter1_failed, iter1_unknown);
+    eprintln!(
+        "  VCs: {} total, {} proved, {} failed, {} unknown",
+        iter1_results.len(),
+        iter1_proved,
+        iter1_failed,
+        iter1_unknown
+    );
 
     // Convergence check
     let frontier1 = ProofFrontier {
@@ -829,7 +834,10 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     assert!(
         frontier1.trusted >= frontier0.trusted || frontier1.failed < frontier0.failed,
         "proof frontier must improve: iter0=(p={},f={}) iter1=(p={},f={})",
-        frontier0.trusted, frontier0.failed, frontier1.trusted, frontier1.failed
+        frontier0.trusted,
+        frontier0.failed,
+        frontier1.trusted,
+        frontier1.failed
     );
 
     // After strengthen, the frontier should show no remaining failures
@@ -840,11 +848,7 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
             functions: vec![FunctionVerificationResult {
                 function_path: "search::safe_midpoint".into(),
                 function_name: "safe_midpoint".into(),
-                results: iter1_results
-                    .iter()
-                    .filter(|(_, r)| r.is_failed())
-                    .cloned()
-                    .collect(),
+                results: iter1_results.iter().filter(|(_, r)| r.is_failed()).cloned().collect(),
                 from_notes: 0,
                 with_assumptions: 0,
             }],
@@ -856,14 +860,25 @@ fn test_real_z4_iterative_loop_converges_in_two_iterations() {
     );
 
     eprintln!("\n=== Iterative Loop Summary ===");
-    eprintln!("  Iteration 0: p={} f={} u={} -> strengthen ({} proposals) -> backprop ({} rewrites)",
-        frontier0.trusted, frontier0.failed, frontier0.unknown,
-        strengthen_out.proposals.len(), plan.len());
-    eprintln!("  Iteration 1: p={} f={} u={} -> strengthen ({} proposals)",
-        frontier1.trusted, frontier1.failed, frontier1.unknown,
-        strengthen_out_iter1.proposals.len());
-    eprintln!("  Frontier delta: proved {} -> {}, failed {} -> {}",
-        frontier0.trusted, frontier1.trusted, frontier0.failed, frontier1.failed);
+    eprintln!(
+        "  Iteration 0: p={} f={} u={} -> strengthen ({} proposals) -> backprop ({} rewrites)",
+        frontier0.trusted,
+        frontier0.failed,
+        frontier0.unknown,
+        strengthen_out.proposals.len(),
+        plan.len()
+    );
+    eprintln!(
+        "  Iteration 1: p={} f={} u={} -> strengthen ({} proposals)",
+        frontier1.trusted,
+        frontier1.failed,
+        frontier1.unknown,
+        strengthen_out_iter1.proposals.len()
+    );
+    eprintln!(
+        "  Frontier delta: proved {} -> {}, failed {} -> {}",
+        frontier0.trusted, frontier1.trusted, frontier0.failed, frontier1.failed
+    );
 
     if frontier1.failed == 0 {
         eprintln!("  CONVERGED: All VCs proved! Loop complete.");

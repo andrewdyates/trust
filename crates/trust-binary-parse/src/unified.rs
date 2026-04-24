@@ -7,7 +7,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::detect::{detect_format, BinaryFormat};
+use crate::detect::{BinaryFormat, detect_format};
 use crate::error::ParseError;
 
 /// Target architecture detected from binary headers.
@@ -241,13 +241,14 @@ fn build_macho_info(macho: &crate::macho::MachO<'_>) -> Result<BinaryInfo, Parse
         })
         .collect();
 
-    Ok(BinaryInfo {
-        format: BinaryFormat::MachO,
-        architecture,
-        sections,
-        symbols,
-        entry_point: macho.entry_point(),
-    })
+    let entry_point = macho.entry_point().map(|entryoff| {
+        macho
+            .find_segment("__TEXT")
+            .map(|segment| segment.vmaddr.saturating_add(entryoff))
+            .unwrap_or(entryoff)
+    });
+
+    Ok(BinaryInfo { format: BinaryFormat::MachO, architecture, sections, symbols, entry_point })
 }
 
 /// Parse a PE binary into `BinaryInfo`.
@@ -291,19 +292,10 @@ fn parse_pe(data: &[u8]) -> Result<BinaryInfo, ParseError> {
         })
         .collect();
 
-    let entry_point = if pe.entry_point() != 0 {
-        Some(image_base + pe.entry_point() as u64)
-    } else {
-        None
-    };
+    let entry_point =
+        if pe.entry_point() != 0 { Some(image_base + pe.entry_point() as u64) } else { None };
 
-    Ok(BinaryInfo {
-        format: BinaryFormat::Pe,
-        architecture,
-        sections,
-        symbols,
-        entry_point,
-    })
+    Ok(BinaryInfo { format: BinaryFormat::Pe, architecture, sections, symbols, entry_point })
 }
 
 #[cfg(test)]
@@ -438,7 +430,7 @@ mod tests {
         buf.push(1); // EV_CURRENT
         buf.push(0); // OS/ABI
         buf.extend_from_slice(&[0u8; 8]);
-        buf.extend_from_slice(&2u16.to_le_bytes());    // ET_EXEC
+        buf.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
         buf.extend_from_slice(&0x3Eu16.to_le_bytes()); // EM_X86_64
         buf.extend_from_slice(&1u32.to_le_bytes());
         buf.extend_from_slice(&0x400000u64.to_le_bytes());
@@ -463,26 +455,33 @@ mod tests {
         buf.extend_from_slice(&0x1000u64.to_le_bytes());
 
         buf.extend_from_slice(shstrtab);
-        while buf.len() < 0x98 { buf.push(0); }
+        while buf.len() < 0x98 {
+            buf.push(0);
+        }
         buf.extend_from_slice(strtab);
-        while buf.len() < 0xA8 { buf.push(0); }
+        while buf.len() < 0xA8 {
+            buf.push(0);
+        }
 
         // Symbols
         // Null symbol
         buf.extend_from_slice(&0u32.to_le_bytes());
-        buf.push(0); buf.push(0);
+        buf.push(0);
+        buf.push(0);
         buf.extend_from_slice(&0u16.to_le_bytes());
         buf.extend_from_slice(&0u64.to_le_bytes());
         buf.extend_from_slice(&0u64.to_le_bytes());
         // _start
         buf.extend_from_slice(&1u32.to_le_bytes());
-        buf.push((1 << 4) | 2); buf.push(0);
+        buf.push((1 << 4) | 2);
+        buf.push(0);
         buf.extend_from_slice(&1u16.to_le_bytes());
         buf.extend_from_slice(&0x400000u64.to_le_bytes());
         buf.extend_from_slice(&16u64.to_le_bytes());
         // main
         buf.extend_from_slice(&8u32.to_le_bytes());
-        buf.push((1 << 4) | 2); buf.push(0);
+        buf.push((1 << 4) | 2);
+        buf.push(0);
         buf.extend_from_slice(&1u16.to_le_bytes());
         buf.extend_from_slice(&0x400010u64.to_le_bytes());
         buf.extend_from_slice(&32u64.to_le_bytes());
@@ -498,8 +497,17 @@ mod tests {
 
     #[allow(clippy::too_many_arguments)]
     fn write_elf_shdr(
-        buf: &mut Vec<u8>, name: u32, typ: u32, flags: u64, addr: u64,
-        offset: u64, size: u64, link: u32, info: u32, align: u64, entsize: u64,
+        buf: &mut Vec<u8>,
+        name: u32,
+        typ: u32,
+        flags: u64,
+        addr: u64,
+        offset: u64,
+        size: u64,
+        link: u32,
+        info: u32,
+        align: u64,
+        entsize: u64,
     ) {
         buf.extend_from_slice(&name.to_le_bytes());
         buf.extend_from_slice(&typ.to_le_bytes());
@@ -574,8 +582,7 @@ mod tests {
 
         let segment_end = buf.len();
         let seg_cmdsize = (segment_end - segment_start) as u32;
-        buf[seg_cmdsize_offset..seg_cmdsize_offset + 4]
-            .copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg_cmdsize_offset..seg_cmdsize_offset + 4].copy_from_slice(&seg_cmdsize.to_le_bytes());
 
         // LC_SYMTAB
         buf.extend_from_slice(&LC_SYMTAB.to_le_bytes());
@@ -595,8 +602,7 @@ mod tests {
 
         let cmds_end = buf.len();
         let sizeofcmds = (cmds_end - cmds_start) as u32;
-        buf[sizeofcmds_offset..sizeofcmds_offset + 4]
-            .copy_from_slice(&sizeofcmds.to_le_bytes());
+        buf[sizeofcmds_offset..sizeofcmds_offset + 4].copy_from_slice(&sizeofcmds.to_le_bytes());
 
         // Section data: RET instruction
         let text_data_offset = buf.len();
@@ -607,8 +613,7 @@ mod tests {
         // String table
         let strtab_offset = buf.len();
         buf.extend_from_slice(b"\0_main\0");
-        buf[stroff_pos..stroff_pos + 4]
-            .copy_from_slice(&(strtab_offset as u32).to_le_bytes());
+        buf[stroff_pos..stroff_pos + 4].copy_from_slice(&(strtab_offset as u32).to_le_bytes());
 
         // Symbol table: one nlist_64 for _main
         let symtab_offset = buf.len();
@@ -617,8 +622,7 @@ mod tests {
         buf.push(1);
         buf.extend_from_slice(&0u16.to_le_bytes());
         buf.extend_from_slice(&0x100001000u64.to_le_bytes());
-        buf[symoff_pos..symoff_pos + 4]
-            .copy_from_slice(&(symtab_offset as u32).to_le_bytes());
+        buf[symoff_pos..symoff_pos + 4].copy_from_slice(&(symtab_offset as u32).to_le_bytes());
 
         buf
     }

@@ -89,16 +89,14 @@ impl PdrCertificate {
         system: &TransitionSystem,
     ) -> Result<Self, CegarError> {
         match result {
-            Ic3Result::Safe { invariant_clauses, convergence_depth } => {
-                Ok(Self {
-                    invariant_clauses: invariant_clauses.clone(),
-                    property: system.property.clone(),
-                    transition: system.transition.clone(),
-                    init: system.init.clone(),
-                    strength: InvariantStrength::Overapprox,
-                    convergence_depth: *convergence_depth,
-                })
-            }
+            Ic3Result::Safe { invariant_clauses, convergence_depth } => Ok(Self {
+                invariant_clauses: invariant_clauses.clone(),
+                property: system.property.clone(),
+                transition: system.transition.clone(),
+                init: system.init.clone(),
+                strength: InvariantStrength::Overapprox,
+                convergence_depth: *convergence_depth,
+            }),
             Ic3Result::Unsafe { .. } => Err(CegarError::InconsistentAbstraction {
                 reason: "cannot create certificate from Unsafe result".to_string(),
             }),
@@ -368,11 +366,8 @@ pub fn interpolants_from_pdr(frames: &[Frame]) -> Vec<Formula> {
     for i in 0..frames.len() - 1 {
         // The interpolant at depth i is the conjunction of clauses
         // common to both F_i and F_{i+1}.
-        let common_clauses: Vec<&Cube> = frames[i]
-            .clauses
-            .iter()
-            .filter(|c| frames[i + 1].clauses.contains(c))
-            .collect();
+        let common_clauses: Vec<&Cube> =
+            frames[i].clauses.iter().filter(|c| frames[i + 1].clauses.contains(c)).collect();
 
         let interpolant = if common_clauses.is_empty() {
             Formula::Bool(true)
@@ -442,10 +437,7 @@ pub fn certificate_to_proof_steps(cert: &PdrCertificate) -> Vec<PdrProofStep> {
     steps.push(PdrProofStep {
         index: idx,
         description: "Initiation: initial states satisfy the invariant".to_string(),
-        formula: Formula::Implies(
-            Box::new(cert.init.clone()),
-            Box::new(cert.invariant_formula()),
-        ),
+        formula: Formula::Implies(Box::new(cert.init.clone()), Box::new(cert.invariant_formula())),
         justification: PdrJustification::Initiation,
     });
     idx += 1;
@@ -477,14 +469,9 @@ pub fn certificate_to_proof_steps(cert: &PdrCertificate) -> Vec<PdrProofStep> {
     // Step 4: Convergence.
     steps.push(PdrProofStep {
         index: idx,
-        description: format!(
-            "Convergence at depth {}: frames stabilized",
-            cert.convergence_depth
-        ),
+        description: format!("Convergence at depth {}: frames stabilized", cert.convergence_depth),
         formula: cert.invariant_formula(),
-        justification: PdrJustification::Convergence {
-            depth: cert.convergence_depth,
-        },
+        justification: PdrJustification::Convergence { depth: cert.convergence_depth },
     });
 
     steps
@@ -497,7 +484,8 @@ pub fn pretty_print_certificate(cert: &PdrCertificate) -> String {
     let _ = write!(out, "{cert}");
     out.push_str("\nProof steps:\n");
     for step in certificate_to_proof_steps(cert) {
-        let _ = writeln!(out, 
+        let _ = writeln!(
+            out,
             "  [{:>3}] {} [{}]",
             step.index,
             step.description,
@@ -526,18 +514,11 @@ mod tests {
     use super::*;
 
     fn trivial_system() -> TransitionSystem {
-        TransitionSystem::new(
-            Formula::Bool(true),
-            Formula::Bool(true),
-            Formula::Bool(true),
-        )
+        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true))
     }
 
     fn trivial_safe_result() -> Ic3Result {
-        Ic3Result::Safe {
-            invariant_clauses: vec![],
-            convergence_depth: 1,
-        }
+        Ic3Result::Safe { invariant_clauses: vec![], convergence_depth: 1 }
     }
 
     // -- InvariantStrength tests --
@@ -555,8 +536,8 @@ mod tests {
     fn test_certificate_from_safe_result() {
         let sys = trivial_system();
         let result = trivial_safe_result();
-        let cert = PdrCertificate::from_ic3_result(&result, &sys)
-            .expect("should create certificate");
+        let cert =
+            PdrCertificate::from_ic3_result(&result, &sys).expect("should create certificate");
         assert!(cert.is_trivial());
         assert_eq!(cert.clause_count(), 0);
         assert_eq!(cert.strength, InvariantStrength::Overapprox);
@@ -582,15 +563,10 @@ mod tests {
     #[test]
     fn test_certificate_with_clauses() {
         let sys = trivial_system();
-        let clause = Cube::new(vec![
-            Formula::Var("bad".into(), Sort::Bool),
-        ]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![clause],
-            convergence_depth: 3,
-        };
-        let cert = PdrCertificate::from_ic3_result(&result, &sys)
-            .expect("should create certificate");
+        let clause = Cube::new(vec![Formula::Var("bad".into(), Sort::Bool)]);
+        let result = Ic3Result::Safe { invariant_clauses: vec![clause], convergence_depth: 3 };
+        let cert =
+            PdrCertificate::from_ic3_result(&result, &sys).expect("should create certificate");
         assert!(!cert.is_trivial());
         assert_eq!(cert.clause_count(), 1);
         assert_eq!(cert.convergence_depth, 3);
@@ -608,10 +584,7 @@ mod tests {
     fn test_certificate_invariant_formula_single_clause() {
         let sys = trivial_system();
         let clause = Cube::new(vec![Formula::Var("x".into(), Sort::Bool)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![clause],
-            convergence_depth: 2,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![clause], convergence_depth: 2 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let f = cert.invariant_formula();
         // Single clause's negation.
@@ -621,16 +594,11 @@ mod tests {
     #[test]
     fn test_certificate_invariant_variables() {
         let sys = trivial_system();
-        let clause = Cube::new(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-            ),
-        ]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![clause],
-            convergence_depth: 2,
-        };
+        let clause = Cube::new(vec![Formula::Lt(
+            Box::new(Formula::Var("x".into(), Sort::Int)),
+            Box::new(Formula::Var("y".into(), Sort::Int)),
+        )]);
+        let result = Ic3Result::Safe { invariant_clauses: vec![clause], convergence_depth: 2 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let vars = cert.invariant_variables();
         assert_eq!(vars, vec!["x".to_string(), "y".to_string()]);
@@ -665,10 +633,7 @@ mod tests {
             Formula::Bool(true),
         );
         let clause = Cube::new(vec![Formula::Var("bad".into(), Sort::Bool)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![clause],
-            convergence_depth: 2,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![clause], convergence_depth: 2 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let verification = verify_certificate(&cert).expect("should verify");
         assert!(verification.initiation_holds);
@@ -678,11 +643,8 @@ mod tests {
 
     #[test]
     fn test_verify_certificate_no_transitions() {
-        let sys = TransitionSystem::new(
-            Formula::Bool(true),
-            Formula::Bool(false),
-            Formula::Bool(true),
-        );
+        let sys =
+            TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
         let result = trivial_safe_result();
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let verification = verify_certificate(&cert).expect("should verify");
@@ -691,11 +653,8 @@ mod tests {
 
     #[test]
     fn test_verify_certificate_no_init_states() {
-        let sys = TransitionSystem::new(
-            Formula::Bool(false),
-            Formula::Bool(true),
-            Formula::Bool(true),
-        );
+        let sys =
+            TransitionSystem::new(Formula::Bool(false), Formula::Bool(true), Formula::Bool(true));
         let result = trivial_safe_result();
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let verification = verify_certificate(&cert).expect("should verify");
@@ -717,10 +676,7 @@ mod tests {
     fn test_minimize_single_clause() {
         let sys = trivial_system();
         let clause = Cube::new(vec![Formula::Var("x".into(), Sort::Bool)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![clause],
-            convergence_depth: 2,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![clause], convergence_depth: 2 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let minimized = minimize_invariant(&cert);
         // Single clause certificate cannot be minimized further.
@@ -733,10 +689,7 @@ mod tests {
         let sys = trivial_system();
         let c1 = Cube::new(vec![Formula::Var("a".into(), Sort::Bool)]);
         let c2 = Cube::new(vec![Formula::Var("b".into(), Sort::Bool)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![c1, c2],
-            convergence_depth: 3,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![c1, c2], convergence_depth: 3 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let minimized = minimize_invariant(&cert);
         // Both clauses are redundant for a trivially-true property.
@@ -828,10 +781,7 @@ mod tests {
         let sys = trivial_system();
         let c1 = Cube::new(vec![Formula::Var("a".into(), Sort::Bool)]);
         let c2 = Cube::new(vec![Formula::Var("b".into(), Sort::Bool)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![c1, c2],
-            convergence_depth: 3,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![c1, c2], convergence_depth: 3 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let steps = certificate_to_proof_steps(&cert);
         // Initiation + 2 consecution + Safety + Convergence = 5.
@@ -847,10 +797,7 @@ mod tests {
     fn test_proof_step_indices_sequential() {
         let sys = trivial_system();
         let c1 = Cube::new(vec![Formula::Bool(true)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![c1],
-            convergence_depth: 2,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![c1], convergence_depth: 2 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let steps = certificate_to_proof_steps(&cert);
         for (i, step) in steps.iter().enumerate() {
@@ -877,10 +824,7 @@ mod tests {
     fn test_pretty_print_with_clauses() {
         let sys = trivial_system();
         let clause = Cube::new(vec![Formula::Var("x".into(), Sort::Bool)]);
-        let result = Ic3Result::Safe {
-            invariant_clauses: vec![clause],
-            convergence_depth: 2,
-        };
+        let result = Ic3Result::Safe { invariant_clauses: vec![clause], convergence_depth: 2 };
         let cert = PdrCertificate::from_ic3_result(&result, &sys).unwrap();
         let output = pretty_print_certificate(&cert);
         assert!(output.contains("CONS"));

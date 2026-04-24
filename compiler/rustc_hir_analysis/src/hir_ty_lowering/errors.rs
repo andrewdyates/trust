@@ -233,14 +233,14 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 if let AssocItemQSelf::TyParam(ty_param_def_id, ty_param_span) = qself
                     // Not using `self.item_def_id()` here as that would yield the opaque type itself if we're
                     // inside an opaque type while we're interested in the overarching type alias (TAIT).
-                    // tRust: known issue — However, for trait aliases, this incorrectly returns the enclosing module...
+                    // FIXME: However, for trait aliases, this incorrectly returns the enclosing module...
                     && let item_def_id =
                         tcx.hir_get_parent_item(tcx.local_def_id_to_hir_id(ty_param_def_id))
-                    // tRust: known issue — ...which obviously won't have any generics.
+                    // FIXME: ...which obviously won't have any generics.
                     && let Some(generics) = tcx.hir_get_generics(item_def_id.def_id)
                 {
-                    // tRust: known issue — Suggest adding supertrait bounds if we have a `Self` type param.
-                    // tRust: known issue — (trait_alias): Suggest adding `Self: Trait` to
+                    // FIXME: Suggest adding supertrait bounds if we have a `Self` type param.
+                    // FIXME(trait_alias): Suggest adding `Self: Trait` to
                     // `trait Alias = where Self::Proj:;` with `trait Trait { type Proj; }`.
                     if generics
                         .bounds_for_param(ty_param_def_id)
@@ -267,8 +267,8 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     let mut trait_ref = trait_name.clone();
                     let applicability = if let [arg, args @ ..] = trait_args {
                         use std::fmt::Write;
-                        write!(trait_ref, "</* {arg}").expect("invariant: write to string succeeds");
-                        args.iter().try_for_each(|arg| write!(trait_ref, ", {arg}")).expect("invariant: value is present");
+                        write!(trait_ref, "</* {arg}").unwrap();
+                        args.iter().try_for_each(|arg| write!(trait_ref, ", {arg}")).unwrap();
                         trait_ref += " */>";
                         Applicability::HasPlaceholders
                     } else {
@@ -362,7 +362,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             None
         };
 
-        // tRust: known issue — (mgca): This has quite a few false positives and negatives.
+        // FIXME(mgca): This has quite a few false positives and negatives.
         let wrap_in_braces_sugg = if let Some(constraint) = constraint
             && let Some(hir_ty) = constraint.ty()
             && let ty = self.lower_ty(hir_ty)
@@ -416,7 +416,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let def_id = self.item_def_id();
         debug!(item_def_id = ?def_id);
 
-        // tRust: known issue — document why/how this is different from `tcx.local_parent(def_id)`
+        // FIXME: document why/how this is different from `tcx.local_parent(def_id)`
         let parent_def_id = tcx.hir_get_parent_item(tcx.local_def_id_to_hir_id(def_id)).to_def_id();
         debug!(?parent_def_id);
 
@@ -442,7 +442,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 .map(|self_ty| tcx.erase_and_anonymize_regions(self_ty).to_string())
                 .collect()
         };
-        // tRust: known issue — also look at `tcx.generics_of(self.item_def_id()).params` any that
+        // FIXME: also look at `tcx.generics_of(self.item_def_id()).params` any that
         // references the trait. Relevant for the first case in
         // `src/test/ui/associated-types/associated-types-in-ambiguous-context.rs`
         self.report_ambiguous_assoc_item_path(
@@ -699,7 +699,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         err.emit()
     }
 
-    // tRust: known issue — (fmease): Heavily adapted from `rustc_hir_typeck::method::suggest`. Deduplicate.
+    // FIXME(fmease): Heavily adapted from `rustc_hir_typeck::method::suggest`. Deduplicate.
     fn note_ambiguous_inherent_assoc_item(
         &self,
         err: &mut Diag<'_>,
@@ -742,7 +742,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         }
     }
 
-    // tRust: known issue — (inherent_associated_types): Find similarly named associated types and suggest them.
+    // FIXME(inherent_associated_types): Find similarly named associated types and suggest them.
     pub(crate) fn report_unresolved_inherent_assoc_item(
         &self,
         name: Ident,
@@ -752,7 +752,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         span: Span,
         assoc_tag: ty::AssocTag,
     ) -> ErrorGuaranteed {
-        // tRust: known issue — (fmease): This was copied in parts from an old version of `rustc_hir_typeck::method::suggest`.
+        // FIXME(fmease): This was copied in parts from an old version of `rustc_hir_typeck::method::suggest`.
         // Either
         // * update this code by applying changes similar to #106702 or by taking a
         //   Vec<(DefId, (DefId, DefId), Option<Vec<FulfillmentError<'tcx>>>)> or
@@ -775,7 +775,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         };
 
         if fulfillment_errors.is_empty() {
-            // tRust: known issue — (fmease): Copied from `rustc_hir_typeck::method::probe`. Deduplicate.
+            // FIXME(fmease): Copied from `rustc_hir_typeck::method::probe`. Deduplicate.
 
             let limit = if candidates.len() == 5 { 5 } else { 4 };
             let type_candidates = candidates
@@ -868,7 +868,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             }
         };
 
-        // tRust: known issue — (fmease): `rustc_hir_typeck::method::suggest` uses a `skip_list` to filter out some bounds.
+        // FIXME(fmease): `rustc_hir_typeck::method::suggest` uses a `skip_list` to filter out some bounds.
         // I would do the same here if it didn't mean more code duplication.
         let mut bounds: Vec<_> = fulfillment_errors
             .into_iter()
@@ -927,9 +927,9 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         }
 
         let tcx = self.tcx();
-        let principal_span = *spans.first().expect("invariant: non-empty collection");
+        let principal_span = *spans.first().unwrap();
 
-        // tRust: known issue — This logic needs some more care w.r.t handling of conflicts
+        // FIXME: This logic needs some more care w.r.t handling of conflicts
         let missing_assoc_items: Vec<_> = missing_assoc_items
             .into_iter()
             .map(|(def_id, trait_ref)| (tcx.associated_item(def_id), trait_ref))
@@ -989,7 +989,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         // This would mean that they are shadowing the associated item we are missing, and
         // we can then use their span to indicate this to the user.
         //
-        // tRust: known issue — This does not account for trait aliases. I think we should just make
+        // FIXME: This does not account for trait aliases. I think we should just make
         //        `lower_trait_object_ty` compute the list of all specified items or give us the
         //        necessary ingredients if it's too expensive to compute in the happy path.
         let bound_names: UnordMap<_, _> =
@@ -1032,7 +1032,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         names.sort();
         let names = names.join(", ");
 
-        let descr = match descr.expect("invariant: value is present") {
+        let descr = match descr.unwrap() {
             Descr::Item => "associated item",
             Descr::Tag(tag) => tag.descr(),
         };
@@ -1112,7 +1112,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     )
                 })
                 .collect();
-            // tRust: known issue — (fmease): Does not account for `dyn Trait<>` (suggs `dyn Trait<, X = Y>`).
+            // FIXME(fmease): Does not account for `dyn Trait<>` (suggs `dyn Trait<, X = Y>`).
             let code = if let Some(snippet) = snippet.strip_suffix('>') {
                 // The user wrote `Trait<'a>` or similar and we don't have a term we can suggest,
                 // but at least we can clue them to the correct syntax `Trait<'a, Item = /* ... */>`
@@ -1132,7 +1132,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             where_constraints.push(principal_span);
         }
 
-        // tRust: known issue — This note doesn't make sense, get rid of this outright.
+        // FIXME: This note doesn't make sense, get rid of this outright.
         //        I don't see how adding a type param (to the trait?) would help.
         //        If the user can modify the trait, they should just rename one of the assoc tys.
         //        What does it mean with the rest of the message?
@@ -1325,7 +1325,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let s = pluralize!(kinds.len());
         let kind =
             listify(&kinds, |k| k.to_string()).expect("expected at least one generic to prohibit");
-        let last_span = *arg_spans.last().expect("invariant: non-empty collection");
+        let last_span = *arg_spans.last().unwrap();
         let span: MultiSpan = arg_spans.into();
         let mut err = struct_span_code_err!(
             self.dcx(),
@@ -1347,11 +1347,11 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
     ) -> ErrorGuaranteed {
         // we use the last span to point at the traits themselves,
         // and all other preceding spans are trait alias expansions.
-        let (&first_span, first_alias_spans) = regular_traits[0].1.split_last().expect("invariant: non-empty slice");
-        let (&second_span, second_alias_spans) = regular_traits[1].1.split_last().expect("invariant: non-empty slice");
+        let (&first_span, first_alias_spans) = regular_traits[0].1.split_last().unwrap();
+        let (&second_span, second_alias_spans) = regular_traits[1].1.split_last().unwrap();
         let mut err = struct_span_code_err!(
             self.dcx(),
-            *regular_traits[1].1.first().expect("invariant: non-empty collection"),
+            *regular_traits[1].1.first().unwrap(),
             E0225,
             "only auto traits can be used as additional traits in a trait object"
         );
@@ -1368,7 +1368,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
              trait here instead: `trait NewTrait: {} {{}}`",
             regular_traits
                 .iter()
-                // tRust: known issue — This should `print_sugared`, but also needs to integrate projection bounds...
+                // FIXME: This should `print_sugared`, but also needs to integrate projection bounds...
                 .map(|(pred, _)| pred
                     .map_bound(|pred| pred.trait_ref)
                     .print_only_trait_path()
@@ -1444,7 +1444,6 @@ pub fn prohibit_assoc_item_constraint(
             //     span encomassing everything within the generics brackets
 
             let Some(index) = constraints.iter().position(|b| b.hir_id == constraint.hir_id) else {
-                // tRust: invariant — type binding's HIR ID must exist in the generic params
                 bug!("a type binding exists but its HIR ID not found in generics");
             };
 
@@ -1461,7 +1460,6 @@ pub fn prohibit_assoc_item_constraint(
                 (None, Some(next)) => constraint.span.with_hi(next.lo()),
                 (None, None) => {
                     let Some(generics_span) = segment.args().span_ext() else {
-                        // tRust: invariant — generic span must be non-empty when a type binding exists
                         bug!("a type binding exists but generic span is empty");
                     };
 
@@ -1662,7 +1660,7 @@ fn generics_args_err_extend<'a>(
             // led to impossible spans and caused issues like #116473
             let args_span = args.span_ext.with_lo(args.span_ext.lo() - BytePos(2));
             if tcx.generics_of(adt_def.did()).is_empty() {
-                // tRust: known issue — (estebank): we could also verify that the arguments being
+                // FIXME(estebank): we could also verify that the arguments being
                 // work for the `enum`, instead of just looking if it takes *any*.
                 err.span_suggestion_verbose(
                     args_span,
@@ -1774,7 +1772,7 @@ fn generics_args_err_extend<'a>(
             err.note("`impl Trait` types can't have type parameters");
         }
         GenericsArgsErrExtend::Param(def_id) => {
-            let span = tcx.def_ident_span(def_id).expect("invariant: def has ident span");
+            let span = tcx.def_ident_span(def_id).unwrap();
             let kind = tcx.def_descr(def_id);
             let name = tcx.item_name(def_id);
             err.span_note(span, format!("{kind} `{name}` defined here"));
@@ -1818,7 +1816,7 @@ fn generics_args_err_extend<'a>(
                     && segment.ident.name == kw::SelfUpper
                 {
                     if generics == 0 {
-                        // tRust: known issue — (estebank): we could also verify that the arguments being
+                        // FIXME(estebank): we could also verify that the arguments being
                         // work for the `enum`, instead of just looking if it takes *any*.
                         err.span_suggestion_verbose(
                             segment.ident.span.shrink_to_hi().to(args.span_ext),

@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-loop: Iterative verification over in-memory verification conditions.
 //!
 //! This crate keeps the orchestration logic separate from the compiler pass:
@@ -8,9 +8,7 @@
 pub mod analysis;
 pub(crate) mod futility;
 pub(crate) mod iteration_metrics;
-pub(crate) mod regression;
 pub mod scheduling;
-pub(crate) mod strengthen_feedback;
 pub(crate) mod vc_tracker;
 
 use std::collections::BTreeMap;
@@ -86,12 +84,18 @@ pub struct LoopResult {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminationReason {
     AllProved,
-    Converged { stable_rounds: usize },
-    IterationLimit { iterations: u32 },
+    Converged {
+        stable_rounds: usize,
+    },
+    IterationLimit {
+        iterations: u32,
+    },
     Regressed,
     NoProgress,
     /// The futility detector determined further iterations are unlikely to help.
-    Futility { reason: futility::FutilityReason },
+    Futility {
+        reason: futility::FutilityReason,
+    },
 }
 
 /// Host hooks required by the loop.
@@ -195,7 +199,7 @@ pub fn run_iterative_verification(
     loop {
         let results = ctx.verify_vcs(&active_vcs);
 
-        // Track per-VC statuses for regression detection and trend analysis.
+        // Track per-VC statuses for regression detection and delta computation.
         vc_tracker.record_results(iteration, &results);
         let vc_delta = vc_tracker.compute_delta(iteration);
         let iter_regressions = vc_tracker.detect_regressions(iteration);
@@ -273,9 +277,10 @@ pub fn run_iterative_verification(
 
         // Futility detection: check if further iterations are unlikely to help.
         if let Some(ref detector) = futility_detector
-            && let Some(reason) = detector.should_stop(&metrics_history) {
-                finish!(TerminationReason::Futility { reason });
-            }
+            && let Some(reason) = detector.should_stop(&metrics_history)
+        {
+            finish!(TerminationReason::Futility { reason });
+        }
 
         if !config.enable_strengthen || failed.is_empty() {
             finish!(TerminationReason::NoProgress);
@@ -493,7 +498,7 @@ mod tests {
 
     fn vc(function: &str, kind: VcKind, formula_name: &str) -> VerificationCondition {
         VerificationCondition {
-            function: function.to_string(),
+            function: function.into(),
             kind,
             location: SourceSpan::default(),
             formula: Formula::Var(formula_name.to_string(), Sort::Bool),
@@ -511,16 +516,16 @@ mod tests {
 
     fn proved() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             strength: ProofStrength::smt_unsat(),
             time_ms: 1,
-        proof_certificate: None,
-                solver_warnings: None,
+            proof_certificate: None,
+            solver_warnings: None,
         }
     }
 
     fn failed() -> VerificationResult {
-        VerificationResult::Failed { solver: "z4".to_string(), counterexample: None, time_ms: 1 }
+        VerificationResult::Failed { solver: "z4".into(), counterexample: None, time_ms: 1 }
     }
 
     #[test]
@@ -567,8 +572,12 @@ mod tests {
             ],
             vec![vec![vc_a_strengthened], vec![vc_b_strengthened]],
         );
-        let config =
-            LoopConfig { max_iterations: 5, stable_round_limit: 2, enable_strengthen: true, ..LoopConfig::default() };
+        let config = LoopConfig {
+            max_iterations: 5,
+            stable_round_limit: 2,
+            enable_strengthen: true,
+            ..LoopConfig::default()
+        };
 
         let result = run_iterative_verification(&config, vec![vc_a, vc_b], &ctx);
 
@@ -604,8 +613,12 @@ mod tests {
             ],
             vec![vec![vc_a_strengthened], vec![vc_b_strengthened]],
         );
-        let config =
-            LoopConfig { max_iterations: 3, stable_round_limit: 4, enable_strengthen: true, ..LoopConfig::default() };
+        let config = LoopConfig {
+            max_iterations: 3,
+            stable_round_limit: 4,
+            enable_strengthen: true,
+            ..LoopConfig::default()
+        };
 
         let result = run_iterative_verification(&config, vec![vc_a, vc_b, vc_c], &ctx);
 
@@ -636,8 +649,12 @@ mod tests {
             ],
             vec![vec![vc_b_strengthened]],
         );
-        let config =
-            LoopConfig { max_iterations: 5, stable_round_limit: 3, enable_strengthen: true, ..LoopConfig::default() };
+        let config = LoopConfig {
+            max_iterations: 5,
+            stable_round_limit: 3,
+            enable_strengthen: true,
+            ..LoopConfig::default()
+        };
 
         let result = run_iterative_verification(&config, vec![vc_a, vc_b], &ctx);
 
@@ -664,24 +681,17 @@ mod tests {
         let ctx = MockVerifyContext::new(
             vec![
                 // Iteration 1: vc_a proved, vc_b failed, vc_c proved
-                vec![
-                    (vc_a.clone(), proved()),
-                    (vc_b.clone(), failed()),
-                    (vc_c.clone(), proved()),
-                ],
+                vec![(vc_a.clone(), proved()), (vc_b.clone(), failed()), (vc_c.clone(), proved())],
                 // Iteration 2: vc_b_strengthened now proved, but vc_c becomes unknown
                 // proved: 2 (a carried, b_strengthened), failed: 0, unknown: 1 (c)
                 // prev:   proved: 2, failed: 1, unknown: 0
                 // unknown increased from 0 to 1 -> regression
                 vec![
-                    (
-                        vc_b_strengthened.clone(),
-                        proved(),
-                    ),
+                    (vc_b_strengthened.clone(), proved()),
                     (
                         vc_c.clone(),
                         VerificationResult::Unknown {
-                            solver: "z4".to_string(),
+                            solver: "z4".into(),
                             reason: "timeout".to_string(),
                             time_ms: 1,
                         },
@@ -690,8 +700,12 @@ mod tests {
             ],
             vec![vec![vc_b_strengthened]],
         );
-        let config =
-            LoopConfig { max_iterations: 5, stable_round_limit: 3, enable_strengthen: true, ..LoopConfig::default() };
+        let config = LoopConfig {
+            max_iterations: 5,
+            stable_round_limit: 3,
+            enable_strengthen: true,
+            ..LoopConfig::default()
+        };
 
         let result = run_iterative_verification(&config, vec![vc_a, vc_b, vc_c], &ctx);
 
@@ -707,8 +721,12 @@ mod tests {
     fn test_no_strengthen() {
         let vc_a = div_zero("crate::single_pass", "single_0");
         let ctx = MockVerifyContext::new(vec![vec![(vc_a.clone(), failed())]], vec![]);
-        let config =
-            LoopConfig { max_iterations: 5, stable_round_limit: 2, enable_strengthen: false, ..LoopConfig::default() };
+        let config = LoopConfig {
+            max_iterations: 5,
+            stable_round_limit: 2,
+            enable_strengthen: false,
+            ..LoopConfig::default()
+        };
 
         let result = run_iterative_verification(&config, vec![vc_a], &ctx);
 

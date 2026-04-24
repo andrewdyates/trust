@@ -188,7 +188,7 @@ pub(crate) fn on_all_inactive_variants<'tcx>(
         // Because of the way we build the `MoveData` tree, each child should have exactly one more
         // projection than `enum_place`. This additional projection must be a downcast since the
         // base is an enum.
-        let (downcast, base_proj) = variant_path.place.projection.split_last().expect("invariant: variant path has at least one projection (downcast)"); // tRust: unwrap -> expect
+        let (downcast, base_proj) = variant_path.place.projection.split_last().unwrap();
         assert_eq!(enum_place.projection.len(), base_proj.len());
 
         let mir::ProjectionElem::Downcast(_, variant_idx) = *downcast else {

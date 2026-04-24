@@ -84,7 +84,7 @@ pub(super) fn simplify_cfg<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
     }
     remove_dead_blocks(body);
 
-    // NOTE: shrink_to_fit here rather than in pass manager for simplicity.
+    // FIXME: Should probably be moved into some kind of pass manager
     body.basic_blocks.as_mut_preserves_cfg().shrink_to_fit();
 }
 
@@ -403,7 +403,7 @@ pub(super) fn remove_dead_blocks(body: &mut Body<'_>) {
     // can no longer attribute their code to a particular location in the
     // source.
     if deduplicated_unreachable {
-        basic_blocks[kept_unreachable.expect("invariant: kept_unreachable must be set when deduplicated_unreachable is true")].terminator_mut().source_info = // tRust: unwrap elimination
+        basic_blocks[kept_unreachable.unwrap()].terminator_mut().source_info =
             SourceInfo { span: DUMMY_SP, scope: OUTERMOST_SOURCE_SCOPE };
     }
 
@@ -674,7 +674,7 @@ impl<'tcx> MutVisitor<'tcx> for LocalUpdater<'tcx> {
     }
 
     fn visit_local(&mut self, l: &mut Local, _: PlaceContext, _: Location) {
-        *l = self.map[*l].expect("invariant: local must have a mapping in used-locals compaction"); // tRust: unwrap elimination
+        *l = self.map[*l].unwrap();
     }
 }
 

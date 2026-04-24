@@ -590,7 +590,7 @@ pub trait AdtDef<I: Interner>: Copy + Debug + Hash + Eq {
         args: I::GenericArgs,
     ) -> Option<FieldInfo<I>>;
 
-    // tRust: known issue -- perhaps use `all_fields` and expose `FieldDef`.
+    // FIXME: perhaps use `all_fields` and expose `FieldDef`.
     fn all_field_tys(self, interner: I) -> ty::EarlyBinder<I, impl IntoIterator<Item = I::Ty>>;
 
     fn sizedness_constraint(

@@ -187,7 +187,6 @@ fn should_emit_layout_error<'tcx>(abi: ExternAbi, layout_err: &'tcx LayoutError<
                     !ty.has_opaque_types()
                 }
                 ExternAbi::CmseNonSecureEntry => true,
-                // tRust: invariant — CMSE functions only support C and C-unwind ABIs
                 _ => bug!("invalid ABI: {abi}"),
             }
         }

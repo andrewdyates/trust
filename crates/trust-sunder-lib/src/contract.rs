@@ -103,11 +103,7 @@ pub struct Contract {
 impl Contract {
     /// Create a new contract.
     pub fn new(kind: ContractKind, expression: impl Into<String>) -> Self {
-        Self {
-            kind,
-            expression: expression.into(),
-            location: None,
-        }
+        Self { kind, expression: expression.into(), location: None }
     }
 
     /// Create a precondition contract.

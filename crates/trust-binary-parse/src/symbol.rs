@@ -7,7 +7,7 @@
 
 use crate::constants::*;
 use crate::error::ParseError;
-use crate::read::{read_strtab_entry, Cursor};
+use crate::read::{Cursor, read_strtab_entry};
 
 /// A parsed nlist_64 symbol table entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,19 +86,13 @@ pub fn parse_symbols<'a>(
     let sym_start = symoff as usize;
     let sym_end = sym_start + (nsyms as usize) * NLIST_64_SIZE;
     if sym_end > file_data.len() {
-        return Err(ParseError::InvalidSymbolTable {
-            offset: symoff,
-            count: nsyms,
-        });
+        return Err(ParseError::InvalidSymbolTable { offset: symoff, count: nsyms });
     }
 
     let str_start = stroff as usize;
     let str_end = str_start + strsize as usize;
     if str_end > file_data.len() {
-        return Err(ParseError::InvalidSymbolTable {
-            offset: stroff,
-            count: strsize,
-        });
+        return Err(ParseError::InvalidSymbolTable { offset: stroff, count: strsize });
     }
     let strtab = &file_data[str_start..str_end];
 
@@ -114,13 +108,7 @@ pub fn parse_symbols<'a>(
 
         let name = read_strtab_entry(strtab, n_strx)?;
 
-        symbols.push(Symbol {
-            name,
-            n_type,
-            n_sect,
-            n_desc,
-            n_value,
-        });
+        symbols.push(Symbol { name, n_type, n_sect, n_desc, n_value });
     }
 
     Ok(symbols)
@@ -132,13 +120,8 @@ mod tests {
 
     #[test]
     fn test_symbol_flags() {
-        let sym = Symbol {
-            name: "_main",
-            n_type: N_SECT | N_EXT,
-            n_sect: 1,
-            n_desc: 0,
-            n_value: 0x1000,
-        };
+        let sym =
+            Symbol { name: "_main", n_type: N_SECT | N_EXT, n_sect: 1, n_desc: 0, n_value: 0x1000 };
         assert!(sym.is_external());
         assert!(sym.is_defined_in_section());
         assert!(!sym.is_undefined());
@@ -148,13 +131,8 @@ mod tests {
 
     #[test]
     fn test_undefined_symbol() {
-        let sym = Symbol {
-            name: "_printf",
-            n_type: N_UNDF | N_EXT,
-            n_sect: 0,
-            n_desc: 0,
-            n_value: 0,
-        };
+        let sym =
+            Symbol { name: "_printf", n_type: N_UNDF | N_EXT, n_sect: 0, n_desc: 0, n_value: 0 };
         assert!(sym.is_external());
         assert!(sym.is_undefined());
         assert!(!sym.is_defined_in_section());
@@ -189,13 +167,7 @@ mod tests {
 
     #[test]
     fn test_absolute_symbol() {
-        let sym = Symbol {
-            name: "_abs",
-            n_type: N_ABS,
-            n_sect: 0,
-            n_desc: 0,
-            n_value: 0x42,
-        };
+        let sym = Symbol { name: "_abs", n_type: N_ABS, n_sect: 0, n_desc: 0, n_value: 0x42 };
         assert!(sym.is_absolute());
         assert!(!sym.is_undefined());
         assert!(!sym.is_defined_in_section());
@@ -204,13 +176,7 @@ mod tests {
 
     #[test]
     fn test_indirect_symbol() {
-        let sym = Symbol {
-            name: "_indirect",
-            n_type: N_INDR,
-            n_sect: 0,
-            n_desc: 0,
-            n_value: 0,
-        };
+        let sym = Symbol { name: "_indirect", n_type: N_INDR, n_sect: 0, n_desc: 0, n_value: 0 };
         assert!(sym.is_indirect());
         assert!(!sym.is_absolute());
         assert!(!sym.is_undefined());
@@ -231,13 +197,7 @@ mod tests {
 
     #[test]
     fn test_symbol_debug_and_clone() {
-        let sym = Symbol {
-            name: "test",
-            n_type: 0,
-            n_sect: 0,
-            n_desc: 0,
-            n_value: 0,
-        };
+        let sym = Symbol { name: "test", n_type: 0, n_sect: 0, n_desc: 0, n_value: 0 };
         let cloned = sym.clone();
         assert_eq!(sym, cloned);
         let _ = format!("{:?}", sym);

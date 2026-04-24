@@ -13,8 +13,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::path::Path;
 use std::fmt::Write;
+use std::path::Path;
 
 use trust_types::{
     CrateVerdict, FunctionVerdict, JsonProofReport, ObligationOutcome, ObligationReport,
@@ -282,7 +282,8 @@ fn html_functions(report: &JsonProofReport) -> String {
         let verdict_label = function_verdict_label(func.summary.verdict);
         let data_verdict = func_verdict_data_attr(func.summary.verdict);
 
-        let _ = write!(out, 
+        let _ = write!(
+            out,
             r#"<div class="func-section" data-verdict="{data_verdict}">
 <details class="func-details" open>
 <summary>
@@ -369,7 +370,8 @@ fn format_obligation_row(ob: &ObligationReport) -> String {
             .iter()
             .map(|v| format!("{} = {}", escape(&v.name), escape(&v.display)))
             .collect();
-        let _ = writeln!(row, 
+        let _ = writeln!(
+            row,
             "<tr><td colspan=\"6\"><div class=\"counterexample\"><div class=\"cex-label\">Counterexample</div>{vars}</div></td></tr>",
             vars = vars.join(", "),
         );
@@ -377,7 +379,8 @@ fn format_obligation_row(ob: &ObligationReport) -> String {
 
     // Unknown reason detail row
     if let ObligationOutcome::Unknown { reason } = &ob.outcome {
-        let _ = writeln!(row, 
+        let _ = writeln!(
+            row,
             "<tr><td colspan=\"6\"><div class=\"reason\">Reason: {reason}</div></td></tr>",
             reason = escape(reason),
         );
@@ -385,7 +388,8 @@ fn format_obligation_row(ob: &ObligationReport) -> String {
 
     // Runtime-check detail row
     if let ObligationOutcome::RuntimeChecked { note: Some(note) } = &ob.outcome {
-        let _ = writeln!(row, 
+        let _ = writeln!(
+            row,
             "<tr><td colspan=\"6\"><div class=\"reason\">Runtime check: {note}</div></td></tr>",
             note = escape(note),
         );
@@ -393,7 +397,8 @@ fn format_obligation_row(ob: &ObligationReport) -> String {
 
     // Timeout detail row
     if let ObligationOutcome::Timeout { timeout_ms } = &ob.outcome {
-        let _ = writeln!(row, 
+        let _ = writeln!(
+            row,
             "<tr><td colspan=\"6\"><div class=\"reason\">Timed out after {timeout_ms}ms</div></td></tr>",
         );
     }
@@ -563,7 +568,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::usize(), Ty::usize()),
                     },
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -575,7 +580,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: Some(Counterexample::new(vec![
                         ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -586,7 +591,7 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -598,10 +603,12 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
         ];
         build_json_report("midpoint", &results)
@@ -616,7 +623,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::usize(), Ty::usize()),
                     },
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -628,7 +635,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: Some(Counterexample::new(vec![
                         ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -639,27 +646,29 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::IndexOutOfBounds,
-                    function: "lookup".to_string(),
+                    function: "lookup".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Unknown {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 50,
                     reason: "nonlinear arithmetic".to_string(),
                 },
@@ -667,12 +676,12 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "compute".to_string(),
+                    function: "compute".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
-                VerificationResult::Timeout { solver: "z4".to_string(), timeout_ms: 5000 },
+                VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 },
             ),
         ];
         build_json_report("multi_crate", &results)
@@ -701,7 +710,7 @@ mod tests {
                 verdict: CrateVerdict::RuntimeChecked,
             },
             functions: vec![FunctionProofReport {
-                function: "dynamic_check".to_string(),
+                function: "dynamic_check".into(),
                 summary: FunctionSummary {
                     total_obligations: 1,
                     proved: 0,
@@ -726,7 +735,7 @@ mod tests {
                     outcome: ObligationOutcome::RuntimeChecked {
                         note: Some("validated by runtime instrumentation".to_string()),
                     },
-                    solver: "runtime".to_string(),
+                    solver: "runtime".into(),
                     time_ms: 11,
                     evidence: None,
                 }],
@@ -817,13 +826,13 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::Postcondition,
-                function: "lookup".to_string(),
+                function: "lookup".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(true),
                 contract_metadata: None,
             },
             VerificationResult::Unknown {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 50,
                 reason: "nonlinear arithmetic".to_string(),
             },
@@ -876,16 +885,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "fn<T>(&self)".to_string(),
+                function: "fn<T>(&self)".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let report = build_json_report("escape_test", &results);
         let html = format_html_report(&report);
@@ -921,16 +932,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_fn".to_string(),
+                function: "safe_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let report = build_json_report("safe", &results);
         let html = format_html_report(&report);
@@ -950,10 +963,7 @@ mod tests {
 
         assert!(html.contains("<script>"), "HTML must contain inline JavaScript");
         assert!(html.contains("</script>"), "HTML must close script tag");
-        assert!(
-            html.contains("filterFunctions"),
-            "HTML must contain filterFunctions JS function"
-        );
+        assert!(html.contains("filterFunctions"), "HTML must contain filterFunctions JS function");
         assert!(html.contains("expandAll"), "HTML must contain expandAll JS function");
         assert!(html.contains("collapseAll"), "HTML must contain collapseAll JS function");
     }
@@ -968,19 +978,10 @@ mod tests {
             html.contains("<details class=\"func-details\""),
             "Function sections must use <details> elements"
         );
-        assert!(
-            html.contains("</details>"),
-            "Function sections must close <details> elements"
-        );
-        assert!(
-            html.contains("<summary>"),
-            "Function sections must have <summary> elements"
-        );
+        assert!(html.contains("</details>"), "Function sections must close <details> elements");
+        assert!(html.contains("<summary>"), "Function sections must have <summary> elements");
         // Default open
-        assert!(
-            html.contains("open"),
-            "Function details should be open by default"
-        );
+        assert!(html.contains("open"), "Function details should be open by default");
         // Toggle arrow
         assert!(
             html.contains("func-toggle"),
@@ -994,44 +995,20 @@ mod tests {
         let html = format_html_report(&report);
 
         // Filter bar present with controls
-        assert!(
-            html.contains("id=\"filter-bar\""),
-            "HTML must contain filter bar"
-        );
-        assert!(
-            html.contains("filter-btn"),
-            "Filter bar must contain filter buttons"
-        );
-        assert!(
-            html.contains("data-filter=\"verified\""),
-            "Must have verified filter"
-        );
-        assert!(
-            html.contains("data-filter=\"violations\""),
-            "Must have violations filter"
-        );
-        assert!(
-            html.contains("data-filter=\"inconclusive\""),
-            "Must have inconclusive filter"
-        );
+        assert!(html.contains("id=\"filter-bar\""), "HTML must contain filter bar");
+        assert!(html.contains("filter-btn"), "Filter bar must contain filter buttons");
+        assert!(html.contains("data-filter=\"verified\""), "Must have verified filter");
+        assert!(html.contains("data-filter=\"violations\""), "Must have violations filter");
+        assert!(html.contains("data-filter=\"inconclusive\""), "Must have inconclusive filter");
         assert!(
             html.contains("data-filter=\"runtime-checked\""),
             "Must have runtime-checked filter"
         );
-        assert!(
-            html.contains("data-filter=\"all\""),
-            "Must have all filter"
-        );
+        assert!(html.contains("data-filter=\"all\""), "Must have all filter");
 
         // Expand/Collapse controls
-        assert!(
-            html.contains("Expand All"),
-            "Must have Expand All button"
-        );
-        assert!(
-            html.contains("Collapse All"),
-            "Must have Collapse All button"
-        );
+        assert!(html.contains("Expand All"), "Must have Expand All button");
+        assert!(html.contains("Collapse All"), "Must have Collapse All button");
     }
 
     #[test]
@@ -1040,10 +1017,7 @@ mod tests {
         let html = format_html_report(&report);
 
         // Filter bar should NOT be present for empty reports
-        assert!(
-            !html.contains("id=\"filter-bar\""),
-            "Empty report must not have filter bar"
-        );
+        assert!(!html.contains("id=\"filter-bar\""), "Empty report must not have filter bar");
     }
 
     #[test]
@@ -1068,26 +1042,11 @@ mod tests {
         let html = format_html_report(&report);
 
         // Progress bar present with segment classes
-        assert!(
-            html.contains("progress-bar"),
-            "HTML must contain a progress bar"
-        );
-        assert!(
-            html.contains("seg-proved"),
-            "Progress bar must have proved segment"
-        );
-        assert!(
-            html.contains("seg-runtime"),
-            "Progress bar must have runtime segment"
-        );
-        assert!(
-            html.contains("seg-failed"),
-            "Progress bar must have failed segment"
-        );
-        assert!(
-            html.contains("seg-unknown"),
-            "Progress bar must have unknown segment"
-        );
+        assert!(html.contains("progress-bar"), "HTML must contain a progress bar");
+        assert!(html.contains("seg-proved"), "Progress bar must have proved segment");
+        assert!(html.contains("seg-runtime"), "Progress bar must have runtime segment");
+        assert!(html.contains("seg-failed"), "Progress bar must have failed segment");
+        assert!(html.contains("seg-unknown"), "Progress bar must have unknown segment");
     }
 
     #[test]
@@ -1097,27 +1056,29 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "f1".to_string(),
+                    function: "f1".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "f2".to_string(),
+                    function: "f2".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
                     counterexample: None,
                 },
@@ -1140,10 +1101,7 @@ mod tests {
 
         // Filter buttons show counts in parentheses
         // multi_function_report has 3 functions analyzed
-        assert!(
-            html.contains("All (3)"),
-            "All filter button must show total function count"
-        );
+        assert!(html.contains("All (3)"), "All filter button must show total function count");
     }
 
     #[test]
@@ -1174,16 +1132,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_fn".to_string(),
+                function: "safe_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let report = build_json_report("verified", &results);
         let html = format_html_report(&report);
@@ -1200,14 +1160,8 @@ mod tests {
         let html = format_html_report(&report);
 
         // Must not reference external resources
-        assert!(
-            !html.contains("src=\"http"),
-            "HTML must not reference external scripts"
-        );
-        assert!(
-            !html.contains("href=\"http"),
-            "HTML must not reference external stylesheets"
-        );
+        assert!(!html.contains("src=\"http"), "HTML must not reference external scripts");
+        assert!(!html.contains("href=\"http"), "HTML must not reference external stylesheets");
 
         // Must have all CSS inline
         assert!(html.contains("<style>"));
@@ -1231,7 +1185,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::usize(), Ty::usize()),
                     },
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -1243,7 +1197,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: Some(Counterexample::new(vec![
                         ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -1254,16 +1208,18 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
         ];
 
@@ -1310,16 +1266,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_div".to_string(),
+                function: "safe_div".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
 
         let dir = std::env::temp_dir().join("trust_report_test_html_218");

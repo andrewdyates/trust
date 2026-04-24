@@ -277,7 +277,7 @@ impl LowerTypeRelativePathMode {
     fn permit_variants(self) -> PermitVariants {
         match self {
             Self::Type(permit_variants) => permit_variants,
-            // tRust: known issue — (mgca): Support paths like `Option::<T>::None` or `Option::<T>::Some` which
+            // FIXME(mgca): Support paths like `Option::<T>::None` or `Option::<T>::Some` which
             // resolve to const ctors/fn items respectively.
             Self::Const => PermitVariants::No,
         }
@@ -448,7 +448,7 @@ impl<'tcx> ty::TypeFolder<TyCtxt<'tcx>> for ForbidMCGParamUsesFolder<'tcx> {
 impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
     /// See `check_param_uses_if_mcg`.
     ///
-    /// tRust: known issue — (mgca): this is pub only for instantiate_value_path and would be nice to avoid altogether
+    /// FIXME(mgca): this is pub only for instantiate_value_path and would be nice to avoid altogether
     pub fn check_param_res_if_mcg_for_instantiate_value_path(
         &self,
         res: Res,
@@ -721,7 +721,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     (&GenericParamDefKind::Const { .. }, GenericArg::Infer(inf)) => {
                         self.lowerer.ct_infer(Some(param), inf.span).into()
                     }
-                    // tRust: invariant — generic argument kind must match the corresponding parameter kind
                     (kind, arg) => span_bug!(
                         self.span,
                         "mismatched path argument for kind {kind:?}: found arg {arg:?}"
@@ -844,7 +843,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         trait_ref: &hir::TraitRef<'tcx>,
         self_ty: Ty<'tcx>,
     ) -> ty::TraitRef<'tcx> {
-        // tRust: invariant — trait ref path always has at least one segment
         let [leading_segments @ .., segment] = trait_ref.path.segments else { bug!() };
 
         let _ = self.prohibit_generic_args(leading_segments.iter(), GenericsArgsErrExtend::None);
@@ -931,7 +929,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             hir::BoundPolarity::Negative(_) => ty::PredicatePolarity::Negative,
         };
 
-        // tRust: invariant — trait ref path always has at least one segment
         let [leading_segments @ .., segment] = trait_ref.path.segments else { bug!() };
 
         let _ = self.prohibit_generic_args(leading_segments.iter(), GenericsArgsErrExtend::None);
@@ -982,7 +979,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     ty::ClauseKind::Trait(ty::TraitPredicate { trait_ref, polarity })
                 });
                 let bound = (bound.upcast(tcx), span);
-                // tRust: known issue — (-Znext-solver): We can likely remove this hack once the
+                // FIXME(-Znext-solver): We can likely remove this hack once the
                 // new trait solver lands. This fixed an overflow in the old solver.
                 // This may have performance implications, so please check perf when
                 // removing it.
@@ -1262,9 +1259,9 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 },
             );
 
-            // tRust: known issue — (#97583): Print associated item bindings properly (i.e., not as equality
+            // FIXME(#97583): Print associated item bindings properly (i.e., not as equality
             // predicates!).
-            // tRust: known issue — Turn this into a structured, translatable & more actionable suggestion.
+            // FIXME: Turn this into a structured, translatable & more actionable suggestion.
             let mut where_bounds = vec![];
             for bound in [bound, bound2].into_iter().chain(matching_candidates) {
                 let bound_id = bound.def_id();
@@ -1311,7 +1308,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                                             )
                                         });
 
-                                        // tRust: known issue — (mgca): code duplication with other places we lower
+                                        // FIXME(mgca): code duplication with other places we lower
                                         // the rhs' of associated const bindings
                                         let ty = projection_term.map_bound(|alias| {
                                             tcx.type_of(alias.def_id).instantiate(tcx, alias.args)
@@ -1329,13 +1326,13 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                                 if term.references_error() {
                                     continue;
                                 }
-                                // tRust: known issue — (#97583): This isn't syntactically well-formed!
+                                // FIXME(#97583): This isn't syntactically well-formed!
                                 where_bounds.push(format!(
                                     "        T: {trait}::{assoc_ident} = {term}",
                                     trait = bound.print_only_trait_path(),
                                 ));
                             }
-                            // tRust: known issue — Provide a suggestion.
+                            // FIXME: Provide a suggestion.
                             hir::AssocItemConstraintKind::Bound { bounds: _ } => {}
                         }
                     } else {
@@ -1465,10 +1462,9 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 }
                 _ => unreachable!(),
             },
-            // tRust: known issue — (mgca): implement support for this once ready to support all adt ctor expressions,
+            // FIXME(mgca): implement support for this once ready to support all adt ctor expressions,
             // not just const ctors
             TypeRelativePath::Variant { .. } => {
-                // tRust: invariant — type-associated const paths should not resolve to variant constructors
                 span_bug!(span, "unexpected variant res for type associated const path")
             }
         }
@@ -1545,7 +1541,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     .iter()
                     .find(|vd| tcx.hygienic_eq(segment.ident, vd.ident(tcx), adt_def.did()));
                 if let Some(variant_def) = variant_def {
-                    // tRust: known issue — (mgca): do we want constructor resolutions to take priority over
+                    // FIXME(mgca): do we want constructor resolutions to take priority over
                     // other possible resolutions?
                     if matches!(mode, LowerTypeRelativePathMode::Const)
                         && let Some((_, ctor_def_id)) = variant_def.ctor
@@ -1582,7 +1578,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 }
             }
 
-            // tRust: known issue — (inherent_associated_types, #106719): Support self types other than ADTs.
+            // FIXME(inherent_associated_types, #106719): Support self types other than ADTs.
             if let Some((did, args)) = self.probe_inherent_assoc_item(
                 segment,
                 adt_def.did(),
@@ -1752,7 +1748,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let (applicable_candidates, fulfillment_errors) =
             self.select_inherent_assoc_candidates(span, self_ty, candidates.clone());
 
-        // tRust: known issue — (#142006): Don't eagerly error here, there might be applicable trait candidates.
+        // FIXME(#142006): Don't eagerly error here, there might be applicable trait candidates.
         let InherentAssocCandidate { impl_, assoc_item, scope: def_scope } =
             match &applicable_candidates[..] {
                 &[] => Err(self.report_unresolved_inherent_assoc_item(
@@ -1773,11 +1769,11 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 )),
             }?;
 
-        // tRust: known issue — (#142006): Don't eagerly validate here, there might be trait candidates that are
+        // FIXME(#142006): Don't eagerly validate here, there might be trait candidates that are
         // accessible (visible and stable) contrary to the inherent candidate.
         self.check_assoc_item(assoc_item, name, def_scope, block, span);
 
-        // tRust: known issue — (fmease): Currently creating throwaway `parent_args` to please
+        // FIXME(fmease): Currently creating throwaway `parent_args` to please
         // `lower_generic_args_of_assoc_item`. Modify the latter instead (or sth. similar) to
         // not require the parent args logic.
         let parent_args = ty::GenericArgs::identity_for_item(tcx, impl_);
@@ -1894,7 +1890,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                             );
 
                             let value = fold_regions(tcx, qself_ty, |_, _| tcx.lifetimes.re_erased);
-                            // tRust: known issue — Don't bother dealing with non-lifetime binders here...
+                            // FIXME: Don't bother dealing with non-lifetime binders here...
                             if value.has_escaping_bound_vars() {
                                 return false;
                             }
@@ -1985,7 +1981,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         debug!(?self_ty);
 
         let trait_ref =
-            self.lower_mono_trait_ref(span, trait_def_id, self_ty, trait_segment.expect("invariant: value is present"), false);
+            self.lower_mono_trait_ref(span, trait_def_id, self_ty, trait_segment.unwrap(), false);
         debug!(?trait_ref);
 
         let item_args =
@@ -2035,7 +2031,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
     ///
     /// // ==> [GenericPathSegment(Option_def_id, 0)]
     /// ```
-    // tRust: known issue — (eddyb, varkor) handle type paths here too, not just value ones.
+    // FIXME(eddyb, varkor) handle type paths here too, not just value ones.
     pub fn probe_generic_path_segments(
         &self,
         segments: &[hir::PathSegment<'_>],
@@ -2111,7 +2107,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             // Case 2. Reference to a variant constructor.
             DefKind::Ctor(CtorOf::Variant, ..) | DefKind::Variant => {
                 let (generics_def_id, index) = if let Some(self_ty) = self_ty {
-                    let adt_def = self.probe_adt(span, self_ty).expect("invariant: value is present");
+                    let adt_def = self.probe_adt(span, self_ty).unwrap();
                     debug_assert!(adt_def.is_enum());
                     (adt_def.did(), last)
                 } else if last >= 1 && segments[last - 1].args.is_some() {
@@ -2128,7 +2124,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     let enum_def_id = tcx.parent(def_id);
                     (enum_def_id, last - 1)
                 } else {
-                    // tRust: known issue — lint here recommending `Enum::<...>::Variant` form
+                    // FIXME: lint here recommending `Enum::<...>::Variant` form
                     // instead of `Enum::Variant::<...>` form.
 
                     // Everything but the final segment should have no
@@ -2150,12 +2146,11 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             DefKind::AssocFn | DefKind::AssocConst { .. } => {
                 if segments.len() >= 2 {
                     let generics = tcx.generics_of(def_id);
-                    generic_segments.push(GenericPathSegment(generics.parent.expect("invariant: has parent def_id"), last - 1));
+                    generic_segments.push(GenericPathSegment(generics.parent.unwrap(), last - 1));
                 }
                 generic_segments.push(GenericPathSegment(def_id, last));
             }
 
-            // tRust: invariant — all valid definition kinds for type lowering handled above
             kind => bug!("unexpected definition kind {:?} for {:?}", kind, def_id),
         }
 
@@ -2181,7 +2176,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             Res::Def(DefKind::OpaqueTy, did) => {
                 // Check for desugared `impl Trait`.
                 assert_matches!(tcx.opaque_ty_origin(did), hir::OpaqueTyOrigin::TyAlias { .. });
-                // tRust: invariant — trait ref path always has at least one segment
                 let [leading_segments @ .., segment] = path.segments else { bug!() };
                 let _ = self.prohibit_generic_args(
                     leading_segments.iter(),
@@ -2199,7 +2193,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 did,
             ) => {
                 assert_eq!(opt_self_ty, None);
-                // tRust: invariant — trait ref path always has at least one segment
                 let [leading_segments @ .., segment] = path.segments else { bug!() };
                 let _ = self
                     .prohibit_generic_args(leading_segments.iter(), GenericsArgsErrExtend::None);
@@ -2223,7 +2216,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     GenericsArgsErrExtend::DefVariant(&path.segments),
                 );
 
-                let &GenericPathSegment(def_id, index) = generic_segments.last().expect("invariant: non-empty collection");
+                let &GenericPathSegment(def_id, index) = generic_segments.last().unwrap();
                 self.lower_path_segment(span, def_id, &path.segments[index])
             }
             Res::Def(DefKind::TyParam, def_id) => {
@@ -2272,7 +2265,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     opt_self_ty,
                     def_id,
                     trait_segment,
-                    path.segments.last().expect("invariant: non-empty collection"),
+                    path.segments.last().unwrap(),
                 )
             }
             Res::PrimTy(prim_ty) => {
@@ -2308,7 +2301,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     self.dcx().span_delayed_bug(span, "incorrect resolution for `Self`"),
                 )
             }
-            // tRust: invariant — all valid resolution kinds for type lowering handled above
             _ => span_bug!(span, "unexpected resolution: {:?}", path.res),
         }
     }
@@ -2335,7 +2327,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 Ty::new_param(tcx, index, tcx.hir_ty_param_name(def_id))
             }
             Some(rbv::ResolvedArg::Error(guar)) => Ty::new_error(tcx, guar),
-            // tRust: invariant — bound var resolution must produce a valid BoundTy or BoundRegion
             arg => bug!("unexpected bound var resolution for {hir_id:?}: {arg:?}"),
         };
         self.check_param_uses_if_mcg(ty, tcx.hir_span(hir_id), false)
@@ -2364,7 +2355,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 ty::BoundConst::new(ty::BoundVar::from_u32(index)),
             ),
             Some(rbv::ResolvedArg::Error(guar)) => ty::Const::new_error(tcx, guar),
-            // tRust: invariant — bound var resolution must produce a valid BoundTy or BoundRegion
             arg => bug!("unexpected bound var resolution for {:?}: {arg:?}", path_hir_id),
         };
         self.check_param_uses_if_mcg(ct, tcx.hir_span(path_hir_id), false)
@@ -2376,7 +2366,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let tcx = self.tcx();
 
         if let hir::ConstArgKind::Anon(anon) = &const_arg.kind {
-            // tRust: known issue — (generic_const_parameter_types): Ideally we remove these errors below when
+            // FIXME(generic_const_parameter_types): Ideally we remove these errors below when
             // we have the ability to intermix typeck of anon const const args with the parent
             // bodies typeck.
 
@@ -2615,7 +2605,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         inits: &'tcx [&'tcx hir::ConstArgExprField<'tcx>],
         span: Span,
     ) -> Const<'tcx> {
-        // tRust: known issue — (mgca): try to deduplicate this function with
+        // FIXME(mgca): try to deduplicate this function with
         // the equivalent HIR typeck logic.
         let tcx = self.tcx();
 
@@ -2668,7 +2658,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             .fields
             .iter()
             .map(|field_def| {
-                // tRust: known issue — (mgca): we aren't really handling privacy, stability,
+                // FIXME(mgca): we aren't really handling privacy, stability,
                 // or macro hygeniene but we should.
                 let mut init_expr =
                     inits.iter().filter(|init_expr| init_expr.field.name == field_def.name);
@@ -2740,7 +2730,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 }
 
                 assert_eq!(opt_self_ty, None);
-                // tRust: invariant — trait ref path always has at least one segment
                 let [leading_segments @ .., segment] = path.segments else { bug!() };
                 let _ = self
                     .prohibit_generic_args(leading_segments.iter(), GenericsArgsErrExtend::None);
@@ -2749,7 +2738,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             }
             Res::Def(DefKind::Ctor(ctor_of, CtorKind::Const), did) => {
                 assert_eq!(opt_self_ty, None);
-                // tRust: invariant — trait ref path always has at least one segment
                 let [leading_segments @ .., segment] = path.segments else { bug!() };
                 let _ = self
                     .prohibit_generic_args(leading_segments.iter(), GenericsArgsErrExtend::None);
@@ -2765,7 +2753,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             }
             Res::Def(DefKind::Ctor(_, CtorKind::Fn), did) => {
                 assert_eq!(opt_self_ty, None);
-                // tRust: invariant — trait ref path always has at least one segment
                 let [leading_segments @ .., segment] = path.segments else { bug!() };
                 let _ = self
                     .prohibit_generic_args(leading_segments.iter(), GenericsArgsErrExtend::None);
@@ -2790,21 +2777,20 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     opt_self_ty,
                     did,
                     trait_segment,
-                    path.segments.last().expect("invariant: non-empty collection"),
+                    path.segments.last().unwrap(),
                 )
                 .unwrap_or_else(|guar| Const::new_error(tcx, guar))
             }
             Res::Def(DefKind::Static { .. }, _) => {
-                // tRust: invariant — bare static ConstArgKind::Path is not yet supported
                 span_bug!(span, "use of bare `static` ConstArgKind::Path's not yet supported")
             }
-            // tRust: known issue — (const_generics): create real const to allow fn items as const paths
+            // FIXME(const_generics): create real const to allow fn items as const paths
             Res::Def(DefKind::Fn | DefKind::AssocFn, did) => {
                 self.dcx().span_delayed_bug(span, "function items cannot be used as const args");
                 let args = self.lower_generic_args_of_path_segment(
                     span,
                     did,
-                    path.segments.last().expect("invariant: non-empty collection"),
+                    path.segments.last().unwrap(),
                 );
                 ty::Const::zero_sized(tcx, Ty::new_fn_def(tcx, did, args))
             }
@@ -2863,7 +2849,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let expr = &tcx.hir_body(anon.body).value;
         debug!(?expr);
 
-        // tRust: known issue — (generic_const_parameter_types): We should use the proper generic args
+        // FIXME(generic_const_parameter_types): We should use the proper generic args
         // here. It's only used as a hint for literals so doesn't matter too much to use the right
         // generic arguments, just weaker type inference.
         let ty = tcx.type_of(anon.def_id).instantiate_identity();
@@ -2917,7 +2903,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         // performance optimisation of directly lowering anon consts occur more often.
         let expr = match &expr.kind {
             hir::ExprKind::Block(block, _) if block.stmts.is_empty() && block.expr.is_some() => {
-                block.expr.as_ref().expect("invariant: value is present")
+                block.expr.as_ref().unwrap()
             }
             _ => expr,
         };
@@ -2984,7 +2970,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
 
                 match idx {
                     hir::InferDelegationSig::Input(idx) => delegation_sig[idx],
-                    hir::InferDelegationSig::Output { .. } => *delegation_sig.last().expect("invariant: non-empty collection"),
+                    hir::InferDelegationSig::Output { .. } => *delegation_sig.last().unwrap(),
                 }
             }
         }
@@ -3149,7 +3135,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     && self.dcx().has_stashed_diagnostic(hir_ty.span, StashKey::ReturnTypeNotation)
                 {
                     // `let x: i32::something(valid_in_ty_ctxt);` -> `let x = i32::something(valid_in_ty_ctxt);`
-                    // tRust: known issue — Check that `something` is a valid function in `i32`.
+                    // FIXME: Check that `something` is a valid function in `i32`.
                     let err = tcx
                         .dcx()
                         .struct_span_err(
@@ -3366,7 +3352,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     }
                 };
                 if field.name != sym::integer(index) {
-                    // tRust: invariant — re-parsing of inherent assoc type bounds must match the original parse
                     bug!("we parsed above, but now not equal?");
                 }
                 if tys.get(index).is_some() {
@@ -3376,7 +3361,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     Ty::new_error(tcx, err)
                 }
             }
-            // tRust: known issue — (FRTs): support type aliases
+            // FIXME(FRTs): support type aliases
             /*
             ty::Alias(AliasTyKind::Free, ty) => {
                 return self.lower_field_of(
@@ -3422,7 +3407,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 tcx,
                 dcx.span_err(ty_span, format!("cannot use `{ty}` in this position")),
             ),
-            // tRust: known issue — (FRTs): support these types?
+            // FIXME(FRTs): support these types?
             ty::Array(..) | ty::Pat(..) => Ty::new_error(
                 tcx,
                 dcx.span_err(ty_span, format!("type `{ty}` is not yet supported in `field_of!`")),
@@ -3450,7 +3435,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                     }
                     _ => unreachable!(),
                 })
-                .expect("invariant: value is present")
+                .unwrap()
         } else {
             def_id.to_def_id()
         };
@@ -3466,7 +3451,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let args = ty::GenericArgs::for_item(tcx, def_id, |param, _| {
             if let Some(i) = (param.index as usize).checked_sub(offset) {
                 let (lifetime, _) = lifetimes[i];
-                // tRust: known issue — (mgca): should we be calling self.check_params_use_if_mcg here too?
+                // FIXME(mgca): should we be calling self.check_params_use_if_mcg here too?
                 self.lower_resolved_lifetime(lifetime).into()
             } else {
                 tcx.mk_param_from_def(param)

@@ -46,8 +46,8 @@ envs:
     # rotate them in a single branch while keeping the old key in another
     # branch, which wouldn't be possible if the key was named with the kind
     # (caches, artifacts...).
-    CACHES_AWS_ACCESS_KEY_ID: AKIA46X5W6CZI5DHEBFL
-    ARTIFACTS_AWS_ACCESS_KEY_ID: AKIA46X5W6CZN24CBO55
+    CACHES_AWS_ACCESS_KEY_ID: TEST_CACHES_KEY_ID
+    ARTIFACTS_AWS_ACCESS_KEY_ID: TEST_ARTIFACTS_KEY_ID
     AWS_REGION: us-west-1
     TOOLSTATE_PUBLISH: 1
 

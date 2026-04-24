@@ -25,8 +25,6 @@ extern "C" {
 pub fn do_call() {
     let _a = A;
 
-    // SAFETY: calling LLVM intrinsic `llvm.sqrt.f32` with a valid f32 argument;
-    // the intrinsic has no memory safety preconditions.
     unsafe {
         // Ensure that we `call` LLVM intrinsics instead of trying to `invoke` them
         // CHECK: store float 4.000000e+00, float* %{{.}}, align 4

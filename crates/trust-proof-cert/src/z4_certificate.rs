@@ -7,7 +7,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use trust_types::{ReasoningKind, SmtTheory};
@@ -105,13 +105,9 @@ impl Z4Rule {
     #[must_use]
     pub fn reasoning_kind(&self) -> ReasoningKind {
         match self {
-            Self::UnitResolution | Self::Lemma | Self::ModusPonens => {
-                ReasoningKind::CdclResolution
-            }
+            Self::UnitResolution | Self::Lemma | Self::ModusPonens => ReasoningKind::CdclResolution,
             Self::ThLemma { theory } => ReasoningKind::TheoryLemma {
-                theory: theory
-                    .clone()
-                    .unwrap_or(SmtTheory::UninterpretedFunctions),
+                theory: theory.clone().unwrap_or(SmtTheory::UninterpretedFunctions),
             },
             // Everything else is generic SMT infrastructure
             _ => ReasoningKind::Smt,
@@ -134,8 +130,9 @@ pub struct Z4ProofStep {
     pub conclusion: String,
     /// Indices of premise steps this step depends on.
     pub premises: Vec<usize>,
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Optional annotations from the solver (e.g. ":pattern", ":qid").
-    pub annotations: FxHashMap<String, String>,
+    pub annotations: BTreeMap<String, String>,
 }
 
 /// A complete proof certificate exported from z4.
@@ -155,7 +152,7 @@ pub struct Z4ProofCertificate {
     /// z4 version string.
     pub solver_version: String,
     /// Additional metadata (logic, options, etc.).
-    pub metadata: FxHashMap<String, String>,
+    pub metadata: BTreeMap<String, String>,
 }
 
 impl Z4ProofCertificate {
@@ -167,7 +164,7 @@ impl Z4ProofCertificate {
             unsat_core: Vec::new(),
             time_ms,
             solver_version: solver_version.into(),
-            metadata: FxHashMap::default(),
+            metadata: BTreeMap::new(),
         }
     }
 
@@ -178,8 +175,7 @@ impl Z4ProofCertificate {
 
     /// Set of unique proof rules used in this certificate.
     pub fn rules_used(&self) -> Vec<String> {
-        let mut rules: Vec<String> =
-            self.proof_steps.iter().map(|s| s.rule_name.clone()).collect();
+        let mut rules: Vec<String> = self.proof_steps.iter().map(|s| s.rule_name.clone()).collect();
         rules.sort();
         rules.dedup();
         rules
@@ -229,7 +225,7 @@ pub fn parse_z4_proof(
     }
 
     // Parse let-bindings first, collecting named subproofs
-    let mut named_steps: FxHashMap<String, usize> = FxHashMap::default();
+    let mut named_steps: BTreeMap<String, usize> = BTreeMap::new();
     let lines: Vec<&str> = trimmed.lines().collect();
 
     let mut i = 0;
@@ -268,9 +264,7 @@ pub fn parse_z4_proof(
         if !step_line.is_empty()
             && let Some(step) = parse_proof_step(step_line, &named_steps)
         {
-
-                cert.proof_steps.push(step);
-
+            cert.proof_steps.push(step);
         }
 
         i += 1;
@@ -283,10 +277,7 @@ pub fn parse_z4_proof(
 ///
 /// Format: `rule_name arg1 arg2 ... conclusion`
 /// Arguments that are `@name` references are resolved to premise indices.
-fn parse_proof_step(
-    body: &str,
-    named_steps: &FxHashMap<String, usize>,
-) -> Option<Z4ProofStep> {
+fn parse_proof_step(body: &str, named_steps: &BTreeMap<String, usize>) -> Option<Z4ProofStep> {
     let body = body.trim();
     if body.is_empty() {
         return None;
@@ -297,7 +288,7 @@ fn parse_proof_step(
 
     // Parse remaining tokens: named refs become premises, last non-ref is conclusion
     let mut premises = Vec::new();
-    let mut annotations = FxHashMap::default();
+    let mut annotations = BTreeMap::new();
     let mut conclusion = String::new();
     let tokens = tokenize_sexpr(rest);
 
@@ -329,13 +320,7 @@ fn parse_proof_step(
     }
 
     let rule = Some(Z4Rule::parse(&rule_name));
-    Some(Z4ProofStep {
-        rule_name,
-        rule,
-        conclusion,
-        premises,
-        annotations,
-    })
+    Some(Z4ProofStep { rule_name, rule, conclusion, premises, annotations })
 }
 
 /// Split the first whitespace-delimited token from a string.
@@ -419,7 +404,8 @@ fn tokenize_sexpr(s: &str) -> Vec<String> {
         } else {
             // Collect non-whitespace token
             let start = i;
-            while i < chars.len() && !chars[i].is_whitespace() && chars[i] != '(' && chars[i] != ')' {
+            while i < chars.len() && !chars[i].is_whitespace() && chars[i] != '(' && chars[i] != ')'
+            {
                 i += 1;
             }
             tokens.push(chars[start..i].iter().collect());
@@ -546,9 +532,7 @@ impl Z4CertificateStoreExt for CertificateStore {
         z4_cert: &Z4ProofCertificate,
     ) -> Result<(), CertError> {
         let proof_cert = self.certificates.get_mut(&cert_id.0).ok_or_else(|| {
-            CertError::StoreError {
-                reason: format!("certificate not found: {}", cert_id.0),
-            }
+            CertError::StoreError { reason: format!("certificate not found: {}", cert_id.0) }
         })?;
 
         let json = serde_json::to_vec(z4_cert)
@@ -580,6 +564,8 @@ impl Z4CertificateStoreExt for CertificateStore {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     // -----------------------------------------------------------------------
@@ -595,28 +581,28 @@ mod tests {
             rule: None,
             conclusion: "p".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(Z4ProofStep {
             rule_name: "asserted".to_string(),
             rule: None,
             conclusion: "(=> p q)".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(Z4ProofStep {
             rule_name: "mp".to_string(),
             rule: None,
             conclusion: "q".to_string(),
             premises: vec![0, 1],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(Z4ProofStep {
             rule_name: "unit-resolution".to_string(),
             rule: None,
             conclusion: "false".to_string(),
             premises: vec![2],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         cert
@@ -729,14 +715,14 @@ asserted q";
             rule: None,
             conclusion: "q".to_string(),
             premises: vec![1], // forward reference
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(Z4ProofStep {
             rule_name: "asserted".to_string(),
             rule: None,
             conclusion: "p".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let err = verify_proof_steps(&cert).expect_err("should fail");
@@ -756,7 +742,7 @@ asserted q";
             rule: None,
             conclusion: "q".to_string(),
             premises: vec![0], // self reference
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let err = verify_proof_steps(&cert).expect_err("should fail");
@@ -782,21 +768,21 @@ asserted q";
             rule: None,
             conclusion: "p".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(Z4ProofStep {
             rule_name: "asserted".to_string(),
             rule: None,
             conclusion: "(=> p q)".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(Z4ProofStep {
             rule_name: "mp".to_string(),
             rule: None,
             conclusion: "q".to_string(), // NOT false -- incomplete proof
             premises: vec![0, 1],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let err = verify_proof_steps(&cert).expect_err("incomplete proof should fail");
@@ -828,7 +814,7 @@ asserted q";
                 rule: None,
                 conclusion: format!("p{i}"),
                 premises: vec![],
-                annotations: FxHashMap::default(),
+                annotations: BTreeMap::new(),
             });
         }
 
@@ -839,7 +825,7 @@ asserted q";
                 rule: None,
                 conclusion: "false".to_string(),
                 premises: vec![], // orphan: non-axiom with no premises
-                annotations: FxHashMap::default(),
+                annotations: BTreeMap::new(),
             });
         }
 
@@ -847,10 +833,7 @@ asserted q";
         let err = verify_proof_steps(&cert).expect_err("too many orphans should fail");
         match err {
             CertError::VerificationFailed { reason } => {
-                assert!(
-                    reason.contains("orphan"),
-                    "error should mention orphan, got: {reason}"
-                );
+                assert!(reason.contains("orphan"), "error should mention orphan, got: {reason}");
             }
             other => panic!("expected VerificationFailed, got: {other:?}"),
         }
@@ -873,7 +856,7 @@ asserted q";
             rule: None,
             conclusion: "#false".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let result = verify_proof_steps(&cert).expect("should verify");
@@ -889,7 +872,7 @@ asserted q";
             rule: None,
             conclusion: "(not true)".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let result = verify_proof_steps(&cert).expect("should verify");
@@ -947,17 +930,13 @@ asserted q";
 
     #[test]
     fn test_store_z4_certificate_roundtrip() {
-        use crate::{
-            CertificateChain, FunctionHash, ProofCertificate, SolverInfo, VcSnapshot,
-        };
-        use trust_types::{
-            Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition,
-        };
+        use crate::{CertificateChain, FunctionHash, ProofCertificate, SolverInfo, VcSnapshot};
+        use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
         let mut store = CertificateStore::new("test-crate");
         let vc = VerificationCondition {
             kind: VcKind::Assertion { message: "test".to_string() },
-            function: "foo".to_string(),
+            function: "foo".into(),
             location: SourceSpan {
                 file: "test.rs".to_string(),
                 line_start: 1,
@@ -988,14 +967,10 @@ asserted q";
         store.insert(cert, CertificateChain::new());
 
         let z4_cert = sample_z4_certificate();
-        store
-            .store_z4_certificate(&cert_id, &z4_cert)
-            .expect("should store");
+        store.store_z4_certificate(&cert_id, &z4_cert).expect("should store");
 
-        let retrieved = store
-            .get_z4_certificate(&cert_id)
-            .expect("should not error")
-            .expect("should exist");
+        let retrieved =
+            store.get_z4_certificate(&cert_id).expect("should not error").expect("should exist");
         assert_eq!(retrieved, z4_cert);
     }
 
@@ -1018,17 +993,13 @@ asserted q";
 
     #[test]
     fn test_get_z4_certificate_empty_trace() {
-        use crate::{
-            CertificateChain, FunctionHash, ProofCertificate, SolverInfo, VcSnapshot,
-        };
-        use trust_types::{
-            Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition,
-        };
+        use crate::{CertificateChain, FunctionHash, ProofCertificate, SolverInfo, VcSnapshot};
+        use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
         let mut store = CertificateStore::new("test-crate");
         let vc = VerificationCondition {
             kind: VcKind::Assertion { message: "test".to_string() },
-            function: "bar".to_string(),
+            function: "bar".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -1052,9 +1023,7 @@ asserted q";
         let cert_id = cert.id.clone();
         store.insert(cert, CertificateChain::new());
 
-        let result = store
-            .get_z4_certificate(&cert_id)
-            .expect("should not error");
+        let result = store.get_z4_certificate(&cert_id).expect("should not error");
         assert!(result.is_none(), "empty proof_trace should return None");
     }
 
@@ -1063,9 +1032,7 @@ asserted q";
         let store = CertificateStore::new("test-crate");
         let missing_id = CertificateId::generate("nonexistent", "2026-01-01T00:00:00Z");
 
-        let result = store
-            .get_z4_certificate(&missing_id)
-            .expect("should not error");
+        let result = store.get_z4_certificate(&missing_id).expect("should not error");
         assert!(result.is_none());
     }
 

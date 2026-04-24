@@ -134,7 +134,7 @@ impl<'tcx> AssertModuleSource<'tcx> {
             let mut iter = user_path.split('-');
 
             // Remove the crate name
-            assert_eq!(iter.next().expect("invariant: iterator must have next element"), crate_name);
+            assert_eq!(iter.next().unwrap(), crate_name);
 
             let cgu_path_components = iter.collect::<Vec<_>>();
 
@@ -264,7 +264,7 @@ impl CguReuseTracker {
             let keys = data.expected_reuse.keys().into_sorted_stable_ord();
             for cgu_name in keys {
                 let &(ref cgu_user_name, ref error_span, expected_reuse, comparison_kind) =
-                    data.expected_reuse.get(cgu_name).expect("invariant: get(cgu_name) must succeed");
+                    data.expected_reuse.get(cgu_name).unwrap();
 
                 if let Some(&actual_reuse) = data.actual_reuse.get(cgu_name) {
                     let (error, at_least) = match comparison_kind {

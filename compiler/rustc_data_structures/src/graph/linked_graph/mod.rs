@@ -154,11 +154,11 @@ impl<N: Debug, E: Debug> LinkedGraph<N, E> {
     }
 
     pub fn mut_node_data(&mut self, idx: NodeIndex) -> &mut N {
-        self.nodes[idx].data.as_mut().expect("invariant: linked graph node must have data") // tRust: unwrap -> expect
+        self.nodes[idx].data.as_mut().unwrap()
     }
 
     pub fn node_data(&self, idx: NodeIndex) -> &N {
-        self.nodes[idx].data.as_ref().expect("invariant: linked graph node must have data") // tRust: unwrap -> expect
+        self.nodes[idx].data.as_ref().unwrap()
     }
 
     pub fn node(&self, idx: NodeIndex) -> &Node<N> {

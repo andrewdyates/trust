@@ -93,7 +93,7 @@ where
         let ocx = ObligationCtxt::new(infcx);
         let value = op(&ocx).map_err(|_| {
             infcx.tcx.check_potentially_region_dependent_goals(root_def_id).err().unwrap_or_else(
-                // tRust: known issue — In this region-dependent context, `type_op` should only fail due to
+                // FIXME: In this region-dependent context, `type_op` should only fail due to
                 // region-dependent goals. Any other kind of failure indicates a bug and we
                 // should ICE.
                 //

@@ -1,6 +1,3 @@
-//! tRust: Symbol export analysis for determining which crate items are externally
-//! tRust: visible based on linkage, visibility, and codegen attributes.
-
 use std::collections::hash_map::Entry::*;
 
 use rustc_abi::{CanonAbi, X86Call};
@@ -176,7 +173,7 @@ fn exported_non_generic_symbols_provider_local<'tcx>(
         return &[];
     }
 
-    // NOTE: This sort is redundant (sorted again later) but kept for defensive correctness.
+    // FIXME: Sorting this is unnecessary since we are sorting later anyway.
     //        Can we skip the later sorting?
     let sorted = tcx.with_stable_hashing_context(|hcx| {
         tcx.reachable_non_generics(LOCAL_CRATE).to_sorted(&hcx, true)
@@ -528,7 +525,7 @@ fn symbol_export_level(tcx: TyCtxt<'_>, sym_def_id: DefId) -> SymbolExportLevel 
     if is_extern && !std_internal && !eii {
         let target = &tcx.sess.target.llvm_target;
         // WebAssembly cannot export data symbols, so reduce their export level
-        // NOTE(jdonszelmann): Uses substring match; exact match would be more precise.
+        // FIXME(jdonszelmann) don't do a substring match here.
         if target.contains("emscripten") {
             if let DefKind::Static { .. } = tcx.def_kind(sym_def_id) {
                 return SymbolExportLevel::Rust;
@@ -633,11 +630,10 @@ fn calling_convention_for_symbol<'tcx>(
             tcx.fn_abi_of_instance(
                 ty::TypingEnv::fully_monomorphized().as_query_input((i, ty::List::empty())),
             )
-            // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
             .unwrap_or_else(|_| bug!("fn_abi_of_instance({i:?}) failed"))
         })
         .map(|fnabi| (fnabi.conv, &fnabi.args[..]))
-        // NOTE(workingjubilee): Calling convention unknown at this point; defaults to C.
+        // FIXME(workingjubilee): why don't we know the convention here?
         .unwrap_or((CanonAbi::Rust, &[]))
 }
 

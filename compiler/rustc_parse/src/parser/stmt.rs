@@ -151,7 +151,7 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if let Some(item) = self.parse_item_common(
-            attrs.clone(), // tRust: known issue —: unwanted clone of attrs
+            attrs.clone(), // FIXME: unwanted clone of attrs
             false,
             true,
             FnParseMode { req_name: |_, _| true, context: FnContext::Free, req_body: true },
@@ -295,7 +295,7 @@ impl<'a> Parser<'a> {
     ) -> PResult<'a, Stmt> {
         let stmt = self.collect_tokens(None, attrs, force_collect, |this, attrs| {
             let local = this.parse_local(None, attrs)?;
-            // tRust: known issue — - maybe capture semicolon in recovery?
+            // FIXME - maybe capture semicolon in recovery?
             Ok((
                 this.mk_stmt(lo.to(this.prev_token.span), StmtKind::Let(local)),
                 Trailing::No,
@@ -539,7 +539,7 @@ impl<'a> Parser<'a> {
             //
             // the place-inside-a-block suggestion would be more likely wrong than right.
             //
-            // tRust: known issue —(compiler-errors): this should probably parse an arbitrary expr and not
+            // FIXME(compiler-errors): this should probably parse an arbitrary expr and not
             // just lookahead one token, so we can see if there's a brace after _that_,
             // since we want to protect against:
             //     `if 1 1 + 1 {` being suggested as  `if { 1 } 1 + 1 {`
@@ -745,7 +745,7 @@ impl<'a> Parser<'a> {
                             && self.may_recover()
                             && self.look_ahead(1, |token| token.is_integer_lit())
                         {
-                            // tRust: known issue —(hkmatsumoto): Might be better to trigger
+                            // FIXME(hkmatsumoto): Might be better to trigger
                             // this only when parsing an index expression.
                             err.span_suggestion_verbose(
                                 self.token.span,

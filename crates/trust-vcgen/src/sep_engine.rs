@@ -13,13 +13,12 @@
 
 use trust_types::fx::FxHashMap;
 
+#[cfg(test)]
+use crate::separation_logic::SepFormula;
+use crate::separation_logic::{PointerPermission, ProvenanceId, SymbolicHeap, SymbolicPointer};
 use trust_types::{
-    Formula, Operand, Place, Projection, Rvalue, Sort, SourceSpan, Statement,
-    Terminator, VcKind, VerifiableFunction, VerificationCondition,
-};
-
-use crate::separation_logic::{
-    PointerPermission, ProvenanceId, SepFormula, SymbolicHeap, SymbolicPointer,
+    Formula, Operand, Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty,
+    VcKind, VerifiableFunction, VerificationCondition,
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -54,6 +53,8 @@ pub(crate) struct SepEngine {
     heap: SymbolicHeap,
     /// Map from MIR local index to the pointer name used in the heap.
     local_to_ptr: FxHashMap<usize, String>,
+    /// Local types used to distinguish raw-pointer derefs from safe ref derefs.
+    local_tys: Vec<Ty>,
     /// VCs accumulated during interpretation.
     vcs: Vec<VerificationCondition>,
     /// Function name for VC attribution.
@@ -67,12 +68,20 @@ impl SepEngine {
         Self {
             heap: SymbolicHeap::new("sep_heap"),
             local_to_ptr: FxHashMap::default(),
+            local_tys: Vec::new(),
             vcs: Vec::new(),
             func_name: func_name.to_string(),
         }
     }
 
+    #[must_use]
+    pub(crate) fn with_local_tys(mut self, local_tys: Vec<Ty>) -> Self {
+        self.local_tys = local_tys;
+        self
+    }
+
     /// Number of accumulated VCs.
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn vc_count(&self) -> usize {
         self.vcs.len()
@@ -82,18 +91,6 @@ impl SepEngine {
     #[must_use]
     pub(crate) fn into_vcs(self) -> Vec<VerificationCondition> {
         self.vcs
-    }
-
-    /// Get a reference to the symbolic heap.
-    #[must_use]
-    pub(crate) fn heap(&self) -> &SymbolicHeap {
-        &self.heap
-    }
-
-    /// Look up the pointer name for a MIR local.
-    #[must_use]
-    pub(crate) fn ptr_name_for_local(&self, local: usize) -> Option<&str> {
-        self.local_to_ptr.get(&local).map(|s| s.as_str())
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -128,20 +125,22 @@ impl SepEngine {
         match rvalue {
             // Pattern 1: Raw pointer deref read — `_x = *ptr`
             Rvalue::Use(Operand::Copy(src) | Operand::Move(src))
-            | Rvalue::CopyForDeref(src)
-                if has_deref(src) =>
+                if self.place_has_raw_deref(src) =>
             {
+                self.interpret_raw_deref_read(src, span);
+            }
+            Rvalue::CopyForDeref(src) if self.place_has_raw_deref(src) => {
                 self.interpret_raw_deref_read(src, span);
             }
 
             // Pattern 8: Pointer offset via BinaryOp::Add/Sub on pointer locals
-            Rvalue::BinaryOp(trust_types::BinOp::Add | trust_types::BinOp::Sub, lhs_op, rhs_op) =>
-            {
+            Rvalue::BinaryOp(trust_types::BinOp::Add | trust_types::BinOp::Sub, lhs_op, rhs_op) => {
                 // Check if LHS is a tracked pointer (pointer arithmetic)
                 if let Operand::Copy(lhs_place) | Operand::Move(lhs_place) = lhs_op
-                    && self.local_to_ptr.contains_key(&lhs_place.local) {
-                        self.interpret_ptr_offset(place, lhs_place, rhs_op, span);
-                    }
+                    && self.local_to_ptr.contains_key(&lhs_place.local)
+                {
+                    self.interpret_ptr_offset(place, lhs_place, rhs_op, span);
+                }
             }
 
             // Pattern 7: Transmute
@@ -158,7 +157,7 @@ impl SepEngine {
 
             // Pattern 2: Raw pointer deref write — `*ptr = val`
             // This is captured when the destination place has a Deref projection
-            _ if has_deref(place) => {
+            _ if self.place_has_raw_deref(place) => {
                 self.interpret_raw_deref_write(place, rvalue, span);
             }
 
@@ -178,11 +177,37 @@ impl SepEngine {
         }
     }
 
+    fn place_has_raw_deref(&self, place: &Place) -> bool {
+        let Some(mut ty) = self.local_tys.get(place.local).cloned() else {
+            return place.projections.iter().any(|proj| matches!(proj, Projection::Deref));
+        };
+
+        for proj in &place.projections {
+            match proj {
+                Projection::Deref => match ty {
+                    Ty::RawPtr { .. } => return true,
+                    Ty::Ref { inner, .. } => ty = *inner,
+                    _ => return false,
+                },
+                _ => {
+                    let Some(next_ty) = crate::project_ty(ty, proj) else {
+                        return false;
+                    };
+                    ty = next_ty;
+                }
+            }
+        }
+
+        false
+    }
+
     /// Pattern 1: Raw pointer dereference read.
     ///
     /// Generates VCs for: null check, allocation validity, provenance bounds.
     fn interpret_raw_deref_read(&mut self, src: &Place, span: &SourceSpan) {
-        let ptr_name = self.local_to_ptr.get(&src.local)
+        let ptr_name = self
+            .local_to_ptr
+            .get(&src.local)
             .cloned()
             .unwrap_or_else(|| format!("_{}.*", src.local));
 
@@ -200,25 +225,17 @@ impl SepEngine {
     /// Pattern 2: Raw pointer dereference write.
     ///
     /// Generates VCs for: all read checks + write permission + post-write consistency.
-    fn interpret_raw_deref_write(
-        &mut self,
-        dest: &Place,
-        rvalue: &Rvalue,
-        span: &SourceSpan,
-    ) {
-        let ptr_name = self.local_to_ptr.get(&dest.local)
+    fn interpret_raw_deref_write(&mut self, dest: &Place, rvalue: &Rvalue, span: &SourceSpan) {
+        let ptr_name = self
+            .local_to_ptr
+            .get(&dest.local)
             .cloned()
             .unwrap_or_else(|| format!("_{}.*", dest.local));
 
         let value_formula = rvalue_to_formula(rvalue);
 
         // Generate heap-aware write VCs
-        let write_vcs = self.heap.write_vc(
-            &ptr_name,
-            &value_formula,
-            &self.func_name,
-            span,
-        );
+        let write_vcs = self.heap.write_vc(&ptr_name, &value_formula, &self.func_name, span);
         if write_vcs.is_empty() {
             // Pointer not tracked; fall back to raw_write_vc
             let vcs = crate::separation_logic::raw_write_vc(
@@ -235,12 +252,7 @@ impl SepEngine {
             if let Some(ptr) = self.heap.pointer(&ptr_name) {
                 let addr = ptr.addr.clone();
                 let prov = ptr.provenance;
-                self.heap.write_cell(
-                    &format!("cell_{ptr_name}"),
-                    addr,
-                    value_formula,
-                    prov,
-                );
+                self.heap.write_cell(&format!("cell_{ptr_name}"), addr, value_formula, prov);
             }
         }
     }
@@ -263,7 +275,7 @@ impl SepEngine {
                         callee, self.func_name,
                     ),
                 },
-                function: self.func_name.clone(),
+                function: self.func_name.clone().into(),
                 location: span.clone(),
                 formula: Formula::Eq(
                     Box::new(Formula::Var(format!("ptr_{ptr_name}"), Sort::Int)),
@@ -280,7 +292,7 @@ impl SepEngine {
                         callee, prov,
                     ),
                 },
-                function: self.func_name.clone(),
+                function: self.func_name.clone().into(),
                 location: span.clone(),
                 formula: Formula::Le(
                     Box::new(Formula::Var(prov.size_var(), Sort::Int)),
@@ -299,12 +311,7 @@ impl SepEngine {
             self.interpret_ptr_copy(dest, span, callee);
         } else if lower.contains("mem::transmute") {
             // Pattern 7: transmute via call
-            let vcs = crate::separation_logic::transmute_vc(
-                &self.func_name,
-                "Src",
-                "Dst",
-                span,
-            );
+            let vcs = crate::separation_logic::transmute_vc(&self.func_name, "Src", "Dst", span);
             self.vcs.extend(vcs);
         }
     }
@@ -312,61 +319,58 @@ impl SepEngine {
     /// Pattern 4: Deallocation via Drop terminator.
     fn interpret_drop(&mut self, place: &Place, span: &SourceSpan) {
         if let Some(ptr_name) = self.local_to_ptr.get(&place.local).cloned()
-            && let Some(ptr) = self.heap.pointer(&ptr_name) {
-                let prov = ptr.provenance;
+            && let Some(ptr) = self.heap.pointer(&ptr_name)
+        {
+            let prov = ptr.provenance;
 
-                // VC: double-free check
-                if self.heap.is_freed(prov) {
-                    self.vcs.push(VerificationCondition {
-                        kind: VcKind::Assertion {
-                            message: format!(
-                                "[unsafe:sep:free] double-free of `{ptr_name}` ({prov}) in {}",
-                                self.func_name,
-                            ),
-                        },
-                        function: self.func_name.clone(),
-                        location: span.clone(),
-                        formula: Formula::Bool(true), // definite violation
-                        contract_metadata: None,
-                    });
-                }
-
-                self.heap.free(prov);
+            // VC: double-free check
+            if self.heap.is_freed(prov) {
+                self.vcs.push(VerificationCondition {
+                    kind: VcKind::Assertion {
+                        message: format!(
+                            "[unsafe:sep:free] double-free of `{ptr_name}` ({prov}) in {}",
+                            self.func_name,
+                        ),
+                    },
+                    function: self.func_name.clone().into(),
+                    location: span.clone(),
+                    formula: Formula::Bool(true), // definite violation
+                    contract_metadata: None,
+                });
             }
+
+            self.heap.free(prov);
+        }
     }
 
     /// Deallocation via explicit dealloc::dealloc call.
     fn interpret_dealloc_call(&mut self, dest: &Place, span: &SourceSpan, callee: &str) {
         if let Some(ptr_name) = self.local_to_ptr.get(&dest.local).cloned()
-            && let Some(ptr) = self.heap.pointer(&ptr_name) {
-                let prov = ptr.provenance;
-                if self.heap.is_freed(prov) {
-                    self.vcs.push(VerificationCondition {
-                        kind: VcKind::Assertion {
-                            message: format!(
-                                "[unsafe:sep:free] double-free via `{callee}` of `{ptr_name}` in {}",
-                                self.func_name,
-                            ),
-                        },
-                        function: self.func_name.clone(),
-                        location: span.clone(),
-                        formula: Formula::Bool(true),
-                        contract_metadata: None,
-                    });
-                }
-                self.heap.free(prov);
+            && let Some(ptr) = self.heap.pointer(&ptr_name)
+        {
+            let prov = ptr.provenance;
+            if self.heap.is_freed(prov) {
+                self.vcs.push(VerificationCondition {
+                    kind: VcKind::Assertion {
+                        message: format!(
+                            "[unsafe:sep:free] double-free via `{callee}` of `{ptr_name}` in {}",
+                            self.func_name,
+                        ),
+                    },
+                    function: self.func_name.clone().into(),
+                    location: span.clone(),
+                    formula: Formula::Bool(true),
+                    contract_metadata: None,
+                });
             }
+            self.heap.free(prov);
+        }
     }
 
     /// Pattern 5: ptr::copy / ptr::copy_nonoverlapping.
     ///
     /// VCs: source readable, destination writable, non-overlapping if nonoverlapping variant.
-    fn interpret_ptr_copy(
-        &mut self,
-        _dest: &Place,
-        span: &SourceSpan,
-        callee: &str,
-    ) {
+    fn interpret_ptr_copy(&mut self, _dest: &Place, span: &SourceSpan, callee: &str) {
         let src_name = "copy_src";
         let dst_name = "copy_dst";
 
@@ -375,20 +379,16 @@ impl SepEngine {
         self.vcs.extend(read_vcs);
 
         // Destination must be writable
-        let value = Formula::Var("copy_value".to_string(), Sort::Int);
-        let write_vcs = crate::separation_logic::raw_write_vc(
-            &self.func_name,
-            dst_name,
-            &value,
-            span,
-        );
+        let value = Formula::Var("copy_value".into(), Sort::Int);
+        let write_vcs =
+            crate::separation_logic::raw_write_vc(&self.func_name, dst_name, &value, span);
         self.vcs.extend(write_vcs);
 
         // Non-overlapping check for copy_nonoverlapping
         if callee.to_lowercase().contains("nonoverlapping") {
             let src_ptr = Formula::Var(format!("ptr_{src_name}"), Sort::Int);
             let dst_ptr = Formula::Var(format!("ptr_{dst_name}"), Sort::Int);
-            let count = Formula::Var("copy_count".to_string(), Sort::Int);
+            let count = Formula::Var("copy_count".into(), Sort::Int);
 
             // Overlap: src < dst + count AND dst < src + count
             self.vcs.push(VerificationCondition {
@@ -398,22 +398,16 @@ impl SepEngine {
                         callee, self.func_name,
                     ),
                 },
-                function: self.func_name.clone(),
+                function: self.func_name.clone().into(),
                 location: span.clone(),
                 formula: Formula::And(vec![
                     Formula::Lt(
                         Box::new(src_ptr.clone()),
-                        Box::new(Formula::Add(
-                            Box::new(dst_ptr.clone()),
-                            Box::new(count.clone()),
-                        )),
+                        Box::new(Formula::Add(Box::new(dst_ptr.clone()), Box::new(count.clone()))),
                     ),
                     Formula::Lt(
                         Box::new(dst_ptr),
-                        Box::new(Formula::Add(
-                            Box::new(src_ptr),
-                            Box::new(count),
-                        )),
+                        Box::new(Formula::Add(Box::new(src_ptr), Box::new(count))),
                     ),
                 ]),
                 contract_metadata: None,
@@ -430,17 +424,12 @@ impl SepEngine {
         span: &SourceSpan,
     ) {
         let ptr_name = format!("raw_{}", dest.local);
-        let permission = if mutable {
-            PointerPermission::ReadWrite
-        } else {
-            PointerPermission::ReadOnly
-        };
+        let permission =
+            if mutable { PointerPermission::ReadWrite } else { PointerPermission::ReadOnly };
 
         // If source is tracked, derive provenance; otherwise create fresh
         let prov = if let Some(src_name) = self.local_to_ptr.get(&src_place.local) {
-            self.heap.pointer(src_name)
-                .map(|p| p.provenance)
-                .unwrap_or(ProvenanceId::UNKNOWN)
+            self.heap.pointer(src_name).map(|p| p.provenance).unwrap_or(ProvenanceId::UNKNOWN)
         } else {
             ProvenanceId::UNKNOWN
         };
@@ -467,7 +456,9 @@ impl SepEngine {
         offset_op: &Operand,
         span: &SourceSpan,
     ) {
-        let src_name = self.local_to_ptr.get(&src_place.local)
+        let src_name = self
+            .local_to_ptr
+            .get(&src_place.local)
             .cloned()
             .unwrap_or_else(|| format!("_{}", src_place.local));
 
@@ -475,20 +466,18 @@ impl SepEngine {
         self.local_to_ptr.insert(dest.local, dest_name.clone());
 
         // Derive provenance from source
-        let prov = self.heap.pointer(&src_name)
-            .map(|p| p.provenance)
-            .unwrap_or(ProvenanceId::UNKNOWN);
+        let prov =
+            self.heap.pointer(&src_name).map(|p| p.provenance).unwrap_or(ProvenanceId::UNKNOWN);
 
-        let permission = self.heap.pointer(&src_name)
+        let permission = self
+            .heap
+            .pointer(&src_name)
             .map(|p| p.permission)
             .unwrap_or(PointerPermission::ReadWrite);
 
         let offset_formula = operand_to_formula_simple(offset_op);
         let src_addr = Formula::Var(format!("ptr_{src_name}"), Sort::Int);
-        let dest_addr = Formula::Add(
-            Box::new(src_addr.clone()),
-            Box::new(offset_formula),
-        );
+        let dest_addr = Formula::Add(Box::new(src_addr.clone()), Box::new(offset_formula));
 
         let ptr = SymbolicPointer {
             addr: dest_addr,
@@ -511,14 +500,11 @@ impl SepEngine {
                         self.func_name,
                     ),
                 },
-                function: self.func_name.clone(),
+                function: self.func_name.clone().into(),
                 location: span.clone(),
                 formula: Formula::Or(vec![
                     // dest < base
-                    Formula::Lt(
-                        Box::new(dest_addr_var.clone()),
-                        Box::new(base.clone()),
-                    ),
+                    Formula::Lt(Box::new(dest_addr_var.clone()), Box::new(base.clone())),
                     // dest >= base + size
                     Formula::Not(Box::new(Formula::Lt(
                         Box::new(dest_addr_var),
@@ -531,18 +517,14 @@ impl SepEngine {
     }
 
     /// Realloc: free old allocation, create new one.
-    fn interpret_realloc(
-        &mut self,
-        dest: &Place,
-        span: &SourceSpan,
-        callee: &str,
-    ) {
+    fn interpret_realloc(&mut self, dest: &Place, span: &SourceSpan, callee: &str) {
         // Free old allocation if tracked
         if let Some(ptr_name) = self.local_to_ptr.get(&dest.local).cloned()
-            && let Some(ptr) = self.heap.pointer(&ptr_name) {
-                let prov = ptr.provenance;
-                self.heap.free(prov);
-            }
+            && let Some(ptr) = self.heap.pointer(&ptr_name)
+        {
+            let prov = ptr.provenance;
+            self.heap.free(prov);
+        }
 
         // Allocate new region
         let prov = self.heap.allocate(&format!("realloc_{}", dest.local));
@@ -557,7 +539,7 @@ impl SepEngine {
                     callee, self.func_name,
                 ),
             },
-            function: self.func_name.clone(),
+            function: self.func_name.clone().into(),
             location: span.clone(),
             formula: Formula::Eq(
                 Box::new(Formula::Var(format!("ptr_{ptr_name}"), Sort::Int)),
@@ -574,7 +556,7 @@ impl SepEngine {
                     callee, prov,
                 ),
             },
-            function: self.func_name.clone(),
+            function: self.func_name.clone().into(),
             location: span.clone(),
             formula: Formula::Le(
                 Box::new(Formula::Var(prov.size_var(), Sort::Int)),
@@ -586,14 +568,13 @@ impl SepEngine {
 
     /// Interpret a Ref rvalue (borrow creation).
     fn interpret_ref(&mut self, dest: &Place, src_place: &Place, mutable: bool) {
-        let permission = if mutable {
-            PointerPermission::ReadWrite
-        } else {
-            PointerPermission::ReadOnly
-        };
+        let permission =
+            if mutable { PointerPermission::ReadWrite } else { PointerPermission::ReadOnly };
 
         let (prov, ptr_name) = if let Some(src_name) = self.local_to_ptr.get(&src_place.local) {
-            let p = self.heap.pointer(src_name)
+            let p = self
+                .heap
+                .pointer(src_name)
                 .map(|ptr| ptr.provenance)
                 .unwrap_or(ProvenanceId::UNKNOWN);
             (p, format!("ref_{}", dest.local))
@@ -616,11 +597,9 @@ impl SepEngine {
     /// `before` but are unchanged in the current heap. This enables the
     /// frame rule: `{P} C {Q}` implies `{P * R} C {Q * R}` when R is
     /// the frame.
+    #[cfg(test)]
     #[must_use]
-    pub(crate) fn compute_frame(
-        before: &SymbolicHeap,
-        after: &SymbolicHeap,
-    ) -> SepFormula {
+    pub(crate) fn compute_frame(before: &SymbolicHeap, after: &SymbolicHeap) -> SepFormula {
         let before_formula = before.to_sep_formula();
         let after_formula = after.to_sep_formula();
 
@@ -658,6 +637,7 @@ impl SepEngine {
 ///
 /// This is the natural extension for modeling arrays, slices, and
 /// multi-byte allocations in separation logic.
+#[cfg(test)]
 #[must_use]
 pub(crate) fn points_to_multi(base: &Formula, values: &[Formula]) -> SepFormula {
     if values.is_empty() {
@@ -671,10 +651,7 @@ pub(crate) fn points_to_multi(base: &Formula, values: &[Formula]) -> SepFormula 
             let addr = if i == 0 {
                 base.clone()
             } else {
-                Formula::Add(
-                    Box::new(base.clone()),
-                    Box::new(Formula::Int(i as i128)),
-                )
+                Formula::Add(Box::new(base.clone()), Box::new(Formula::Int(i as i128)))
             };
             SepFormula::points_to(addr, val.clone())
         })
@@ -702,23 +679,23 @@ pub(crate) fn check_sep_unsafe(func: &VerifiableFunction) -> Vec<VerificationCon
         return Vec::new();
     }
 
-    let mut engine = SepEngine::new(&func.name);
+    let mut engine = SepEngine::new(&func.name)
+        .with_local_tys(func.body.locals.iter().map(|local| local.ty.clone()).collect());
 
     // Initialize pointer tracking for ref-typed arguments
     for local in &func.body.locals {
-        if local.index > 0 && local.index <= func.body.arg_count
-            && let trust_types::Ty::Ref { mutable, .. } = &local.ty {
-                let ptr_name = format!("arg_{}", local.index);
-                let prov = engine.heap.allocate(&ptr_name);
-                let permission = if *mutable {
-                    PointerPermission::ReadWrite
-                } else {
-                    PointerPermission::ReadOnly
-                };
-                let ptr = SymbolicPointer::new(&ptr_name, prov, permission);
-                engine.heap.track_pointer(ptr);
-                engine.local_to_ptr.insert(local.index, ptr_name);
-            }
+        if local.index > 0
+            && local.index <= func.body.arg_count
+            && let trust_types::Ty::Ref { mutable, .. } = &local.ty
+        {
+            let ptr_name = format!("arg_{}", local.index);
+            let prov = engine.heap.allocate(&ptr_name);
+            let permission =
+                if *mutable { PointerPermission::ReadWrite } else { PointerPermission::ReadOnly };
+            let ptr = SymbolicPointer::new(&ptr_name, prov, permission);
+            engine.heap.track_pointer(ptr);
+            engine.local_to_ptr.insert(local.index, ptr_name);
+        }
     }
 
     // Forward walk through blocks
@@ -741,23 +718,22 @@ pub(crate) fn check_sep_unsafe(func: &VerifiableFunction) -> Vec<VerificationCon
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-/// Check if a place has a Deref projection.
-fn has_deref(place: &Place) -> bool {
-    place.projections.iter().any(|p| matches!(p, Projection::Deref))
-}
-
 /// Check if a function contains patterns that warrant sep-logic analysis.
 fn has_unsafe_patterns(func: &VerifiableFunction) -> bool {
     for block in &func.body.blocks {
         for stmt in &block.stmts {
             if let Statement::Assign { place, rvalue, .. } = stmt {
                 // Deref on source or destination
-                if has_deref(place) {
+                if crate::place_has_raw_deref(func, place) {
                     return true;
                 }
                 match rvalue {
-                    Rvalue::Use(Operand::Copy(p) | Operand::Move(p))
-                    | Rvalue::CopyForDeref(p) if has_deref(p) => return true,
+                    Rvalue::Use(operand) if crate::operand_has_raw_deref(func, operand) => {
+                        return true;
+                    }
+                    Rvalue::CopyForDeref(place) if crate::place_has_raw_deref(func, place) => {
+                        return true;
+                    }
                     Rvalue::AddressOf(_, _) => return true,
                     _ => {}
                 }
@@ -802,7 +778,7 @@ fn is_realloc_call(lower: &str) -> bool {
 fn rvalue_to_formula(rvalue: &Rvalue) -> Formula {
     match rvalue {
         Rvalue::Use(op) => operand_to_formula_simple(op),
-        _ => Formula::Var("rval".to_string(), Sort::Int),
+        _ => Formula::Var("rval".into(), Sort::Int),
     }
 }
 
@@ -823,9 +799,9 @@ fn operand_to_formula_simple(op: &Operand) -> Formula {
                 Formula::Var(format!("float_{f}"), Sort::BitVec(64))
             }
             trust_types::ConstValue::Unit => Formula::Int(0),
-            _ => Formula::Var("__unknown_const".to_string(), Sort::Int),
+            _ => Formula::Var("__unknown_const".into(), Sort::Int),
         },
-        _ => Formula::Var("__unknown_operand".to_string(), Sort::Int),
+        _ => Formula::Var("__unknown_operand".into(), Sort::Int),
     }
 }
 
@@ -837,9 +813,8 @@ fn operand_to_formula_simple(op: &Operand) -> Formula {
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BlockId, LocalDecl, Operand, Place, Projection, Rvalue,
-        SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody,
-        VerifiableFunction, ProofLevel,
+        BasicBlock, BlockId, LocalDecl, Operand, Place, Projection, ProofLevel, Rvalue, SourceSpan,
+        Statement, Terminator, Ty, VcKind, VerifiableBody, VerifiableFunction,
     };
 
     fn empty_span() -> SourceSpan {
@@ -856,12 +831,7 @@ mod tests {
             name: name.to_string(),
             def_path: format!("test::{name}"),
             span: empty_span(),
-            body: VerifiableBody {
-                return_ty: Ty::Unit,
-                locals,
-                arg_count,
-                blocks,
-            },
+            body: VerifiableBody { return_ty: Ty::Unit, locals, arg_count, blocks },
             contracts: vec![],
             preconditions: vec![],
             postconditions: vec![],
@@ -894,7 +864,11 @@ mod tests {
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("val".into()) },
-                LocalDecl { index: 2, ty: Ty::u32(), name: Some("ptr".into()) },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::RawPtr { mutable: false, pointee: Box::new(Ty::u32()) },
+                    name: Some("ptr".into()),
+                },
             ],
             0,
             vec![BasicBlock {
@@ -928,16 +902,17 @@ mod tests {
             "deref_write",
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::u32(), name: Some("ptr".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::RawPtr { mutable: true, pointee: Box::new(Ty::u32()) },
+                    name: Some("ptr".into()),
+                },
             ],
             0,
             vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![Statement::Assign {
-                    place: Place {
-                        local: 1,
-                        projections: vec![Projection::Deref],
-                    },
+                    place: Place { local: 1, projections: vec![Projection::Deref] },
                     rvalue: Rvalue::Use(Operand::Constant(trust_types::ConstValue::Uint(42, 32))),
                     span: empty_span(),
                 }],
@@ -965,27 +940,29 @@ mod tests {
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("ptr".into()) },
             ],
             0,
-            vec![BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Call {
-                    func: "std::alloc::alloc".to_string(),
-                    args: vec![],
-                    dest: Place::local(1),
-                    target: Some(BlockId(1)),
-                    span: empty_span(),
-                    atomic: None,
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Call {
+                        func: "std::alloc::alloc".to_string(),
+                        args: vec![],
+                        dest: Place::local(1),
+                        target: Some(BlockId(1)),
+                        span: empty_span(),
+                        atomic: None,
+                    },
                 },
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            }],
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            ],
         );
 
         let vcs = check_sep_unsafe(&func);
-        assert!(vcs.len() >= 2, "alloc should produce at least 2 VCs (null + size), got {}", vcs.len());
+        assert!(
+            vcs.len() >= 2,
+            "alloc should produce at least 2 VCs (null + size), got {}",
+            vcs.len()
+        );
         assert!(vcs.iter().any(|vc| matches!(
             &vc.kind,
             VcKind::Assertion { message } if message.contains("null check")
@@ -1038,19 +1015,18 @@ mod tests {
                         span: empty_span(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(3),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
             ],
         );
 
         let vcs = check_sep_unsafe(&func);
-        assert!(vcs.iter().any(|vc| matches!(
-            &vc.kind,
-            VcKind::Assertion { message } if message.contains("double-free")
-        )), "double drop should produce a double-free VC");
+        assert!(
+            vcs.iter().any(|vc| matches!(
+                &vc.kind,
+                VcKind::Assertion { message } if message.contains("double-free")
+            )),
+            "double drop should produce a double-free VC"
+        );
     }
 
     // ── Pattern 5: ptr::copy_nonoverlapping ───────────────────────────
@@ -1064,30 +1040,31 @@ mod tests {
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("dst".into()) },
             ],
             0,
-            vec![BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Call {
-                    func: "std::ptr::copy_nonoverlapping".to_string(),
-                    args: vec![],
-                    dest: Place::local(1),
-                    target: Some(BlockId(1)),
-                    span: empty_span(),
-                    atomic: None,
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Call {
+                        func: "std::ptr::copy_nonoverlapping".to_string(),
+                        args: vec![],
+                        dest: Place::local(1),
+                        target: Some(BlockId(1)),
+                        span: empty_span(),
+                        atomic: None,
+                    },
                 },
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            }],
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            ],
         );
 
         let vcs = check_sep_unsafe(&func);
-        assert!(vcs.iter().any(|vc| matches!(
-            &vc.kind,
-            VcKind::Assertion { message } if message.contains("overlap")
-        )), "copy_nonoverlapping should produce an overlap check VC");
+        assert!(
+            vcs.iter().any(|vc| matches!(
+                &vc.kind,
+                VcKind::Assertion { message } if message.contains("overlap")
+            )),
+            "copy_nonoverlapping should produce an overlap check VC"
+        );
     }
 
     // ── Pattern 6: AddressOf ──────────────────────────────────────────
@@ -1114,10 +1091,13 @@ mod tests {
         );
 
         let vcs = check_sep_unsafe(&func);
-        assert!(vcs.iter().any(|vc| matches!(
-            &vc.kind,
-            VcKind::Assertion { message } if message.contains("&raw mut")
-        )), "AddressOf should produce a source liveness VC");
+        assert!(
+            vcs.iter().any(|vc| matches!(
+                &vc.kind,
+                VcKind::Assertion { message } if message.contains("&raw mut")
+            )),
+            "AddressOf should produce a source liveness VC"
+        );
     }
 
     // ── Pattern 7: Transmute ──────────────────────────────────────────
@@ -1131,23 +1111,21 @@ mod tests {
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("val".into()) },
             ],
             0,
-            vec![BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Call {
-                    func: "std::mem::transmute".to_string(),
-                    args: vec![],
-                    dest: Place::local(1),
-                    target: Some(BlockId(1)),
-                    span: empty_span(),
-                    atomic: None,
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Call {
+                        func: "std::mem::transmute".to_string(),
+                        args: vec![],
+                        dest: Place::local(1),
+                        target: Some(BlockId(1)),
+                        span: empty_span(),
+                        atomic: None,
+                    },
                 },
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            }],
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            ],
         );
 
         let vcs = check_sep_unsafe(&func);
@@ -1162,21 +1140,21 @@ mod tests {
 
     #[test]
     fn test_points_to_multi_empty() {
-        let base = Formula::Var("base".to_string(), Sort::Int);
+        let base = Formula::Var("base".into(), Sort::Int);
         let result = points_to_multi(&base, &[]);
         assert!(result.is_emp());
     }
 
     #[test]
     fn test_points_to_multi_single() {
-        let base = Formula::Var("base".to_string(), Sort::Int);
+        let base = Formula::Var("base".into(), Sort::Int);
         let result = points_to_multi(&base, &[Formula::Int(42)]);
         assert_eq!(result.cell_count(), 1);
     }
 
     #[test]
     fn test_points_to_multi_multiple() {
-        let base = Formula::Var("base".to_string(), Sort::Int);
+        let base = Formula::Var("base".into(), Sort::Int);
         let values = vec![Formula::Int(1), Formula::Int(2), Formula::Int(3)];
         let result = points_to_multi(&base, &values);
         assert_eq!(result.cell_count(), 3);
@@ -1257,24 +1235,26 @@ mod tests {
             "mixed_unsafe",
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::u32(), name: Some("ptr".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::RawPtr { mutable: false, pointee: Box::new(Ty::u32()) },
+                    name: Some("ptr".into()),
+                },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("val".into()) },
             ],
             0,
-            vec![
-                BasicBlock {
-                    id: BlockId(0),
-                    stmts: vec![Statement::Assign {
-                        place: Place::local(2),
-                        rvalue: Rvalue::Use(Operand::Copy(Place {
-                            local: 1,
-                            projections: vec![Projection::Deref],
-                        })),
-                        span: empty_span(),
-                    }],
-                    terminator: Terminator::Return,
-                },
-            ],
+            vec![BasicBlock {
+                id: BlockId(0),
+                stmts: vec![Statement::Assign {
+                    place: Place::local(2),
+                    rvalue: Rvalue::Use(Operand::Copy(Place {
+                        local: 1,
+                        projections: vec![Projection::Deref],
+                    })),
+                    span: empty_span(),
+                }],
+                terminator: Terminator::Return,
+            }],
         );
 
         let vcs = check_sep_unsafe(&func);
@@ -1319,12 +1299,7 @@ mod tests {
         );
 
         let vcs = check_sep_unsafe(&func);
-        // Ref args are tracked; read through them should produce heap-aware VCs
-        // (provenance bounds check, not use-after-free)
-        assert!(!vcs.iter().any(|vc| matches!(
-            &vc.kind,
-            VcKind::Assertion { message } if message.contains("use-after-free")
-        )), "valid ref arg read should not produce use-after-free VC");
+        assert!(vcs.is_empty(), "safe reference deref should not enter sep analysis");
     }
 
     // ── Use-after-free detection ──────────────────────────────────────
@@ -1336,7 +1311,11 @@ mod tests {
             "use_after_free",
             vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl { index: 1, ty: Ty::u32(), name: Some("ptr".into()) },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::RawPtr { mutable: true, pointee: Box::new(Ty::u32()) },
+                    name: Some("ptr".into()),
+                },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("val".into()) },
             ],
             0,
@@ -1378,10 +1357,13 @@ mod tests {
         );
 
         let vcs = check_sep_unsafe(&func);
-        assert!(vcs.iter().any(|vc| matches!(
-            &vc.kind,
-            VcKind::Assertion { message } if message.contains("use-after-free")
-        )), "reading freed pointer should produce use-after-free VC");
+        assert!(
+            vcs.iter().any(|vc| matches!(
+                &vc.kind,
+                VcKind::Assertion { message } if message.contains("use-after-free")
+            )),
+            "reading freed pointer should produce use-after-free VC"
+        );
     }
 
     // ── Realloc ───────────────────────────────────────────────────────
@@ -1395,29 +1377,30 @@ mod tests {
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("ptr".into()) },
             ],
             0,
-            vec![BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Call {
-                    func: "std::alloc::realloc".to_string(),
-                    args: vec![],
-                    dest: Place::local(1),
-                    target: Some(BlockId(1)),
-                    span: empty_span(),
-                    atomic: None,
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![],
+                    terminator: Terminator::Call {
+                        func: "std::alloc::realloc".to_string(),
+                        args: vec![],
+                        dest: Place::local(1),
+                        target: Some(BlockId(1)),
+                        span: empty_span(),
+                        atomic: None,
+                    },
                 },
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            }],
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            ],
         );
 
         let vcs = check_sep_unsafe(&func);
-        assert!(vcs.iter().any(|vc| matches!(
-            &vc.kind,
-            VcKind::Assertion { message } if message.contains("realloc")
-        )), "realloc should produce VCs");
+        assert!(
+            vcs.iter().any(|vc| matches!(
+                &vc.kind,
+                VcKind::Assertion { message } if message.contains("realloc")
+            )),
+            "realloc should produce VCs"
+        );
     }
 }

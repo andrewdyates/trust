@@ -42,13 +42,13 @@ pub fn format_diag_message<'a>(message: &'a DiagMessage, args: &DiagArgMap) -> C
 fn format_fluent_str(message: &str, args: &DiagArgMap) -> Cow<'static, str> {
     trace!(?message, ?args);
     const GENERATED_MSG_ID: &str = "generated_msg";
-    let resource = FluentResource::try_new(format!("{GENERATED_MSG_ID} = {message}\n")).expect("invariant: generated fluent resource must parse"); // tRust: unwrap -> expect
+    let resource = FluentResource::try_new(format!("{GENERATED_MSG_ID} = {message}\n")).unwrap();
     let mut bundle = fluent_bundle::FluentBundle::new(vec![langid!("en-US")]);
     bundle.set_use_isolating(false);
-    bundle.add_resource(resource).expect("invariant: fluent bundle must accept resource"); // tRust: unwrap -> expect
+    bundle.add_resource(resource).unwrap();
     register_functions(&mut bundle);
-    let message = bundle.get_message(GENERATED_MSG_ID).expect("invariant: generated message ID must exist in bundle"); // tRust: unwrap -> expect
-    let value = message.value().expect("invariant: fluent message must have a value"); // tRust: unwrap -> expect
+    let message = bundle.get_message(GENERATED_MSG_ID).unwrap();
+    let value = message.value().unwrap();
     let args = to_fluent_args(args.iter());
 
     let mut errs = vec![];

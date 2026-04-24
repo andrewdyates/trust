@@ -153,7 +153,7 @@ impl<'tcx> MoveCheckVisitor<'tcx> {
             // This happens when the issue is in a function from a foreign crate that
             // we monomorphized in the current crate. We can't get a `HirId` for things
             // in other crates.
-            // tRust: known issue -- Find out where to report the lint on. Maybe simply crate-level lint root
+            // FIXME: Find out where to report the lint on. Maybe simply crate-level lint root
             // but correct span? This would make the lint at least accept crate-level lint attributes.
             return;
         };

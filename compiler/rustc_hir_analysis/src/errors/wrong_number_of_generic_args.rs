@@ -675,7 +675,7 @@ impl<'a, 'tcx> WrongNumberOfGenericArgs<'a, 'tcx> {
 
             AngleBrackets::Available => {
                 let (sugg_span, is_first) = if self.num_provided_lifetime_args() == 0 {
-                    (self.gen_args.span().expect("invariant: value is present").shrink_to_lo(), true)
+                    (self.gen_args.span().unwrap().shrink_to_lo(), true)
                 } else {
                     let last_lt = &self.gen_args.args[self.num_provided_lifetime_args() - 1];
                     (last_lt.span().shrink_to_hi(), false)
@@ -723,7 +723,7 @@ impl<'a, 'tcx> WrongNumberOfGenericArgs<'a, 'tcx> {
                 );
             }
             AngleBrackets::Available => {
-                let gen_args_span = self.gen_args.span().expect("invariant: value is present");
+                let gen_args_span = self.gen_args.span().unwrap();
                 let sugg_offset =
                     self.get_lifetime_args_offset() + self.num_provided_type_or_const_args();
 
@@ -1040,9 +1040,9 @@ impl<'a, 'tcx> WrongNumberOfGenericArgs<'a, 'tcx> {
             let span = self
                 .path_segment
                 .args
-                .expect("invariant: value is present")
+                .unwrap()
                 .span_ext()
-                .expect("invariant: value is present")
+                .unwrap()
                 .with_lo(self.path_segment.ident.span.hi());
 
             let msg = format!(
@@ -1055,7 +1055,7 @@ impl<'a, 'tcx> WrongNumberOfGenericArgs<'a, 'tcx> {
             );
 
             if span.is_empty() {
-                // tRust: known issue — Avoid ICE when types with the same name with `derive`s are in the same scope:
+                // HACK: Avoid ICE when types with the same name with `derive`s are in the same scope:
                 //     struct NotSM;
                 //     #[derive(PartialEq, Eq)]
                 //     struct NotSM<T>(T);

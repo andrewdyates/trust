@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-lsp: LSP server for tRust verification diagnostics
 //!
 //! Provides real-time verification feedback in VS Code / Neovim via the

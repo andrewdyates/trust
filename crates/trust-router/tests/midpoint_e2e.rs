@@ -83,9 +83,9 @@ fn midpoint_function() -> VerifiableFunction {
             return_ty: Ty::usize(),
         },
         contracts: vec![],
-            preconditions: vec![],
-            postconditions: vec![],
-            spec: Default::default(),
+        preconditions: vec![],
+        postconditions: vec![],
+        spec: Default::default(),
     }
 }
 
@@ -144,9 +144,9 @@ fn test_identity_function_no_vcs() {
             return_ty: Ty::u32(),
         },
         contracts: vec![],
-            preconditions: vec![],
-            postconditions: vec![],
-            spec: Default::default(),
+        preconditions: vec![],
+        postconditions: vec![],
+        spec: Default::default(),
     };
 
     let vcs = trust_vcgen::generate_vcs(&func);

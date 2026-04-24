@@ -207,7 +207,6 @@ fn inhabited_predicate_type<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> InhabitedP
             None => ty.inhabited_predicate(tcx).or(tcx, InhabitedPredicate::ConstIsZero(len)),
         },
 
-        // tRust: invariant: unexpected TyKind, use Ty::inhabited_predicate
         _ => bug!("unexpected TyKind, use `Ty::inhabited_predicate`"),
     }
 }

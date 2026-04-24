@@ -9,8 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::hash::{Hash, Hasher};
+use trust_types::fx::FxHashMap;
 
 use trust_types::{Formula, Sort, VerificationCondition, VerificationResult};
 
@@ -182,9 +182,7 @@ fn normalize_inner(
             let resolved = env.get(name).cloned().unwrap_or_else(|| name.clone());
             Formula::Var(resolved, sort.clone())
         }
-        Formula::Forall(bindings, body) => {
-            normalize_quantifier(bindings, body, true, env, counter)
-        }
+        Formula::Forall(bindings, body) => normalize_quantifier(bindings, body, true, env, counter),
         Formula::Exists(bindings, body) => {
             normalize_quantifier(bindings, body, false, env, counter)
         }
@@ -195,7 +193,7 @@ fn normalize_inner(
 
 /// Normalize a quantifier node (Forall or Exists).
 fn normalize_quantifier(
-    bindings: &[(String, Sort)],
+    bindings: &[(trust_types::Symbol, Sort)],
     body: &Formula,
     is_forall: bool,
     env: &mut FxHashMap<String, String>,
@@ -208,9 +206,10 @@ fn normalize_quantifier(
     for (name, sort) in bindings {
         let canonical = format!("__alpha_{counter}");
         *counter += 1;
-        saved.push((name.clone(), env.get(name).cloned()));
-        env.insert(name.clone(), canonical.clone());
-        new_bindings.push((canonical, sort.clone()));
+        let name_str = name.to_string();
+        saved.push((name_str.clone(), env.get(&name_str).cloned()));
+        env.insert(name_str, canonical.clone());
+        new_bindings.push((trust_types::Symbol::intern(&canonical), sort.clone()));
     }
 
     let new_body = normalize_inner(body, env, counter);
@@ -218,8 +217,12 @@ fn normalize_quantifier(
     // tRust #477: Restore previous bindings (important for nested quantifiers).
     for (name, old_val) in saved {
         match old_val {
-            Some(v) => { env.insert(name, v); }
-            None => { env.remove(&name); }
+            Some(v) => {
+                env.insert(name, v);
+            }
+            None => {
+                env.remove(&name);
+            }
         }
     }
 
@@ -238,8 +241,11 @@ fn normalize_structural(
 ) -> Formula {
     match f {
         // Leaves with no sub-formulas.
-        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_)
-        | Formula::BitVec { .. } | Formula::Var(..) => f.clone(),
+        Formula::Bool(_)
+        | Formula::Int(_)
+        | Formula::UInt(_)
+        | Formula::BitVec { .. }
+        | Formula::Var(..) => f.clone(),
 
         Formula::Not(a) => Formula::Not(Box::new(normalize_inner(a, env, counter))),
         Formula::Neg(a) => Formula::Neg(Box::new(normalize_inner(a, env, counter))),
@@ -386,19 +392,11 @@ fn normalize_structural(
         ),
 
         // Bitvector unary / conversions.
-        Formula::BvNot(a, w) => Formula::BvNot(
-            Box::new(normalize_inner(a, env, counter)),
-            *w,
-        ),
-        Formula::BvToInt(a, w, s) => Formula::BvToInt(
-            Box::new(normalize_inner(a, env, counter)),
-            *w,
-            *s,
-        ),
-        Formula::IntToBv(a, w) => Formula::IntToBv(
-            Box::new(normalize_inner(a, env, counter)),
-            *w,
-        ),
+        Formula::BvNot(a, w) => Formula::BvNot(Box::new(normalize_inner(a, env, counter)), *w),
+        Formula::BvToInt(a, w, s) => {
+            Formula::BvToInt(Box::new(normalize_inner(a, env, counter)), *w, *s)
+        }
+        Formula::IntToBv(a, w) => Formula::IntToBv(Box::new(normalize_inner(a, env, counter)), *w),
         Formula::BvExtract { inner, high, low } => Formula::BvExtract {
             inner: Box::new(normalize_inner(inner, env, counter)),
             high: *high,
@@ -408,14 +406,12 @@ fn normalize_structural(
             Box::new(normalize_inner(a, env, counter)),
             Box::new(normalize_inner(b, env, counter)),
         ),
-        Formula::BvZeroExt(a, bits) => Formula::BvZeroExt(
-            Box::new(normalize_inner(a, env, counter)),
-            *bits,
-        ),
-        Formula::BvSignExt(a, bits) => Formula::BvSignExt(
-            Box::new(normalize_inner(a, env, counter)),
-            *bits,
-        ),
+        Formula::BvZeroExt(a, bits) => {
+            Formula::BvZeroExt(Box::new(normalize_inner(a, env, counter)), *bits)
+        }
+        Formula::BvSignExt(a, bits) => {
+            Formula::BvSignExt(Box::new(normalize_inner(a, env, counter)), *bits)
+        }
 
         // Ternary.
         Formula::Ite(cond, then_f, else_f) => Formula::Ite(
@@ -557,24 +553,75 @@ fn hash_formula(f: &Formula, h: &mut impl Hasher) {
             hash_formula(a, h);
         }
         // Bitvector binary ops.
-        Formula::BvAdd(a, b, w) => { TAG_BV_ADD.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvSub(a, b, w) => { TAG_BV_SUB.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvMul(a, b, w) => { TAG_BV_MUL.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvUDiv(a, b, w) => { TAG_BV_UDIV.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvSDiv(a, b, w) => { TAG_BV_SDIV.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvURem(a, b, w) => { TAG_BV_UREM.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvSRem(a, b, w) => { TAG_BV_SREM.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvAnd(a, b, w) => { TAG_BV_AND.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvOr(a, b, w) => { TAG_BV_OR.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvXor(a, b, w) => { TAG_BV_XOR.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvShl(a, b, w) => { TAG_BV_SHL.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvLShr(a, b, w) => { TAG_BV_LSHR.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvAShr(a, b, w) => { TAG_BV_ASHR.hash(h); hash_bv_binary(a, b, *w, h); }
+        Formula::BvAdd(a, b, w) => {
+            TAG_BV_ADD.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvSub(a, b, w) => {
+            TAG_BV_SUB.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvMul(a, b, w) => {
+            TAG_BV_MUL.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvUDiv(a, b, w) => {
+            TAG_BV_UDIV.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvSDiv(a, b, w) => {
+            TAG_BV_SDIV.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvURem(a, b, w) => {
+            TAG_BV_UREM.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvSRem(a, b, w) => {
+            TAG_BV_SREM.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvAnd(a, b, w) => {
+            TAG_BV_AND.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvOr(a, b, w) => {
+            TAG_BV_OR.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvXor(a, b, w) => {
+            TAG_BV_XOR.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvShl(a, b, w) => {
+            TAG_BV_SHL.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvLShr(a, b, w) => {
+            TAG_BV_LSHR.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvAShr(a, b, w) => {
+            TAG_BV_ASHR.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
         // Bitvector comparisons.
-        Formula::BvULt(a, b, w) => { TAG_BV_ULT.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvULe(a, b, w) => { TAG_BV_ULE.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvSLt(a, b, w) => { TAG_BV_SLT.hash(h); hash_bv_binary(a, b, *w, h); }
-        Formula::BvSLe(a, b, w) => { TAG_BV_SLE.hash(h); hash_bv_binary(a, b, *w, h); }
+        Formula::BvULt(a, b, w) => {
+            TAG_BV_ULT.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvULe(a, b, w) => {
+            TAG_BV_ULE.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvSLt(a, b, w) => {
+            TAG_BV_SLT.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
+        Formula::BvSLe(a, b, w) => {
+            TAG_BV_SLE.hash(h);
+            hash_bv_binary(a, b, *w, h);
+        }
         // Bitvector unary / conversions.
         Formula::BvNot(a, w) => {
             TAG_BV_NOT.hash(h);
@@ -662,7 +709,7 @@ fn hash_bv_binary(a: &Formula, b: &Formula, w: u32, h: &mut impl Hasher) {
 }
 
 /// Hash quantifier bindings (name, sort pairs).
-fn hash_bindings(bindings: &[(String, Sort)], h: &mut impl Hasher) {
+fn hash_bindings(bindings: &[(trust_types::Symbol, Sort)], h: &mut impl Hasher) {
     bindings.len().hash(h);
     for (name, sort) in bindings {
         name.hash(h);
@@ -688,7 +735,7 @@ mod tests {
     fn make_vc(kind: VcKind, formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -700,8 +747,10 @@ mod tests {
         VerificationResult::Proved {
             solver: "z4".into(),
             time_ms: 1,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     #[test]
@@ -796,14 +845,14 @@ mod tests {
 
     #[test]
     fn test_vc_fingerprint_same_kind_same_formula() {
-        let vc1 = make_vc(VcKind::DivisionByZero, Formula::Eq(
-            Box::new(var("y")),
-            Box::new(Formula::Int(0)),
-        ));
-        let vc2 = make_vc(VcKind::DivisionByZero, Formula::Eq(
-            Box::new(var("y")),
-            Box::new(Formula::Int(0)),
-        ));
+        let vc1 = make_vc(
+            VcKind::DivisionByZero,
+            Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))),
+        );
+        let vc2 = make_vc(
+            VcKind::DivisionByZero,
+            Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))),
+        );
         assert_eq!(vc_fingerprint(&vc1), vc_fingerprint(&vc2));
     }
 
@@ -878,10 +927,7 @@ mod tests {
         assert_eq!(dedup.len(), 0);
         assert!(dedup.is_empty());
 
-        dedup.record(
-            &make_vc(VcKind::DivisionByZero, Formula::Bool(true)),
-            proved(),
-        );
+        dedup.record(&make_vc(VcKind::DivisionByZero, Formula::Bool(true)), proved());
         assert_eq!(dedup.len(), 1);
         assert!(!dedup.is_empty());
 
@@ -972,11 +1018,8 @@ mod tests {
     fn test_formula_fingerprint_array_ops() {
         let arr = Formula::Var("arr".into(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)));
         let sel = Formula::Select(Box::new(arr.clone()), Box::new(Formula::Int(0)));
-        let sto = Formula::Store(
-            Box::new(arr),
-            Box::new(Formula::Int(0)),
-            Box::new(Formula::Int(42)),
-        );
+        let sto =
+            Formula::Store(Box::new(arr), Box::new(Formula::Int(0)), Box::new(Formula::Int(42)));
         assert_ne!(
             formula_fingerprint(&sel),
             formula_fingerprint(&sto),

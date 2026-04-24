@@ -51,11 +51,10 @@ fn recurse_build<'tcx>(
         | &ExprKind::ValueTypeAscription { source, .. } => {
             recurse_build(tcx, body, source, root_span)?
         }
-        // tRust: UnsafeBinder expressions in const evaluation are not yet supported
         &ExprKind::PlaceUnwrapUnsafeBinder { .. }
         | &ExprKind::ValueUnwrapUnsafeBinder { .. }
         | &ExprKind::WrapUnsafeBinder { .. } => {
-            bug!("unimplemented: UnsafeBinder expressions in const evaluation are not yet supported")
+            todo!("FIXME(unsafe_binders)")
         }
         &ExprKind::Literal { lit, neg } => {
             let sp = node.span;
@@ -130,14 +129,14 @@ fn recurse_build<'tcx>(
 
             // Skip reborrows for now until we allow Deref/Borrow/RawBorrow
             // expressions.
-            // tRust: known issue (generic_const_exprs) — Verify/explain why this is sound
+            // FIXME(generic_const_exprs): Verify/explain why this is sound
             if let ExprKind::Deref { arg } = arg_node.kind {
                 recurse_build(tcx, body, arg, root_span)?
             } else {
                 maybe_supported_error(GenericConstantTooComplexSub::BorrowNotSupported(node.span))?
             }
         }
-        // tRust: known issue (generic_const_exprs) — We may want to support these.
+        // FIXME(generic_const_exprs): We may want to support these.
         ExprKind::RawBorrow { .. } | ExprKind::Deref { .. } => maybe_supported_error(
             GenericConstantTooComplexSub::AddressAndDerefNotSupported(node.span),
         )?,
@@ -190,7 +189,7 @@ fn recurse_build<'tcx>(
         ExprKind::Assign { .. } | ExprKind::AssignOp { .. } => {
             error(GenericConstantTooComplexSub::AssignNotSupported(node.span))?
         }
-        // tRust: known issue (explicit_tail_calls) — maybe get `become` a new error
+        // FIXME(explicit_tail_calls): maybe get `become` a new error
         ExprKind::Closure { .. } | ExprKind::Return { .. } | ExprKind::Become { .. } => {
             error(GenericConstantTooComplexSub::ClosureAndReturnNotSupported(node.span))?
         }
@@ -356,7 +355,7 @@ fn thir_abstract_const<'tcx>(
     }
 
     match tcx.def_kind(def) {
-        // tRust: known issue (generic_const_exprs) — We currently only do this for anonymous constants,
+        // FIXME(generic_const_exprs): We currently only do this for anonymous constants,
         // meaning that we do not look into associated constants. I(@lcnr) am not yet sure whether
         // we want to look into them or treat them as opaque projections.
         //

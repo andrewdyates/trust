@@ -466,7 +466,7 @@ impl<'a> Parser<'a> {
             && self.look_ahead(1, |t| {
                 matches!(t.kind, token::Lt | token::OpenBrace | token::OpenParen)
             }) {
-            self.parse_ident_common(true).expect("invariant: token is a valid identifier") // tRust: unwrap -> expect
+            self.parse_ident_common(true).unwrap()
         } else {
             return Ok(());
         };
@@ -646,7 +646,7 @@ impl<'a> Parser<'a> {
         };
 
         if let Const::No = constness {
-            // tRust: known issue —(const_trait_impl): disallow `impl const Trait`
+            // FIXME(const_trait_impl): disallow `impl const Trait`
             constness = self.parse_constness(Case::Sensitive);
         }
 
@@ -869,7 +869,7 @@ impl<'a> Parser<'a> {
             }))
         } else {
             let rename = rename(self)?;
-            let ident = rename.unwrap_or_else(|| path.segments.last().expect("invariant: collection is non-empty").ident); // tRust: unwrap -> expect
+            let ident = rename.unwrap_or_else(|| path.segments.last().unwrap().ident);
 
             ItemKind::Delegation(Box::new(Delegation {
                 id: DUMMY_NODE_ID,
@@ -987,7 +987,7 @@ impl<'a> Parser<'a> {
     fn recover_doc_comment_before_brace(&mut self) -> bool {
         if let token::DocComment(..) = self.token.kind {
             if self.look_ahead(1, |tok| tok == &token::CloseBrace) {
-                // tRust: known issue —: merge with `DocCommentDoesNotDocumentAnything` (E0585)
+                // FIXME: merge with `DocCommentDoesNotDocumentAnything` (E0585)
                 struct_span_code_err!(
                     self.dcx(),
                     self.token.span,
@@ -1094,7 +1094,7 @@ impl<'a> Parser<'a> {
 
     /// Parses `const? unsafe? auto? [impl(in? path)]? trait Foo { ... }` or `trait Foo = Bar;`.
     ///
-    /// tRust: known issue —(restrictions): The current keyword order follows the grammar specified in RFC 3323.
+    /// FIXME(restrictions): The current keyword order follows the grammar specified in RFC 3323.
     /// However, whether the restriction should be grouped closer to the visibility modifier
     /// (e.g., `pub impl(crate) const unsafe auto trait`) remains an unresolved design question.
     /// This ordering must be kept in sync with the logic in `check_trait_front_matter`.
@@ -1390,10 +1390,10 @@ impl<'a> Parser<'a> {
             idents.push(self.parse_ident()?);
         }
 
-        let fixed_name_sp = ident.span.to(idents.last().expect("invariant: collection is non-empty").span); // tRust: unwrap -> expect
+        let fixed_name_sp = ident.span.to(idents.last().unwrap().span);
         let mut fixed_name = ident.name.to_string();
         for part in idents {
-            write!(fixed_name, "_{}", part.name).expect("invariant: write to string/buffer cannot fail"); // tRust: unwrap -> expect
+            write!(fixed_name, "_{}", part.name).unwrap();
         }
 
         self.dcx().emit_err(errors::ExternCrateNameWithDashes {
@@ -1421,7 +1421,7 @@ impl<'a> Parser<'a> {
     ) -> PResult<'a, ItemKind> {
         let extern_span = self.prev_token_uninterpolated_span();
         let abi = self.parse_abi(); // ABI?
-        // tRust: known issue —: This recovery should be tested better.
+        // FIXME: This recovery should be tested better.
         if safety == Safety::Default
             && self.token.is_keyword(kw::Unsafe)
             && self.look_ahead(1, |t| *t == token::OpenBrace)
@@ -1488,7 +1488,7 @@ impl<'a> Parser<'a> {
     }
 
     fn error_bad_item_kind<T>(&self, span: Span, kind: &ItemKind, ctx: &'static str) -> Option<T> {
-        // tRust: known issue —(#100717): needs variant for each `ItemKind` (instead of using `ItemKind::descr()`)
+        // FIXME(#100717): needs variant for each `ItemKind` (instead of using `ItemKind::descr()`)
         let span = self.psess.source_map().guess_head_span(span);
         let descr = kind.descr();
         let help = match kind {
@@ -1599,7 +1599,7 @@ impl<'a> Parser<'a> {
         }
 
         // Parse the type of a static item. That is, the `":" $ty` fragment.
-        // tRust: known issue —: This could maybe benefit from `.may_recover()`?
+        // FIXME: This could maybe benefit from `.may_recover()`?
         let ty = match (self.eat(exp!(Colon)), self.check(exp!(Eq)) | self.check(exp!(Semi))) {
             (true, false) => self.parse_ty()?,
             // If there wasn't a `:` or the colon was followed by a `=` or `;`, recover a missing
@@ -1639,7 +1639,7 @@ impl<'a> Parser<'a> {
         }
 
         // Parse the type of a constant item. That is, the `":" $ty` fragment.
-        // tRust: known issue —: This could maybe benefit from `.may_recover()`?
+        // FIXME: This could maybe benefit from `.may_recover()`?
         let ty = match (
             self.eat(exp!(Colon)),
             self.check(exp!(Eq)) | self.check(exp!(Semi)) | self.check_keyword(exp!(Where)),
@@ -1684,7 +1684,7 @@ impl<'a> Parser<'a> {
                         }
                     })
                 } else {
-                    // tRust: known issue —(generic_const_items): Provide a structured suggestion to merge the first
+                    // FIXME(generic_const_items): Provide a structured suggestion to merge the first
                     // where-clause into the second one.
                     None
                 },
@@ -2514,7 +2514,7 @@ impl<'a> Parser<'a> {
             span,
             "macros that expand to items must be delimited with braces or followed by a semicolon",
         );
-        // tRust: known issue —: This will make us not emit the help even for declarative
+        // FIXME: This will make us not emit the help even for declarative
         // macros within the same crate (that we can fix), which is sad.
         if !span.from_expansion() {
             let DelimSpan { open, close } = args.dspan;
@@ -2562,7 +2562,7 @@ impl<'a> Parser<'a> {
                 ForceCollect::No,
                 AllowConstBlockItems::DoesNotMatter, // self.token != kw::Const
             )?;
-            let mut item = item.expect("invariant: item was parsed").span; // tRust: unwrap -> expect
+            let mut item = item.unwrap().span;
             if self.token == token::Comma {
                 item = item.to(self.token.span);
             }
@@ -2655,7 +2655,7 @@ pub(crate) struct FnParseMode {
 }
 
 /// The context in which a function is parsed.
-/// tRust: known issue —(estebank, xizheyin): Use more variants.
+/// FIXME(estebank, xizheyin): Use more variants.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FnContext {
     /// Free context.
@@ -3005,7 +3005,7 @@ impl<'a> Parser<'a> {
                 suggestion: async_span.until(self.token.span),
             });
         }
-        // tRust: known issue —(gen_blocks): emit a similar error for `gen fn()`
+        // FIXME(gen_blocks): emit a similar error for `gen fn()`
 
         let unsafe_start_sp = self.token.span;
         let safety = self.parse_safety(case);
@@ -3090,7 +3090,7 @@ impl<'a> Parser<'a> {
                                     closure_id: DUMMY_NODE_ID,
                                     return_impl_trait_id: DUMMY_NODE_ID,
                                 });
-                                // tRust: known issue —(gen_blocks): This span is wrong, didn't want to think about it.
+                                // FIXME(gen_blocks): This span is wrong, didn't want to think about it.
                                 Some(WrongKw::Misplaced(unsafe_start_sp))
                             }
                             None => {
@@ -3163,7 +3163,7 @@ impl<'a> Parser<'a> {
                         let correct_pos_sp = correct_pos_sp.to(self.prev_token.span);
                         if let Ok(current_qual) = self.span_to_snippet(correct_pos_sp) {
                             let misplaced_qual_sp = self.token_uninterpolated_span();
-                            let misplaced_qual = self.span_to_snippet(misplaced_qual_sp).expect("invariant: span maps to valid source"); // tRust: unwrap -> expect
+                            let misplaced_qual = self.span_to_snippet(misplaced_qual_sp).unwrap();
 
                             err.span_suggestion(
                                     correct_pos_sp.to(misplaced_qual_sp),
@@ -3209,7 +3209,7 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    // tRust: known issue —(gen_blocks): add keyword recovery logic for genness
+                    // FIXME(gen_blocks): add keyword recovery logic for genness
 
                     if let Some(wrong_kw) = wrong_kw
                         && self.may_recover()

@@ -34,10 +34,7 @@ impl CongruenceValue {
     /// Create a congruence value from a constant.
     #[must_use]
     pub fn constant(value: u64) -> Self {
-        Self::Congruence {
-            modulus: 0,
-            residue: value,
-        }
+        Self::Congruence { modulus: 0, residue: value }
     }
 
     /// Create a congruence class.
@@ -46,20 +43,14 @@ impl CongruenceValue {
         if modulus == 0 {
             Self::Congruence { modulus: 0, residue }
         } else {
-            Self::Congruence {
-                modulus,
-                residue: residue % modulus,
-            }
+            Self::Congruence { modulus, residue: residue % modulus }
         }
     }
 
     /// Top: any value (modulus 1).
     #[must_use]
     pub fn top_value() -> Self {
-        Self::Congruence {
-            modulus: 1,
-            residue: 0,
-        }
+        Self::Congruence { modulus: 1, residue: 0 }
     }
 
     /// Check if this value contains a specific integer.
@@ -117,14 +108,8 @@ fn congruence_add(a: CongruenceValue, b: CongruenceValue) -> CongruenceValue {
     match (a, b) {
         (CongruenceValue::Bottom, _) | (_, CongruenceValue::Bottom) => CongruenceValue::Bottom,
         (
-            CongruenceValue::Congruence {
-                modulus: ma,
-                residue: ra,
-            },
-            CongruenceValue::Congruence {
-                modulus: mb,
-                residue: rb,
-            },
+            CongruenceValue::Congruence { modulus: ma, residue: ra },
+            CongruenceValue::Congruence { modulus: mb, residue: rb },
         ) => {
             let m = if ma == 0 && mb == 0 {
                 0
@@ -156,10 +141,7 @@ fn congruence_mul_const(val: CongruenceValue, c: u64) -> CongruenceValue {
             let new_modulus = modulus.saturating_mul(c);
             let new_residue = residue.wrapping_mul(c);
             if new_modulus == 0 {
-                CongruenceValue::Congruence {
-                    modulus: 0,
-                    residue: new_residue,
-                }
+                CongruenceValue::Congruence { modulus: 0, residue: new_residue }
             } else {
                 CongruenceValue::new(new_modulus, new_residue % new_modulus)
             }
@@ -182,10 +164,7 @@ fn congruence_mod_const(val: CongruenceValue, c: u64) -> CongruenceValue {
             };
             let new_residue = residue % c;
             if new_modulus == 0 {
-                CongruenceValue::Congruence {
-                    modulus: 0,
-                    residue: new_residue,
-                }
+                CongruenceValue::Congruence { modulus: 0, residue: new_residue }
             } else {
                 CongruenceValue::new(new_modulus, new_residue % new_modulus)
             }
@@ -212,10 +191,7 @@ fn congruence_shr_const(val: CongruenceValue, shift: u64) -> CongruenceValue {
                 1 // Top
             };
             if new_modulus == 0 {
-                CongruenceValue::Congruence {
-                    modulus: 0,
-                    residue: new_residue,
-                }
+                CongruenceValue::Congruence { modulus: 0, residue: new_residue }
             } else {
                 CongruenceValue::new(new_modulus, new_residue)
             }
@@ -228,14 +204,8 @@ pub fn congruence_join(a: CongruenceValue, b: CongruenceValue) -> CongruenceValu
     match (a, b) {
         (CongruenceValue::Bottom, x) | (x, CongruenceValue::Bottom) => x,
         (
-            CongruenceValue::Congruence {
-                modulus: ma,
-                residue: ra,
-            },
-            CongruenceValue::Congruence {
-                modulus: mb,
-                residue: rb,
-            },
+            CongruenceValue::Congruence { modulus: ma, residue: ra },
+            CongruenceValue::Congruence { modulus: mb, residue: rb },
         ) => {
             // Join: gcd(ma, mb, |ra - rb|)
             let diff = ra.abs_diff(rb);
@@ -260,14 +230,8 @@ pub fn congruence_meet(a: CongruenceValue, b: CongruenceValue) -> CongruenceValu
     match (a, b) {
         (CongruenceValue::Bottom, _) | (_, CongruenceValue::Bottom) => CongruenceValue::Bottom,
         (
-            CongruenceValue::Congruence {
-                modulus: ma,
-                residue: ra,
-            },
-            CongruenceValue::Congruence {
-                modulus: mb,
-                residue: rb,
-            },
+            CongruenceValue::Congruence { modulus: ma, residue: ra },
+            CongruenceValue::Congruence { modulus: mb, residue: rb },
         ) => {
             if ma == 1 && ra == 0 {
                 return b; // a is top
@@ -277,11 +241,7 @@ pub fn congruence_meet(a: CongruenceValue, b: CongruenceValue) -> CongruenceValu
             }
             if ma == 0 && mb == 0 {
                 // Both exact: must agree
-                if ra == rb {
-                    CongruenceValue::constant(ra)
-                } else {
-                    CongruenceValue::Bottom
-                }
+                if ra == rb { CongruenceValue::constant(ra) } else { CongruenceValue::Bottom }
             } else if ma == 0 {
                 // a is exact, b is congruence: check if a satisfies b
                 if rb == 0 || ra % mb == rb {
@@ -321,14 +281,8 @@ pub fn congruence_subset(a: CongruenceValue, b: CongruenceValue) -> bool {
         (_, CongruenceValue::Congruence { modulus: 1, residue: 0 }) => true, // b is top
         (CongruenceValue::Congruence { modulus: 1, residue: 0 }, _) => false, // a is top, b isn't
         (
-            CongruenceValue::Congruence {
-                modulus: ma,
-                residue: ra,
-            },
-            CongruenceValue::Congruence {
-                modulus: mb,
-                residue: rb,
-            },
+            CongruenceValue::Congruence { modulus: ma, residue: ra },
+            CongruenceValue::Congruence { modulus: mb, residue: rb },
         ) => {
             if mb == 0 {
                 // b is exact: a must also be exact and equal
@@ -362,19 +316,13 @@ impl CongruenceDomain {
     /// Create a top (unconstrained) congruence domain.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            vars: BTreeMap::new(),
-            is_bottom: false,
-        }
+        Self { vars: BTreeMap::new(), is_bottom: false }
     }
 
     /// Create a bottom domain.
     #[must_use]
     pub fn new_bottom() -> Self {
-        Self {
-            vars: BTreeMap::new(),
-            is_bottom: true,
-        }
+        Self { vars: BTreeMap::new(), is_bottom: true }
     }
 
     /// Set a variable to a specific congruence.
@@ -395,10 +343,7 @@ impl CongruenceDomain {
         if self.is_bottom {
             return CongruenceValue::Bottom;
         }
-        self.vars
-            .get(var)
-            .copied()
-            .unwrap_or(CongruenceValue::top_value())
+        self.vars.get(var).copied().unwrap_or(CongruenceValue::top_value())
     }
 
     /// Transfer: `dst = src_a + src_b`.
@@ -478,11 +423,7 @@ impl fmt::Display for CongruenceDomain {
         if self.vars.is_empty() {
             return write!(f, "top");
         }
-        let parts: Vec<String> = self
-            .vars
-            .iter()
-            .map(|(k, v)| format!("{k}: {v}"))
-            .collect();
+        let parts: Vec<String> = self.vars.iter().map(|(k, v)| format!("{k}: {v}")).collect();
         write!(f, "cong({})", parts.join(", "))
     }
 }

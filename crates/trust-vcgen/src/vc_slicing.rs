@@ -48,8 +48,7 @@ pub fn dependency_cone(target: &Formula, context: &[Formula]) -> Vec<Formula> {
 
     // tRust #484: Pre-compute free variables for each context formula
     // to avoid redundant traversals in the fixpoint loop.
-    let context_vars: Vec<FxHashSet<String>> =
-        context.iter().map(collect_vars).collect();
+    let context_vars: Vec<FxHashSet<String>> = context.iter().map(collect_vars).collect();
 
     // tRust #484: Fixpoint iteration — keep adding context formulas
     // whose variables overlap with the current dependency set until
@@ -118,7 +117,7 @@ pub fn slice_vc(vc: &VerificationCondition) -> VerificationCondition {
 
     VerificationCondition {
         kind: vc.kind.clone(),
-        function: vc.function.clone(),
+        function: vc.function,
         location: vc.location.clone(),
         formula: sliced_formula,
         contract_metadata: vc.contract_metadata,
@@ -176,14 +175,14 @@ mod tests {
 
     // tRust #484: Helper to create a variable formula.
     fn var(name: &str) -> Formula {
-        Formula::Var(name.to_string(), Sort::Int)
+        Formula::Var(name.into(), Sort::Int)
     }
 
     // tRust #484: Helper to create a simple test VC.
     fn make_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -223,7 +222,7 @@ mod tests {
     fn test_collect_vars_excludes_quantifier_bound() {
         // tRust #484: Quantifier-bound variables are excluded.
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Eq(Box::new(var("x")), Box::new(var("y")))),
         );
         let vars = collect_vars(&f);
@@ -333,9 +332,8 @@ mod tests {
     #[test]
     fn test_slice_vc_single_conjunct_unchanged() {
         // tRust #484: A single-element And has no assumptions to slice.
-        let formula = Formula::And(vec![
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        ]);
+        let formula =
+            Formula::And(vec![Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)))]);
         let vc = make_vc(formula.clone());
         let sliced = slice_vc(&vc);
         assert_eq!(sliced.formula, formula);
@@ -385,10 +383,7 @@ mod tests {
         let sliced = slice_vc(&vc);
 
         // tRust #484: When only the target remains, it is unwrapped from And.
-        assert_eq!(
-            sliced.formula,
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)))
-        );
+        assert_eq!(sliced.formula, Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))));
     }
 
     #[test]
@@ -462,7 +457,7 @@ mod tests {
             Formula::Lt(Box::new(var("y")), Box::new(Formula::Int(10))),
         ]);
         let formula = Formula::And(vec![
-            nested_assumption, // relevant via "x"
+            nested_assumption,                                          // relevant via "x"
             Formula::Eq(Box::new(var("a")), Box::new(Formula::Int(1))), // irrelevant
             Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))), // target
         ]);

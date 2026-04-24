@@ -7,8 +7,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::fx::FxHashMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::sync::{Mutex, OnceLock};
 
@@ -42,10 +42,7 @@ impl Symbol {
     /// symbols obtained from [`Symbol::intern`]).
     #[must_use]
     pub fn as_str(&self) -> &'static str {
-        global_interner()
-            .lock()
-            .expect("interner lock poisoned")
-            .resolve(*self)
+        global_interner().lock().expect("interner lock poisoned").resolve(*self)
     }
 
     /// Get the raw index of this symbol (for debugging/testing).
@@ -85,6 +82,83 @@ impl AsRef<str> for Symbol {
     }
 }
 
+// tRust #883: Enable `assert_eq!(symbol, "str")` and `symbol == "str"` comparisons.
+impl PartialEq<&str> for Symbol {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<str> for Symbol {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<String> for Symbol {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+// tRust #883: Enable Symbol to convert back to String via From/Into
+impl From<Symbol> for String {
+    fn from(sym: Symbol) -> Self {
+        sym.as_str().to_owned()
+    }
+}
+
+impl From<&Symbol> for String {
+    fn from(sym: &Symbol) -> Self {
+        sym.as_str().to_owned()
+    }
+}
+
+// tRust #883: Enable `symbol.as_bytes()` for hashing/caching paths
+// tRust #883: Delegate common str methods for ergonomic use
+impl Symbol {
+    /// Get the byte representation of the interned string.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.as_str().as_bytes()
+    }
+
+    /// Check if the interned string contains a pattern.
+    #[must_use]
+    pub fn contains(&self, pat: &str) -> bool {
+        self.as_str().contains(pat)
+    }
+
+    /// Check if the interned string starts with a pattern.
+    #[must_use]
+    pub fn starts_with(&self, pat: &str) -> bool {
+        self.as_str().starts_with(pat)
+    }
+
+    /// Check if the interned string ends with a pattern.
+    #[must_use]
+    pub fn ends_with(&self, pat: &str) -> bool {
+        self.as_str().ends_with(pat)
+    }
+
+    /// Check if the interned string is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.as_str().is_empty()
+    }
+
+    /// Get the length of the interned string in bytes.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.as_str().len()
+    }
+}
+
+// NOTE: We intentionally do NOT impl Borrow<str> for Symbol because it would
+// violate the Borrow contract — Symbol hashes by u32 index while str hashes by
+// content, so HashMap lookups via get("str") would silently fail. Use
+// Symbol::as_str() or AsRef<str> for string access instead.
+
 impl Serialize for Symbol {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.as_str().serialize(serializer)
@@ -114,10 +188,7 @@ impl Interner {
     /// Create a new empty interner.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            map: FxHashMap::default(),
-            strings: Vec::new(),
-        }
+        Self { map: FxHashMap::default(), strings: Vec::new() }
     }
 
     /// Intern a string, returning its symbol.
@@ -311,5 +382,108 @@ mod tests {
         let a = Symbol::intern("global_shared_test");
         let b = Symbol::intern("global_shared_test");
         assert_eq!(a.index(), b.index());
+    }
+
+    // tRust #883: Tests for backward-compatible conversions added for interning extension
+
+    #[test]
+    fn test_symbol_partial_eq_str() {
+        let sym = Symbol::intern("eq_str_test");
+        assert!(sym == "eq_str_test");
+        assert!(sym == *"eq_str_test");
+        assert!(sym != "other");
+    }
+
+    #[test]
+    fn test_symbol_partial_eq_string() {
+        let sym = Symbol::intern("eq_string_test");
+        let s = String::from("eq_string_test");
+        assert!(sym == s);
+    }
+
+    #[test]
+    fn test_symbol_to_string() {
+        let sym = Symbol::intern("to_string_test");
+        let s: String = sym.into();
+        assert_eq!(s, "to_string_test");
+    }
+
+    #[test]
+    fn test_symbol_ref_to_string() {
+        let sym = Symbol::intern("ref_to_string_test");
+        let s: String = (&sym).into();
+        assert_eq!(s, "ref_to_string_test");
+    }
+
+    #[test]
+    fn test_symbol_as_bytes() {
+        let sym = Symbol::intern("bytes_test");
+        assert_eq!(sym.as_bytes(), b"bytes_test");
+    }
+
+    #[test]
+    fn test_symbol_contains() {
+        let sym = Symbol::intern("foo::bar::baz");
+        assert!(sym.contains("bar"));
+        assert!(!sym.contains("qux"));
+    }
+
+    #[test]
+    fn test_symbol_starts_with() {
+        let sym = Symbol::intern("foo::bar::baz");
+        assert!(sym.starts_with("foo"));
+        assert!(!sym.starts_with("bar"));
+    }
+
+    #[test]
+    fn test_symbol_ends_with() {
+        let sym = Symbol::intern("foo::bar::baz");
+        assert!(sym.ends_with("baz"));
+        assert!(!sym.ends_with("bar"));
+    }
+
+    #[test]
+    fn test_symbol_is_empty_and_len() {
+        let empty = Symbol::intern("");
+        assert!(empty.is_empty());
+        assert_eq!(empty.len(), 0);
+
+        let nonempty = Symbol::intern("nonempty_test");
+        assert!(!nonempty.is_empty());
+        assert_eq!(nonempty.len(), 13);
+    }
+
+    #[test]
+    fn test_symbol_as_ref_str_generic() {
+        // Symbol implements AsRef<str> for generic contexts
+        fn takes_as_ref(s: &impl AsRef<str>) -> &str {
+            s.as_ref()
+        }
+        let sym = Symbol::intern("as_ref_generic_test");
+        assert_eq!(takes_as_ref(&sym), "as_ref_generic_test");
+    }
+
+    #[test]
+    fn test_symbol_in_hashmap_lookup_by_symbol() {
+        // Symbol keys in HashMap are looked up by Symbol (fast u32 comparison)
+        use crate::fx::FxHashMap;
+        let mut map = FxHashMap::default();
+        let key = Symbol::intern("map_key_test");
+        map.insert(key, 42);
+        // Lookup by same Symbol works (same u32 index)
+        let lookup = Symbol::intern("map_key_test");
+        assert_eq!(map.get(&lookup), Some(&42));
+    }
+
+    #[test]
+    fn test_symbol_copy_semantics_zero_cost() {
+        // Verify that interning the same string 1000 times costs nothing
+        let first = Symbol::intern("copy_cost_test");
+        for _ in 0..1000 {
+            let sym = Symbol::intern("copy_cost_test");
+            assert_eq!(sym.index(), first.index());
+        }
+        // Symbol is 4 bytes
+        assert_eq!(std::mem::size_of::<Symbol>(), 4);
     }
 }

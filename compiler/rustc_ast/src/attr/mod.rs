@@ -482,7 +482,7 @@ impl MetaItem {
     }
 
     fn from_tokens(iter: &mut TokenStreamIter<'_>) -> Option<MetaItem> {
-        // tRust: known issue — Share code with `parse_path`.
+        // FIXME: Share code with `parse_path`.
         let tt = iter.next().map(|tt| TokenTree::uninterpolate(tt));
         let path = match tt.as_deref() {
             Some(&TokenTree::Token(
@@ -514,7 +514,7 @@ impl MetaItem {
                     };
                     iter.next();
                 }
-                let span = span.with_hi(segments.last().expect("invariant: segments is non-empty because at least one segment was pushed above").ident.span.hi()); // tRust: unwrap -> expect
+                let span = span.with_hi(segments.last().unwrap().ident.span.hi());
                 Path { span, segments, tokens: None }
             }
             Some(TokenTree::Delimited(
@@ -541,7 +541,7 @@ impl MetaItem {
             _ => path.span.hi(),
         };
         let span = path.span.with_hi(hi);
-        // tRust: known issue — This parses `unsafe()` not as unsafe attribute syntax in `MetaItem`,
+        // FIXME: This parses `unsafe()` not as unsafe attribute syntax in `MetaItem`,
         // but as a parenthesized list. This (and likely `MetaItem`) should be changed in
         // such a way that builtin macros don't accept extraneous `unsafe()`.
         Some(MetaItem { unsafety: Safety::Default, path, kind, span })
@@ -952,7 +952,7 @@ pub trait AttributeExt: Debug {
     fn is_rustc_doc_primitive(&self) -> bool;
 }
 
-// tRust: known issue (fn_delegation) — use function delegation instead of manually forwarding
+// FIXME(fn_delegation): use function delegation instead of manually forwarding
 
 impl Attribute {
     pub fn id(&self) -> AttrId {

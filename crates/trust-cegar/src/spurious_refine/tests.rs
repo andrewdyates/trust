@@ -3,7 +3,9 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::{AssertMessage, BlockId, ConstValue, CounterexampleValue, Operand, SourceSpan, Terminator};
+use trust_types::{
+    AssertMessage, BlockId, ConstValue, CounterexampleValue, Operand, SourceSpan, Terminator,
+};
 use trust_types::{BasicBlock, Counterexample, Formula};
 
 use crate::interpolation::UnsatCore;
@@ -19,12 +21,7 @@ use super::refinement::{interpolant_refine, predicate_refine, rust_semantic_refi
 use super::strategy::InnerRefinementStrategy;
 
 fn make_cex(assignments: Vec<(&str, CounterexampleValue)>) -> Counterexample {
-    Counterexample::new(
-        assignments
-            .into_iter()
-            .map(|(n, v)| (n.to_string(), v))
-            .collect(),
-    )
+    Counterexample::new(assignments.into_iter().map(|(n, v)| (n.to_string(), v)).collect())
 }
 
 fn span() -> SourceSpan {
@@ -33,16 +30,8 @@ fn span() -> SourceSpan {
 
 fn simple_blocks() -> Vec<BasicBlock> {
     vec![
-        BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Goto(BlockId(1)),
-        },
-        BasicBlock {
-            id: BlockId(1),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        },
+        BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+        BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
     ]
 }
 
@@ -66,18 +55,9 @@ fn blocks_with_false_assert() -> Vec<BasicBlock> {
 
 #[test]
 fn test_inner_refinement_strategy_display() {
-    assert_eq!(
-        format!("{}", InnerRefinementStrategy::PredicateRefinement),
-        "predicate"
-    );
-    assert_eq!(
-        format!("{}", InnerRefinementStrategy::TraceRefinement),
-        "trace"
-    );
-    assert_eq!(
-        format!("{}", InnerRefinementStrategy::InterpolantBased),
-        "interpolant"
-    );
+    assert_eq!(format!("{}", InnerRefinementStrategy::PredicateRefinement), "predicate");
+    assert_eq!(format!("{}", InnerRefinementStrategy::TraceRefinement), "trace");
+    assert_eq!(format!("{}", InnerRefinementStrategy::InterpolantBased), "interpolant");
 }
 
 #[test]
@@ -145,19 +125,13 @@ fn test_checker_update_states() {
     let cex = make_cex(vec![("x", CounterexampleValue::Int(-1))]);
 
     // Initially unknown (no predicates to contradict, no SMT solver).
-    assert!(matches!(
-        checker.check(&cex, &simple_blocks()),
-        CexCheckResult::Unknown
-    ));
+    assert!(matches!(checker.check(&cex, &simple_blocks()), CexCheckResult::Unknown));
 
     // After update, spurious.
     let mut state = AbstractState::top();
     state.add(Predicate::comparison("x", CmpOp::Ge, "0"));
     checker.update_states(vec![state]);
-    assert!(matches!(
-        checker.check(&cex, &simple_blocks()),
-        CexCheckResult::Spurious { .. }
-    ));
+    assert!(matches!(checker.check(&cex, &simple_blocks()), CexCheckResult::Spurious { .. }));
 }
 
 #[test]
@@ -224,10 +198,8 @@ fn test_predicate_refine_bool_values() {
 
 #[test]
 fn test_predicate_refine_pairwise_comparisons() {
-    let cex = make_cex(vec![
-        ("a", CounterexampleValue::Int(1)),
-        ("b", CounterexampleValue::Int(10)),
-    ]);
+    let cex =
+        make_cex(vec![("a", CounterexampleValue::Int(1)), ("b", CounterexampleValue::Int(10))]);
     let preds = predicate_refine(&cex, &[]);
     let pred_strs: Vec<String> = preds.iter().map(ToString::to_string).collect();
     assert!(pred_strs.contains(&"a < b".to_string()));
@@ -247,10 +219,8 @@ fn test_predicate_refine_skips_existing() {
 
 #[test]
 fn test_trace_refine_produces_predicates() {
-    let cex = make_cex(vec![
-        ("x", CounterexampleValue::Int(3)),
-        ("y", CounterexampleValue::Int(7)),
-    ]);
+    let cex =
+        make_cex(vec![("x", CounterexampleValue::Int(3)), ("y", CounterexampleValue::Int(7))]);
     let preds = trace_refine(&cex, &[]);
     assert!(!preds.is_empty());
     let pred_strs: Vec<String> = preds.iter().map(ToString::to_string).collect();
@@ -298,8 +268,7 @@ fn test_interpolant_refine_with_core() {
     )];
     let core = UnsatCore::new(vec!["a0".into(), "b0".into()]);
 
-    let preds = interpolant_refine(&cex, &path_a, &path_b, &core, &[])
-        .expect("should not error");
+    let preds = interpolant_refine(&cex, &path_a, &path_b, &core, &[]).expect("should not error");
     assert!(!preds.is_empty());
     assert!(preds.contains(&Predicate::comparison("x", CmpOp::Lt, "10")));
 }
@@ -309,8 +278,7 @@ fn test_interpolant_refine_fallback_to_predicate() {
     let cex = make_cex(vec![("x", CounterexampleValue::Int(-5))]);
     // Empty paths and core -> falls back to predicate refinement.
     let preds =
-        interpolant_refine(&cex, &[], &[], &UnsatCore::default(), &[])
-            .expect("should not error");
+        interpolant_refine(&cex, &[], &[], &UnsatCore::default(), &[]).expect("should not error");
     assert!(!preds.is_empty());
 }
 
@@ -330,9 +298,7 @@ fn test_inner_loop_unknown_without_smt() {
     let mut loop_ = SpuriousRefinementLoop::new(vec![], config);
     let cex = make_cex(vec![("x", CounterexampleValue::Int(5))]);
 
-    let outcome = loop_
-        .process_counterexample(&cex, &simple_blocks())
-        .expect("should not error");
+    let outcome = loop_.process_counterexample(&cex, &simple_blocks()).expect("should not error");
     assert!(matches!(outcome, InnerLoopOutcome::Unknown));
     assert_eq!(loop_.stats().counterexamples_checked, 1);
 }
@@ -347,16 +313,11 @@ fn test_inner_loop_spurious_refined() {
     let mut loop_ = SpuriousRefinementLoop::new(vec![], config);
     let cex = make_cex(vec![("x", CounterexampleValue::Int(5))]);
 
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     match outcome {
-        InnerLoopOutcome::Refined {
-            new_predicates,
-            inner_iterations,
-            strategy_used,
-        } => {
+        InnerLoopOutcome::Refined { new_predicates, inner_iterations, strategy_used } => {
             assert!(!new_predicates.is_empty());
             assert!(inner_iterations >= 1);
             assert_eq!(strategy_used, InnerRefinementStrategy::PredicateRefinement);
@@ -373,14 +334,11 @@ fn test_inner_loop_trace_refinement_strategy() {
         ..InnerLoopConfig::default()
     };
     let mut loop_ = SpuriousRefinementLoop::new(vec![], config);
-    let cex = make_cex(vec![
-        ("x", CounterexampleValue::Int(3)),
-        ("y", CounterexampleValue::Int(-7)),
-    ]);
+    let cex =
+        make_cex(vec![("x", CounterexampleValue::Int(3)), ("y", CounterexampleValue::Int(-7))]);
 
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     match outcome {
         InnerLoopOutcome::Refined { strategy_used, .. } => {
@@ -399,9 +357,8 @@ fn test_inner_loop_interpolant_strategy() {
     let mut loop_ = SpuriousRefinementLoop::new(vec![], config);
     let cex = make_cex(vec![("x", CounterexampleValue::Int(42))]);
 
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     match outcome {
         InnerLoopOutcome::Refined { strategy_used, .. } => {
@@ -413,10 +370,7 @@ fn test_inner_loop_interpolant_strategy() {
 
 #[test]
 fn test_inner_loop_max_predicates_limit() {
-    let config = InnerLoopConfig {
-        max_predicates: 2,
-        ..InnerLoopConfig::default()
-    };
+    let config = InnerLoopConfig { max_predicates: 2, ..InnerLoopConfig::default() };
     // Start with 2 predicates (already at limit).
     let initial = vec![
         Predicate::comparison("a", CmpOp::Ge, "0"),
@@ -427,9 +381,8 @@ fn test_inner_loop_max_predicates_limit() {
 
     // Blocks with assert(false) trigger spurious, but max_predicates
     // prevents further refinement.
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     assert!(matches!(
         outcome,
@@ -476,10 +429,7 @@ fn test_inner_loop_predicates_grow() {
     let cex = make_cex(vec![("x", CounterexampleValue::Int(-5))]);
     let _ = loop_.process_counterexample(&cex, &blocks_with_false_assert());
 
-    assert!(
-        !loop_.predicates().is_empty(),
-        "predicates should grow after refinement"
-    );
+    assert!(!loop_.predicates().is_empty(), "predicates should grow after refinement");
 }
 
 // -----------------------------------------------------------------------
@@ -545,10 +495,7 @@ fn test_is_trivially_unsat_not_true() {
 
 #[test]
 fn test_is_trivially_unsat_and_with_false() {
-    let f = Formula::And(vec![
-        Formula::Bool(true),
-        Formula::Bool(false),
-    ]);
+    let f = Formula::And(vec![Formula::Bool(true), Formula::Bool(false)]);
     assert!(is_trivially_unsat(&f));
 }
 
@@ -563,10 +510,7 @@ fn test_is_trivially_unsat_contradiction() {
 #[test]
 fn test_is_trivially_unsat_sat_formula() {
     assert!(!is_trivially_unsat(&Formula::Bool(true)));
-    assert!(!is_trivially_unsat(&Formula::And(vec![
-        Formula::Bool(true),
-        Formula::Bool(true),
-    ])));
+    assert!(!is_trivially_unsat(&Formula::And(vec![Formula::Bool(true), Formula::Bool(true),])));
 }
 
 #[test]
@@ -658,10 +602,7 @@ fn test_collect_core_labels() {
 
 #[test]
 fn test_rust_semantic_strategy_display() {
-    assert_eq!(
-        format!("{}", InnerRefinementStrategy::RustSemanticRefinement),
-        "rust-semantic"
-    );
+    assert_eq!(format!("{}", InnerRefinementStrategy::RustSemanticRefinement), "rust-semantic");
 }
 
 #[test]
@@ -683,8 +624,7 @@ fn test_rust_semantic_refine_moved_variable() {
     domain.ownership.set_state("x", OwnershipState::Moved);
 
     let cex = make_cex(vec![("x", CounterexampleValue::Int(42))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::Custom("x:moved".into())));
 }
 
@@ -694,8 +634,7 @@ fn test_rust_semantic_refine_type_violation() {
     domain.type_info.add_integer_range("x", 0, 255);
 
     let cex = make_cex(vec![("x", CounterexampleValue::Int(300))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::range("x", 0, 255)));
 }
 
@@ -706,8 +645,7 @@ fn test_rust_semantic_refine_non_null_violation() {
 
     // ptr = 0 violates non-null.
     let cex = make_cex(vec![("ptr", CounterexampleValue::Int(0))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::NonNull("ptr".into())));
 }
 
@@ -718,8 +656,7 @@ fn test_rust_semantic_refine_interval_violation() {
 
     // x = 200 is outside the interval.
     let cex = make_cex(vec![("x", CounterexampleValue::Int(200))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::range("x", 0, 100)));
 }
 
@@ -730,13 +667,10 @@ fn test_rust_semantic_refine_borrow_check_violation() {
     let mut domain = crate::rust_abstraction::RustAbstractionDomain::new();
     domain.ownership.set_state("x", OwnershipState::MutableBorrow);
     domain.ownership.set_state("y", OwnershipState::SharedBorrow);
-    domain.add_borrow_check(BorrowCheckPredicate::NoMutWhileShared {
-        place: "x".into(),
-    });
+    domain.add_borrow_check(BorrowCheckPredicate::NoMutWhileShared { place: "x".into() });
 
     let cex = make_cex(vec![("z", CounterexampleValue::Int(0))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::Custom("x:no_mut_while_shared".into())));
 }
 
@@ -748,8 +682,7 @@ fn test_rust_semantic_refine_ownership_blocking_predicate() {
     domain.add_ownership_predicate(OwnershipPredicate::IsMoved("val".into()));
 
     let cex = make_cex(vec![("other", CounterexampleValue::Int(0))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     // The moved predicate should appear as a seed predicate.
     assert!(preds.contains(&Predicate::Custom("val:moved".into())));
 }
@@ -762,8 +695,7 @@ fn test_rust_semantic_refine_seeds_domain_predicates() {
 
     // CEX with unrelated variable, but domain predicates should be seeded.
     let cex = make_cex(vec![("other", CounterexampleValue::Int(5))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::range("n", 0, 100)));
     assert!(preds.contains(&Predicate::NonNull("ptr".into())));
 }
@@ -775,8 +707,7 @@ fn test_rust_semantic_refine_skips_existing() {
 
     let existing = vec![Predicate::range("x", 0, 255)];
     let cex = make_cex(vec![("x", CounterexampleValue::Int(300))]);
-    let preds = rust_semantic_refine(&cex, &existing, Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &existing, Some(&domain)).expect("should not error");
     // Range predicate is already in existing: should not be re-added.
     assert!(!preds.contains(&Predicate::range("x", 0, 255)));
 }
@@ -787,8 +718,7 @@ fn test_rust_semantic_refine_uint_values() {
     domain.type_info.add_integer_range("n", 0, 65535);
 
     let cex = make_cex(vec![("n", CounterexampleValue::Uint(70000))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::range("n", 0, 65535)));
 }
 
@@ -798,8 +728,7 @@ fn test_rust_semantic_refine_bool_values() {
     domain.ownership.set_state("flag", crate::rust_abstraction::OwnershipState::Moved);
 
     let cex = make_cex(vec![("flag", CounterexampleValue::Bool(true))]);
-    let preds = rust_semantic_refine(&cex, &[], Some(&domain))
-        .expect("should not error");
+    let preds = rust_semantic_refine(&cex, &[], Some(&domain)).expect("should not error");
     assert!(preds.contains(&Predicate::Custom("flag:moved".into())));
 }
 
@@ -814,11 +743,7 @@ fn test_inner_loop_with_rust_domain_constructor() {
         strategy: InnerRefinementStrategy::RustSemanticRefinement,
         ..InnerLoopConfig::default()
     };
-    let loop_ = SpuriousRefinementLoop::with_rust_domain(
-        vec![],
-        config,
-        domain.clone(),
-    );
+    let loop_ = SpuriousRefinementLoop::with_rust_domain(vec![], config, domain.clone());
     assert!(loop_.rust_domain().is_some());
 }
 
@@ -842,17 +767,12 @@ fn test_inner_loop_rust_semantic_strategy_spurious() {
         strategy: InnerRefinementStrategy::RustSemanticRefinement,
         ..InnerLoopConfig::default()
     };
-    let mut loop_ = SpuriousRefinementLoop::with_rust_domain(
-        vec![],
-        config,
-        domain,
-    );
+    let mut loop_ = SpuriousRefinementLoop::with_rust_domain(vec![], config, domain);
 
     // Blocks with assert(false) make every CEX spurious.
     let cex = make_cex(vec![("x", CounterexampleValue::Int(42))]);
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     match outcome {
         InnerLoopOutcome::Refined { strategy_used, new_predicates, .. } => {
@@ -872,16 +792,10 @@ fn test_inner_loop_rust_semantic_strategy_unknown() {
         strategy: InnerRefinementStrategy::RustSemanticRefinement,
         ..InnerLoopConfig::default()
     };
-    let mut loop_ = SpuriousRefinementLoop::with_rust_domain(
-        vec![],
-        config,
-        domain,
-    );
+    let mut loop_ = SpuriousRefinementLoop::with_rust_domain(vec![], config, domain);
 
     let cex = make_cex(vec![("x", CounterexampleValue::Int(5))]);
-    let outcome = loop_
-        .process_counterexample(&cex, &simple_blocks())
-        .expect("should not error");
+    let outcome = loop_.process_counterexample(&cex, &simple_blocks()).expect("should not error");
     assert!(matches!(outcome, InnerLoopOutcome::Unknown));
 }
 
@@ -895,9 +809,8 @@ fn test_inner_loop_rust_semantic_no_domain_falls_back() {
     let mut loop_ = SpuriousRefinementLoop::new(vec![], config);
 
     let cex = make_cex(vec![("x", CounterexampleValue::Int(42))]);
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     match outcome {
         InnerLoopOutcome::Refined { strategy_used, new_predicates, .. } => {
@@ -917,16 +830,11 @@ fn test_inner_loop_rust_semantic_with_discriminant() {
         strategy: InnerRefinementStrategy::RustSemanticRefinement,
         ..InnerLoopConfig::default()
     };
-    let mut loop_ = SpuriousRefinementLoop::with_rust_domain(
-        vec![],
-        config,
-        domain,
-    );
+    let mut loop_ = SpuriousRefinementLoop::with_rust_domain(vec![], config, domain);
 
     let cex = make_cex(vec![("opt", CounterexampleValue::Int(5))]);
-    let outcome = loop_
-        .process_counterexample(&cex, &blocks_with_false_assert())
-        .expect("should not error");
+    let outcome =
+        loop_.process_counterexample(&cex, &blocks_with_false_assert()).expect("should not error");
 
     match outcome {
         InnerLoopOutcome::Refined { new_predicates, .. } => {
@@ -968,10 +876,8 @@ fn test_cex_unknown_no_contradiction_no_unsat() {
     // No abstract state contradiction, no trivially-unsat path formula.
     // Syntactic analysis is inconclusive -> Unknown (not Feasible).
     let checker = CounterexampleChecker::new(vec![]);
-    let cex = make_cex(vec![
-        ("x", CounterexampleValue::Int(5)),
-        ("y", CounterexampleValue::Int(10)),
-    ]);
+    let cex =
+        make_cex(vec![("x", CounterexampleValue::Int(5)), ("y", CounterexampleValue::Int(10))]);
     let result = checker.check(&cex, &simple_blocks());
     assert!(
         matches!(result, CexCheckResult::Unknown),
@@ -987,10 +893,7 @@ fn test_cex_unknown_with_nontrivial_assert() {
         id: BlockId(0),
         stmts: vec![],
         terminator: Terminator::Assert {
-            cond: Operand::Copy(trust_types::Place {
-                local: 0,
-                projections: vec![],
-            }),
+            cond: Operand::Copy(trust_types::Place { local: 0, projections: vec![] }),
             expected: true,
             msg: AssertMessage::BoundsCheck,
             target: BlockId(1),
@@ -1013,9 +916,7 @@ fn test_inner_loop_unknown_does_not_increment_feasible_count() {
     let mut loop_ = SpuriousRefinementLoop::new(vec![], config);
 
     let cex = make_cex(vec![("x", CounterexampleValue::Int(42))]);
-    let outcome = loop_
-        .process_counterexample(&cex, &simple_blocks())
-        .expect("should not error");
+    let outcome = loop_.process_counterexample(&cex, &simple_blocks()).expect("should not error");
     assert!(matches!(outcome, InnerLoopOutcome::Unknown));
     assert_eq!(loop_.stats().feasible_count, 0, "Unknown must not be counted as feasible");
 }

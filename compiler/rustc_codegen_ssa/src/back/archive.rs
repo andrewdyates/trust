@@ -1,6 +1,3 @@
-//! tRust: Archive file creation and manipulation for static libraries, including
-//! tRust: `.a` and `.lib` outputs used by codegen backends.
-
 use std::env;
 use std::error::Error;
 use std::ffi::OsString;
@@ -108,8 +105,7 @@ pub trait ArchiveBuilderBuilder {
             );
 
             // All import names are Rust identifiers and therefore cannot contain \0 characters.
-            // tRust: Upstream TODO -- requires #[link_name] support for raw-dylib.
-            // TODO: When #[link_name] support is implemented, verify import names match.
+            // FIXME: when support for #[link_name] is implemented, ensure that the import names
             // still don't contain any \0 characters. Also need to check that the names don't
             // contain substrings like " @" or "NONAME" that are keywords or otherwise reserved
             // in definition files.
@@ -157,12 +153,6 @@ pub trait ArchiveBuilderBuilder {
         outdir: &Path,
         bundled_lib_file_names: &FxIndexSet<Symbol>,
     ) -> Result<(), ExtractBundledLibsError<'a>> {
-        // SAFETY: `File::open(rlib)` returns a valid, open file handle for the rlib. // tRust:
-        // `Mmap::map` requires the file to remain open and unmodified for the mapping
-        // lifetime. `archive_map` lives for this function's scope, during which the
-        // rlib is only read (not written) by the archive parser.
-        // SAFETY: `File::open(rlib)` yielded a valid handle, and the rlib is
-        // only read while this mapping is alive.
         let archive_map = unsafe {
             Mmap::map(
                 File::open(rlib)
@@ -373,10 +363,10 @@ fn try_filter_fat_archs(
     };
 
     let (mut new_f, extracted_path) = tempfile::Builder::new()
-        .suffix(archive_path.file_name().expect("invariant: path must have filename"))
+        .suffix(archive_path.file_name().unwrap())
         .tempfile()?
         .keep()
-        .expect("invariant: object file operation must succeed");
+        .unwrap();
 
     new_f.write_all(
         desired.data(archive_map_data).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
@@ -389,12 +379,6 @@ pub fn try_extract_macho_fat_archive(
     sess: &Session,
     archive_path: &Path,
 ) -> io::Result<Option<PathBuf>> {
-    // SAFETY: `File::open` returns a valid, open file handle. `Mmap::map` requires // tRust:
-    // the file to remain open and unmodified for the mapping lifetime. The archive
-    // file is a static library on disk that is only read (not written) during this
-    // function's execution.
-    // SAFETY: `File::open(&archive_path)` yielded a valid handle, and this
-    // archive is only read while the mapping is used in this function.
     let archive_map = unsafe { Mmap::map(File::open(&archive_path)?)? };
     let target_arch = match sess.target.arch {
         Arch::AArch64 => object::Architecture::Aarch64,
@@ -431,13 +415,6 @@ impl<'a> ArchiveBuilder for ArArchiveBuilder<'a> {
             return Ok(());
         }
 
-        // SAFETY: `File::open` returns a valid, open file handle. `Mmap::map` // tRust:
-        // requires the file to remain open and unmodified for the mapping lifetime.
-        // The `archive_map` is stored in `self.src_archives` alongside the parsed
-        // archive, keeping both alive for the builder's lifetime. The archive file
-        // is not modified during the build.
-        // SAFETY: `File::open(&archive_path)` yielded a valid handle, and the
-        // stored `Mmap` keeps this read-only archive mapping alive in `self.src_archives`.
         let archive_map = unsafe { Mmap::map(File::open(&archive_path)?)? };
         let archive = ArchiveFile::parse(&*archive_map)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
@@ -449,7 +426,7 @@ impl<'a> ArchiveBuilder for ArArchiveBuilder<'a> {
                 .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
             if !skip(&file_name) {
                 if entry.is_thin() {
-                    let member_path = archive_path.parent().expect("invariant: item must have parent").join(Path::new(&file_name));
+                    let member_path = archive_path.parent().unwrap().join(Path::new(&file_name));
                     self.entries.push((file_name.into_bytes(), ArchiveEntry::File(member_path)));
                 } else {
                     self.entries.push((
@@ -467,7 +444,7 @@ impl<'a> ArchiveBuilder for ArArchiveBuilder<'a> {
     /// Adds an arbitrary file to this archive
     fn add_file(&mut self, file: &Path) {
         self.entries.push((
-            file.file_name().expect("invariant: path must have filename").to_str().expect("invariant: archive filename must be valid UTF-8").to_string().into_bytes(),
+            file.file_name().unwrap().to_str().unwrap().to_string().into_bytes(),
             ArchiveEntry::File(file.to_owned()),
         ));
     }
@@ -511,13 +488,6 @@ impl<'a> ArArchiveBuilder<'a> {
 
                         Box::new(data) as Box<dyn AsRef<[u8]>>
                     }
-                    // SAFETY: `File::open(file)` returns a valid, open file handle // tRust:
-                    // for the object file. `Mmap::map` requires the file to remain
-                    // open and unmodified for the mapping lifetime. The `Mmap` is
-                    // boxed and stored in `entries` for the duration of archive
-                    // writing, during which object files are not modified.
-                    // SAFETY: `File::open(file)` yielded a valid handle, and the
-                    // boxed `Mmap` keeps this read-only object mapping alive until writing finishes.
                     ArchiveEntry::File(file) => unsafe {
                         Box::new(
                             Mmap::map(File::open(file).map_err(|err| {
@@ -531,7 +501,7 @@ impl<'a> ArArchiveBuilder<'a> {
             entries.push(NewArchiveMember {
                 buf: data,
                 object_reader: self.object_reader,
-                member_name: String::from_utf8(entry_name).expect("invariant: entry must exist"),
+                member_name: String::from_utf8(entry_name).unwrap(),
                 mtime: 0,
                 uid: 0,
                 gid: 0,

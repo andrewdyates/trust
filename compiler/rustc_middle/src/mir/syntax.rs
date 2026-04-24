@@ -592,7 +592,7 @@ pub enum FakeReadCause {
     /// Therefore, we insert a `FakeRead(ForLet)` immediately after each `let`
     /// with a trivial pattern.
     ///
-    /// tRust: known issue — `ExprUseVisitor` has an entirely different opinion on what `FakeRead(ForLet)`
+    /// FIXME: `ExprUseVisitor` has an entirely different opinion on what `FakeRead(ForLet)`
     /// is supposed to mean. If it was accurate to what MIR lowering does,
     /// would it even make sense to hoist these out of closures like
     /// `ForMatchedPlace`?
@@ -854,7 +854,7 @@ pub enum TerminatorKind<'tcx> {
         /// This allows the memory occupied by "by-value" arguments to be
         /// reused across function calls without duplicating the contents.
         args: Box<[Spanned<Operand<'tcx>>]>,
-        // tRust: known issue (explicit_tail_calls) — should we have the span for `become`? is this span accurate? do we need it?
+        // FIXME(explicit_tail_calls): should we have the span for `become`? is this span accurate? do we need it?
         /// This `Span` is the span of the function, without the dot and receiver
         /// (e.g. `foo(a, b)` in `x.foo(a, b)`
         fn_span: Span,
@@ -1315,6 +1315,7 @@ pub enum Operand<'tcx> {
     /// Creates a value by performing loading the place, just like the `Copy` operand.
     ///
     /// This *may* additionally overwrite the place with `uninit` bytes, depending on how we decide
+    
     /// place without first re-initializing it.
     ///
     /// **Needs clarification:** The operational impact of `Move` is unclear. Currently (both in
@@ -1408,7 +1409,7 @@ pub enum Rvalue<'tcx> {
     ///
     /// This allows for casts from/to a variety of types.
     ///
-    /// tRust: known issue — Document exactly which `CastKind`s allow which types of casts.
+    /// **FIXME**: Document exactly which `CastKind`s allow which types of casts.
     Cast(CastKind, Operand<'tcx>, Ty<'tcx>),
 
     /// * `Offset` has the same semantics as [`offset`](pointer::offset), except that the second

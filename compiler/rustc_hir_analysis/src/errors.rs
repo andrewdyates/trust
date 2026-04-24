@@ -440,7 +440,7 @@ pub(crate) struct MissingGenericParams {
     pub empty_generic_args: bool,
 }
 
-// tRust: known issue — This doesn't need to be a manual impl!
+// FIXME: This doesn't need to be a manual impl!
 impl<'a, G: EmissionGuarantee> Diagnostic<'a, G> for MissingGenericParams {
     #[track_caller]
     fn into_diag(self, dcx: DiagCtxtHandle<'a>, level: Level) -> Diag<'a, G> {
@@ -487,7 +487,7 @@ impl<'a, G: EmissionGuarantee> Diagnostic<'a, G> for MissingGenericParams {
 
         err.arg(
             "descr",
-            match descr.expect("invariant: value is present") {
+            match descr.unwrap() {
                 Descr::Generic => "generic",
                 Descr::Type => "type",
                 Descr::Const => "const",
@@ -496,7 +496,7 @@ impl<'a, G: EmissionGuarantee> Diagnostic<'a, G> for MissingGenericParams {
         err.arg("parameterCount", self.missing_generic_params.len());
         err.arg(
             "parameters",
-            listify(&self.missing_generic_params, |(n, _)| format!("`{n}`")).expect("invariant: value is present"),
+            listify(&self.missing_generic_params, |(n, _)| format!("`{n}`")).unwrap(),
         );
 
         let mut suggested = false;
@@ -1450,7 +1450,7 @@ pub struct NoFieldOnType<'tcx> {
     pub field: Ident,
 }
 
-// tRust: known issue — (fmease): Deduplicate:
+// FIXME(fmease): Deduplicate:
 
 #[derive(Diagnostic)]
 #[diag("type parameter `{$param}` must be covered by another type when it appears before the first local type (`{$local_type}`)", code = E0210)]

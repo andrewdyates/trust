@@ -124,7 +124,7 @@ fn asm_target_features(tcx: TyCtxt<'_>, did: DefId) -> &FxIndexSet<Symbol> {
         match attrs.instruction_set {
             None => {}
             Some(InstructionSetAttr::ArmA32) => {
-                // NOTE(#120456): swap_remove changes order; correctness depends on not needing order.
+                // FIXME(#120456) - is `swap_remove` correct?
                 target_features.swap_remove(&sym::thumb_mode);
             }
             Some(InstructionSetAttr::ArmT32) => {
@@ -370,7 +370,7 @@ pub fn check_tied_features(
         for tied in sess.target.tied_target_features() {
             // Tied features must be set to the same value, or not set at all
             let mut tied_iter = tied.iter();
-            let enabled = features.get(tied_iter.next().expect("invariant: iterator must have next element"));
+            let enabled = features.get(tied_iter.next().unwrap());
             if tied_iter.any(|f| enabled != features.get(f)) {
                 return Some(tied);
             }
@@ -397,7 +397,7 @@ pub fn target_spec_to_backend_features<'a>(
             panic!("Target spec contains invalid feature {feature}");
         },
         |_base_feature, new_features, enable| {
-            // TODO: Emit an error for unknown features (matching cfg_target_feature behavior).
+            // FIXME emit an error for unknown features like cfg_target_feature would for -Ctarget-feature
             rust_features.extend(
                 UnordSet::from(new_features).to_sorted_stable_ord().iter().map(|&&s| (enable, s)),
             );
@@ -465,7 +465,7 @@ pub(crate) fn provide(providers: &mut Providers) {
         rust_target_features: |tcx, cnum| {
             assert_eq!(cnum, LOCAL_CRATE);
             if tcx.sess.opts.actually_rustdoc {
-                // tRust: known workaround — rustdoc would like to pretend that we have all the target features, so we
+                // HACK: rustdoc would like to pretend that we have all the target features, so we
                 // have to merge all the lists into one. To ensure an unstable target never prevents
                 // a stable one from working, we merge the stability info of all instances of the
                 // same target feature name, with the "most stable" taking precedence. And then we

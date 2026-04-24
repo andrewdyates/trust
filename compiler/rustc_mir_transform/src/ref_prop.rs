@@ -223,7 +223,6 @@ fn compute_replacement<'tcx>(
         debug!(?local);
 
         // Only visit if we have something to do.
-        // tRust: invariant: algorithm precondition — SSA/reference propagation analysis maintains this invariant
         let Value::Unknown = targets[local] else { bug!() };
 
         let ty = body.local_decls[local].ty;
@@ -264,7 +263,6 @@ fn compute_replacement<'tcx>(
                 }
             }
             Rvalue::Ref(_, _, place) | Rvalue::RawPtr(_, place) => {
-                let is_raw_ptr = matches!(rvalue, Rvalue::RawPtr(..));
                 let mut place = *place;
                 // Try to see through `place` in order to collapse reborrow chains.
                 if let Some((&PlaceElem::Deref, rest)) = place.projection.split_first()
@@ -279,17 +277,6 @@ fn compute_replacement<'tcx>(
                 }
                 assert_ne!(place.local, local);
                 if is_constant_place(place) {
-                    // tRust: fix for rust-lang#132898 — do not propagate raw pointers to
-                    // direct (non-indirect) places. Replacing `*raw_ptr` with a direct
-                    // place access changes aliasing semantics from SharedReadWrite to
-                    // Unique, which can invalidate live 2-phase borrows.
-                    // Raw pointer propagation is only safe when the target is itself an
-                    // indirect projection (a dereference of another pointer), preserving
-                    // the pointer-based access semantics.
-                    if is_raw_ptr && !place.is_indirect_first_projection() {
-                        debug!("skipping raw pointer propagation to direct place: {place:?}");
-                        continue;
-                    }
                     targets[local] = Value::Pointer(place, needs_unique);
                 }
             }

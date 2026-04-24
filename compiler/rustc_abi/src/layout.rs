@@ -472,7 +472,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
             Ok(Some((repr, _))) => match repr {
                 // Mismatched alignment (e.g. union is #[repr(packed)]): disable opt
                 BackendRepr::Scalar(_) | BackendRepr::ScalarPair(_, _)
-                    if repr.scalar_align(dl).expect("invariant: Scalar/ScalarPair always has scalar alignment") != align => // tRust: unwrap -> expect
+                    if repr.scalar_align(dl).unwrap() != align =>
                 {
                     BackendRepr::Memory { sized: true }
                 }
@@ -577,13 +577,13 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
 
                 let max_value = scalar.size(dl).unsigned_int_max();
                 if let Bound::Included(start) = start {
-                    // tRust: known issue (eddyb) — this might be incorrect - it doesn't
+                    // FIXME(eddyb) this might be incorrect - it doesn't
                     // account for wrap-around (end < start) ranges.
                     assert!(start <= max_value, "{start} > {max_value}");
                     scalar.valid_range_mut().start = start;
                 }
                 if let Bound::Included(end) = end {
-                    // tRust: known issue (eddyb) — this might be incorrect - it doesn't
+                    // FIXME(eddyb) this might be incorrect - it doesn't
                     // account for wrap-around (end < start) ranges.
                     assert!(end <= max_value, "{end} > {max_value}");
                     scalar.valid_range_mut().end = end;
@@ -666,8 +666,8 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
             let all_indices = variants.indices();
             let needs_disc =
                 |index: VariantIdx| index != largest_variant_index && !absent(&variants[index]);
-            let niche_variants = all_indices.clone().find(|v| needs_disc(*v)).expect("invariant: at least one variant needs a discriminant") // tRust: unwrap -> expect
-                ..=all_indices.rev().find(|v| needs_disc(*v)).expect("invariant: at least one variant needs a discriminant"); // tRust: unwrap -> expect
+            let niche_variants = all_indices.clone().find(|v| needs_disc(*v)).unwrap()
+                ..=all_indices.rev().find(|v| needs_disc(*v)).unwrap();
 
             let count =
                 (niche_variants.end().index() as u128 - niche_variants.start().index() as u128) + 1;
@@ -800,7 +800,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
             .map(|(_, val)| {
                 if discr_type.is_signed() {
                     // sign extend the raw representation to be an i128
-                    // tRust: known issue — do this at the discriminant iterator creation sites
+                    // FIXME: do this at the discriminant iterator creation sites
                     discr_int.size().sign_extend(val as u128)
                 } else {
                     val
@@ -854,7 +854,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
         let mut size = Size::ZERO;
 
         // We're interested in the smallest alignment, so start large.
-        let mut start_align = Align::from_bytes(256).expect("invariant: 256 is a valid power-of-two alignment"); // tRust: unwrap -> expect
+        let mut start_align = Align::from_bytes(256).unwrap();
         assert_eq!(Integer::for_align(dl, start_align), None);
 
         // repr(C) on an enum tells us to make a (tag, union) layout,
@@ -901,7 +901,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
         // Align the maximum variant size to the largest alignment.
         size = size.align_to(align);
 
-        // tRust: known issue (oli-obk) — deduplicate and harden these checks
+        // FIXME(oli-obk): deduplicate and harden these checks
         if size.bytes() >= dl.obj_size_bound() {
             return Err(LayoutCalculatorError::SizeOverflow);
         }
@@ -1301,7 +1301,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
                     }
                 }
 
-                // tRust: known issue (Kixiron) — We can always shuffle fields within a given alignment class
+                // FIXME(Kixiron): We can always shuffle fields within a given alignment class
                 //                 regardless of the status of `-Z randomize-layout`
             }
         }
@@ -1378,7 +1378,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
         debug!("univariant min_size: {:?}", offset);
         let min_size = offset;
         let size = min_size.align_to(align);
-        // tRust: known issue (oli-obk) — deduplicate and harden these checks
+        // FIXME(oli-obk): deduplicate and harden these checks
         if size.bytes() >= dl.obj_size_bound() {
             return Err(LayoutCalculatorError::SizeOverflow);
         }
@@ -1507,7 +1507,7 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
         for i in layout.fields.index_by_increasing_offset() {
             let offset = layout.fields.offset(i);
             let f = &fields[FieldIdx::new(i)];
-            write!(s, "[o{}a{}s{}", offset.bytes(), f.align.bytes(), f.size.bytes()).expect("invariant: write! to String is infallible"); // tRust: unwrap -> expect
+            write!(s, "[o{}a{}s{}", offset.bytes(), f.align.bytes(), f.size.bytes()).unwrap();
             if let Some(n) = f.largest_niche {
                 write!(
                     s,
@@ -1516,9 +1516,9 @@ impl<Cx: HasDataLayout> LayoutCalculator<Cx> {
                     n.available(dl).ilog2(),
                     n.value.size(dl).bytes()
                 )
-                .expect("invariant: write! to String is infallible"); // tRust: unwrap -> expect
+                .unwrap();
             }
-            write!(s, "] ").expect("invariant: write! to String is infallible"); // tRust: unwrap -> expect
+            write!(s, "] ").unwrap();
         }
         s
     }

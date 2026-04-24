@@ -46,16 +46,15 @@ pub(super) fn build_async_drop_shim<'tcx>(
 ) -> Body<'tcx> {
     debug!("build_async_drop_shim(def_id={:?}, ty={:?})", def_id, ty);
     let ty::Coroutine(_, parent_args) = ty.kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!();
     };
     let typing_env = ty::TypingEnv::fully_monomorphized();
 
-    let drop_ty = parent_args.first().expect("invariant: async destructor must have a type argument").expect_ty(); // tRust: unwrap elimination
+    let drop_ty = parent_args.first().unwrap().expect_ty();
     let drop_ptr_ty = Ty::new_mut_ptr(tcx, drop_ty);
 
     assert!(tcx.is_coroutine(def_id));
-    let coroutine_kind = tcx.coroutine_kind(def_id).expect("invariant: async destructor def must be a coroutine"); // tRust: unwrap elimination
+    let coroutine_kind = tcx.coroutine_kind(def_id).unwrap();
 
     assert!(matches!(
         coroutine_kind,
@@ -178,7 +177,6 @@ pub(super) fn build_future_drop_poll_shim<'tcx>(
 ) -> Body<'tcx> {
     let instance = ty::InstanceKind::FutureDropPollShim(def_id, proxy_ty, impl_ty);
     let ty::Coroutine(coroutine_def_id, _) = impl_ty.kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!("build_future_drop_poll_shim not for coroutine impl type: ({:?})", instance);
     };
 
@@ -203,7 +201,6 @@ fn build_adrop_for_coroutine_shim<'tcx>(
     instance: ty::InstanceKind<'tcx>,
 ) -> Body<'tcx> {
     let ty::Coroutine(coroutine_def_id, impl_args) = impl_ty.kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!("build_adrop_for_coroutine_shim not for coroutine impl type: ({:?})", instance);
     };
     let proxy_ref = Ty::new_mut_ref(tcx, tcx.lifetimes.re_erased, proxy_ty);
@@ -214,7 +211,7 @@ fn build_adrop_for_coroutine_shim<'tcx>(
     // into `(_1: Pin<&mut ProxyLayout>, _2: &mut Context<'_>) -> Poll<()>`
     // let mut _x: &mut CorLayout = &*_1.0.0;
     // Replace old _1.0 accesses into _x accesses;
-    let body = tcx.optimized_mir(*coroutine_def_id).future_drop_poll().expect("invariant: coroutine must have a future_drop_poll body"); // tRust: unwrap elimination
+    let body = tcx.optimized_mir(*coroutine_def_id).future_drop_poll().unwrap();
     let mut body: Body<'tcx> = EarlyBinder::bind(body.clone()).instantiate(tcx, impl_args);
     body.source.instance = instance;
     body.phase = MirPhase::Runtime(RuntimePhase::Initial);

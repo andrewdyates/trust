@@ -12,27 +12,27 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-mod warnings;
-mod structural;
 mod comparison;
-mod reference_vcgen;
 mod properties;
+mod reference_vcgen;
+mod structural;
+mod warnings;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export public types
-pub use warnings::{CrossCheckWarning, SortClass};
 pub use comparison::{CrossCheckResult, CrossCheckVerdict, full_cross_check};
 pub use properties::{
-    formula_free_var_count, weakening_preserves_safety, strengthen_by_dropping_assumption,
+    formula_free_var_count, strengthen_by_dropping_assumption, weakening_preserves_safety,
 };
+pub use warnings::{CrossCheckWarning, SortClass};
 
 use trust_types::{VerifiableFunction, VerificationCondition};
 
 use structural::{
-    check_variable_scope, check_overflow_bounds, check_divzero_structure,
-    check_sort_consistency, check_degenerate_connectives, check_trivial_formula,
+    check_degenerate_connectives, check_divzero_structure, check_overflow_bounds,
+    check_sort_consistency, check_trivial_formula, check_variable_scope,
 };
 
 // ---------------------------------------------------------------------------

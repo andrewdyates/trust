@@ -419,6 +419,7 @@
 # If any enabled tool fails to build, the installation fails.
 #build.tools = [
 #    "cargo",
+#    "cargo-trust",
 #    "clippy",
 #    "rustdoc",
 #    "rustfmt",
@@ -801,8 +802,10 @@
 # a dist component/tarball for the Cranelift backend if it is included in this array.
 #
 # Note that the LLVM codegen backend is special and will always be built and distributed.
+# Additional backend components such as LLVM2 or Cranelift are shipped only when they are listed
+# here.
 #
-# Currently, the only standard options supported here are `"llvm"`, `"cranelift"` and `"gcc"`.
+# Currently, the only standard options supported here are `"llvm"`, `"llvm2"`, `"cranelift"` and `"gcc"`.
 #rust.codegen-backends = ["llvm"]
 
 # Indicates whether LLD will be compiled and made available in the sysroot for rustc to execute,

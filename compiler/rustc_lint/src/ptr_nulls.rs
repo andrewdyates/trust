@@ -42,7 +42,6 @@ declare_lint! {
     /// # use std::{slice, ptr};
     /// // Undefined behavior
     /// # let _slice: &[u8] =
-    /// // SAFETY: This is illustrative code in the lint documentation and is not executed.
     /// unsafe { slice::from_raw_parts(ptr::null(), 0) };
     /// ```
     ///

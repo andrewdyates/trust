@@ -109,7 +109,7 @@ fn intern_shallow<'tcx, M: CompileTimeMachine<'tcx>>(
 ) -> Result<impl Iterator<Item = CtfeProvenance> + 'tcx, InternError> {
     trace!("intern_shallow {:?}", alloc_id);
     // remove allocation
-    // tRust: known issue (#120456) — - is `swap_remove` correct?
+    // FIXME(#120456) - is `swap_remove` correct?
     let Some((kind, mut alloc)) = ecx.memory.alloc_map.swap_remove(&alloc_id) else {
         return Err(InternError::DanglingPointer);
     };
@@ -238,7 +238,7 @@ pub fn intern_const_alloc_recursive<'tcx, M: CompileTimeMachine<'tcx>>(
     };
 
     // Intern the base allocation, and initialize todo list for recursive interning.
-    let base_alloc_id = ret.ptr().provenance.expect("invariant: return place was just allocated and must have provenance").alloc_id();
+    let base_alloc_id = ret.ptr().provenance.unwrap().alloc_id();
     trace!(?base_alloc_id, ?base_mutability);
     // First we intern the base allocation, as it requires a different mutability.
     // This gives us the initial set of nested allocations, which will then all be processed
@@ -246,7 +246,7 @@ pub fn intern_const_alloc_recursive<'tcx, M: CompileTimeMachine<'tcx>>(
     let mut todo: Vec<_> = if is_static {
         // Do not steal the root allocation, we need it later to create the return value of `eval_static_initializer`.
         // But still change its mutability to match the requested one.
-        let (kind, alloc) = ecx.memory.alloc_map.get_mut(&base_alloc_id).expect("invariant: base_alloc_id was just allocated in local alloc_map");
+        let (kind, alloc) = ecx.memory.alloc_map.get_mut(&base_alloc_id).unwrap();
         prepare_alloc(*ecx.tcx, *kind, alloc, base_mutability)?;
         alloc.provenance().ptrs().iter().map(|&(_, prov)| prov).collect()
     } else {
@@ -342,7 +342,6 @@ pub fn intern_const_alloc_recursive<'tcx, M: CompileTimeMachine<'tcx>>(
         if ecx.tcx.sess.opts.unstable_opts.unleash_the_miri_inside_of_you {
             return Err(InternError::BadMutablePointer);
         } else {
-            // tRust: invariant — const interning safety checks should reject mutable pointers before reaching this point
             span_bug!(
                 ecx.tcx.span,
                 "the static const safety checks accepted a mutable pointer they should not have accepted"
@@ -363,7 +362,7 @@ pub fn intern_const_alloc_for_constprop<'tcx, M: CompileTimeMachine<'tcx>>(
         return interp_ok(());
     }
     // Move allocation to `tcx`.
-    if let Some(_) = intern_shallow(ecx, alloc_id, Mutability::Not, None).expect("invariant: intern_shallow succeeds for freshly-allocated alloc_id").next() {
+    if let Some(_) = intern_shallow(ecx, alloc_id, Mutability::Not, None).unwrap().next() {
         // We are not doing recursive interning, so we don't currently support provenance.
         // (If this assertion ever triggers, we should just implement a
         // proper recursive interning loop -- or just call `intern_const_alloc_recursive`.
@@ -387,8 +386,8 @@ impl<'tcx> InterpCx<'tcx, DummyMachine> {
         // `allocate` picks a fresh AllocId that we will associate with its data below.
         let dest = self.allocate(layout, MemoryKind::Stack)?;
         f(self, &dest.clone().into())?;
-        let alloc_id = dest.ptr().provenance.expect("invariant: freshly allocated pointer must have provenance").alloc_id(); // this was just allocated, it must have provenance
-        for prov in intern_shallow(self, alloc_id, Mutability::Not, None).expect("invariant: intern_shallow succeeds for freshly-allocated alloc_id") {
+        let alloc_id = dest.ptr().provenance.unwrap().alloc_id(); // this was just allocated, it must have provenance
+        for prov in intern_shallow(self, alloc_id, Mutability::Not, None).unwrap() {
             // We are not doing recursive interning, so we don't currently support provenance.
             // (If this assertion ever triggers, we should just implement a
             // proper recursive interning loop -- or just call `intern_const_alloc_recursive`.

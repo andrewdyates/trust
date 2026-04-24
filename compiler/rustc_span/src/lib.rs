@@ -509,7 +509,7 @@ pub enum FileName {
     /// Command line.
     Anon(Hash64),
     /// Hack in `src/librustc_ast/parse.rs`.
-    // tRust: known issue (jseyfried)
+    // FIXME(jseyfried)
     MacroExpansion(Hash64),
     ProcMacroSourceCode(Hash64),
     /// Strings provided as crate attributes in the CLI.
@@ -797,7 +797,7 @@ impl Span {
     /// Gate suggestions that would not be appropriate in a context the user didn't write.
     pub fn can_be_used_for_suggestions(self) -> bool {
         !self.from_expansion()
-        // tRust: known issue — If this span comes from a `derive` macro but it points at code the user wrote,
+        // FIXME: If this span comes from a `derive` macro but it points at code the user wrote,
         // the callsite span and the span will be pointing at different places. It also means that
         // we can safely provide suggestions on this span.
             || (self.in_derive_expansion()
@@ -1239,7 +1239,7 @@ impl Span {
         match Span::prepare_to_combine(self, within) {
             // Only return something if it doesn't overlap with the original span,
             // and the span isn't "imported" (i.e. from unavailable sources).
-            // tRust: known issue — This does limit the usefulness of the error when the macro is
+            // FIXME: This does limit the usefulness of the error when the macro is
             // from a foreign crate; we could also take into account `-Zmacro-backtrace`,
             // which doesn't redact this span (but that would mean passing in even more
             // args to this function, lol).
@@ -1960,7 +1960,7 @@ impl<S: SpanEncoder> Encodable<S> for SourceFile {
                     .map(|&[fst, snd]| snd - fst)
                     .map(|bp| bp.to_usize())
                     .max()
-                    .expect("invariant: array_windows on 2+ elements always has a max") // tRust: unwrap -> expect
+                    .unwrap()
             };
 
             let bytes_per_diff: usize = match max_line_length {
@@ -2247,7 +2247,7 @@ impl SourceFile {
     /// Returns the `BytePos` of the beginning of the current line.
     pub fn line_begin_pos(&self, pos: BytePos) -> BytePos {
         let pos = self.relative_position(pos);
-        let line_index = self.lookup_line(pos).expect("invariant: pos is within this source file's line range"); // tRust: unwrap -> expect
+        let line_index = self.lookup_line(pos).unwrap();
         let line_start_pos = self.lines()[line_index];
         self.absolute_position(line_start_pos)
     }
@@ -2476,7 +2476,7 @@ impl SourceFile {
                 // If we don't have the code available, it is ok as a fallback to return the bytepos
                 // instead of the "display" column, which is only used to properly show underlines
                 // in the terminal.
-                // tRust: known issue — we'll want better handling of this in the future for the sake of tools
+                // FIXME: we'll want better handling of this in the future for the sake of tools
                 // that want to use the display col instead of byte offsets to modify Rust code, but
                 // that is a problem for another day, the previous code was already incorrect for
                 // both displaying *and* third party tools using the json output naïvely.
@@ -2493,7 +2493,7 @@ impl SourceFile {
 }
 
 pub fn char_width(ch: char) -> usize {
-    // tRust: known issue — `unicode_width` sometimes disagrees with terminals on how wide a `char` is. For now,
+    // FIXME: `unicode_width` sometimes disagrees with terminals on how wide a `char` is. For now,
     // just accept that sometimes the code line will be longer than desired.
     match ch {
         '\t' => 4,
@@ -2568,14 +2568,8 @@ fn normalize_newlines(src: &mut String, normalized_pos: &mut Vec<NormalizedPos>)
     }
 
     // Account for removed `\r`.
+    // After `set_len`, `buf` is guaranteed to contain utf-8 again.
     let new_len = buf.len() - gap_len;
-    // SAFETY: The loop above copies bytes in-place, removing only `\r` characters that
-    // precede `\n`. `new_len` equals the original length minus the number of removed `\r`
-    // bytes, so `set_len` does not expose uninitialized memory. The resulting bytes are
-    // valid UTF-8 because removing `\r` from a valid `\r\n` sequence leaves a valid `\n`,
-    // and no other bytes are modified.
-    // SAFETY: `buf[..new_len]` stays fully initialized and valid UTF-8 after only removing
-    // `\r` bytes from `\r\n` pairs.
     unsafe {
         buf.set_len(new_len);
         *src = String::from_utf8_unchecked(buf);

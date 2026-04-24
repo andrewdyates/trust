@@ -139,10 +139,10 @@ pub fn relate_args_with_variances<I: Interner, R: TypeRelation<I>>(
 ) -> RelateResult<I, I::GenericArgs> {
     let cx = relation.cx();
     let args = iter::zip(a_args.iter(), b_args.iter()).enumerate().map(|(i, (a, b))| {
-        let variance = variances.get(i).expect("invariant: variance index matches args index"); // tRust: unwrap -> expect
+        let variance = variances.get(i).unwrap();
         relation.relate_with_variance(variance, VarianceDiagInfo::None, a, b)
     });
-    // tRust: known issue -- We can probably try to reuse `a_args` here if it did not change.
+    // FIXME: We can probably try to reuse `a_args` here if it did not change.
     cx.mk_args_from_iter(args)
 }
 
@@ -361,7 +361,7 @@ pub fn structurally_relate_tys<I: Interner, R: TypeRelation<I>>(
         }
 
         (ty::Param(a_p), ty::Param(b_p)) if a_p.index() == b_p.index() => {
-            // tRust: known issue -- Put this back
+            // FIXME: Put this back
             //debug_assert_eq!(a_p.name(), b_p.name(), "param types with same index differ in name");
             Ok(a)
         }
@@ -523,8 +523,8 @@ pub fn structurally_relate_tys<I: Interner, R: TypeRelation<I>>(
 /// Any semantic equality, e.g. of unevaluated consts, and inference variables have
 /// to be handled by the caller.
 ///
-/// tRust: known issue -- This is not totally structural, which probably should be fixed.
-/// See the known upstream workarounds below.
+/// FIXME: This is not totally structural, which probably should be fixed.
+/// See the HACKs below.
 pub fn structurally_relate_consts<I: Interner, R: TypeRelation<I>>(
     relation: &mut R,
     mut a: I::Const,
@@ -563,7 +563,7 @@ pub fn structurally_relate_consts<I: Interner, R: TypeRelation<I>>(
         (_, ty::ConstKind::Error(_)) => return Ok(b),
 
         (ty::ConstKind::Param(a_p), ty::ConstKind::Param(b_p)) if a_p.index() == b_p.index() => {
-            // tRust: known issue -- Put this back
+            // FIXME: Put this back
             // debug_assert_eq!(a_p.name, b_p.name, "param types with same index differ in name");
             true
         }
@@ -589,7 +589,7 @@ pub fn structurally_relate_consts<I: Interner, R: TypeRelation<I>>(
         // and is the better alternative to waiting until `generic_const_exprs` can
         // be stabilized.
         (ty::ConstKind::Unevaluated(au), ty::ConstKind::Unevaluated(bu)) if au.def == bu.def => {
-            // tRust: known issue (mgca) -- remove this
+            // FIXME(mgca): remove this
             if cfg!(debug_assertions) {
                 let a_ty = cx.type_of(au.def.into()).instantiate(cx, au.args);
                 let b_ty = cx.type_of(bu.def.into()).instantiate(cx, bu.args);

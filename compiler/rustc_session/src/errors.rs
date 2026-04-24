@@ -306,7 +306,7 @@ struct InvalidLiteralSuffix<'a> {
     #[primary_span]
     #[label("invalid suffix `{$suffix}`")]
     span: Span,
-    // tRust: known issue — (#100717)
+    // FIXME(#100717)
     kind: &'a str,
     suffix: Symbol,
 }
@@ -415,7 +415,7 @@ pub fn create_lit_error(psess: &ParseSess, err: LitError, lit: token::Lit, span:
     fn fix_base_capitalisation(prefix: &str, suffix: &str) -> Option<String> {
         let mut chars = suffix.chars();
 
-        let base_char = chars.next().expect("invariant: suffix length > 1 guarantees at least one char"); // tRust: unwrap -> expect
+        let base_char = chars.next().unwrap();
         let base = match base_char {
             'B' => 2,
             'O' => 8,

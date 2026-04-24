@@ -11,7 +11,6 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use trust_types::fx::FxHashMap;
-
 use trust_types::{CrateVerificationResult, VerificationResult};
 
 use crate::analyzer::{self, FailureAnalysis, FailurePattern};
@@ -168,10 +167,7 @@ impl FeedbackLoop {
     /// 5. Records outcomes in the feedback collector
     /// 6. Returns accepted proposals + strategy recommendation
     #[must_use]
-    pub fn run_iteration(
-        &mut self,
-        results: &CrateVerificationResult,
-    ) -> FeedbackLoopResult {
+    pub fn run_iteration(&mut self, results: &CrateVerificationResult) -> FeedbackLoopResult {
         self.iteration += 1;
 
         // Step 1: Analyze failures
@@ -196,7 +192,8 @@ impl FeedbackLoop {
         let mut improved_proposals: Vec<ImprovedProposal> = Vec::new();
         if self.config.learn_from_prior {
             for (prior_proposal, failure_pattern) in &self.prior_proposals {
-                let mut improved = self.collector.learn_from_failure(prior_proposal, failure_pattern);
+                let mut improved =
+                    self.collector.learn_from_failure(prior_proposal, failure_pattern);
                 improved.truncate(self.config.max_improved_per_failure);
                 improved_proposals.extend(improved);
             }
@@ -263,10 +260,7 @@ impl FeedbackLoop {
         self.prior_proposals.clear();
         for entry in &entries {
             for proposal in &accepted {
-                self.prior_proposals.push((
-                    proposal.clone(),
-                    entry.analysis.pattern.clone(),
-                ));
+                self.prior_proposals.push((proposal.clone(), entry.analysis.pattern.clone()));
             }
         }
 
@@ -308,11 +302,9 @@ impl FeedbackLoop {
     /// This is a convenience method that combines analysis, proposal generation,
     /// and ensemble ranking in one call.
     #[must_use]
-    pub fn suggest_from_failures(
-        &self,
-        entries: &[FeedbackEntry],
-    ) -> Vec<ScoredProposal> {
-        let mut proposals_by_source: FxHashMap<ProposalSource, Vec<Proposal>> = FxHashMap::default();
+    pub fn suggest_from_failures(&self, entries: &[FeedbackEntry]) -> Vec<ScoredProposal> {
+        let mut proposals_by_source: FxHashMap<ProposalSource, Vec<Proposal>> =
+            FxHashMap::default();
 
         // Generate proposals from each entry
         for entry in entries {
@@ -322,10 +314,7 @@ impl FeedbackLoop {
                 std::slice::from_ref(&entry.analysis),
             );
 
-            proposals_by_source
-                .entry(ProposalSource::Heuristic)
-                .or_default()
-                .extend(proposals);
+            proposals_by_source.entry(ProposalSource::Heuristic).or_default().extend(proposals);
         }
 
         // Apply strategy adjustments from feedback history
@@ -362,11 +351,9 @@ pub fn analyze_failures(results: &CrateVerificationResult) -> Vec<FeedbackEntry>
             let analysis = analyzer::analyze_failure(vc, result);
 
             let (solver, time_ms, has_cex) = match result {
-                VerificationResult::Failed {
-                    solver,
-                    time_ms,
-                    counterexample,
-                } => (solver.clone(), *time_ms, counterexample.is_some()),
+                VerificationResult::Failed { solver, time_ms, counterexample } => {
+                    (solver.to_string(), *time_ms, counterexample.is_some())
+                }
                 _ => (String::new(), 0, false),
             };
 
@@ -396,8 +383,9 @@ pub fn classify_failures(entries: &[FeedbackEntry]) -> FxHashMap<FailureClass, u
             | FailurePattern::NegationOverflow
             | FailurePattern::ShiftOverflow => FailureClass::ArithmeticSafety,
 
-            FailurePattern::IndexOutOfBounds
-            | FailurePattern::CastOverflow => FailureClass::MemorySafety,
+            FailurePattern::IndexOutOfBounds | FailurePattern::CastOverflow => {
+                FailureClass::MemorySafety
+            }
 
             FailurePattern::PreconditionViolation { .. }
             | FailurePattern::AssertionFailure { .. } => FailureClass::MissingPrecondition,
@@ -431,17 +419,20 @@ fn pattern_name_for_kind(kind: &ProposalKind) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{
-        BinOp, Formula, FunctionVerificationResult, SourceSpan, Ty, VcKind,
-        VerificationCondition,
+        BinOp, Formula, FunctionVerificationResult, SourceSpan, Ty, VcKind, VerificationCondition,
     };
+
+    use super::*;
 
     fn make_overflow_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "get_midpoint".into(),
             location: SourceSpan::default(),
@@ -471,11 +462,7 @@ mod tests {
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed {
-            solver: "z4".into(),
-            time_ms: 5,
-            counterexample: None,
-        }
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 5, counterexample: None }
     }
 
     fn failed_with_cex() -> VerificationResult {
@@ -495,11 +482,13 @@ mod tests {
             time_ms: 2,
             strength: trust_types::ProofStrength::smt_unsat(),
             proof_certificate: None,
-                solver_warnings: None,
+            solver_warnings: None,
         }
     }
 
-    fn make_crate_result(failures: Vec<(VerificationCondition, VerificationResult)>) -> CrateVerificationResult {
+    fn make_crate_result(
+        failures: Vec<(VerificationCondition, VerificationResult)>,
+    ) -> CrateVerificationResult {
         CrateVerificationResult {
             crate_name: "test".into(),
             functions: vec![FunctionVerificationResult {
@@ -556,18 +545,14 @@ mod tests {
 
     #[test]
     fn test_analyze_failures_skips_proved() {
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), proved_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), proved_result())]);
         let entries = analyze_failures(&results);
         assert!(entries.is_empty());
     }
 
     #[test]
     fn test_analyze_failures_single_failure() {
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let entries = analyze_failures(&results);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].function_name, "func");
@@ -577,9 +562,7 @@ mod tests {
 
     #[test]
     fn test_analyze_failures_with_counterexample() {
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_with_cex()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_with_cex())]);
         let entries = analyze_failures(&results);
         assert_eq!(entries.len(), 1);
         assert!(entries[0].has_counterexample);
@@ -615,9 +598,7 @@ mod tests {
 
     #[test]
     fn test_classify_failures_arithmetic() {
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let entries = analyze_failures(&results);
         let classes = classify_failures(&entries);
         assert_eq!(classes[&FailureClass::ArithmeticSafety], 1);
@@ -625,9 +606,7 @@ mod tests {
 
     #[test]
     fn test_classify_failures_memory() {
-        let results = make_crate_result(vec![
-            (make_oob_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_oob_vc(), failed_result())]);
         let entries = analyze_failures(&results);
         let classes = classify_failures(&entries);
         assert_eq!(classes[&FailureClass::MemorySafety], 1);
@@ -666,9 +645,7 @@ mod tests {
     #[test]
     fn test_feedback_loop_single_failure() {
         let mut fl = FeedbackLoop::new();
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let result = fl.run_iteration(&results);
         assert_eq!(result.total_failures, 1);
         assert!(!result.accepted_proposals.is_empty());
@@ -687,9 +664,7 @@ mod tests {
     #[test]
     fn test_feedback_loop_records_in_collector() {
         let mut fl = FeedbackLoop::new();
-        let results = make_crate_result(vec![
-            (make_div_zero_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_div_zero_vc(), failed_result())]);
         let _ = fl.run_iteration(&results);
         assert!(fl.collector().outcome_count() > 0);
     }
@@ -697,9 +672,7 @@ mod tests {
     #[test]
     fn test_feedback_loop_tracks_prior_proposals() {
         let mut fl = FeedbackLoop::new();
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let _ = fl.run_iteration(&results);
         assert!(fl.prior_proposal_count() > 0);
     }
@@ -709,9 +682,7 @@ mod tests {
         let mut fl = FeedbackLoop::new();
 
         // First iteration: generates proposals and stores them as prior
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let _ = fl.run_iteration(&results);
 
         // Second iteration: should have improved proposals from learning
@@ -736,14 +707,9 @@ mod tests {
 
     #[test]
     fn test_feedback_loop_no_gate() {
-        let config = FeedbackLoopConfig {
-            use_structural_gate: false,
-            ..Default::default()
-        };
+        let config = FeedbackLoopConfig { use_structural_gate: false, ..Default::default() };
         let mut fl = FeedbackLoop::with_config(config);
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let result = fl.run_iteration(&results);
         assert!(result.rejected_proposals.is_empty(), "no gate means no rejections");
         assert!(!result.accepted_proposals.is_empty());
@@ -751,14 +717,9 @@ mod tests {
 
     #[test]
     fn test_feedback_loop_no_learning() {
-        let config = FeedbackLoopConfig {
-            learn_from_prior: false,
-            ..Default::default()
-        };
+        let config = FeedbackLoopConfig { learn_from_prior: false, ..Default::default() };
         let mut fl = FeedbackLoop::with_config(config);
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let _ = fl.run_iteration(&results);
         let result2 = fl.run_iteration(&results);
         assert!(result2.improved_proposals.is_empty(), "learning disabled");
@@ -766,14 +727,9 @@ mod tests {
 
     #[test]
     fn test_feedback_loop_confidence_filter() {
-        let config = FeedbackLoopConfig {
-            min_confidence: 0.99,
-            ..Default::default()
-        };
+        let config = FeedbackLoopConfig { min_confidence: 0.99, ..Default::default() };
         let mut fl = FeedbackLoop::with_config(config);
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let result = fl.run_iteration(&results);
         // Most proposals have confidence < 0.99, so few should pass
         assert!(
@@ -850,9 +806,7 @@ mod tests {
     #[test]
     fn test_suggest_from_failures_all_have_confidence() {
         let fl = FeedbackLoop::new();
-        let results = make_crate_result(vec![
-            (make_div_zero_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_div_zero_vc(), failed_result())]);
         let entries = analyze_failures(&results);
         let suggestions = fl.suggest_from_failures(&entries);
 
@@ -876,9 +830,7 @@ mod tests {
     #[test]
     fn test_feedback_loop_result_strategy_present() {
         let mut fl = FeedbackLoop::new();
-        let results = make_crate_result(vec![
-            (make_overflow_vc(), failed_result()),
-        ]);
+        let results = make_crate_result(vec![(make_overflow_vc(), failed_result())]);
         let result = fl.run_iteration(&results);
         // Strategy should always be present
         assert!(result.strategy.confidence_threshold > 0.0);
@@ -892,12 +844,22 @@ mod tests {
             ProposalKind::AddPrecondition { spec_body: "x > 0".into() },
             ProposalKind::AddPostcondition { spec_body: "result > 0".into() },
             ProposalKind::AddInvariant { spec_body: "i < n".into() },
-            ProposalKind::SafeArithmetic { original: "a+b".into(), replacement: "a.checked_add(b)".into() },
+            ProposalKind::SafeArithmetic {
+                original: "a+b".into(),
+                replacement: "a.checked_add(b)".into(),
+            },
             ProposalKind::AddBoundsCheck { check_expr: "assert!(i < len)".into() },
             ProposalKind::AddNonZeroCheck { check_expr: "assert!(y != 0)".into() },
         ];
 
-        let expected = ["precondition", "postcondition", "invariant", "safe_arithmetic", "bounds_check", "nonzero_check"];
+        let expected = [
+            "precondition",
+            "postcondition",
+            "invariant",
+            "safe_arithmetic",
+            "bounds_check",
+            "nonzero_check",
+        ];
         for (kind, exp) in kinds.iter().zip(expected.iter()) {
             assert_eq!(pattern_name_for_kind(kind), *exp);
         }

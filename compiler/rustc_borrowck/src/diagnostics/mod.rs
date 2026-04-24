@@ -143,7 +143,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
     }
 
     pub(crate) fn get_buffered_mut_error(&mut self, span: Span) -> Option<(Diag<'infcx>, usize)> {
-        // // NOTE: swap_remove is correct here - ordering doesn't matter for this collection.
+        // FIXME(#120456) - is `swap_remove` correct?
         self.diags_buffer.buffered_mut_errors.swap_remove(&span)
     }
 
@@ -204,7 +204,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                         if let Some(prev_name) = local_names[local]
                             && var_debug_info.name != prev_name
                         {
-                            // tRust: invariant — algorithm precondition — borrow/move analysis requires well-formed MIR
                             span_bug!(
                                 var_debug_info.source_info.span,
                                 "local {:?} has many names (`{}` vs `{}`)",
@@ -273,7 +272,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     Some(Spanned { node: Operand::Copy(place) | Operand::Move(place), .. })
                         if target == place.local_or_deref_local() =>
                     {
-                        place.local_or_deref_local().expect("invariant: place must be local or deref of local")
+                        place.local_or_deref_local().unwrap()
                     }
                     _ => return false,
                 };
@@ -391,7 +390,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                                 None => Some(0),
                             };
                         }
-                        if index >= autoderef_index.expect("invariant: autoderef index must be set") {
+                        if index >= autoderef_index.unwrap() {
                             buf.insert(0, '*');
                         }
                     }
@@ -401,7 +400,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                 ProjectionElem::OpaqueCast(..) => (),
                 ProjectionElem::UnwrapUnsafeBinder(_) => (),
                 ProjectionElem::Field(field, _ty) => {
-                    // // NOTE(project-rfc_2229#36): print capture precisely here. here.
+                    // FIXME(project-rfc_2229#36): print capture precisely here.
                     if let Some(field) = self.is_upvar_field_projection(PlaceRef {
                         local,
                         projection: place.projection.split_at(index + 1).0,
@@ -540,7 +539,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                 _ => {
                     // Might need a revision when the fields in trait RFC is implemented
                     // (https://github.com/rust-lang/rfcs/pull/1546)
-                    // tRust: invariant — type system guarantee
                     bug!("End-user description not implemented for field access on `{:?}`", ty);
                 }
             }
@@ -628,7 +626,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             }
         }
 
-        ty.print(&mut p).expect("write to buffer is infallible");
+        ty.print(&mut p).unwrap();
         p.into_buffer()
     }
 
@@ -648,11 +646,10 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             }
             region
         } else {
-            // tRust: invariant — type system guarantee
             bug!("ty for annotation of borrow region is not a reference");
         };
 
-        region.print(&mut p).expect("write to buffer is infallible");
+        region.print(&mut p).unwrap();
         p.into_buffer()
     }
 
@@ -807,7 +804,7 @@ impl UseSpans<'_> {
         }
     }
 
-    // // NOTE(coroutines): Make this just return the `ClosureKind` directly? directly?
+    // FIXME(coroutines): Make this just return the `ClosureKind` directly?
     pub(super) fn coroutine_kind(self) -> Option<CoroutineKind> {
         match self {
             UseSpans::ClosureUse {
@@ -898,7 +895,7 @@ impl UseSpans<'_> {
     /// Returns `false` if this place is not used in a coroutine.
     pub(super) fn for_coroutine(&self) -> bool {
         match *self {
-            // // NOTE(coroutines): Do we want this to apply to synthetic coroutines? coroutines?
+            // FIXME(coroutines): Do we want this to apply to synthetic coroutines?
             UseSpans::ClosureUse { closure_kind, .. } => {
                 matches!(closure_kind, hir::ClosureKind::Coroutine(..))
             }
@@ -960,7 +957,6 @@ impl<'tcx> BorrowedContentSource<'tcx> {
             BorrowedContentSource::DerefRawPointer => "a `*const` pointer".to_string(),
             BorrowedContentSource::DerefSharedRef => "a `&` reference".to_string(),
             BorrowedContentSource::DerefMutableRef => {
-                // tRust: invariant — algorithm precondition — borrow/move analysis requires well-formed MIR
                 bug!("describe_for_immutable_place: DerefMutableRef isn't immutable")
             }
             BorrowedContentSource::OverloadedDeref(ty) => ty
@@ -1075,7 +1071,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
 
         let target_temp = match stmt.kind {
             StatementKind::Assign(box (temp, _)) if temp.as_local().is_some() => {
-                temp.as_local().expect("invariant: def_id must be local")
+                temp.as_local().unwrap()
             }
             _ => return normal_ret,
         };
@@ -1326,7 +1322,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     }
                 }
                 CallKind::Operator { self_arg, trait_id, .. } => {
-                    let self_arg = self_arg.expect("invariant: self argument must be present");
+                    let self_arg = self_arg.unwrap();
                     err.subdiagnostic(CaptureReasonLabel::OperatorUse {
                         fn_call_span,
                         place_name: &place_name,
@@ -1347,7 +1343,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     }
                 }
                 CallKind::Normal { self_arg, desugaring, method_did, method_args } => {
-                    let self_arg = self_arg.expect("invariant: self argument must be present");
+                    let self_arg = self_arg.unwrap();
                     let mut has_sugg = false;
                     let tcx = self.infcx.tcx;
                     // Avoid pointing to the same function in multiple different
@@ -1507,7 +1503,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                                                 "`{}`",
                                                 e.obligation.predicate
                                             ))
-                                            .expect("invariant: listify must succeed for non-empty error list"),
+                                            .unwrap(),
                                         )
                                     }
                                 };

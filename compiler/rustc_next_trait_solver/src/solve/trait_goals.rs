@@ -173,7 +173,7 @@ where
         assumption: I::Clause,
         then: impl FnOnce(&mut EvalCtxt<'_, D>) -> QueryResult<I>,
     ) -> QueryResult<I> {
-        let trait_clause = assumption.as_trait_clause().expect("invariant: assumption pre-filtered as trait clause"); // tRust: unwrap -> expect
+        let trait_clause = assumption.as_trait_clause().unwrap();
 
         // PERF(sized-hierarchy): Sizedness supertraits aren't elaborated to improve perf, so
         // check for a `Sized` subtrait when looking for `MetaSized`. `PointeeSized` bounds
@@ -372,7 +372,7 @@ where
         let (inputs, output) = ecx.instantiate_binder_with_infer(tupled_inputs_and_output);
 
         // A built-in `Fn` impl only holds if the output is sized.
-        // (tRust: known issue — technically we only need to check this if the type is a fn ptr...)
+        // (FIXME: technically we only need to check this if the type is a fn ptr...)
         let output_is_sized_pred =
             ty::TraitRef::new(cx, cx.require_trait_lang_item(SolverTraitLangItem::Sized), [output]);
 
@@ -413,7 +413,7 @@ where
         } = ecx.instantiate_binder_with_infer(tupled_inputs_and_output_and_coroutine);
 
         // A built-in `AsyncFn` impl only holds if the output is sized.
-        // (tRust: known issue — technically we only need to check this if the type is a fn ptr...)
+        // (FIXME: technically we only need to check this if the type is a fn ptr...)
         let output_is_sized_pred = ty::TraitRef::new(
             cx,
             cx.require_trait_lang_item(SolverTraitLangItem::Sized),
@@ -450,7 +450,7 @@ where
             // We don't need to worry about the self type being an infer var.
             return Err(NoSolution);
         };
-        let goal_kind = goal_kind_ty.expect_ty().to_opt_closure_kind().expect("invariant: goal kind ty is a valid closure kind"); // tRust: unwrap -> expect
+        let goal_kind = goal_kind_ty.expect_ty().to_opt_closure_kind().unwrap();
         if closure_kind.extends(goal_kind) {
             ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc)
                 .enter(|ecx| ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes))
@@ -857,7 +857,7 @@ where
                 def.field_representing_type_info(ecx.cx(), args)
             && {
                 let sized_trait = ecx.cx().require_trait_lang_item(SolverTraitLangItem::Sized);
-                // tRust: known issue — add better support for builtin impls of traits that check for the bounds
+                // FIXME: add better support for builtin impls of traits that check for the bounds
                 // on the trait definition in std.
 
                 // NOTE: these bounds have to be kept in sync with the definition of the `Field`
@@ -1068,7 +1068,7 @@ where
                     // Check that a's supertrait (upcast_principal) is compatible
                     // with the target (b_ty).
                     ty::ExistentialPredicate::Trait(target_principal) => {
-                        let source_principal = upcast_principal.expect("invariant: upcast principal exists when matching trait predicate"); // tRust: unwrap -> expect
+                        let source_principal = upcast_principal.unwrap();
                         let target_principal = bound.rebind(target_principal);
                         ecx.enter_forall(target_principal, |ecx, target_principal| {
                             let source_principal =
@@ -1364,7 +1364,7 @@ where
     D: SolverDelegate<Interner = I>,
     I: Interner,
 {
-    /// tRust: known issue (#57893) — For backwards compatibility with the old trait solver implementation,
+    /// FIXME(#57893): For backwards compatibility with the old trait solver implementation,
     /// we need to handle overlap between builtin and user-written impls for trait objects.
     ///
     /// This overlap is unsound in general and something which we intend to fix separately.

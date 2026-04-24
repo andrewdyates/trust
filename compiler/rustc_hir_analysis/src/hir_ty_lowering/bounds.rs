@@ -193,14 +193,14 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             }
             ImpliedBoundsContext::TyParam(..) | ImpliedBoundsContext::AssociatedTypeOrImplTrait => {
                 // Report invalid relaxed bounds.
-                // tRust: known issue — Since we only call this validation function here in this function, we only
+                // FIXME: Since we only call this validation function here in this function, we only
                 //        fully validate relaxed bounds in contexts where we perform
                 //        "sized elaboration". In most cases that doesn't matter because we *usually*
                 //        reject such relaxed bounds outright during AST lowering.
                 //        However, this can easily get out of sync! Ideally, we would perform this step
                 //        where we are guaranteed to catch *all* bounds like in
                 //        `Self::lower_poly_trait_ref`. List of concrete issues:
-                //        tRust: known issue — (more_maybe_bounds): We don't call this for trait object tys, supertrait
+                //        FIXME(more_maybe_bounds): We don't call this for trait object tys, supertrait
                 //                                  bounds, trait alias bounds, assoc type bounds (ATB)!
                 let bounds = collect_relaxed_bounds(hir_bounds, context);
                 self.reject_duplicate_relaxed_bounds(bounds);
@@ -570,7 +570,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 debug!(?late_bound_in_projection_ty);
                 debug!(?late_bound_in_term);
 
-                // tRust: known issue — point at the type params that don't have appropriate lifetimes:
+                // FIXME: point at the type params that don't have appropriate lifetimes:
                 // struct S1<F: for<'a> Fn(&i32, &i32) -> &'a i32>(F);
                 //                         ----  ----     ^^^^^^^
                 // NOTE(mgca): This error should be impossible to trigger with assoc const bindings.
@@ -690,7 +690,6 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                             "failed to resolve RTN",
                         );
                     }
-                    // tRust: invariant — fully qualified RTN paths only resolve to methods
                     _ => bug!("only expected method resolution for fully qualified RTN"),
                 };
                 let trait_def_id = tcx.parent(item_def_id);
@@ -858,7 +857,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
 
 /// Detect and reject early-bound & escaping late-bound generic params in the type of assoc const bindings.
 ///
-/// tRust: known issue — (const_generics): This is a temporary and semi-artificial restriction until the
+/// FIXME(const_generics): This is a temporary and semi-artificial restriction until the
 /// arrival of *generic const generics*[^1].
 ///
 /// It might actually be possible that we can already support early-bound generic params
@@ -900,7 +899,7 @@ pub(crate) fn check_assoc_const_binding_type<'tcx>(
     let enclosing_item_owner_id = tcx
         .hir_parent_owner_iter(hir_id)
         .find_map(|(owner_id, parent)| parent.generics().map(|_| owner_id))
-        .expect("invariant: value is present");
+        .unwrap();
     let generics = tcx.generics_of(enclosing_item_owner_id);
     for index in collector.params {
         let param = generics.param_at(index as _, tcx);
@@ -918,7 +917,7 @@ pub(crate) fn check_assoc_const_binding_type<'tcx>(
                 "normal"
             },
             param_defined_here_label:
-                (!is_self_param).then(|| tcx.def_ident_span(param.def_id).expect("invariant: def has ident span")),
+                (!is_self_param).then(|| tcx.def_ident_span(param.def_id).unwrap()),
             ty_note,
         }));
     }
@@ -929,13 +928,12 @@ pub(crate) fn check_assoc_const_binding_type<'tcx>(
                 assoc_const,
                 var_name: cx.tcx().item_name(var_def_id),
                 var_def_kind: tcx.def_descr(var_def_id),
-                var_defined_here_label: tcx.def_ident_span(var_def_id).expect("invariant: def has ident span"),
+                var_defined_here_label: tcx.def_ident_span(var_def_id).unwrap(),
                 ty_note,
             },
         ));
     }
 
-    // tRust: invariant — type must contain generic params or bound vars for this conversion
     let guar = guar.unwrap_or_else(|| bug!("failed to find gen params or bound vars in ty"));
     Ty::new_error(tcx, guar)
 }
@@ -999,7 +997,6 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for GenericParamAndBoundVarCollector<'_, 't
                         return ControlFlow::Break(guar);
                     }
                     ty::BoundRegionKind::NamedForPrinting(_) => {
-                        // tRust: invariant — this path is only used for pretty-printing, never for code generation
                         bug!("only used for pretty printing")
                     }
                 });

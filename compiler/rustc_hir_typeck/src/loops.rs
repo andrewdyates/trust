@@ -241,7 +241,6 @@ impl<'hir> Visitor<'hir> for CheckLoopVisitor<'hir> {
                                 (Some(sp), label, Some(source))
                             }
                             ref r => {
-                                // tRust: invariant — a resolved `break` label must point to an HIR loop expression, never any other expression kind
                                 span_bug!(e.span, "break label resolved to a non-loop: {:?}", r)
                             }
                         }

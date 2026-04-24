@@ -106,18 +106,11 @@ impl CallGraph {
         if let Some(existing) = edges.iter_mut().find(|e| e.target == site.callee) {
             existing.count += 1;
         } else {
-            edges.push(EdgeInfo {
-                target: site.callee.clone(),
-                kind: site.kind,
-                count: 1,
-            });
+            edges.push(EdgeInfo { target: site.callee.clone(), kind: site.kind, count: 1 });
         }
 
         // Update reverse edge.
-        self.reverse
-            .entry(site.callee)
-            .or_default()
-            .insert(site.caller);
+        self.reverse.entry(site.callee).or_default().insert(site.caller);
     }
 
     /// Return all functions that call `function`.
@@ -249,10 +242,7 @@ impl CallGraph {
         *index_counter += 1;
         stack.push(start.to_string());
         on_stack.insert(start.to_string());
-        work.push(Frame {
-            node: start.to_string(),
-            edge_idx: 0,
-        });
+        work.push(Frame { node: start.to_string(), edge_idx: 0 });
 
         while let Some(frame) = work.last_mut() {
             let successors: Vec<String> = self
@@ -272,10 +262,7 @@ impl CallGraph {
                     *index_counter += 1;
                     stack.push(successor.clone());
                     on_stack.insert(successor.clone());
-                    work.push(Frame {
-                        node: successor.clone(),
-                        edge_idx: 0,
-                    });
+                    work.push(Frame { node: successor.clone(), edge_idx: 0 });
                 } else if on_stack.contains(successor) {
                     // Back edge: update lowlink.
                     let current_node = frame.node.clone();
@@ -376,22 +363,13 @@ impl CallGraph {
         let total_edges = self.forward.values().map(|v| v.len()).sum();
 
         // Count recursive functions.
-        let num_recursive = self
-            .functions
-            .iter()
-            .filter(|f| self.is_recursive(f))
-            .count();
+        let num_recursive = self.functions.iter().filter(|f| self.is_recursive(f)).count();
 
         // Compute max depth via BFS from each root (node with in-degree 0).
         let roots: Vec<&str> = self
             .functions
             .iter()
-            .filter(|f| {
-                !self
-                    .reverse
-                    .get(f.as_str())
-                    .map_or(false, |callers| !callers.is_empty())
-            })
+            .filter(|f| !self.reverse.get(f.as_str()).map_or(false, |callers| !callers.is_empty()))
             .map(|s| s.as_str())
             .collect();
 
@@ -413,12 +391,7 @@ impl CallGraph {
             }
         }
 
-        CallGraphStats {
-            total_nodes: self.functions.len(),
-            total_edges,
-            max_depth,
-            num_recursive,
-        }
+        CallGraphStats { total_nodes: self.functions.len(), total_edges, max_depth, num_recursive }
     }
 
     /// Number of registered function nodes.
@@ -492,7 +465,7 @@ mod tests {
             caller: caller.to_string(),
             callee: callee.to_string(),
             kind,
-            location: format!("{}->{}",caller, callee),
+            location: format!("{}->{}", caller, callee),
         }
     }
 

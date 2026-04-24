@@ -239,15 +239,14 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             }
             TerminatorKind::Yield { .. } => {
                 // They would have an effect, but are not allowed in this phase.
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!("encountered disallowed terminator");
             }
             TerminatorKind::SwitchInt { discr, targets } => {
                 return self.handle_switch_int(discr, targets, state);
             }
             TerminatorKind::TailCall { .. } => {
-                // NOTE(explicit_tail_calls): No special handling needed for tail calls
-                // in dataflow const propagation.
+                // FIXME(explicit_tail_calls): determine if we need to do something here (probably
+                // not)
             }
             TerminatorKind::Goto { .. }
             | TerminatorKind::UnwindResume
@@ -306,7 +305,6 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
                     self.assign_operand(state, target, operand);
                 }
             }
-            // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
             Rvalue::CopyForDeref(_) => bug!("`CopyForDeref` in runtime MIR"),
             Rvalue::Aggregate(kind, operands) => {
                 // If we assign `target = Enum::Variant#0(operand)`,
@@ -468,7 +466,6 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             }
             Rvalue::Discriminant(place) => state.get_discr(place.as_ref(), &self.map),
             Rvalue::Use(operand) => return self.handle_operand(operand, state),
-            // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
             Rvalue::CopyForDeref(_) => bug!("`CopyForDeref` in runtime MIR"),
             Rvalue::Ref(..) | Rvalue::RawPtr(..) => {
                 // We don't track such places.
@@ -614,7 +611,7 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
                     let layout = self
                         .tcx
                         .layout_of(self.typing_env.as_query_input(self.tcx.types.usize))
-                        .expect("invariant: usize layout must be available"); // tRust: unwrap elimination
+                        .unwrap();
                     Some(ImmTy::from_uint(len_usize, layout).into())
                 }
             },
@@ -941,7 +938,6 @@ fn try_write_constant<'tcx>(
         | ty::Dynamic(..)
         | ty::UnsafeBinder(_) => throw_machine_stop_str!("unsupported type"),
 
-        // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
         ty::Error(_) | ty::Infer(..) | ty::CoroutineWitness(..) => bug!(),
     }
 
@@ -1025,7 +1021,6 @@ impl<'tcx> MutVisitor<'tcx> for Patch<'tcx> {
                 StatementKind::Assign(box (_, rvalue)) => {
                     *rvalue = Rvalue::Use(self.make_operand(*value));
                 }
-                // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                 _ => bug!("found assignment info for non-assign statement"),
             }
         } else {

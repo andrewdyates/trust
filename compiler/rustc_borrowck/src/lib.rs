@@ -265,7 +265,6 @@ impl<'tcx> ClosureOutlivesSubjectTy<'tcx> {
                 };
                 ty::Region::new_bound(tcx, depth, br)
             }
-            // tRust: invariant — ClosureOutlivesSubjectTy is constructed only from ReVar regions
             _ => bug!("unexpected region in ClosureOutlivesSubjectTy: {r:?}"),
         });
 
@@ -282,7 +281,6 @@ impl<'tcx> ClosureOutlivesSubjectTy<'tcx> {
                 debug_assert_eq!(debruijn, depth);
                 map(ty::RegionVid::from_usize(br.var.index()))
             }
-            // tRust: invariant — instantiate reverses the bound-region encoding from `new`; only ReBound regions should exist
             _ => bug!("unexpected region {r:?}"),
         })
     }
@@ -735,7 +733,7 @@ pub(crate) struct MirBorrowckCtxt<'a, 'infcx, 'tcx> {
     /// for reservations, so that we don't report seemingly duplicate
     /// errors for corresponding activations.
     //
-    // // NOTE: ideally this would be a set of `BorrowIndex`, not `Place`s,, not `Place`s,
+    // FIXME: ideally this would be a set of `BorrowIndex`, not `Place`s,
     // but it is currently inconvenient to track down the `BorrowIndex`
     // at the time we detect and report a reservation error.
     reservation_error_reported: FxIndexSet<Place<'tcx>>,
@@ -782,7 +780,7 @@ pub(crate) struct MirBorrowckCtxt<'a, 'infcx, 'tcx> {
 }
 
 // Check that:
-// 1. assignments are always made to mutable locations (NOTE: assignments are always made to mutable locations)
+// 1. assignments are always made to mutable locations (FIXME: does that still really go here?)
 // 2. loans made in overlapping scopes do not conflict
 // 3. assignments do not affect things loaned out as immutable
 // 4. moves do not affect things loaned out in any way
@@ -810,7 +808,7 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
                 // assert that a place is safe and live. So we don't have to
                 // do any checks here.
                 //
-                // // NOTE: Remove check that the place is initialized. This is
+                // FIXME: Remove check that the place is initialized. This is
                 // needed for now because matches don't have never patterns yet.
                 // So this is the only place we prevent
                 //      let x: !;
@@ -827,7 +825,6 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
                 NonDivergingIntrinsic::Assume(op) => {
                     self.consume_operand(location, (op, span), state);
                 }
-                // tRust: invariant: MIR phase guarantee — CopyNonOverlapping is lowered by lower_intrinsics before borrowck
                 NonDivergingIntrinsic::CopyNonOverlapping(..) => span_bug!(
                     span,
                     "Unexpected CopyNonOverlapping, should only appear after lower_intrinsics",
@@ -858,7 +855,6 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
             StatementKind::Nop
             | StatementKind::Retag { .. }
             | StatementKind::SetDiscriminant { .. } => {
-                // tRust: invariant — these statements are lowered away before borrowck; MIR validation rejects them earlier
                 bug!("Statement not allowed in this MIR phase")
             }
         }
@@ -1109,7 +1105,7 @@ enum WriteKind {
 /// When checking permissions for a place access, this flag is used to indicate that an immutable
 /// local place can be mutated.
 //
-// // NOTE: @nikomatsakis suggested that this flag could be removed with the following modifications: with the following modifications:
+// FIXME: @nikomatsakis suggested that this flag could be removed with the following modifications:
 // - Split `is_mutable()` into `is_assignable()` (can be directly assigned) and
 //   `is_declared_mutable()`.
 // - Take flow state into consideration in `is_assignable()` for local variables.
@@ -1587,7 +1583,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                         let def_id = def_id.expect_local();
                         let used_mut_upvars = self.root_cx.used_mut_upvars(def_id);
                         debug!("{:?} used_mut_upvars={:?}", def_id, used_mut_upvars);
-                        // // NOTE: cloning the `SmallVec` here to avoid borrowing `root_cx` `root_cx`
+                        // FIXME: We're cloning the `SmallVec` here to avoid borrowing `root_cx`
                         // when calling `propagate_closure_used_mut_upvar`. This should ideally
                         // be unnecessary.
                         for field in used_mut_upvars.clone() {
@@ -1609,7 +1605,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                 self.consume_operand(location, (op, span), state);
             }
 
-            // tRust: invariant — CopyForDeref is lowered to Copy by ElaborateDrops before borrowck runs
             Rvalue::CopyForDeref(_) => bug!("`CopyForDeref` in borrowck"),
         }
     }
@@ -1676,19 +1671,16 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                         // As such we have to search for the local that this
                         // capture comes from and mark it as being used as mut.
 
-                        // tRust: invariant — all locals in the body are tracked by move_data; non-user temporaries are always present
                         let Some(temp_mpi) = self.move_data.rev_lookup.find_local(local) else {
                             bug!("temporary should be tracked");
                         };
                         let init = if let [init_index] = *self.move_data.init_path_map[temp_mpi] {
                             &self.move_data.inits[init_index]
                         } else {
-                            // tRust: invariant — closure capture temporaries are assigned exactly once in MIR construction
                             bug!("temporary should be initialized exactly once")
                         };
 
                         let InitLocation::Statement(loc) = init.location else {
-                            // tRust: invariant — closure capture temporaries are initialized in statement position, not as function arguments
                             bug!("temporary initialized in arguments")
                         };
 
@@ -1706,7 +1698,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                                 propagate_closure_used_mut_place(self, source);
                             }
                             _ => {
-                                // tRust: invariant — MIR construction for closures only generates Ref or Use(Copy/Move) for captured variables
                                 bug!(
                                     "closures should only capture user variables \
                                  or references to user variables"
@@ -1730,7 +1721,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
         match *operand {
             Operand::Copy(place) => {
                 // copy of place: check if this is "copy of frozen path"
-                // (// (see check_loans.rs))
+                // (FIXME: see check_loans.rs)
                 self.access_place(
                     location,
                     (place, span),
@@ -1784,11 +1775,11 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
         let place = borrow.borrowed_place;
         let mut root_place = PlaceRef { local: place.local, projection: &[] };
 
-        // // NOTE(nll-rfc#40): more precise destructor tracking possible. For now here. For now
+        // FIXME(nll-rfc#40): do more precise destructor tracking here. For now
         // we just know that all locals are dropped at function exit (otherwise
         // we'll have a memory leak) and assume that all statics have a destructor.
         //
-        // // NOTE: allowing thread-locals to borrow other thread locals is future work.
+        // FIXME: allow thread-locals to borrow other thread locals?
         let might_be_alive = if self.body.local_decls[root_place.local].is_ref_to_thread_local() {
             // Thread-locals might be dropped after the function exits
             // We have to dereference the outer reference because
@@ -1811,7 +1802,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
             places_conflict::PlaceConflictBias::Overlap,
         ) {
             debug!("check_for_invalidation_at_exit({:?}): INVALID", place);
-            // // NOTE: should be talking about the region lifetime instead
+            // FIXME: should be talking about the region lifetime instead
             // of just a span here.
             let span = self.infcx.tcx.sess.source_map().end_point(span);
             self.report_borrowed_value_does_not_live_long_enough(
@@ -1885,11 +1876,9 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                     }
                     ty::Adt(adt, _) => {
                         if !adt.is_box() {
-                            // tRust: invariant — only Box<T> among ADTs supports Deref projection in MIR
                             bug!("Adt should be a box type when Place is deref");
                         }
                     }
-                    // tRust: invariant — Deref projection requires a ref, raw ptr, or Box type; these types cannot be dereferenced
                     ty::Bool
                     | ty::Char
                     | ty::Int(_)
@@ -1916,7 +1905,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                     | ty::Infer(_)
                     | ty::Error(_)
                     | ty::Placeholder(_) => {
-                        // tRust: invariant: type system guarantee — type properties are ensured by prior type checking
                         bug!("When Place is Deref it's type shouldn't be {place_ty:#?}")
                     }
                 },
@@ -1958,7 +1946,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                     | ty::Bound(_, _)
                     | ty::Infer(_)
                     | ty::Error(_)
-                    // tRust: invariant: type system guarantee — type properties are ensured by prior type checking
                     | ty::Placeholder(_) => bug!(
                         "When Place contains ProjectionElem::Field it's type shouldn't be {place_ty:#?}"
                     ),
@@ -1974,7 +1961,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                             return;
                         }
                         ty::Array(_, _) => (),
-                        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                         _ => bug!("Unexpected type {:#?}", place_ty.ty),
                     }
                 }
@@ -1987,7 +1973,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                         ));
                         return;
                     }
-                    // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                     _ => bug!("Unexpected type {place_ty:#?}"),
                 },
                 // `OpaqueCast`: only transmutes the type, so no moves there.
@@ -2082,7 +2067,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
 
             let root_path = &move_paths[mpi];
             for (child_mpi, child_move_path) in root_path.children(move_paths) {
-                let last_proj = child_move_path.place.projection.last().expect("invariant: move path must have at least one projection");
+                let last_proj = child_move_path.place.projection.last().unwrap();
                 if let ProjectionElem::ConstantIndex { offset, from_end, .. } = last_proj {
                     debug_assert!(!from_end, "Array constant indexing shouldn't be `from_end`.");
 
@@ -2225,7 +2210,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                 ProjectionElem::Downcast(_/*adt_def*/, _/*variant_idx*/) =>
                 // assigning to (P->variant) is okay if assigning to `P` is okay
                 //
-                // // NOTE: this may need revisiting for ADTs with destructors.
+                // FIXME: is this true even if P is an adt with a dtor?
                 { }
 
                 ProjectionElem::UnwrapUnsafeBinder(_) => {
@@ -2601,7 +2586,6 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
                                 self.is_mutable(place_base, is_local_mutation_allowed)
                             }
                             // Deref should only be for reference, pointers or boxes
-                            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                             _ => bug!("Deref of unexpected type: {:?}", base_ty),
                         }
                     }

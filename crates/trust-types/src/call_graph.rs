@@ -67,21 +67,13 @@ impl CallGraph {
     /// Return all entry point def_paths.
     #[must_use]
     pub fn entry_points(&self) -> Vec<&str> {
-        self.nodes
-            .iter()
-            .filter(|n| n.is_entry_point)
-            .map(|n| n.def_path.as_str())
-            .collect()
+        self.nodes.iter().filter(|n| n.is_entry_point).map(|n| n.def_path.as_str()).collect()
     }
 
     /// Return all public function def_paths.
     #[must_use]
     pub fn public_functions(&self) -> Vec<&str> {
-        self.nodes
-            .iter()
-            .filter(|n| n.is_public)
-            .map(|n| n.def_path.as_str())
-            .collect()
+        self.nodes.iter().filter(|n| n.is_public).map(|n| n.def_path.as_str()).collect()
     }
 }
 

@@ -61,95 +61,15 @@ impl Default for OscillationConfig {
     }
 }
 
-/// Tracks metric history and detects oscillation patterns.
-#[derive(Debug, Clone)]
-pub(crate) struct OscillationDetector {
-    history: Vec<f64>,
-    config: OscillationConfig,
-}
-
-impl OscillationDetector {
-    /// Create a new detector with default configuration.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            history: Vec::new(),
-            config: OscillationConfig::default(),
-        }
-    }
-
-    /// Create a detector with custom configuration.
-    #[must_use]
-    pub fn with_config(config: OscillationConfig) -> Self {
-        Self {
-            history: Vec::new(),
-            config,
-        }
-    }
-
-    /// Record a new metric value.
-    pub fn record(&mut self, value: f64) {
-        self.history.push(value);
-    }
-
-    /// Access the recorded history.
-    #[must_use]
-    pub fn history(&self) -> &[f64] {
-        &self.history
-    }
-
-    /// Detect oscillation in the recorded history.
-    ///
-    /// Returns `None` if no oscillation pattern is found or history is too short.
-    #[must_use]
-    pub fn detect_oscillation(&self) -> Option<OscillationPattern> {
-        detect_oscillation(&self.history, &self.config)
-    }
-
-    /// Generate a human-readable report of detected patterns.
-    #[must_use]
-    pub fn report(&self) -> String {
-        oscillation_report(&self.history, &self.config)
-    }
-
-    /// Apply a damping strategy to a proposed value, using the current history.
-    ///
-    /// Returns the damped value that should replace `proposed`.
-    #[must_use]
-    pub fn apply_damping(&self, proposed: f64, strategy: DampingStrategy) -> f64 {
-        apply_damping(proposed, &self.history, strategy, &self.config)
-    }
-
-    /// Clear all recorded history.
-    pub fn reset(&mut self) {
-        self.history.clear();
-    }
-
-    /// Number of recorded values.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.history.len()
-    }
-
-    /// Whether the history is empty.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.history.is_empty()
-    }
-}
-
-impl Default for OscillationDetector {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Detect oscillation patterns in a metric history.
 ///
 /// Checks for binary flip-flop, periodic cycles, and divergence.
 /// Returns `None` if no pattern is detected or the history is too short.
 #[must_use]
-pub(crate) fn detect_oscillation(history: &[f64], config: &OscillationConfig) -> Option<OscillationPattern> {
+pub(crate) fn detect_oscillation(
+    history: &[f64],
+    config: &OscillationConfig,
+) -> Option<OscillationPattern> {
     if history.len() < config.min_history {
         return None;
     }
@@ -221,55 +141,6 @@ pub(crate) fn apply_damping(
     }
 }
 
-/// Generate a human-readable summary of oscillation analysis.
-#[must_use]
-pub(crate) fn oscillation_report(history: &[f64], config: &OscillationConfig) -> String {
-    let n = history.len();
-    if n == 0 {
-        return "No history recorded.".to_string();
-    }
-
-    let mut lines = vec![format!("Oscillation analysis ({n} data points):")];
-
-    match detect_oscillation(history, config) {
-        Some(OscillationPattern::Binary) => {
-            lines.push("  Pattern: Binary flip-flop (period 2)".to_string());
-            if n >= 2 {
-                let a = history[n - 2];
-                let b = history[n - 1];
-                lines.push(format!("  Alternating between {a:.6} and {b:.6}"));
-            }
-        }
-        Some(OscillationPattern::Periodic(p)) => {
-            lines.push(format!("  Pattern: Periodic oscillation (period {p})"));
-        }
-        Some(OscillationPattern::Divergent) => {
-            lines.push("  Pattern: Divergent (amplitude increasing)".to_string());
-            let amplitude = peak_amplitude(history);
-            lines.push(format!("  Current amplitude: {amplitude:.6}"));
-        }
-        None => {
-            if n < config.min_history {
-                lines.push(format!(
-                    "  Insufficient history ({n} < {} minimum)",
-                    config.min_history
-                ));
-            } else {
-                lines.push("  No oscillation detected.".to_string());
-            }
-        }
-    }
-
-    // Append basic stats.
-    let avg = mean(history);
-    let amp = peak_amplitude(history);
-    lines.push(format!("  Mean: {avg:.6}, Peak amplitude: {amp:.6}"));
-
-    lines.join("\n")
-}
-
-// --- Internal helpers ---
-
 /// Check if oscillation amplitude is increasing over time.
 fn is_divergent(history: &[f64], config: &OscillationConfig) -> bool {
     if history.len() < 4 {
@@ -285,8 +156,7 @@ fn is_divergent(history: &[f64], config: &OscillationConfig) -> bool {
     // Check the last 3 diffs for a monotonically increasing trend.
     let n = diffs.len();
     let tail = &diffs[n.saturating_sub(3)..n];
-    tail.windows(2)
-        .all(|w| w[1] > w[0] + config.tolerance)
+    tail.windows(2).all(|w| w[1] > w[0] + config.tolerance)
 }
 
 /// Check for binary (period-2) oscillation in the tail of history.
@@ -328,17 +198,6 @@ fn mean(values: &[f64]) -> f64 {
     values.iter().sum::<f64>() / values.len() as f64
 }
 
-fn peak_amplitude(values: &[f64]) -> f64 {
-    if values.is_empty() {
-        return 0.0;
-    }
-    let avg = mean(values);
-    values
-        .iter()
-        .map(|v| (v - avg).abs())
-        .fold(0.0_f64, f64::max)
-}
-
 /// Exponentially weighted moving average.
 fn compute_ewma(history: &[f64], alpha: f64) -> f64 {
     let mut ewma = history[0];
@@ -367,10 +226,7 @@ mod tests {
     #[test]
     fn test_detect_periodic_oscillation_period_3() {
         let history = vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
-        let config = OscillationConfig {
-            min_history: 4,
-            ..default_config()
-        };
+        let config = OscillationConfig { min_history: 4, ..default_config() };
         let pattern = detect_oscillation(&history, &config);
         assert_eq!(pattern, Some(OscillationPattern::Periodic(3)));
     }
@@ -408,10 +264,7 @@ mod tests {
     #[test]
     fn test_damping_momentum() {
         let history = vec![10.0, 12.0, 14.0];
-        let config = OscillationConfig {
-            momentum_factor: 0.5,
-            ..default_config()
-        };
+        let config = OscillationConfig { momentum_factor: 0.5, ..default_config() };
         let damped = apply_damping(20.0, &history, DampingStrategy::Momentum, &config);
         // EWMA with alpha=0.5: 10, 11, 12.5 => ewma=12.5
         // result = 0.5 * 12.5 + 0.5 * 20 = 6.25 + 10 = 16.25
@@ -421,10 +274,7 @@ mod tests {
     #[test]
     fn test_damping_exponential_decay() {
         let history = vec![10.0, 20.0, 30.0];
-        let config = OscillationConfig {
-            decay_rate: 0.5,
-            ..default_config()
-        };
+        let config = OscillationConfig { decay_rate: 0.5, ..default_config() };
         let damped = apply_damping(50.0, &history, DampingStrategy::ExponentialDecay, &config);
         // mean = 20, result = 20 + 0.5*(50-20) = 35
         assert!((damped - 35.0).abs() < 1e-9);
@@ -447,75 +297,19 @@ mod tests {
     }
 
     #[test]
-    fn test_oscillation_report_binary() {
-        let history = vec![1.0, 2.0, 1.0, 2.0];
-        let report = oscillation_report(&history, &default_config());
-        assert!(report.contains("Binary flip-flop"));
-        assert!(report.contains("Alternating between"));
-    }
-
-    #[test]
-    fn test_oscillation_report_no_history() {
-        let report = oscillation_report(&[], &default_config());
-        assert_eq!(report, "No history recorded.");
-    }
-
-    #[test]
-    fn test_oscillation_report_no_pattern() {
-        let history = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let report = oscillation_report(&history, &default_config());
-        assert!(report.contains("No oscillation detected"));
-    }
-
-    #[test]
-    fn test_detector_struct_lifecycle() {
-        let mut detector = OscillationDetector::new();
-        assert!(detector.is_empty());
-        assert_eq!(detector.len(), 0);
-
-        detector.record(1.0);
-        detector.record(2.0);
-        detector.record(1.0);
-        detector.record(2.0);
-        assert_eq!(detector.len(), 4);
-        assert!(!detector.is_empty());
-
-        let pattern = detector.detect_oscillation();
-        assert_eq!(pattern, Some(OscillationPattern::Binary));
-
-        let damped = detector.apply_damping(1.0, DampingStrategy::Averaging);
-        // (1.0 + 2.0) / 2 = 1.5
-        assert!((damped - 1.5).abs() < 1e-9);
-
-        let report = detector.report();
-        assert!(report.contains("Binary"));
-
-        detector.reset();
-        assert!(detector.is_empty());
-        assert_eq!(detector.detect_oscillation(), None);
-    }
-
-    #[test]
     fn test_periodic_sinusoidal_signal() {
         // Generate a sinusoidal signal with period 4.
         let period = 4;
-        let history: Vec<f64> = (0..8)
-            .map(|i| (2.0 * PI * i as f64 / period as f64).sin())
-            .collect();
-        let config = OscillationConfig {
-            tolerance: 1e-6,
-            ..default_config()
-        };
+        let history: Vec<f64> =
+            (0..8).map(|i| (2.0 * PI * i as f64 / period as f64).sin()).collect();
+        let config = OscillationConfig { tolerance: 1e-6, ..default_config() };
         let pattern = detect_oscillation(&history, &config);
         assert_eq!(pattern, Some(OscillationPattern::Periodic(4)));
     }
 
     #[test]
     fn test_config_custom_min_history() {
-        let config = OscillationConfig {
-            min_history: 10,
-            ..default_config()
-        };
+        let config = OscillationConfig { min_history: 10, ..default_config() };
         // 6 points < min_history of 10 => None
         let history = vec![1.0, 2.0, 1.0, 2.0, 1.0, 2.0];
         assert_eq!(detect_oscillation(&history, &config), None);

@@ -7,7 +7,7 @@
 // (serde_json used by downstream, thiserror reserved for error types)
 // tRust: Allow std HashMap/HashSet — FxHash lint only applies to compiler internals
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
 // tRust #837: Deterministic hash collections for compilation reproducibility.
 pub mod fx;
@@ -42,8 +42,8 @@ pub mod smt_printer;
 // tRust #713: Canonical SMT-LIB2 logic selection, free variable collection, and sort inference.
 pub mod smt_logic;
 // tRust #308: SMT-LIB2 string-based pretty printer for debugging and external solver interop.
-pub(crate) mod smtlib2_printer;
 mod result;
+pub(crate) mod smtlib2_printer;
 pub(crate) mod spec;
 pub(crate) mod spec_attrs;
 mod spec_parse;
@@ -74,8 +74,8 @@ pub mod sunder_bridge;
 pub mod test_utils;
 
 pub use annotation::*;
-pub use boundary::*;
 pub use atomic_intrinsics::parse_atomic_intrinsic;
+pub use boundary::*;
 pub use concurrency::*;
 pub use facts::*;
 pub use formula::*;
@@ -98,7 +98,6 @@ pub use smt_logic::{collect_free_var_decls, infer_sort, select_logic};
 pub use smt_printer::{PrintConfig, SmtPrinter};
 // tRust #458: Re-export translation validation types at crate root.
 pub use translation_validation::{
-    CheckKind, RefinementVc, SimulationRelation, TranslationCheck,
-    TranslationValidationError, block_successors_list, detect_back_edges,
-    infer_identity_relation,
+    CheckKind, RefinementVc, SimulationRelation, TranslationCheck, TranslationValidationError,
+    block_successors_list, detect_back_edges, infer_identity_relation,
 };

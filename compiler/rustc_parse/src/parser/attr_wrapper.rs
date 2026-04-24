@@ -70,7 +70,7 @@ impl AttrWrapper {
     }
 
     /// Prepend `self.attrs` to `attrs`.
-    // tRust: known issue —: require passing an NT to prevent misuse of this method
+    // FIXME: require passing an NT to prevent misuse of this method
     pub(super) fn prepend_to_nt_inner(mut self, attrs: &mut AttrVec) {
         mem::swap(attrs, &mut self.attrs);
         attrs.extend(self.attrs);
@@ -254,7 +254,7 @@ impl<'a> Parser<'a> {
         // (The caller is responsible for providing a non-`None` `pre_attr_pos`
         // if this is a possibility.)
         if matches!(use_pre_attr_pos, UsePreAttrPos::Yes) {
-            collect_pos = pre_attr_pos.expect("invariant: pre-attribute position was recorded"); // tRust: unwrap -> expect
+            collect_pos = pre_attr_pos.unwrap();
         }
 
         let parser_replacements_end = self.capture_state.parser_replacements.len();
@@ -365,7 +365,7 @@ impl<'a> Parser<'a> {
             // will be replaced with `target` in the lazy token stream. This will allow us to
             // cfg-expand this AST node.
             let start_pos =
-                if has_outer_attrs { attrs.start_pos.expect("invariant: start position was set") } else { collect_pos.start_pos }; // tRust: unwrap -> expect
+                if has_outer_attrs { attrs.start_pos.unwrap() } else { collect_pos.start_pos };
             let target =
                 AttrsTarget { attrs: ret_attrs.iter().cloned().collect(), tokens: tokens.clone() };
             tokens_used = true;

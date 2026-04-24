@@ -14,7 +14,7 @@ use crate::fx::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::formula::{Formula, Sort};
-use crate::model::{SourceSpan, Ty};
+use crate::model::{FnSig, SourceSpan, Ty};
 use crate::traits::TraitBound;
 
 // ---------------------------------------------------------------------------
@@ -318,6 +318,29 @@ impl Substitution {
             Ty::RawPtr { mutable, pointee } => {
                 Ty::RawPtr { mutable: *mutable, pointee: Box::new(self.apply_ty(pointee)) }
             }
+            // tRust: #828 — recursively substitute through new function-like and composite types.
+            Ty::Closure { name, upvars } => Ty::Closure {
+                name: name.clone(),
+                upvars: upvars.iter().map(|t| self.apply_ty(t)).collect(),
+            },
+            Ty::FnDef { name, sig } => Ty::FnDef {
+                name: name.clone(),
+                sig: Box::new(FnSig {
+                    params: sig.params.iter().map(|t| self.apply_ty(t)).collect(),
+                    ret: Box::new(self.apply_ty(&sig.ret)),
+                }),
+            },
+            Ty::FnPtr { sig } => Ty::FnPtr {
+                sig: Box::new(FnSig {
+                    params: sig.params.iter().map(|t| self.apply_ty(t)).collect(),
+                    ret: Box::new(self.apply_ty(&sig.ret)),
+                }),
+            },
+            Ty::Dynamic { .. } => ty.clone(),
+            Ty::Coroutine { name, upvars } => Ty::Coroutine {
+                name: name.clone(),
+                upvars: upvars.iter().map(|t| self.apply_ty(t)).collect(),
+            },
             // Primitive types pass through unchanged.
             Ty::Bool | Ty::Int { .. } | Ty::Float { .. } | Ty::Bv(_) | Ty::Unit | Ty::Never => {
                 ty.clone()
@@ -392,12 +415,12 @@ impl Substitution {
             ),
             Formula::Forall(vars, body) => {
                 let new_vars =
-                    vars.iter().map(|(name, sort)| (name.clone(), self.apply_sort(sort))).collect();
+                    vars.iter().map(|(name, sort)| (*name, self.apply_sort(sort))).collect();
                 Formula::Forall(new_vars, Box::new(self.apply_formula(body)))
             }
             Formula::Exists(vars, body) => {
                 let new_vars =
-                    vars.iter().map(|(name, sort)| (name.clone(), self.apply_sort(sort))).collect();
+                    vars.iter().map(|(name, sort)| (*name, self.apply_sort(sort))).collect();
                 Formula::Exists(new_vars, Box::new(self.apply_formula(body)))
             }
             Formula::Select(arr, idx) => Formula::Select(
@@ -925,7 +948,7 @@ mod tests {
     fn test_apply_formula_quantifier() {
         let subst = Substitution::new();
         let formula = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(
                 Box::new(Formula::Var("x".to_string(), Sort::Int)),
                 Box::new(Formula::Int(0)),

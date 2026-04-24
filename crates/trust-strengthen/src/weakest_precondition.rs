@@ -35,11 +35,7 @@ pub enum Statement {
     Assert(Formula),
 
     /// Conditional: `if cond { then_branch } else { else_branch }`.
-    Conditional {
-        condition: Formula,
-        then_branch: Vec<Statement>,
-        else_branch: Vec<Statement>,
-    },
+    Conditional { condition: Formula, then_branch: Vec<Statement>, else_branch: Vec<Statement> },
 
     /// Loop with an invariant placeholder.
     ///
@@ -82,15 +78,9 @@ pub fn wp_transform(formula: &Formula, statement: &Statement) -> Formula {
             Formula::Implies(Box::new(condition.clone()), Box::new(formula.clone()))
         }
 
-        Statement::Assert(condition) => {
-            Formula::And(vec![condition.clone(), formula.clone()])
-        }
+        Statement::Assert(condition) => Formula::And(vec![condition.clone(), formula.clone()]),
 
-        Statement::Conditional {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
+        Statement::Conditional { condition, then_branch, else_branch } => {
             let then_wp = compute_weakest_precondition(formula, then_branch);
             let else_wp = compute_weakest_precondition(formula, else_branch);
 
@@ -131,9 +121,7 @@ pub fn wp_transform(formula: &Formula, statement: &Statement) -> Formula {
 /// with Q and folding backward through the statement list.
 #[must_use]
 pub fn compute_weakest_precondition(postcondition: &Formula, path: &[Statement]) -> Formula {
-    path.iter()
-        .rev()
-        .fold(postcondition.clone(), |acc, stmt| wp_transform(&acc, stmt))
+    path.iter().rev().fold(postcondition.clone(), |acc, stmt| wp_transform(&acc, stmt))
 }
 
 /// Substitute all occurrences of variable `var` with expression `expr` in a formula.
@@ -142,7 +130,9 @@ pub fn compute_weakest_precondition(postcondition: &Formula, path: &[Statement])
 #[must_use]
 pub fn substitute(formula: &Formula, var: &str, expr: &Formula) -> Formula {
     match formula {
-        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => formula.clone(),
+        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {
+            formula.clone()
+        }
 
         Formula::Var(name, _sort) => {
             if name == var {
@@ -167,55 +157,45 @@ pub fn substitute(formula: &Formula, var: &str, expr: &Formula) -> Formula {
             Box::new(substitute(rhs, var, expr)),
         ),
 
-        Formula::Eq(lhs, rhs) => Formula::Eq(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Eq(lhs, rhs) => {
+            Formula::Eq(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Lt(lhs, rhs) => Formula::Lt(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Lt(lhs, rhs) => {
+            Formula::Lt(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Le(lhs, rhs) => Formula::Le(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Le(lhs, rhs) => {
+            Formula::Le(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Gt(lhs, rhs) => Formula::Gt(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Gt(lhs, rhs) => {
+            Formula::Gt(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Ge(lhs, rhs) => Formula::Ge(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Ge(lhs, rhs) => {
+            Formula::Ge(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Add(lhs, rhs) => Formula::Add(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Add(lhs, rhs) => {
+            Formula::Add(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Sub(lhs, rhs) => Formula::Sub(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Sub(lhs, rhs) => {
+            Formula::Sub(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Mul(lhs, rhs) => Formula::Mul(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Mul(lhs, rhs) => {
+            Formula::Mul(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Div(lhs, rhs) => Formula::Div(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Div(lhs, rhs) => {
+            Formula::Div(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
-        Formula::Rem(lhs, rhs) => Formula::Rem(
-            Box::new(substitute(lhs, var, expr)),
-            Box::new(substitute(rhs, var, expr)),
-        ),
+        Formula::Rem(lhs, rhs) => {
+            Formula::Rem(Box::new(substitute(lhs, var, expr)), Box::new(substitute(rhs, var, expr)))
+        }
 
         Formula::Neg(inner) => Formula::Neg(Box::new(substitute(inner, var, expr))),
 
@@ -230,10 +210,7 @@ pub fn substitute(formula: &Formula, var: &str, expr: &Formula) -> Formula {
             if bindings.iter().any(|(name, _)| name == var) {
                 formula.clone() // var is shadowed by the quantifier
             } else {
-                Formula::Forall(
-                    bindings.clone(),
-                    Box::new(substitute(body, var, expr)),
-                )
+                Formula::Forall(bindings.clone(), Box::new(substitute(body, var, expr)))
             }
         }
 
@@ -241,10 +218,7 @@ pub fn substitute(formula: &Formula, var: &str, expr: &Formula) -> Formula {
             if bindings.iter().any(|(name, _)| name == var) {
                 formula.clone() // var is shadowed by the quantifier
             } else {
-                Formula::Exists(
-                    bindings.clone(),
-                    Box::new(substitute(body, var, expr)),
-                )
+                Formula::Exists(bindings.clone(), Box::new(substitute(body, var, expr)))
             }
         }
 
@@ -311,9 +285,7 @@ pub fn substitute(formula: &Formula, var: &str, expr: &Formula) -> Formula {
             Box::new(substitute(r, var, expr)),
             *w,
         ),
-        Formula::BvNot(inner, w) => {
-            Formula::BvNot(Box::new(substitute(inner, var, expr)), *w)
-        }
+        Formula::BvNot(inner, w) => Formula::BvNot(Box::new(substitute(inner, var, expr)), *w),
         Formula::BvShl(l, r, w) => Formula::BvShl(
             Box::new(substitute(l, var, expr)),
             Box::new(substitute(r, var, expr)),
@@ -356,9 +328,7 @@ pub fn substitute(formula: &Formula, var: &str, expr: &Formula) -> Formula {
         Formula::BvToInt(inner, w, signed) => {
             Formula::BvToInt(Box::new(substitute(inner, var, expr)), *w, *signed)
         }
-        Formula::IntToBv(inner, w) => {
-            Formula::IntToBv(Box::new(substitute(inner, var, expr)), *w)
-        }
+        Formula::IntToBv(inner, w) => Formula::IntToBv(Box::new(substitute(inner, var, expr)), *w),
         Formula::BvExtract { inner, high, low } => Formula::BvExtract {
             inner: Box::new(substitute(inner, var, expr)),
             high: *high,
@@ -397,11 +367,7 @@ mod tests {
     }
 
     fn assign(name: &str, expr: Formula) -> Statement {
-        Statement::Assign {
-            var: name.into(),
-            sort: Sort::Int,
-            expr,
-        }
+        Statement::Assign { var: name.into(), sort: Sort::Int, expr }
     }
 
     // --- Substitution tests ---
@@ -450,10 +416,7 @@ mod tests {
                     Formula::Gt(Box::new(replacement.clone()), Box::new(int(0)))
                 );
                 // Second child: (y + 1) < 10
-                assert_eq!(
-                    children[1],
-                    Formula::Lt(Box::new(replacement), Box::new(int(10)))
-                );
+                assert_eq!(children[1], Formula::Lt(Box::new(replacement), Box::new(int(10))));
             }
             other => panic!("expected And, got {other:?}"),
         }
@@ -470,10 +433,7 @@ mod tests {
     fn test_substitute_in_implies() {
         let q = Formula::Implies(Box::new(var("x")), Box::new(var("y")));
         let result = substitute(&q, "x", &Formula::Bool(true));
-        assert_eq!(
-            result,
-            Formula::Implies(Box::new(Formula::Bool(true)), Box::new(var("y")))
-        );
+        assert_eq!(result, Formula::Implies(Box::new(Formula::Bool(true)), Box::new(var("y"))));
     }
 
     #[test]
@@ -512,27 +472,16 @@ mod tests {
         let q = Formula::Add(Box::new(var("x")), Box::new(var("y")));
         let replacement = Formula::Mul(Box::new(var("a")), Box::new(var("b")));
         let result = substitute(&q, "x", &replacement);
-        assert_eq!(
-            result,
-            Formula::Add(Box::new(replacement), Box::new(var("y")))
-        );
+        assert_eq!(result, Formula::Add(Box::new(replacement), Box::new(var("y"))));
     }
 
     #[test]
     fn test_substitute_in_ite() {
-        let q = Formula::Ite(
-            Box::new(var("c")),
-            Box::new(var("x")),
-            Box::new(var("y")),
-        );
+        let q = Formula::Ite(Box::new(var("c")), Box::new(var("x")), Box::new(var("y")));
         let result = substitute(&q, "x", &int(42));
         assert_eq!(
             result,
-            Formula::Ite(
-                Box::new(var("c")),
-                Box::new(int(42)),
-                Box::new(var("y")),
-            )
+            Formula::Ite(Box::new(var("c")), Box::new(int(42)), Box::new(var("y")),)
         );
     }
 
@@ -541,25 +490,14 @@ mod tests {
         // select(arr, x) -- substituting x <- 0
         let q = Formula::Select(Box::new(var("arr")), Box::new(var("x")));
         let result = substitute(&q, "x", &int(0));
-        assert_eq!(
-            result,
-            Formula::Select(Box::new(var("arr")), Box::new(int(0)))
-        );
+        assert_eq!(result, Formula::Select(Box::new(var("arr")), Box::new(int(0))));
 
         // store(arr, x, v) -- substituting x <- 0
-        let q2 = Formula::Store(
-            Box::new(var("arr")),
-            Box::new(var("x")),
-            Box::new(var("v")),
-        );
+        let q2 = Formula::Store(Box::new(var("arr")), Box::new(var("x")), Box::new(var("v")));
         let result2 = substitute(&q2, "x", &int(0));
         assert_eq!(
             result2,
-            Formula::Store(
-                Box::new(var("arr")),
-                Box::new(int(0)),
-                Box::new(var("v")),
-            )
+            Formula::Store(Box::new(var("arr")), Box::new(int(0)), Box::new(var("v")),)
         );
     }
 
@@ -674,10 +612,7 @@ mod tests {
         let q = Formula::Eq(Box::new(var("i")), Box::new(var("n")));
         let s = Statement::Loop {
             invariant: Some(invariant.clone()),
-            body: vec![assign(
-                "i",
-                Formula::Add(Box::new(var("i")), Box::new(int(1))),
-            )],
+            body: vec![assign("i", Formula::Add(Box::new(var("i")), Box::new(int(1))))],
         };
 
         let result = wp_transform(&q, &s);
@@ -690,10 +625,7 @@ mod tests {
         // Returning the postcondition would be unsound — it assumes the loop
         // is a no-op, which can produce false proofs.
         let q = Formula::Eq(Box::new(var("i")), Box::new(var("n")));
-        let s = Statement::Loop {
-            invariant: None,
-            body: vec![],
-        };
+        let s = Statement::Loop { invariant: None, body: vec![] };
         let result = wp_transform(&q, &s);
         assert_eq!(
             result,
@@ -804,9 +736,7 @@ mod tests {
     #[test]
     fn test_wp_nested_sequence() {
         let q = Formula::Gt(Box::new(var("x")), Box::new(int(0)));
-        let inner = Statement::Sequence(vec![
-            assign("x", int(5)),
-        ]);
+        let inner = Statement::Sequence(vec![assign("x", int(5))]);
         let result = wp_transform(&q, &inner);
         assert_eq!(result, Formula::Gt(Box::new(int(5)), Box::new(int(0))));
     }
@@ -851,10 +781,7 @@ mod tests {
                 Box::new(var("y")),
                 Box::new(int(0)),
             )))),
-            assign(
-                "result",
-                Formula::Div(Box::new(var("x")), Box::new(var("y"))),
-            ),
+            assign("result", Formula::Div(Box::new(var("x")), Box::new(var("y")))),
         ];
         let result = compute_weakest_precondition(&q, &path);
 
@@ -863,10 +790,7 @@ mod tests {
         assert_eq!(
             result,
             Formula::And(vec![
-                Formula::Not(Box::new(Formula::Eq(
-                    Box::new(var("y")),
-                    Box::new(int(0)),
-                ))),
+                Formula::Not(Box::new(Formula::Eq(Box::new(var("y")), Box::new(int(0)),))),
                 Formula::Bool(true),
             ])
         );
@@ -882,11 +806,7 @@ mod tests {
             Formula::Eq(Box::new(var("x")), Box::new(var("old_y"))),
             Formula::Eq(Box::new(var("y")), Box::new(var("old_x"))),
         ]);
-        let path = vec![
-            assign("tmp", var("x")),
-            assign("x", var("y")),
-            assign("y", var("tmp")),
-        ];
+        let path = vec![assign("tmp", var("x")), assign("x", var("y")), assign("y", var("tmp"))];
 
         let result = compute_weakest_precondition(&q, &path);
 

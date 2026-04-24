@@ -11,7 +11,8 @@
 //   Iteration 1: tRust detects overflow/underflow VCs, z4 produces counterexamples
 //   Iteration 2: trust-strengthen infers #[requires(!arr.is_empty())] and safe midpoint
 //   Iteration 3: trust-backprop rewrites source → binary_search_fixed.rs
-//   Iteration 4: tRust verifies the fixed version, all VCs discharged
+//   Iteration 4: tRust re-checks the fixed version; full discharge is still a
+//                frontier goal rather than a guaranteed outcome today
 //
 // tRust compiler output (stage1, z4-smtlib backend):
 //   note: tRust [overflow:sub]: arithmetic overflow (Sub) — FAILED (z4-smtlib, 50ms)

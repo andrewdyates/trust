@@ -112,9 +112,13 @@ pub fn join_value_sets(a: &ValueSet, b: &ValueSet) -> ValueSet {
             if merged.len() > MAX_EXACT_SIZE {
                 // Promote to range.
                 // SAFETY: merged is a union of two non-empty sets, so it is non-empty.
-                let lo = *merged.iter().next()
+                let lo = *merged
+                    .iter()
+                    .next()
                     .unwrap_or_else(|| unreachable!("empty set after union of non-empty sets"));
-                let hi = *merged.iter().next_back()
+                let hi = *merged
+                    .iter()
+                    .next_back()
                     .unwrap_or_else(|| unreachable!("empty set after union of non-empty sets"));
                 ValueSet::Range(lo, hi)
             } else {
@@ -133,8 +137,10 @@ pub fn join_value_sets(a: &ValueSet, b: &ValueSet) -> ValueSet {
             ValueSet::Range((*lo).min(s_lo), (*hi).max(s_hi))
         }
 
-        (ValueSet::Strided { base: b1, stride: s1, count: c1 },
-         ValueSet::Strided { base: b2, stride: s2, count: c2 }) => {
+        (
+            ValueSet::Strided { base: b1, stride: s1, count: c1 },
+            ValueSet::Strided { base: b2, stride: s2, count: c2 },
+        ) => {
             if s1 == s2 && b1 % s1 == b2 % s2 {
                 // Same stride class, merge.
                 let lo = (*b1).min(*b2);
@@ -222,8 +228,7 @@ impl ValueSetState {
             return self.clone();
         }
         let mut vars = FxHashMap::default();
-        let all_keys: BTreeSet<&String> =
-            self.vars.keys().chain(other.vars.keys()).collect();
+        let all_keys: BTreeSet<&String> = self.vars.keys().chain(other.vars.keys()).collect();
         for key in all_keys {
             let a = self.get(key);
             let b = other.get(key);
@@ -290,11 +295,7 @@ pub fn transfer_assign(
 }
 
 /// Evaluate an rvalue to a value set.
-fn eval_rvalue_vs(
-    rvalue: &Rvalue,
-    func: &VerifiableFunction,
-    state: &ValueSetState,
-) -> ValueSet {
+fn eval_rvalue_vs(rvalue: &Rvalue, func: &VerifiableFunction, state: &ValueSetState) -> ValueSet {
     match rvalue {
         Rvalue::Use(op) => operand_to_value_set(op, func, state),
 
@@ -308,8 +309,7 @@ fn eval_rvalue_vs(
             let a = operand_to_value_set(op, func, state);
             match a {
                 ValueSet::Exact(s) => {
-                    let negated: BTreeSet<i64> =
-                        s.iter().filter_map(|v| v.checked_neg()).collect();
+                    let negated: BTreeSet<i64> = s.iter().filter_map(|v| v.checked_neg()).collect();
                     if negated.len() > MAX_EXACT_SIZE {
                         ValueSet::Top
                     } else {
@@ -337,19 +337,20 @@ fn eval_rvalue_vs(
 fn apply_binop_vs(op: BinOp, a: &ValueSet, b: &ValueSet) -> ValueSet {
     // For exact small sets, compute pointwise.
     if let (ValueSet::Exact(sa), ValueSet::Exact(sb)) = (a, b)
-        && sa.len() * sb.len() <= MAX_EXACT_SIZE {
-            let mut result = BTreeSet::new();
-            for &va in sa {
-                for &vb in sb {
-                    if let Some(r) = eval_binop_i64(op, va, vb) {
-                        result.insert(r);
-                    }
+        && sa.len() * sb.len() <= MAX_EXACT_SIZE
+    {
+        let mut result = BTreeSet::new();
+        for &va in sa {
+            for &vb in sb {
+                if let Some(r) = eval_binop_i64(op, va, vb) {
+                    result.insert(r);
                 }
             }
-            if result.len() <= MAX_EXACT_SIZE {
-                return ValueSet::Exact(result);
-            }
         }
+        if result.len() <= MAX_EXACT_SIZE {
+            return ValueSet::Exact(result);
+        }
+    }
 
     // Fall back to range arithmetic.
     let (a_lo, a_hi) = match (a.min_value(), a.max_value()) {
@@ -362,18 +363,14 @@ fn apply_binop_vs(op: BinOp, a: &ValueSet, b: &ValueSet) -> ValueSet {
     };
 
     match op {
-        BinOp::Add => {
-            match (a_lo.checked_add(b_lo), a_hi.checked_add(b_hi)) {
-                (Some(lo), Some(hi)) => ValueSet::range(lo, hi),
-                _ => ValueSet::Top,
-            }
-        }
-        BinOp::Sub => {
-            match (a_lo.checked_sub(b_hi), a_hi.checked_sub(b_lo)) {
-                (Some(lo), Some(hi)) => ValueSet::range(lo, hi),
-                _ => ValueSet::Top,
-            }
-        }
+        BinOp::Add => match (a_lo.checked_add(b_lo), a_hi.checked_add(b_hi)) {
+            (Some(lo), Some(hi)) => ValueSet::range(lo, hi),
+            _ => ValueSet::Top,
+        },
+        BinOp::Sub => match (a_lo.checked_sub(b_hi), a_hi.checked_sub(b_lo)) {
+            (Some(lo), Some(hi)) => ValueSet::range(lo, hi),
+            _ => ValueSet::Top,
+        },
         BinOp::Mul => {
             let corners = [
                 a_lo.checked_mul(b_lo),
@@ -405,10 +402,18 @@ fn eval_binop_i64(op: BinOp, a: i64, b: i64) -> Option<i64> {
         BinOp::Sub => a.checked_sub(b),
         BinOp::Mul => a.checked_mul(b),
         BinOp::Div => {
-            if b == 0 { None } else { a.checked_div(b) }
+            if b == 0 {
+                None
+            } else {
+                a.checked_div(b)
+            }
         }
         BinOp::Rem => {
-            if b == 0 { None } else { a.checked_rem(b) }
+            if b == 0 {
+                None
+            } else {
+                a.checked_rem(b)
+            }
         }
         _ => None,
     }
@@ -497,8 +502,7 @@ pub fn analyze_function(func: &VerifiableFunction) -> FxHashMap<String, ValueSet
 
     // Forward dataflow to fixpoint.
     let max_iterations = func.body.blocks.len() * 15 + 50;
-    let mut worklist: VecDeque<BlockId> =
-        func.body.blocks.iter().map(|b| b.id).collect();
+    let mut worklist: VecDeque<BlockId> = func.body.blocks.iter().map(|b| b.id).collect();
     let mut iteration = 0;
 
     while let Some(block_id) = worklist.pop_front() {
@@ -511,8 +515,7 @@ pub fn analyze_function(func: &VerifiableFunction) -> FxHashMap<String, ValueSet
             continue;
         };
 
-        let entry = block_states.get(&block_id).cloned()
-            .unwrap_or_else(ValueSetState::bottom);
+        let entry = block_states.get(&block_id).cloned().unwrap_or_else(ValueSetState::bottom);
         if entry.is_unreachable {
             continue;
         }
@@ -530,8 +533,7 @@ pub fn analyze_function(func: &VerifiableFunction) -> FxHashMap<String, ValueSet
         // include Assert/Call success targets).
         let successors = vs_terminator_successors(&block.terminator);
         for succ_id in successors {
-            let old = block_states.get(&succ_id).cloned()
-                .unwrap_or_else(ValueSetState::bottom);
+            let old = block_states.get(&succ_id).cloned().unwrap_or_else(ValueSetState::bottom);
             let merged = old.join(&current);
             if merged != old {
                 block_states.insert(succ_id, merged);
@@ -567,11 +569,7 @@ fn type_to_value_set(ty: &Ty) -> ValueSet {
             ValueSet::Exact(s)
         }
         Ty::Int { width, signed: false } => {
-            let max = if *width >= 64 {
-                i64::MAX
-            } else {
-                (1i64 << width) - 1
-            };
+            let max = if *width >= 64 { i64::MAX } else { (1i64 << width) - 1 };
             ValueSet::Range(0, max)
         }
         Ty::Int { width, .. } => {
@@ -669,18 +667,24 @@ pub fn generate_vc_from_value_sets(
                 // Generate: var == v1 OR var == v2 OR ...
                 let clauses: Vec<Formula> = values
                     .iter()
-                    .map(|&v| Formula::Eq(Box::new(var_f.clone()), Box::new(Formula::Int(i128::from(v)))))
+                    .map(|&v| {
+                        Formula::Eq(Box::new(var_f.clone()), Box::new(Formula::Int(i128::from(v))))
+                    })
                     .collect();
                 if clauses.len() == 1 {
                     vcs.push(VerificationCondition {
                         kind: VcKind::Assertion {
                             message: format!("value_analysis: {var_name} is constant"),
                         },
-                        function: function_name.to_string(),
+                        function: function_name.into(),
                         location: SourceSpan::default(),
                         // SAFETY: we enter this branch only when clauses.len() == 1.
-                        formula: Formula::Not(Box::new(clauses.into_iter().next()
-                            .unwrap_or_else(|| unreachable!("empty clauses despite len == 1")))),
+                        formula: Formula::Not(Box::new(
+                            clauses
+                                .into_iter()
+                                .next()
+                                .unwrap_or_else(|| unreachable!("empty clauses despite len == 1")),
+                        )),
                         contract_metadata: None,
                     });
                 }
@@ -691,14 +695,16 @@ pub fn generate_vc_from_value_sets(
             ValueSet::Range(lo, hi) => {
                 // Generate: NOT (lo <= var AND var <= hi)
                 // If SAT, the variable escapes its computed range.
-                let lower = Formula::Ge(Box::new(var_f.clone()), Box::new(Formula::Int(i128::from(*lo))));
-                let upper = Formula::Le(Box::new(var_f.clone()), Box::new(Formula::Int(i128::from(*hi))));
+                let lower =
+                    Formula::Ge(Box::new(var_f.clone()), Box::new(Formula::Int(i128::from(*lo))));
+                let upper =
+                    Formula::Le(Box::new(var_f.clone()), Box::new(Formula::Int(i128::from(*hi))));
                 let in_range = Formula::And(vec![lower, upper]);
                 vcs.push(VerificationCondition {
                     kind: VcKind::Assertion {
                         message: format!("value_analysis: {var_name} in [{lo}, {hi}]"),
                     },
-                    function: function_name.to_string(),
+                    function: function_name.into(),
                     location: SourceSpan::default(),
                     formula: Formula::Not(Box::new(in_range)),
                     contract_metadata: None,
@@ -857,12 +863,8 @@ mod tests {
         s.insert(1);
         state.set("flag".into(), ValueSet::Exact(s));
 
-        let (true_state, false_state) = transfer_condition(
-            &Operand::Copy(Place::local(1)),
-            1,
-            &func,
-            &state,
-        );
+        let (true_state, false_state) =
+            transfer_condition(&Operand::Copy(Place::local(1)), 1, &func, &state);
 
         // In the midpoint function, local 1 is "a", but the condition transfer
         // uses the place name. The test verifies narrowing works.
@@ -878,64 +880,45 @@ mod tests {
 
     #[test]
     fn test_definite_error_negative_index() {
-        let access = ArrayAccess {
-            index: ValueSet::range(-5, -1),
-            length: ValueSet::range(10, 20),
-        };
+        let access =
+            ArrayAccess { index: ValueSet::range(-5, -1), length: ValueSet::range(10, 20) };
         assert!(is_definite_error(&access));
     }
 
     #[test]
     fn test_definite_error_index_past_length() {
-        let access = ArrayAccess {
-            index: ValueSet::range(100, 200),
-            length: ValueSet::range(5, 50),
-        };
+        let access =
+            ArrayAccess { index: ValueSet::range(100, 200), length: ValueSet::range(5, 50) };
         assert!(is_definite_error(&access));
     }
 
     #[test]
     fn test_definite_error_zero_length_array() {
-        let access = ArrayAccess {
-            index: ValueSet::singleton(0),
-            length: ValueSet::singleton(0),
-        };
+        let access = ArrayAccess { index: ValueSet::singleton(0), length: ValueSet::singleton(0) };
         assert!(is_definite_error(&access));
     }
 
     #[test]
     fn test_not_definite_error_overlapping() {
-        let access = ArrayAccess {
-            index: ValueSet::range(0, 10),
-            length: ValueSet::range(5, 20),
-        };
+        let access = ArrayAccess { index: ValueSet::range(0, 10), length: ValueSet::range(5, 20) };
         assert!(!is_definite_error(&access));
     }
 
     #[test]
     fn test_definite_safe_in_bounds() {
-        let access = ArrayAccess {
-            index: ValueSet::range(0, 4),
-            length: ValueSet::range(10, 20),
-        };
+        let access = ArrayAccess { index: ValueSet::range(0, 4), length: ValueSet::range(10, 20) };
         assert!(is_definite_safe(&access));
     }
 
     #[test]
     fn test_not_definite_safe_may_exceed() {
-        let access = ArrayAccess {
-            index: ValueSet::range(0, 15),
-            length: ValueSet::range(10, 20),
-        };
+        let access = ArrayAccess { index: ValueSet::range(0, 15), length: ValueSet::range(10, 20) };
         assert!(!is_definite_safe(&access));
     }
 
     #[test]
     fn test_not_definite_safe_top_index() {
-        let access = ArrayAccess {
-            index: ValueSet::Top,
-            length: ValueSet::range(10, 20),
-        };
+        let access = ArrayAccess { index: ValueSet::Top, length: ValueSet::range(10, 20) };
         assert!(!is_definite_safe(&access));
     }
 

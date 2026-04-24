@@ -259,7 +259,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
                     // with a recoverable substitution token, like `➖`.
                     if !UNICODE_ARRAY.iter().any(|&(c, _, _)| {
                         let sym = self.str_from(start);
-                        sym.chars().count() == 1 && c == sym.chars().next().expect("invariant: string is non-empty, has at least one char") // tRust: unwrap -> expect
+                        sym.chars().count() == 1 && c == sym.chars().next().unwrap()
                     }) =>
                 {
                     let sym = nfc_normalize(self.str_from(start));
@@ -437,7 +437,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
                         continue;
                     }
                     let mut it = self.str_from_to_end(start).chars();
-                    let c = it.next().expect("invariant: iterator is non-empty"); // tRust: unwrap -> expect
+                    let c = it.next().unwrap();
                     if c == '\u{00a0}' {
                         // If an error has already been reported on non-breaking
                         // space characters earlier in the file, treat all
@@ -449,7 +449,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
                         self.nbsp_is_whitespace = true;
                     }
                     let repeats = it.take_while(|c1| *c1 == c).count();
-                    // tRust: known issue —: the lexer could be used to turn the ASCII version of unicode
+                    // FIXME: the lexer could be used to turn the ASCII version of unicode
                     // homoglyphs, instead of keeping a table in `check_for_substitution`into the
                     // token. Ideally, this should be inside `rustc_lexer`. However, we should
                     // first remove compound tokens like `<<` from `rustc_lexer`, and then add
@@ -631,7 +631,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
         invalid_infostring: bool,
     ) {
         let s = self.str_from(start);
-        let real_start = s.find("---").expect("invariant: substring exists"); // tRust: unwrap -> expect
+        let real_start = s.find("---").unwrap();
         let frontmatter_opening_pos = BytePos(real_start as u32) + start;
         let real_s = &s[real_start..];
         let within = real_s.trim_start_matches('-');
@@ -1056,7 +1056,7 @@ impl<'psess, 'src> Lexer<'psess, 'src> {
                     && let end = self.mk_sp(self.pos, self.pos + BytePos(1))
                     && !self.psess.source_map().is_multiline(start.until(end))
                 {
-                    // tRust: known issue —: An "unclosed `char`" error will be emitted already in some cases,
+                    // FIXME: An "unclosed `char`" error will be emitted already in some cases,
                     // but it's hard to silence this error while not also silencing important cases
                     // too. We should use the error stashing machinery instead.
                     Some(errors::UnknownPrefixSugg::MeantStr { start, end })

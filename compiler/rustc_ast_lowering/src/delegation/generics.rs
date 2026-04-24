@@ -334,7 +334,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             }
         }));
 
-        // tRust: known issue — for now we generate predicates such that all lifetimes are early bound,
+        // HACK: for now we generate predicates such that all lifetimes are early bound,
         // we can not not generate early-bound lifetimes, but we can't know which of them
         // are late-bound at this level of compilation.
         let predicates =

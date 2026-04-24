@@ -57,10 +57,7 @@ impl CertSigningKey {
 
     /// Get the corresponding public verifying key.
     pub fn verifying_key(&self) -> CertVerifyingKey {
-        CertVerifyingKey {
-            key: self.key.verifying_key(),
-            trust_level: self.trust_level,
-        }
+        CertVerifyingKey { key: self.key.verifying_key(), trust_level: self.trust_level }
     }
 
     /// Sign a proof certificate. Produces a `CertificateSignature` that
@@ -111,9 +108,7 @@ impl CertVerifyingKey {
     ) -> Result<(), CertError> {
         let canonical = canonical_bytes(cert, self.trust_level);
         let signature = Signature::from_slice(&sig.signature_bytes).map_err(|e| {
-            CertError::VerificationFailed {
-                reason: format!("invalid signature bytes: {e}"),
-            }
+            CertError::VerificationFailed { reason: format!("invalid signature bytes: {e}") }
         })?;
         self.key.verify(&canonical, &signature).map_err(|e| CertError::VerificationFailed {
             reason: format!("Ed25519 signature verification failed: {e}"),
@@ -136,13 +131,11 @@ impl CertificateSignature {
     /// Verify this signature against the given certificate.
     /// Reconstructs the verifying key from the embedded public key bytes.
     pub fn verify(&self, cert: &ProofCertificate) -> Result<(), CertError> {
-        let pk_bytes: [u8; 32] =
-            self.public_key_bytes.clone().try_into().map_err(|_| CertError::VerificationFailed {
-                reason: format!(
-                    "public key must be 32 bytes, got {}",
-                    self.public_key_bytes.len()
-                ),
-            })?;
+        let pk_bytes: [u8; 32] = self.public_key_bytes.clone().try_into().map_err(|_| {
+            CertError::VerificationFailed {
+                reason: format!("public key must be 32 bytes, got {}", self.public_key_bytes.len()),
+            }
+        })?;
         let vk = CertVerifyingKey::from_bytes(&pk_bytes, self.trust_level)?;
         vk.verify_signature(cert, self)
     }
@@ -403,7 +396,10 @@ mod tests {
         let cert1 = make_test_cert();
         let mut cert2 = make_test_cert();
         cert2.function = "crate::other_fn".to_string();
-        assert_ne!(canonical_bytes(&cert1, TrustLevel::Solver), canonical_bytes(&cert2, TrustLevel::Solver));
+        assert_ne!(
+            canonical_bytes(&cert1, TrustLevel::Solver),
+            canonical_bytes(&cert2, TrustLevel::Solver)
+        );
     }
 
     #[test]
@@ -412,7 +408,10 @@ mod tests {
         let cert = make_test_cert();
         let solver_bytes = canonical_bytes(&cert, TrustLevel::Solver);
         let root_bytes = canonical_bytes(&cert, TrustLevel::Root);
-        assert_ne!(solver_bytes, root_bytes, "different trust levels must produce different canonical bytes");
+        assert_ne!(
+            solver_bytes, root_bytes,
+            "different trust levels must produce different canonical bytes"
+        );
     }
 
     #[test]
@@ -442,10 +441,8 @@ mod tests {
 
         let solver_key = CertSigningKey::generate(TrustLevel::Solver);
         let solver_sig = solver_key.sign(&cert);
-        let forged_sig = CertificateSignature {
-            trust_level: TrustLevel::Root,
-            ..solver_sig.clone()
-        };
+        let forged_sig =
+            CertificateSignature { trust_level: TrustLevel::Root, ..solver_sig.clone() };
 
         let result = forged_sig.verify(&cert);
         assert!(result.is_err());

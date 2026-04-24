@@ -157,7 +157,7 @@ pub fn generate_certificate_with_env(
 
     let solver_info = match primary_result {
         VerificationResult::Proved { solver, time_ms, strength, .. } => SolverInfo {
-            name: solver.clone(),
+            name: solver.to_string(),
             version: String::new(),
             time_ms: *time_ms,
             strength: strength.clone(),
@@ -275,16 +275,16 @@ fn compute_signature_hash(signature: &str) -> String {
 fn extract_result_info(result: &VerificationResult) -> (String, String, u64, bool) {
     match result {
         VerificationResult::Proved { solver, time_ms, strength, .. } => {
-            (solver.clone(), format!("{:?}", strength), *time_ms, true)
+            (solver.to_string(), format!("{:?}", strength), *time_ms, true)
         }
         VerificationResult::Failed { solver, time_ms, .. } => {
-            (solver.clone(), "failed".to_string(), *time_ms, false)
+            (solver.to_string(), "failed".to_string(), *time_ms, false)
         }
         VerificationResult::Unknown { solver, time_ms, reason } => {
-            (solver.clone(), format!("unknown: {reason}"), *time_ms, false)
+            (solver.to_string(), format!("unknown: {reason}"), *time_ms, false)
         }
         VerificationResult::Timeout { solver, timeout_ms } => {
-            (solver.clone(), "timeout".to_string(), *timeout_ms, false)
+            (solver.to_string(), "timeout".to_string(), *timeout_ms, false)
         }
         _ => ("unknown".to_string(), "unhandled variant".to_string(), 0, false),
     }
@@ -394,7 +394,7 @@ mod tests {
     fn sample_vc(kind_msg: &str) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Assertion { message: kind_msg.to_string() },
-            function: "crate::math::add".to_string(),
+            function: "crate::math::add".into(),
             location: SourceSpan {
                 file: "src/math.rs".to_string(),
                 line_start: 12,
@@ -409,7 +409,7 @@ mod tests {
 
     fn proved_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 42,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
@@ -418,7 +418,7 @@ mod tests {
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed { solver: "z4".to_string(), time_ms: 15, counterexample: None }
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 15, counterexample: None }
     }
 
     fn assert_no_proved_error(result: Result<GeneratedCertificate, CertError>) {
@@ -486,7 +486,7 @@ mod tests {
             (
                 sample_vc("assertion 2"),
                 VerificationResult::Unknown {
-                    solver: "sunder".to_string(),
+                    solver: "sunder".into(),
                     time_ms: 100,
                     reason: "incomplete".to_string(),
                 },
@@ -516,7 +516,7 @@ mod tests {
         let func = sample_function();
         let results = vec![(
             sample_vc("assertion"),
-            VerificationResult::Timeout { solver: "lean5".to_string(), timeout_ms: 5000 },
+            VerificationResult::Timeout { solver: "lean5".into(), timeout_ms: 5000 },
         )];
 
         assert_no_proved_error(generate_certificate(&func, &results));
@@ -752,7 +752,7 @@ mod tests {
         let results = vec![(
             sample_vc("test"),
             VerificationResult::Unknown {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 50,
                 reason: "incomplete".to_string(),
             },
@@ -766,7 +766,7 @@ mod tests {
         let func = sample_function();
         let results = vec![(
             sample_vc("test"),
-            VerificationResult::Timeout { solver: "lean5".to_string(), timeout_ms: 5000 },
+            VerificationResult::Timeout { solver: "lean5".into(), timeout_ms: 5000 },
         )];
 
         assert_no_proved_error(generate_certificate(&func, &results));

@@ -22,7 +22,8 @@ default = ["pipeline-v2"]
 # Disabled by default because z4's transitive deps (stacker, cc) conflict
 # with compiler-pinned versions in the main workspace. Enable when building
 # standalone or after dependency conflicts are resolved.
-z4-backend = ["dep:z4", "dep:num-bigint"]
+# tRust #886: Also gates z4-bindings for incremental push/pop sessions.
+z4-backend = ["dep:z4", "dep:num-bigint", "dep:z4-bindings"]
 # tRust #798: z4-direct, sunder, sunder-direct features removed — Pipeline v2.
 zani-backend = ["dep:zani-verifier"]
 sunder-backend = ["dep:sunder-core"]
@@ -32,6 +33,10 @@ sunder = []
 # tRust #791: Pipeline v2 enables MIR-level router dispatching functions to
 # zani-lib (BMC) and sunder-lib (deductive) before VC generation.
 pipeline-v2 = []
+# tRust #870: LLVM2 backend gates the trust-llvm2-bridge codegen integration.
+# When enabled, the MirRouter can dispatch scalar functions to the LLVM2
+# verified codegen pipeline (lower to LIR, compile, translation-validate).
+llvm2-backend = ["dep:trust-llvm2-bridge"]
 
 [dependencies]
 trust-types = { workspace = true }
@@ -51,12 +56,22 @@ sha2 = { workspace = true }
 # tRust #420: Optional z4 dependency for the z4-backend feature.
 z4 = { workspace = true, optional = true }
 num-bigint = { workspace = true, optional = true }
+# tRust #886: z4-bindings for incremental push/pop sessions.
+z4-bindings = { workspace = true, optional = true }
+
+# tRust #870: Optional LLVM2 bridge for verified codegen backend.
+trust-llvm2-bridge = { workspace = true, optional = true }
 
 # tRust #442: Optional dMATH solver backends
 # tRust #798: z4-bindings, zani_core, sunder-z4 removed — Pipeline v2.
 zani-verifier = { workspace = true, optional = true }
 sunder-core = { workspace = true, optional = true }
 certus-core = { workspace = true, optional = true }
+
+# tRust #887: Verification daemon binary — shared solver state over TCP.
+[[bin]]
+name = "trustd"
+path = "src/bin/trustd.rs"
 
 [dev-dependencies]
 toml = { workspace = true }

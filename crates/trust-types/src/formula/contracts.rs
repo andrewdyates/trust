@@ -31,11 +31,7 @@ impl StateMachineMetadata {
     pub fn from_trust_types_sm(sm: &crate::StateMachine) -> Self {
         let states: Vec<String> = sm.states.iter().map(|s| s.name.clone()).collect();
         let init_states = sm.initial_state.map_or_else(Vec::new, |init| {
-            sm.states
-                .iter()
-                .position(|s| s.discriminant == init)
-                .into_iter()
-                .collect()
+            sm.states.iter().position(|s| s.discriminant == init).into_iter().collect()
         });
         let transitions = sm
             .transitions
@@ -48,11 +44,7 @@ impl StateMachineMetadata {
                 Some((from_idx, format!("{from_name}_to_{to_name}"), to_idx))
             })
             .collect();
-        let labels = states
-            .iter()
-            .enumerate()
-            .map(|(i, name)| (i, vec![name.clone()]))
-            .collect();
+        let labels = states.iter().enumerate().map(|(i, name)| (i, vec![name.clone()])).collect();
         Self { states, init_states, transitions, labels }
     }
 }
@@ -89,8 +81,13 @@ impl ContractMetadata {
     /// Returns true if any contract annotation is present.
     #[must_use]
     pub fn has_any(&self) -> bool {
-        self.has_requires || self.has_ensures || self.has_invariant || self.has_variant
-            || self.has_loop_invariant || self.has_type_refinement || self.has_modifies
+        self.has_requires
+            || self.has_ensures
+            || self.has_invariant
+            || self.has_variant
+            || self.has_loop_invariant
+            || self.has_type_refinement
+            || self.has_modifies
     }
 
     /// Returns true if any Sunder-specific contract is present.

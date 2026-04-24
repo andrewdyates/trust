@@ -88,7 +88,7 @@ impl PoloniusLocationTable {
             .statements_before_block
             .iter_enumerated()
             .rfind(|&(_, &first_index)| first_index <= point_index)
-            .expect("invariant: point index must correspond to a valid basic block");
+            .unwrap();
 
         let statement_index = (point_index - first_index) / 2;
         if index.is_start() {

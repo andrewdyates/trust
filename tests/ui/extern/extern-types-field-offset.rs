@@ -1,8 +1,8 @@
-//@ run-crash
-//@ check-run-results
-//@ exec-env:RUST_BACKTRACE=0
-//@ normalize-stderr: "(core/src/panicking\.rs):[0-9]+:[0-9]+" -> "$1:$$LINE:$$COL"
-//@ normalize-stderr: "/rustc(?:-dev)?/[a-z0-9.]+/" -> ""
+// tRust: Modified from run-crash to run-pass. Projecting to an extern type
+// field at non-zero offset now uses the statically-computed layout offset
+// instead of falling through to the DST path that panics.
+// See rust-lang/rust#127336, tRust#919.
+//@ run-pass
 //@ ignore-backends: gcc
 #![feature(extern_types)]
 
@@ -33,8 +33,9 @@ fn main() {
     std::hint::black_box(field);
     let field = &x.j;
     std::hint::black_box(field);
-    // This needs to compute the field offset, but we don't know the type's alignment,
-    // so this panics.
+    // tRust: This now correctly uses the static offset from the struct layout
+    // to compute the pointer to the extern type field. No dynamic alignment
+    // computation is needed because extern types have no runtime metadata.
     let field = &x.a;
     std::hint::black_box(field);
 }

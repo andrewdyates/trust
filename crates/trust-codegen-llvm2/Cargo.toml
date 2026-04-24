@@ -1,0 +1,36 @@
+# trust-codegen-llvm2: LLVM2 codegen backend integration for rustc
+#
+# Thin integration crate that wires trust-llvm2-bridge's CodegenBackend
+# implementation into the rustc compilation pipeline. When the compiler
+# plugin adapter is built (compiler/rustc_codegen_llvm2/), it delegates
+# to this crate.
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "trust-codegen-llvm2"
+description = "LLVM2 codegen backend integration for rustc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+# Enable translation validation during codegen.
+transval = ["trust-llvm2-bridge/transval"]
+# Enable full SMT-backed translation validation.
+transval-full = ["trust-llvm2-bridge/transval-full"]
+# Enable z4 formal proofs for codegen correctness.
+z4-proofs = ["trust-llvm2-bridge/z4-proofs"]
+
+[dependencies]
+trust-llvm2-bridge = { workspace = true }
+trust-types = { workspace = true }
+llvm2-ir = { workspace = true }
+llvm2-lower = { workspace = true }
+llvm2-codegen = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

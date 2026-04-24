@@ -3,7 +3,7 @@ use rustc_middle::bug;
 use rustc_middle::ty::layout::{IntegerExt, PrimitiveExt, TyAndLayout};
 use rustc_middle::ty::{self, Ty, TyCtxt};
 
-// NOTE(eddyb): Utility function without a clear home; kept here for convenience.
+// FIXME(eddyb) find a place for this (or a way to replace it).
 pub mod type_names;
 
 /// Returns true if we want to generate a DW_TAG_enumeration_type description for
@@ -50,7 +50,6 @@ pub fn wants_c_like_enum_debuginfo<'tcx>(
 /// Extract the type with which we want to describe the tag of the given enum or coroutine.
 pub fn tag_base_type<'tcx>(tcx: TyCtxt<'tcx>, enum_type_and_layout: TyAndLayout<'tcx>) -> Ty<'tcx> {
     tag_base_type_opt(tcx, enum_type_and_layout).unwrap_or_else(|| {
-        // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
         bug!("tag_base_type() called for enum without tag: {:?}", enum_type_and_layout)
     })
 }
@@ -74,8 +73,8 @@ fn tag_base_type_opt<'tcx>(
             Some(
                 match tag.primitive() {
                     Primitive::Int(t, _) => t,
-                    Primitive::Float(f) => Integer::from_size(f.size()).expect("invariant: float size must correspond to a valid integer size"),
-                    // NOTE(erikdesjardins): Non-default address space pointer sizes not handled.
+                    Primitive::Float(f) => Integer::from_size(f.size()).unwrap(),
+                    // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
                     Primitive::Pointer(_) => {
                         // If the niche is the NULL value of a reference, then `discr_enum_ty` will
                         // be a RawPtr. CodeView doesn't know what to do with enums whose base type

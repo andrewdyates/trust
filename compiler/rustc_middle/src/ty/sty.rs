@@ -88,8 +88,8 @@ impl<'tcx> ty::CoroutineArgs<TyCtxt<'tcx>> {
     /// The valid variant indices of this coroutine.
     #[inline]
     fn variant_range(&self, def_id: DefId, tcx: TyCtxt<'tcx>) -> Range<VariantIdx> {
-        // tRust: known issue — requires optimized MIR
-        FIRST_VARIANT..tcx.coroutine_layout(def_id, self.args).expect("invariant: coroutine has a layout").variant_fields.next_index()
+        // FIXME requires optimized MIR
+        FIRST_VARIANT..tcx.coroutine_layout(def_id, self.args).unwrap().variant_fields.next_index()
     }
 
     /// The discriminant for the given variant. Panics if the `variant_index` is
@@ -149,7 +149,7 @@ impl<'tcx> ty::CoroutineArgs<TyCtxt<'tcx>> {
         def_id: DefId,
         tcx: TyCtxt<'tcx>,
     ) -> impl Iterator<Item: Iterator<Item = Ty<'tcx>>> {
-        let layout = tcx.coroutine_layout(def_id, self.args).expect("invariant: coroutine has a layout");
+        let layout = tcx.coroutine_layout(def_id, self.args).unwrap();
         layout.variant_fields.iter().map(move |variant| {
             variant.iter().map(move |field| {
                 if tcx.is_async_drop_in_place_coroutine(def_id) {
@@ -191,9 +191,7 @@ impl<'tcx> UpvarArgs<'tcx> {
         match tupled_tys.kind() {
             TyKind::Error(_) => ty::List::empty(),
             TyKind::Tuple(..) => self.tupled_upvars_ty().tuple_fields(),
-            // tRust: invariant: capture types are inferred before calling upvar_tys
             TyKind::Infer(_) => bug!("upvar_tys called before capture types are inferred"),
-            // tRust: invariant: upvar types must be represented as a tuple
             ty => bug!("Unexpected representation of upvar types tuple {:?}", ty),
         }
     }
@@ -253,7 +251,6 @@ impl<'tcx> InlineConstArgs<'tcx> {
     fn split(self) -> InlineConstArgsParts<'tcx, GenericArg<'tcx>> {
         match self.args[..] {
             [ref parent_args @ .., ty] => InlineConstArgsParts { parent_args, ty },
-            // tRust: invariant: inline const args must include synthetic type parameter
             _ => bug!("inline const args missing synthetics"),
         }
     }
@@ -352,7 +349,6 @@ impl ParamConst {
         // items. It's advised to fix the underlying issue rather than trying
         // to modify this function.
         let ty = candidates.next().unwrap_or_else(|| {
-            // tRust: invariant: const param must exist in param-env
             bug!("cannot find `{self:?}` in param-env: {env:#?}");
         });
         assert!(
@@ -499,7 +495,6 @@ impl<'tcx> Ty<'tcx> {
         field: FieldIdx,
     ) -> Ty<'tcx> {
         let Some(did) = tcx.lang_items().field_representing_type() else {
-            // tRust: invariant: required lang item must be available
             bug!("could not locate the `FieldRepresentingType` lang item")
         };
         let def = tcx.adt_def(did);
@@ -666,7 +661,6 @@ impl<'tcx> Ty<'tcx> {
                 | DefKind::Impl { .. }
                 | DefKind::Closure
                 | DefKind::SyntheticCoroutineBody => {
-                    // tRust: invariant: def must be an adt
                     bug!("not an adt: {def:?} ({:?})", tcx.def_kind(def.did()))
                 }
             }
@@ -841,7 +835,7 @@ impl<'tcx> Ty<'tcx> {
         coroutine_args: GenericArgsRef<'tcx>,
     ) -> Ty<'tcx> {
         tcx.debug_assert_args_compatible(def_id, coroutine_args);
-        // tRust: accepted tradeoff — Coroutine witness types are lifetime erased, so they
+        // HACK: Coroutine witness types are lifetime erased, so they
         // never reference any lifetime args from the coroutine. We erase
         // the regions here since we may get into situations where a
         // coroutine is recursively contained within itself, leading to
@@ -872,7 +866,6 @@ impl<'tcx> Ty<'tcx> {
     fn new_generic_adt(tcx: TyCtxt<'tcx>, wrapper_def_id: DefId, ty_param: Ty<'tcx>) -> Ty<'tcx> {
         let adt_def = tcx.adt_def(wrapper_def_id);
         let args = GenericArgs::for_item(tcx, wrapper_def_id, |param, args| match param.kind {
-            // tRust: invariant: generic param must be a type parameter, not lifetime or const
             GenericParamDefKind::Lifetime | GenericParamDefKind::Const { .. } => bug!(),
             GenericParamDefKind::Type { has_default, .. } => {
                 if param.index == 0 {
@@ -1131,7 +1124,7 @@ impl<'tcx> Ty<'tcx> {
         self.0.0
     }
 
-    // tRust: known issue (compiler-errors) — Think about removing this.
+    // FIXME(compiler-errors): Think about removing this.
     #[inline(always)]
     pub fn flags(self) -> TypeFlags {
         self.0.0.flags
@@ -1264,18 +1257,15 @@ impl<'tcx> Ty<'tcx> {
         match self.kind() {
             Array(ty, _) | Slice(ty) => *ty,
             Str => tcx.types.u8,
-            // tRust: invariant: type must be sequence when calling sequence_element_type
             _ => bug!("`sequence_element_type` called on non-sequence value: {}", self),
         }
     }
 
     pub fn scalable_vector_element_count_and_type(self, tcx: TyCtxt<'tcx>) -> (u16, Ty<'tcx>) {
         let Adt(def, args) = self.kind() else {
-            // tRust: invariant: type must be valid for scalable_vector_size_and_type
             bug!("`scalable_vector_size_and_type` called on invalid type")
         };
         let Some(ScalableElt::ElementCount(element_count)) = def.repr().scalable else {
-            // tRust: invariant: type must be scalable when calling scalable_vector_size_and_type
             bug!("`scalable_vector_size_and_type` called on non-scalable vector type");
         };
         let variant = def.non_enum_variant();
@@ -1286,7 +1276,6 @@ impl<'tcx> Ty<'tcx> {
 
     pub fn simd_size_and_type(self, tcx: TyCtxt<'tcx>) -> (u64, Ty<'tcx>) {
         let Adt(def, args) = self.kind() else {
-            // tRust: invariant: type must be valid for simd_size_and_type
             bug!("`simd_size_and_type` called on invalid type")
         };
         assert!(def.repr().simd(), "`simd_size_and_type` called on non-SIMD type");
@@ -1294,10 +1283,9 @@ impl<'tcx> Ty<'tcx> {
         assert_eq!(variant.fields.len(), 1);
         let field_ty = variant.fields[FieldIdx::ZERO].ty(tcx, args);
         let Array(f0_elem_ty, f0_len) = field_ty.kind() else {
-            // tRust: invariant: SIMD type field must be an array [T; N]
             bug!("Simd type has non-array field type {field_ty:?}")
         };
-        // tRust: known issue (repr_simd) — https://github.com/rust-lang/rust/pull/78863#discussion_r522784112
+        // FIXME(repr_simd): https://github.com/rust-lang/rust/pull/78863#discussion_r522784112
         // The way we evaluate the `N` in `[T; N]` here only works since we use
         // `simd_size_and_type` post-monomorphization. It will probably start to ICE
         // if we use it in generic code. See the `simd-array-trait` ui test.
@@ -1403,7 +1391,6 @@ impl<'tcx> Ty<'tcx> {
     /// Panics if called on any type other than `Box<T>`.
     pub fn expect_boxed_ty(self) -> Ty<'tcx> {
         self.boxed_ty()
-            // tRust: invariant: type must be box when calling is
             .unwrap_or_else(|| bug!("`expect_boxed_ty` is called on non-box type {:?}", self))
     }
 
@@ -1560,7 +1547,7 @@ impl<'tcx> Ty<'tcx> {
             if !tcx.is_async_drop_in_place_coroutine(*def_id) {
                 return cor_ty;
             }
-            ty = args.first().expect("invariant: collection is non-empty").expect_ty();
+            ty = args.first().unwrap().expect_ty();
         }
     }
 
@@ -1620,7 +1607,6 @@ impl<'tcx> Ty<'tcx> {
     pub fn tuple_fields(self) -> &'tcx List<Ty<'tcx>> {
         match self.kind() {
             Tuple(args) => args,
-            // tRust: invariant: type must be tuple when calling tuple_fields
             _ => bug!("tuple_fields called on non-tuple: {self:?}"),
         }
     }
@@ -1636,7 +1622,7 @@ impl<'tcx> Ty<'tcx> {
 
     /// If the type contains variants, returns the valid range of variant indices.
     //
-    // tRust: known issue — This requires the optimized MIR in the case of coroutines.
+    // FIXME: This requires the optimized MIR in the case of coroutines.
     #[inline]
     pub fn variant_range(self, tcx: TyCtxt<'tcx>) -> Option<Range<VariantIdx>> {
         match self.kind() {
@@ -1651,7 +1637,7 @@ impl<'tcx> Ty<'tcx> {
     /// If the type contains variants, returns the variant for `variant_index`.
     /// Panics if `variant_index` is out of range.
     //
-    // tRust: known issue — This requires the optimized MIR in the case of coroutines.
+    // FIXME: This requires the optimized MIR in the case of coroutines.
     #[inline]
     pub fn discriminant_for_variant(
         self,
@@ -1711,7 +1697,6 @@ impl<'tcx> Ty<'tcx> {
             ty::Bound(..)
             | ty::Placeholder(_)
             | ty::Infer(FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant: type must be handled by discriminant_ty (no inference variables)
                 bug!("`discriminant_ty` applied to unexpected type: {:?}", self)
             }
         }
@@ -1764,17 +1749,12 @@ impl<'tcx> Ty<'tcx> {
             // metadata of `tail`.
             ty::Param(_) | ty::Alias(..) => Err(tail),
 
-            // tRust: UnsafeBinder pointer metadata is not yet defined
-            | ty::UnsafeBinder(_) => {
-                // tRust: invariant: feature not yet supported: UnsafeBinder pointer metadata is not yet supported
-                bug!("unimplemented: UnsafeBinder pointer metadata is not yet supported")
-            }
+            | ty::UnsafeBinder(_) => todo!("FIXME(unsafe_binder)"),
 
             ty::Infer(ty::TyVar(_))
             | ty::Pat(..)
             | ty::Bound(..)
             | ty::Placeholder(..)
-            // tRust: invariant: unexpected state in 
             | ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => bug!(
                 "`ptr_metadata_ty_or_tail` applied to unexpected type: {self:?} (tail = {tail:?})"
             ),
@@ -1790,7 +1770,6 @@ impl<'tcx> Ty<'tcx> {
     ) -> Ty<'tcx> {
         match self.ptr_metadata_ty_or_tail(tcx, normalize) {
             Ok(metadata) => metadata,
-            // tRust: invariant: unexpected state in ptr_metadata_ty
             Err(tail) => bug!(
                 "`ptr_metadata_ty` failed to get metadata for type: {self:?} (tail = {tail:?})"
             ),
@@ -1808,7 +1787,6 @@ impl<'tcx> Ty<'tcx> {
     #[track_caller]
     pub fn pointee_metadata_ty_or_projection(self, tcx: TyCtxt<'tcx>) -> Ty<'tcx> {
         let Some(pointee_ty) = self.builtin_deref(true) else {
-            // tRust: invariant: def must be an pointer
             bug!("Type {self:?} is not a pointer or reference type")
         };
         if pointee_ty.has_trivial_sizedness(tcx, SizedTraitKind::Sized) {
@@ -1869,7 +1847,6 @@ impl<'tcx> Ty<'tcx> {
                 ty::IntTy::I8 => Some(ty::ClosureKind::Fn),
                 ty::IntTy::I16 => Some(ty::ClosureKind::FnMut),
                 ty::IntTy::I32 => Some(ty::ClosureKind::FnOnce),
-                // tRust: invariant: type must be convertible to a closure kind (i8/i16/i32)
                 _ => bug!("cannot convert type `{:?}` to a closure kind", self),
             },
 
@@ -1880,7 +1857,6 @@ impl<'tcx> Ty<'tcx> {
 
             Error(_) => Some(ty::ClosureKind::Fn),
 
-            // tRust: invariant: type must be convertible to a closure kind (i8/i16/i32)
             _ => bug!("cannot convert type `{:?}` to a closure kind", self),
         }
     }
@@ -1966,7 +1942,6 @@ impl<'tcx> Ty<'tcx> {
             ty::Infer(ty::TyVar(_)) => false,
 
             ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant: type must be handled by has_trivial_sizedness (no inference variables)
                 bug!("`has_trivial_sizedness` applied to unexpected type: {:?}", self)
             }
         }
@@ -2149,11 +2124,11 @@ impl<'tcx> Ty<'tcx> {
 
 impl<'tcx> rustc_type_ir::inherent::Tys<TyCtxt<'tcx>> for &'tcx ty::List<Ty<'tcx>> {
     fn inputs(self) -> &'tcx [Ty<'tcx>] {
-        self.split_last().expect("invariant: split_last returned a valid value").1
+        self.split_last().unwrap().1
     }
 
     fn output(self) -> Ty<'tcx> {
-        *self.split_last().expect("invariant: split_last returned a valid value").0
+        *self.split_last().unwrap().0
     }
 }
 

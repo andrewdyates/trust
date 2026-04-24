@@ -178,8 +178,8 @@ impl<'s> AllocDecodingSession<'s> {
         D: TyDecoder<'tcx>,
     {
         // Read the index of the allocation.
-        let idx = usize::try_from(decoder.read_u32()).expect("invariant: value fits in target type");
-        let pos = usize::try_from(self.state.data_offsets[idx]).expect("invariant: value fits in target type");
+        let idx = usize::try_from(decoder.read_u32()).unwrap();
+        let pos = usize::try_from(self.state.data_offsets[idx]).unwrap();
 
         // Decode the `AllocDiscriminant` now so that we know if we have to reserve an
         // `AllocId`.
@@ -276,7 +276,6 @@ impl<'tcx> GlobalAlloc<'tcx> {
     pub fn unwrap_memory(&self) -> ConstAllocation<'tcx> {
         match *self {
             GlobalAlloc::Memory(mem) => mem,
-            // tRust: invariant: expected memory, got <...>
             _ => bug!("expected memory, got {:?}", self),
         }
     }
@@ -287,7 +286,6 @@ impl<'tcx> GlobalAlloc<'tcx> {
     pub fn unwrap_fn(&self) -> Instance<'tcx> {
         match *self {
             GlobalAlloc::Function { instance, .. } => instance,
-            // tRust: invariant: expected function, got <...>
             _ => bug!("expected function, got {:?}", self),
         }
     }
@@ -298,7 +296,6 @@ impl<'tcx> GlobalAlloc<'tcx> {
     pub fn unwrap_vtable(&self) -> (Ty<'tcx>, Option<ty::PolyExistentialTraitRef<'tcx>>) {
         match *self {
             GlobalAlloc::VTable(ty, dyn_ty) => (ty, dyn_ty.principal()),
-            // tRust: invariant: expected vtable, got <...>
             _ => bug!("expected vtable, got {:?}", self),
         }
     }
@@ -320,14 +317,13 @@ impl<'tcx> GlobalAlloc<'tcx> {
         match *self {
             GlobalAlloc::Static(did) => {
                 let DefKind::Static { safety: _, mutability, nested } = tcx.def_kind(did) else {
-                    // tRust: invariant: unexpected state reached in mutability
                     bug!()
                 };
                 if nested {
                     // Nested statics in a `static` are never interior mutable,
                     // so just use the declared mutability.
                     if cfg!(debug_assertions) {
-                        let alloc = tcx.eval_static_initializer(did).expect("invariant: eval_static_initializer returned a valid value");
+                        let alloc = tcx.eval_static_initializer(did).unwrap();
                         assert_eq!(alloc.0.mutability, mutability);
                     }
                     mutability
@@ -363,7 +359,6 @@ impl<'tcx> GlobalAlloc<'tcx> {
         match *self {
             GlobalAlloc::Static(def_id) => {
                 let DefKind::Static { nested, .. } = tcx.def_kind(def_id) else {
-                    // tRust: invariant: def must be an static
                     bug!("GlobalAlloc::Static is not a static")
                 };
 
@@ -372,7 +367,7 @@ impl<'tcx> GlobalAlloc<'tcx> {
                     // size and alignment from the allocation itself. This always
                     // succeeds, as the query is fed at DefId creation time, so no
                     // evaluation actually occurs.
-                    let alloc = tcx.eval_static_initializer(def_id).expect("invariant: eval_static_initializer returned a valid value");
+                    let alloc = tcx.eval_static_initializer(def_id).unwrap();
                     (alloc.0.size(), alloc.0.align)
                 } else {
                     // Use size and align of the type for everything else. We need
@@ -383,7 +378,7 @@ impl<'tcx> GlobalAlloc<'tcx> {
                         .type_of(def_id)
                         .no_bound_vars()
                         .expect("statics should not have generic parameters");
-                    let layout = tcx.layout_of(typing_env.as_query_input(ty)).expect("invariant: type has a computable layout");
+                    let layout = tcx.layout_of(typing_env.as_query_input(ty)).unwrap();
                     assert!(layout.is_sized());
 
                     // Take over-alignment from attributes into account.
@@ -448,7 +443,7 @@ impl<'tcx> AllocMap<'tcx> {
         // increments `next_id` *again* and uses it before we panic and tear down the entire session.
         // We consider this fine since such overflows cannot realistically occur.
         let next_id = self.next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        AllocId(NonZero::new(next_id).expect("invariant: value is non-zero"))
+        AllocId(NonZero::new(next_id).unwrap())
     }
 }
 
@@ -467,7 +462,6 @@ impl<'tcx> TyCtxt<'tcx> {
     fn reserve_and_set_dedup(self, alloc: GlobalAlloc<'tcx>, salt: usize) -> AllocId {
         if let GlobalAlloc::Memory(mem) = alloc {
             if mem.inner().mutability.is_mut() {
-                // tRust: invariant: trying to dedup-reserve mutable memory
                 bug!("trying to dedup-reserve mutable memory");
             }
         }
@@ -549,7 +543,6 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn global_alloc(self, id: AllocId) -> GlobalAlloc<'tcx> {
         match self.try_get_global_alloc(id) {
             Some(alloc) => alloc,
-            // tRust: invariant: could not find allocation for <...>
             None => bug!("could not find allocation for {id:?}"),
         }
     }
@@ -558,7 +551,6 @@ impl<'tcx> TyCtxt<'tcx> {
     /// call this function twice, even with the same `Allocation` will ICE the compiler.
     pub fn set_alloc_id_memory(self, id: AllocId, mem: ConstAllocation<'tcx>) {
         if let Some(old) = self.alloc_map.to_alloc.insert(id, GlobalAlloc::Memory(mem)) {
-            // tRust: invariant: tried to set allocation ID <...>, but it was already existing as <...>
             bug!("tried to set allocation ID {id:?}, but it was already existing as {old:#?}");
         }
     }
@@ -569,7 +561,6 @@ impl<'tcx> TyCtxt<'tcx> {
         if let Some(old) =
             self.alloc_map.to_alloc.insert(id, GlobalAlloc::Static(def_id.to_def_id()))
         {
-            // tRust: invariant: tried to set allocation ID <...>, but it was already existing as <...>
             bug!("tried to set allocation ID {id:?}, but it was already existing as {old:#?}");
         }
     }

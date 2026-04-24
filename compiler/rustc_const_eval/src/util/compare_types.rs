@@ -1,6 +1,6 @@
 //! Routines to check for relations between fully inferred types.
 //!
-//! tRust: known issue — Move this to a more general place. The utility of this extends to
+//! FIXME: Move this to a more general place. The utility of this extends to
 //! other areas of the compiler as well.
 
 use rustc_infer::infer::TyCtxtInferExt;

@@ -543,6 +543,7 @@ impl () {}
 ///
 /// This does not take ownership of the original allocation
 /// and requires no resource management later,
+
 ///
 /// ## 2. Consume a box (`Box<T>`).
 ///

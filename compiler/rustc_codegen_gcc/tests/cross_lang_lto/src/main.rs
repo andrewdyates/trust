@@ -13,8 +13,6 @@ unsafe extern "C" {
 }
 
 fn main() {
-    // SAFETY: `my_add` is an extern C function linked via LTO; it performs simple
-    // integer addition with no memory safety preconditions.
     let res = unsafe { my_add(30, 12) };
     println!("{}", res);
 }

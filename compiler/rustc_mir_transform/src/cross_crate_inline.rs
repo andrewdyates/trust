@@ -1,6 +1,3 @@
-//! tRust: Determines which functions are eligible for cross-crate inlining
-//! tRust: from inline attributes and size heuristics.
-
 use rustc_hir::attrs::InlineAttr;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::LocalDefId;
@@ -64,8 +61,8 @@ fn cross_crate_inlinable(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
     let sig = tcx.fn_sig(def_id).instantiate_identity();
     for ty in sig.inputs().skip_binder().iter().chain(std::iter::once(&sig.output().skip_binder()))
     {
-        // NOTE(f16_f128): Always inline f16/f128 functions to avoid crashes building core
-        // when codegen for unused functions is skipped.
+        // FIXME(f16_f128): in order to avoid crashes building `core`, always inline to skip
+        // codegen if the function is not used.
         if ty == &tcx.types.f16 || ty == &tcx.types.f128 {
             return true;
         }
@@ -184,7 +181,6 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
             | TerminatorKind::FalseEdge { .. }
             | TerminatorKind::Yield { .. }
             | TerminatorKind::CoroutineDrop) => {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!("{kind:?} should not be in runtime MIR");
             }
         }

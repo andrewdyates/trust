@@ -83,18 +83,12 @@ pub enum CallSiteSatisfaction {
 pub enum VcDisposition {
     /// Satisfied from compiler notes — no solver call needed.
     /// The cheapest outcome: a previously proved postcondition discharges the requirement.
-    SatisfiedFromNotes {
-        fact_id: FactId,
-        source: FactSource,
-    },
+    SatisfiedFromNotes { fact_id: FactId, source: FactSource },
     /// Requires a solver call — the standard verification path.
     RequiresSolver,
     /// An assumption was injected from a callee's proved postcondition.
     /// The VC still goes to the solver, but with the callee's postcondition as a premise.
-    SolverWithAssumption {
-        fact_id: FactId,
-        source: FactSource,
-    },
+    SolverWithAssumption { fact_id: FactId, source: FactSource },
 }
 
 impl FactMemory {

@@ -85,7 +85,7 @@ pub(crate) fn register_offload<'ll>(cx: &CodegenCx<'ll, '_>) {
     let atexit = cx.type_func(&[cx.type_ptr()], cx.type_i32());
     let atexit_fn = declare_offload_fn(cx, "atexit", atexit);
 
-    // tRust: known issue — (offload): Drop this, once we fully automated our offload compilation pipeline, since
+    // FIXME(offload): Drop this, once we fully automated our offload compilation pipeline, since
     // LLVM will initialize them for us if it sees gpu kernels being registered.
     let init_ty = cx.type_func(&[], cx.type_void());
     let init_rtls = declare_offload_fn(cx, "__tgt_init_all_rtls", init_ty);
@@ -146,16 +146,14 @@ impl<'ll> OffloadKernelDims<'ll> {
     ) -> Self {
         let cx = builder.cx;
         let arr_ty = cx.type_array(cx.type_i32(), 3);
-        let four = Align::from_bytes(4).expect("invariant: alignment is a valid power of 2");
+        let four = Align::from_bytes(4).unwrap();
 
         let OperandValue::Ref(place) = workgroup_op.val else {
-            // tRust: invariant — workgroup dimensions must be passed as an array operand by reference
             bug!("expected array operand by reference");
         };
         let workgroup_val = builder.load(arr_ty, place.llval, four);
 
         let OperandValue::Ref(place) = thread_op.val else {
-            // tRust: invariant — thread dimensions must be passed as an array operand by reference
             bug!("expected array operand by reference");
         };
         let thread_val = builder.load(arr_ty, place.llval, four);
@@ -202,11 +200,11 @@ fn generate_launcher<'ll>(cx: &CodegenCx<'ll, '_>) -> (&'ll llvm::Value, &'ll ll
 // What is our @1 here? A magic global, used in our data_{begin/update/end}_mapper:
 // @0 = private unnamed_addr constant [23 x i8] c";unknown;unknown;0;0;;\00", align 1
 // @1 = private unnamed_addr constant %struct.ident_t { i32 0, i32 2, i32 0, i32 22, ptr @0 }, align 8
-// tRust: known issue — (offload): @0 should include the file name (e.g. lib.rs) in which the function to be
+// FIXME(offload): @0 should include the file name (e.g. lib.rs) in which the function to be
 // offloaded was defined.
 pub(crate) fn generate_at_one<'ll>(cx: &CodegenCx<'ll, '_>) -> &'ll llvm::Value {
     let unknown_txt = ";unknown;unknown;0;0;;";
-    let c_entry_name = CString::new(unknown_txt).expect("invariant: CString::new failed - input contains null byte");
+    let c_entry_name = CString::new(unknown_txt).unwrap();
     let c_val = c_entry_name.as_bytes_with_nul();
     let initializer = crate::common::bytes_in_context(cx.llcx, c_val);
     let at_zero = add_unnamed_global(&cx, &"", initializer, PrivateLinkage);
@@ -332,7 +330,7 @@ impl KernelArgsTy {
             (eight, geps[1]),
             (eight, geps[2]),
             (eight, memtransfer_types),
-            // The next two are debug infos. tRust: known issue — (offload): set them
+            // The next two are debug infos. FIXME(offload): set them
             (eight, cx.const_null(cx.type_ptr())), // dbg
             (eight, cx.const_null(cx.type_ptr())), // dbg
             (eight, cx.get_const_i64(KernelArgsTy::TRIPCOUNT)),
@@ -405,7 +403,7 @@ pub(crate) fn add_global<'ll>(
     initializer: &'ll llvm::Value,
     l: Linkage,
 ) -> &'ll llvm::Value {
-    let c_name = CString::new(name).expect("invariant: CString::new failed - input contains null byte");
+    let c_name = CString::new(name).unwrap();
     let llglobal: &'ll llvm::Value = llvm::add_global(cx.llmod, cx.val_ty(initializer), &c_name);
     llvm::set_global_constant(llglobal, true);
     llvm::set_linkage(llglobal, l);
@@ -450,7 +448,7 @@ pub(crate) fn gen_define_handling<'ll>(
         transfer.iter().map(|m| m.intersection(valid_begin_mappings).bits()).collect();
     let transfer_from: Vec<u64> =
         transfer.iter().map(|m| m.intersection(MappingFlags::FROM).bits()).collect();
-    // tRust: known issue — (offload): add `OMP_MAP_TARGET_PARAM = 0x20` only if necessary
+    // FIXME(offload): add `OMP_MAP_TARGET_PARAM = 0x20` only if necessary
     let transfer_kernel = vec![MappingFlags::TARGET_PARAM.bits(); transfer_to.len()];
 
     let actual_sizes = sizes
@@ -476,7 +474,7 @@ pub(crate) fn gen_define_handling<'ll>(
     let initializer = cx.get_const_i8(0);
     let region_id = add_global(&cx, &name, initializer, WeakAnyLinkage);
 
-    let c_entry_name = CString::new(symbol.clone()).expect("invariant: CString::new failed - input contains null byte");
+    let c_entry_name = CString::new(symbol.clone()).unwrap();
     let c_val = c_entry_name.as_bytes_with_nul();
     let offload_entry_name = format!(".offloading.entry_name.{symbol}");
 
@@ -491,13 +489,13 @@ pub(crate) fn gen_define_handling<'ll>(
     let elems = TgtOffloadEntry::new(&cx, region_id, llglobal);
 
     let initializer = crate::common::named_struct(offload_entry_ty, &elems);
-    let c_name = CString::new(name).expect("invariant: CString::new failed - input contains null byte");
+    let c_name = CString::new(name).unwrap();
     let offload_entry = llvm::add_global(cx.llmod, offload_entry_ty, &c_name);
     llvm::set_global_constant(offload_entry, true);
     llvm::set_linkage(offload_entry, WeakAnyLinkage);
     llvm::set_initializer(offload_entry, initializer);
     llvm::set_alignment(offload_entry, Align::EIGHT);
-    let c_section_name = CString::new("llvm_offload_entries").expect("invariant: CString::new failed - input contains null byte");
+    let c_section_name = CString::new("llvm_offload_entries").unwrap();
     llvm::set_section(offload_entry, &c_section_name);
 
     cx.add_compiler_used_global(offload_entry);
@@ -539,7 +537,6 @@ pub(crate) fn scalar_width<'ll>(cx: &'ll SimpleCx<'_>, ty: &'ll Type) -> u64 {
         | TypeKind::FP128
         | TypeKind::PPC_FP128 => cx.float_width(ty) as u64,
         TypeKind::Integer => cx.int_width(ty),
-        // tRust: invariant — `scalar_width` is only queried for LLVM integer or floating-point scalar types
         other => bug!("scalar_width was called on a non scalar type {other:?}"),
     }
 }
@@ -549,7 +546,7 @@ fn get_runtime_size<'ll, 'tcx>(
     _val: &'ll Value,
     _meta: &OffloadMetadata,
 ) -> &'ll Value {
-    // tRust: known issue — (Sa4dUs): handle dynamic-size data (e.g. slices)
+    // FIXME(Sa4dUs): handle dynamic-size data (e.g. slices)
     bug!("offload does not support dynamic sizes yet");
 }
 
@@ -605,7 +602,6 @@ pub(crate) fn gen_call_handling<'ll, 'tcx>(
     let bb = builder.llbb();
 
     // Step 0)
-    // SAFETY: `self.llbuilder` is a valid builder, and the function is a valid LLVM function value.
     unsafe {
         llvm::LLVMRustPositionBuilderPastAllocas(&builder.llbuilder, builder.llfn());
     }
@@ -640,7 +636,6 @@ pub(crate) fn gen_call_handling<'ll, 'tcx>(
     let a5 = builder.direct_alloca(tgt_kernel_decl, Align::EIGHT, "kernel_args");
 
     // Step 1)
-    // SAFETY: Both `llbuilder` and `llbb` are valid references — the builder is owned by `self` and the basic block belongs to the same LLVM module.
     unsafe {
         llvm::LLVMPositionBuilderAtEnd(&builder.llbuilder, bb);
     }
@@ -655,16 +650,14 @@ pub(crate) fn gen_call_handling<'ll, 'tcx>(
         let (base_val, gep_base) = match ty_kind {
             TypeKind::Pointer => (v, v),
             TypeKind::Half | TypeKind::Float | TypeKind::Double | TypeKind::Integer => {
-                // tRust: known issue — (Sa4dUs): check for `f128` support, latest NVIDIA cards support it
+                // FIXME(Sa4dUs): check for `f128` support, latest NVIDIA cards support it
                 let num_bits = scalar_width(cx, ty);
 
                 let bb = builder.llbb();
-                // SAFETY: Both `llbuilder` and the basic block are valid references in the same LLVM context.
                 unsafe {
                     llvm::LLVMRustPositionBuilderPastAllocas(builder.llbuilder, builder.llfn());
                 }
                 let addr = builder.direct_alloca(cx.type_i64(), Align::EIGHT, "addr");
-                // SAFETY: Both `llbuilder` and `llbb` are valid references — the builder is owned by `self` and the basic block belongs to the same LLVM module.
                 unsafe {
                     llvm::LLVMPositionBuilderAtEnd(builder.llbuilder, bb);
                 }
@@ -674,7 +667,6 @@ pub(crate) fn gen_call_handling<'ll, 'tcx>(
                 builder.store(value, addr, Align::EIGHT);
                 (value, addr)
             }
-            // tRust: invariant — offload argument lowering only supports pointer and scalar integer/float values
             other => bug!("offload does not support {other:?}"),
         };
 
@@ -760,7 +752,7 @@ pub(crate) fn gen_call_handling<'ll, 'tcx>(
 
     let args = vec![
         s_ident_t,
-        // tRust: known issue — (offload) give users a way to select which GPU to use.
+        // FIXME(offload) give users a way to select which GPU to use.
         cx.get_const_i64(u64::MAX), // MAX == -1.
         num_workgroups,
         threads_per_block,

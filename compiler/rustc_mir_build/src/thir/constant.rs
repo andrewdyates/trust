@@ -19,18 +19,16 @@ pub(crate) fn lit_to_const<'tcx>(
 
     let trunc = |n, width: ty::UintTy| {
         let width = width
-            .normalize(tcx.data_layout.pointer_size().bits().try_into().expect("invariant: value fits in target type")) // tRust: unwrap -> expect
+            .normalize(tcx.data_layout.pointer_size().bits().try_into().unwrap())
             .bit_width()
-            .expect("invariant: value is present"); // tRust: unwrap -> expect
+            .unwrap();
         let width = Size::from_bits(width);
         trace!("trunc {} with size {} and shift {}", n, width.bits(), 128 - width.bits());
         let result = width.truncate(n);
         trace!("trunc result: {}", result);
 
-        ScalarInt::try_from_uint(result, width).unwrap_or_else(|| {
-            // tRust: invariant — truncating to `width` bits always yields a value representable as a `ScalarInt` of that same width.
-            bug!("expected to create ScalarInt from uint {:?}", result)
-        })
+        ScalarInt::try_from_uint(result, width)
+            .unwrap_or_else(|| bug!("expected to create ScalarInt from uint {:?}", result))
     };
 
     let (valtree, valtree_ty) = match (lit, expected_ty.map(|ty| ty.kind())) {
@@ -43,7 +41,7 @@ pub(crate) fn lit_to_const<'tcx>(
             if let ty::Slice(ty) | ty::Array(ty, _) = inner_ty.kind()
                 && let ty::Uint(UintTy::U8) = ty.kind() =>
         {
-            (ty::ValTree::from_raw_bytes(tcx, byte_sym.as_byte_str()), expected_ty.expect("invariant: expected type is known")) // tRust: unwrap -> expect
+            (ty::ValTree::from_raw_bytes(tcx, byte_sym.as_byte_str()), expected_ty.unwrap())
         }
         (
             ast::LitKind::ByteStr(byte_sym, _),
@@ -53,7 +51,7 @@ pub(crate) fn lit_to_const<'tcx>(
         {
             // Byte string literal patterns may have type `[u8]` or `[u8; N]` if `deref_patterns` is
             // enabled, in order to allow, e.g., `deref!(b"..."): Vec<u8>`.
-            (ty::ValTree::from_raw_bytes(tcx, byte_sym.as_byte_str()), expected_ty.expect("invariant: expected type is known")) // tRust: unwrap -> expect
+            (ty::ValTree::from_raw_bytes(tcx, byte_sym.as_byte_str()), expected_ty.unwrap())
         }
         (ast::LitKind::ByteStr(byte_sym, _), _) => {
             let valtree = ty::ValTree::from_raw_bytes(tcx, byte_sym.as_byte_str());

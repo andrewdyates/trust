@@ -348,7 +348,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         adjusted_ty: Ty<'tcx>,
         opt_arg_exprs: Option<&'tcx [hir::Expr<'tcx>]>,
     ) -> Option<(Option<Adjustment<'tcx>>, MethodCallee<'tcx>)> {
-        // tRust: known issue — For async closures, prefer `AsyncFn*` (upstream HACK by async_closures)
+        // HACK(async_closures): For async closures, prefer `AsyncFn*`
         // over `Fn*`, since all async closures implement `FnOnce`, but
         // choosing that over `AsyncFn`/`AsyncFnMut` would be more restrictive.
         // For other callables, just prefer `Fn*` for perf reasons.
@@ -408,7 +408,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // Check for &self vs &mut self in the method signature. Since this is either
                     // the Fn or FnMut trait, it should be one of those.
                     let ty::Ref(_, _, mutbl) = *method.sig.inputs()[0].kind() else {
-                        // tRust: invariant — the `Fn` and `FnMut` trait methods always take their receiver by shared or mutable reference
                         bug!("Expected `FnMut`/`Fn` to take receiver by-ref/by-mut")
                     };
 
@@ -571,7 +570,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 (fn_sig, Some(def_id))
             }
 
-            // NOTE(const_trait_impl): these arms should error because we can't enforce them
+            // FIXME(const_trait_impl): these arms should error because we can't enforce them
             ty::FnPtr(sig_tys, hdr) => (sig_tys.with(hdr), None),
 
             _ => unreachable!(),
@@ -935,7 +934,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             None => return,
         };
 
-        // NOTE(const_trait_impl): Should this be `is_const_fn_raw`? It depends on if we move
+        // FIXME(const_trait_impl): Should this be `is_const_fn_raw`? It depends on if we move
         // const stability checking here too, I guess.
         if self.tcx.is_conditionally_const(callee_did) {
             let q = self.tcx.const_conditions(callee_did);
@@ -958,7 +957,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 ));
             }
         } else {
-            // NOTE(const_trait_impl): This should eventually be caught here.
+            // FIXME(const_trait_impl): This should eventually be caught here.
             // For now, though, we defer some const checking to MIR.
         }
     }
@@ -1039,7 +1038,6 @@ impl<'a, 'tcx> DeferredCallResolution<'tcx> {
                 );
             }
             None => {
-                // tRust: invariant — after closure kind inference finishes, a callable closure type must resolve to one of the call traits here
                 span_bug!(
                     self.call_expr.span,
                     "Expected to find a suitable `Fn`/`FnMut`/`FnOnce` implementation for `{}`",

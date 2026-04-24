@@ -61,7 +61,7 @@ impl MacroKinds {
     /// This hardcodes all the possibilities, in order to return a static string.
     pub fn descr(self) -> &'static str {
         match self {
-            // tRust: known issue — change this to "function-like macro" and fix all tests
+            // FIXME: change this to "function-like macro" and fix all tests
             Self::BANG => "macro",
             Self::ATTR => "attribute macro",
             Self::DERIVE => "derive macro",
@@ -170,6 +170,7 @@ pub enum DefKind {
     /// We do not provide any a `Span` for the definition and pretty much all other
     /// queries also ICE when using this `DefId`. Given that the `DefId` of such
     /// constants should only be reachable by iterating all definitions of a
+    
     AnonConst,
     /// An inline constant, e.g. `const { 1 + 2 }`
     InlineConst,
@@ -319,11 +320,11 @@ impl DefKind {
             | DefKind::ForeignTy
             | DefKind::TraitAlias
             | DefKind::TyParam
-            | DefKind::ExternCrate => DefPathData::TypeNs(name.expect("invariant: type namespace definitions must have a name")), // tRust: unwrap -> expect
+            | DefKind::ExternCrate => DefPathData::TypeNs(name.unwrap()),
 
             // An associated type name will be missing for an RPITIT (DefPathData::AnonAssocTy),
             // but those provide their own DefPathData.
-            DefKind::AssocTy => DefPathData::TypeNs(name.expect("invariant: associated type definitions must have a name")), // tRust: unwrap -> expect
+            DefKind::AssocTy => DefPathData::TypeNs(name.unwrap()),
 
             DefKind::Fn
             | DefKind::Const { .. }
@@ -331,9 +332,9 @@ impl DefKind {
             | DefKind::Static { .. }
             | DefKind::AssocFn
             | DefKind::AssocConst { .. }
-            | DefKind::Field => DefPathData::ValueNs(name.expect("invariant: value namespace definitions must have a name")), // tRust: unwrap -> expect
-            DefKind::Macro(..) => DefPathData::MacroNs(name.expect("invariant: macro definitions must have a name")), // tRust: unwrap -> expect
-            DefKind::LifetimeParam => DefPathData::LifetimeNs(name.expect("invariant: lifetime parameters must have a name")), // tRust: unwrap -> expect
+            | DefKind::Field => DefPathData::ValueNs(name.unwrap()),
+            DefKind::Macro(..) => DefPathData::MacroNs(name.unwrap()),
+            DefKind::LifetimeParam => DefPathData::LifetimeNs(name.unwrap()),
             DefKind::Ctor(..) => DefPathData::Ctor,
             DefKind::Use => DefPathData::Use,
             DefKind::ForeignMod => DefPathData::ForeignMod,
@@ -1007,7 +1008,7 @@ pub enum LifetimeRes {
     Static,
     /// Resolution failure.
     Error(rustc_span::ErrorGuaranteed),
-    /// tRust: known issue — This is used to recover the NodeId of an elided lifetime.
+    /// HACK: This is used to recover the NodeId of an elided lifetime.
     ElidedAnchor { start: NodeId, end: NodeId },
 }
 

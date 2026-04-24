@@ -11,10 +11,12 @@ use crate::abstraction::{AbstractDomain, is_bottom};
 use crate::predicate::{AbstractState, CmpOp, Predicate};
 
 use super::borrow_check::BorrowCheckPredicate;
-use super::domain::{combined_abstraction, refine_with_rust_semantics, RustAbstractionDomain};
+use super::domain::{RustAbstractionDomain, combined_abstraction, refine_with_rust_semantics};
 use super::interval::IntervalAbstraction;
 use super::lifetime::LifetimeAbstraction;
-use super::ownership::{more_restrictive, OwnershipAbstraction, OwnershipPredicate, OwnershipState};
+use super::ownership::{
+    OwnershipAbstraction, OwnershipPredicate, OwnershipState, more_restrictive,
+};
 use super::type_abs::TypeAbstraction;
 
 // -----------------------------------------------------------------------
@@ -564,16 +566,10 @@ fn test_refine_deduplicates() {
     domain.type_info.add_integer_range("x", 0, 100);
     let cex = vec![
         Formula::Var("x".into(), Sort::Int),
-        Formula::Eq(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(50)),
-        ),
+        Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(50))),
     ];
     let preds = refine_with_rust_semantics(&cex, &domain);
-    let range_count = preds
-        .iter()
-        .filter(|p| **p == Predicate::range("x", 0, 100))
-        .count();
+    let range_count = preds.iter().filter(|p| **p == Predicate::range("x", 0, 100)).count();
     assert_eq!(range_count, 1);
 }
 
@@ -648,9 +644,18 @@ fn test_type_meet_adds_one_sided_range() {
 
 #[test]
 fn test_more_restrictive_ordering() {
-    assert_eq!(more_restrictive(OwnershipState::Owned, OwnershipState::Moved), OwnershipState::Moved);
-    assert_eq!(more_restrictive(OwnershipState::MutableBorrow, OwnershipState::SharedBorrow), OwnershipState::MutableBorrow);
-    assert_eq!(more_restrictive(OwnershipState::Owned, OwnershipState::Owned), OwnershipState::Owned);
+    assert_eq!(
+        more_restrictive(OwnershipState::Owned, OwnershipState::Moved),
+        OwnershipState::Moved
+    );
+    assert_eq!(
+        more_restrictive(OwnershipState::MutableBorrow, OwnershipState::SharedBorrow),
+        OwnershipState::MutableBorrow
+    );
+    assert_eq!(
+        more_restrictive(OwnershipState::Owned, OwnershipState::Owned),
+        OwnershipState::Owned
+    );
 }
 
 // -----------------------------------------------------------------------
@@ -741,10 +746,8 @@ fn test_borrow_check_exclusive_mut_to_predicate() {
 
 #[test]
 fn test_borrow_check_borrow_active_to_predicate() {
-    let pred = BorrowCheckPredicate::BorrowActive {
-        borrow_var: "ref_x".into(),
-        referent: "x".into(),
-    };
+    let pred =
+        BorrowCheckPredicate::BorrowActive { borrow_var: "ref_x".into(), referent: "x".into() };
     assert_eq!(pred.to_predicate(), Predicate::Custom("ref_x:borrows:x".into()));
 }
 
@@ -758,10 +761,7 @@ fn test_borrow_check_no_alias_canonical_ordering() {
 
 #[test]
 fn test_borrow_check_shared_borrow_count_to_predicate() {
-    let pred = BorrowCheckPredicate::SharedBorrowCount {
-        place: "buf".into(),
-        max_shared: 3,
-    };
+    let pred = BorrowCheckPredicate::SharedBorrowCount { place: "buf".into(), max_shared: 3 };
     assert_eq!(pred.to_predicate(), Predicate::Custom("buf:shared_borrow_count:<=3".into()));
 }
 
@@ -805,10 +805,8 @@ fn test_borrow_check_exclusive_mut_no_violation_single() {
 fn test_borrow_check_borrow_active_violation_moved() {
     let mut own = OwnershipAbstraction::new();
     own.set_state("ref_x", OwnershipState::Moved);
-    let pred = BorrowCheckPredicate::BorrowActive {
-        borrow_var: "ref_x".into(),
-        referent: "x".into(),
-    };
+    let pred =
+        BorrowCheckPredicate::BorrowActive { borrow_var: "ref_x".into(), referent: "x".into() };
     assert!(pred.is_violated(&own));
 }
 
@@ -816,10 +814,8 @@ fn test_borrow_check_borrow_active_violation_moved() {
 fn test_borrow_check_borrow_active_no_violation() {
     let mut own = OwnershipAbstraction::new();
     own.set_state("ref_x", OwnershipState::SharedBorrow);
-    let pred = BorrowCheckPredicate::BorrowActive {
-        borrow_var: "ref_x".into(),
-        referent: "x".into(),
-    };
+    let pred =
+        BorrowCheckPredicate::BorrowActive { borrow_var: "ref_x".into(), referent: "x".into() };
     assert!(!pred.is_violated(&own));
 }
 
@@ -831,19 +827,13 @@ fn test_borrow_check_display() {
     let p2 = BorrowCheckPredicate::ExclusiveMut { place: "x".into() };
     assert_eq!(format!("{p2}"), "exclusive_mut(x)");
 
-    let p3 = BorrowCheckPredicate::BorrowActive {
-        borrow_var: "r".into(),
-        referent: "x".into(),
-    };
+    let p3 = BorrowCheckPredicate::BorrowActive { borrow_var: "r".into(), referent: "x".into() };
     assert_eq!(format!("{p3}"), "borrow_active(r -> x)");
 
     let p4 = BorrowCheckPredicate::NoAlias { var_a: "a".into(), var_b: "b".into() };
     assert_eq!(format!("{p4}"), "no_alias(a, b)");
 
-    let p5 = BorrowCheckPredicate::SharedBorrowCount {
-        place: "buf".into(),
-        max_shared: 5,
-    };
+    let p5 = BorrowCheckPredicate::SharedBorrowCount { place: "buf".into(), max_shared: 5 };
     assert_eq!(format!("{p5}"), "shared_borrow_count(buf) <= 5");
 }
 

@@ -19,7 +19,7 @@ pub struct Lock {
 impl Lock {
     pub fn new(p: &Path, wait: bool, create: bool, exclusive: bool) -> io::Result<Lock> {
         assert!(
-            p.parent().expect("invariant: lock file path must have a parent directory").exists(), // tRust: unwrap -> expect
+            p.parent().unwrap().exists(),
             "Parent directory of lock-file must exist: {}",
             p.display()
         );
@@ -58,9 +58,6 @@ impl Lock {
 
         debug!("attempting to acquire lock on lock file `{}`", p.display());
 
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `file` keeps the OS handle alive for the call and
-        // `overlapped` is a valid writable `OVERLAPPED` on the stack.
         unsafe {
             LockFileEx(
                 HANDLE(file.as_raw_handle()),

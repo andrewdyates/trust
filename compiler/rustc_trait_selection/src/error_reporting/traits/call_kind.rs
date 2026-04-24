@@ -30,13 +30,13 @@ pub enum CallDesugaringKind {
 impl CallDesugaringKind {
     pub fn trait_def_id(self, tcx: TyCtxt<'_>) -> DefId {
         match self {
-            Self::ForLoopIntoIter => tcx.get_diagnostic_item(sym::IntoIterator).expect("invariant: diagnostic item is defined"),
+            Self::ForLoopIntoIter => tcx.get_diagnostic_item(sym::IntoIterator).unwrap(),
             Self::ForLoopNext => tcx.require_lang_item(LangItem::Iterator, DUMMY_SP),
             Self::QuestionBranch | Self::TryBlockFromOutput => {
                 tcx.require_lang_item(LangItem::Try, DUMMY_SP)
             }
-            Self::QuestionFromResidual => tcx.get_diagnostic_item(sym::FromResidual).expect("invariant: diagnostic item is defined"),
-            Self::Await => tcx.get_diagnostic_item(sym::IntoFuture).expect("invariant: diagnostic item is defined"),
+            Self::QuestionFromResidual => tcx.get_diagnostic_item(sym::FromResidual).unwrap(),
+            Self::Await => tcx.get_diagnostic_item(sym::IntoFuture).unwrap(),
         }
     }
 }

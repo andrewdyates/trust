@@ -237,7 +237,7 @@ macro_rules! run_driver {
                     rustc_internal::run(tcx, || {
                         self.result = Some(callback($($crate::optional!($with_tcx tcx))?));
                     })
-                    .expect("invariant: rustc_internal::run succeeds for valid TyCtxt"); // tRust: unwrap -> expect
+                    .unwrap();
                     if self.result.as_ref().is_some_and(|val| val.is_continue()) {
                         Compilation::Continue
                     } else {

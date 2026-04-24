@@ -82,14 +82,8 @@ pub fn classify_function(sig: &FunctionSignature) -> Option<(FunctionCategory, f
     }
 
     // Setter patterns
-    if (lower.starts_with("set_") || lower.starts_with("with_"))
-        && !sig.params.is_empty()
-    {
-        let conf = if ret == "()" || ret.contains("Self") || ret.is_empty() {
-            0.85
-        } else {
-            0.65
-        };
+    if (lower.starts_with("set_") || lower.starts_with("with_")) && !sig.params.is_empty() {
+        let conf = if ret == "()" || ret.contains("Self") || ret.is_empty() { 0.85 } else { 0.65 };
         candidates.push((FunctionCategory::Setter, conf));
     }
 
@@ -128,9 +122,7 @@ pub fn classify_function(sig: &FunctionSignature) -> Option<(FunctionCategory, f
     }
 
     // Finder patterns
-    if (lower.starts_with("find_")
-        || lower.starts_with("search_")
-        || lower.starts_with("lookup_"))
+    if (lower.starts_with("find_") || lower.starts_with("search_") || lower.starts_with("lookup_"))
         && ret.starts_with("Option<")
     {
         candidates.push((FunctionCategory::Finder, 0.85));
@@ -144,9 +136,7 @@ pub fn classify_function(sig: &FunctionSignature) -> Option<(FunctionCategory, f
     }
 
     // Return the highest confidence match
-    candidates
-        .into_iter()
-        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+    candidates.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 /// Match a function signature against templates and produce proposals.
@@ -160,11 +150,7 @@ pub fn match_and_propose(sig: &FunctionSignature) -> Vec<TemplateMatchResult> {
     if let Some((category, confidence)) = classify_function(sig) {
         let proposals = generate_proposals_for_category(sig, category, confidence);
         if !proposals.is_empty() {
-            results.push(TemplateMatchResult {
-                category,
-                confidence,
-                proposals,
-            });
+            results.push(TemplateMatchResult { category, confidence, proposals });
         }
     }
 
@@ -200,10 +186,7 @@ fn getter_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal> {
             spec_body: "self is unchanged (pure getter)".to_string(),
         },
         confidence: confidence * 0.9,
-        rationale: format!(
-            "Getter `{}`: should be a pure function with no side effects",
-            sig.name
-        ),
+        rationale: format!("Getter `{}`: should be a pure function with no side effects", sig.name),
     });
 
     // If it takes an index-like param, add bounds check
@@ -212,9 +195,7 @@ fn getter_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal> {
             proposals.push(Proposal {
                 function_path: sig.path.clone(),
                 function_name: sig.name.clone(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: format!("{pname} < self.len()"),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: format!("{pname} < self.len()") },
                 confidence,
                 rationale: format!(
                     "Getter `{}`: index parameter `{pname}` must be in bounds",
@@ -303,10 +284,7 @@ fn validator_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal
             spec_body: "self is unchanged (pure predicate)".to_string(),
         },
         confidence: confidence * 0.85,
-        rationale: format!(
-            "Validator `{}`: should not modify state",
-            sig.name
-        ),
+        rationale: format!("Validator `{}`: should not modify state", sig.name),
     });
 
     // Validator should be deterministic
@@ -354,10 +332,7 @@ fn converter_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal
                 spec_body: "result represents the same semantic value as input".to_string(),
             },
             confidence: confidence * 0.85,
-            rationale: format!(
-                "Converter `{}`: conversion preserves meaning",
-                sig.name
-            ),
+            rationale: format!("Converter `{}`: conversion preserves meaning", sig.name),
         });
     }
 
@@ -388,10 +363,7 @@ fn predicate_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal
             spec_body: "result == (condition holds)".to_string(),
         },
         confidence: confidence * 0.85,
-        rationale: format!(
-            "Predicate `{}`: bool return encodes a condition",
-            sig.name
-        ),
+        rationale: format!("Predicate `{}`: bool return encodes a condition", sig.name),
     }]
 }
 
@@ -406,10 +378,7 @@ fn finder_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal> {
             spec_body: "result.is_none() ==> element not present in collection".to_string(),
         },
         confidence,
-        rationale: format!(
-            "Finder `{}`: None means the element was not found",
-            sig.name
-        ),
+        rationale: format!("Finder `{}`: None means the element was not found", sig.name),
     });
 
     // Some means found and valid
@@ -420,10 +389,7 @@ fn finder_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Proposal> {
             spec_body: "result.is_some() ==> returned element matches search criteria".to_string(),
         },
         confidence: confidence * 0.9,
-        rationale: format!(
-            "Finder `{}`: Some contains an element matching the query",
-            sig.name
-        ),
+        rationale: format!("Finder `{}`: Some contains an element matching the query", sig.name),
     });
 
     proposals
@@ -442,37 +408,32 @@ fn accumulator_proposals(sig: &FunctionSignature, confidence: f64) -> Vec<Propos
         && let Some((name, _)) = sig.params.iter().find(|(_, ty)| {
             let t = ty.trim();
             t.starts_with("&[") || t.starts_with("&mut [") || t.starts_with("Vec<")
-        }) {
-            proposals.push(Proposal {
-                function_path: sig.path.clone(),
-                function_name: sig.name.clone(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: format!("!{name}.is_empty()"),
-                },
-                confidence: confidence * 0.8,
-                rationale: format!(
-                    "Accumulator `{}`: collection `{name}` should be non-empty",
-                    sig.name
-                ),
-            });
-        }
+        })
+    {
+        proposals.push(Proposal {
+            function_path: sig.path.clone(),
+            function_name: sig.name.clone(),
+            kind: ProposalKind::AddPrecondition { spec_body: format!("!{name}.is_empty()") },
+            confidence: confidence * 0.8,
+            rationale: format!(
+                "Accumulator `{}`: collection `{name}` should be non-empty",
+                sig.name
+            ),
+        });
+    }
 
     // Result >= 0 for unsigned accumulators
     if let Some(ref ret) = sig.return_type
-        && is_unsigned_type(ret.trim()) {
-            proposals.push(Proposal {
-                function_path: sig.path.clone(),
-                function_name: sig.name.clone(),
-                kind: ProposalKind::AddPostcondition {
-                    spec_body: "result >= 0".to_string(),
-                },
-                confidence: confidence * 0.9,
-                rationale: format!(
-                    "Accumulator `{}`: result is non-negative",
-                    sig.name
-                ),
-            });
-        }
+        && is_unsigned_type(ret.trim())
+    {
+        proposals.push(Proposal {
+            function_path: sig.path.clone(),
+            function_name: sig.name.clone(),
+            kind: ProposalKind::AddPostcondition { spec_body: "result >= 0".to_string() },
+            confidence: confidence * 0.9,
+            rationale: format!("Accumulator `{}`: result is non-negative", sig.name),
+        });
+    }
 
     proposals
 }
@@ -556,10 +517,7 @@ mod tests {
         FunctionSignature {
             path: format!("test::{name}"),
             name: name.into(),
-            params: params
-                .into_iter()
-                .map(|(n, t)| (n.into(), t.into()))
-                .collect(),
+            params: params.into_iter().map(|(n, t)| (n.into(), t.into())).collect(),
             return_type: return_type.map(Into::into),
         }
     }
@@ -987,6 +945,9 @@ mod tests {
 
         assert!(v_res.is_some());
         assert!(p_res.is_some());
-        assert!(v_res.unwrap().1 > p_res.unwrap().1, "validator should have higher confidence than generic predicate");
+        assert!(
+            v_res.unwrap().1 > p_res.unwrap().1,
+            "validator should have higher confidence than generic predicate"
+        );
     }
 }

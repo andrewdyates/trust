@@ -64,10 +64,7 @@ impl AliasAnalyzer {
     /// Create a new empty alias analyzer.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            points_to: FxHashMap::default(),
-            stores: FxHashMap::default(),
-        }
+        Self { points_to: FxHashMap::default(), stores: FxHashMap::default() }
     }
 
     /// Query whether two pointers alias.
@@ -102,10 +99,7 @@ impl AliasAnalyzer {
 
     /// Add a points-to edge: `pointer` may point to `target`.
     pub fn add_points_to(&mut self, pointer: &str, target: &str) {
-        self.points_to
-            .entry(pointer.to_owned())
-            .or_default()
-            .insert(target.to_owned());
+        self.points_to.entry(pointer.to_owned()).or_default().insert(target.to_owned());
     }
 
     /// Compute the points-to set for a given pointer.
@@ -320,21 +314,12 @@ mod tests {
     fn test_alias_analyzer_merge_alias_sets() {
         let analyzer = AliasAnalyzer::new();
         let a = AliasSet {
-            entries: vec![PointsToEntry {
-                pointer: "p".to_owned(),
-                targets: vec!["x".to_owned()],
-            }],
+            entries: vec![PointsToEntry { pointer: "p".to_owned(), targets: vec!["x".to_owned()] }],
         };
         let b = AliasSet {
             entries: vec![
-                PointsToEntry {
-                    pointer: "p".to_owned(),
-                    targets: vec!["y".to_owned()],
-                },
-                PointsToEntry {
-                    pointer: "q".to_owned(),
-                    targets: vec!["z".to_owned()],
-                },
+                PointsToEntry { pointer: "p".to_owned(), targets: vec!["y".to_owned()] },
+                PointsToEntry { pointer: "q".to_owned(), targets: vec!["z".to_owned()] },
             ],
         };
         let merged = analyzer.merge_alias_sets(&a, &b);

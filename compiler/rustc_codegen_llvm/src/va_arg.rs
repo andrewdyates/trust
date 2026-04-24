@@ -108,7 +108,7 @@ fn emit_ptr_va_arg<'ll, 'tcx>(
     let indirect = matches!(pass_mode, PassMode::Indirect);
     let allow_higher_align = matches!(allow_higher_align, AllowHigherAlign::Yes);
     let force_right_adjust = matches!(force_right_adjust, ForceRightAdjust::Yes);
-    let slot_size = Align::from_bytes(slot_size as u64).expect("invariant: alignment is a valid power of 2");
+    let slot_size = Align::from_bytes(slot_size as u64).unwrap();
 
     let layout = bx.cx.layout_of(target_ty);
     let (llty, size, align) = if indirect {
@@ -174,7 +174,7 @@ fn emit_aapcs_va_arg<'ll, 'tcx>(
     let on_stack = bx.append_sibling_block("va_arg.on_stack");
     let end = bx.append_sibling_block("va_arg.end");
     let zero = bx.const_i32(0);
-    let offset_align = Align::from_bytes(4).expect("invariant: alignment is a valid power of 2");
+    let offset_align = Align::from_bytes(4).unwrap();
 
     let gr_type = target_ty.is_any_ptr() || target_ty.is_integral();
     let (reg_off, reg_top, slot_size) = if gr_type {
@@ -344,7 +344,7 @@ fn emit_powerpc_va_arg<'ll, 'tcx>(
         bx.store(bx.const_u8(max_regs), num_regs_addr, dl.i8_align);
 
         // Everything in the overflow area is rounded up to a size of at least 4.
-        let overflow_area_align = Align::from_bytes(4).expect("invariant: alignment is a valid power of 2");
+        let overflow_area_align = Align::from_bytes(4).unwrap();
 
         let size = if !is_indirect {
             layout.layout.size.align_to(overflow_area_align)
@@ -420,7 +420,7 @@ fn emit_s390x_va_arg<'ll, 'tcx>(
     let end = bx.append_sibling_block("va_arg.end");
     let ptr_align_abi = dl.pointer_align().abi;
 
-    // tRust: known issue — vector ABI not yet supported.
+    // FIXME: vector ABI not yet supported.
     let target_ty_size = bx.cx.size_of(target_ty).bytes();
     let indirect: bool = target_ty_size > 8 || !target_ty_size.is_power_of_two();
     let unpadded_size = if indirect { 8 } else { target_ty_size };
@@ -432,7 +432,7 @@ fn emit_s390x_va_arg<'ll, 'tcx>(
         if gpr_type { (5, gpr, 2, padding) } else { (4, fpr, 16, 0) };
 
     // Check whether the value was passed in a register or in memory.
-    let reg_count_v = bx.load(bx.type_i64(), reg_count, Align::from_bytes(8).expect("invariant: alignment is a valid power of 2"));
+    let reg_count_v = bx.load(bx.type_i64(), reg_count, Align::from_bytes(8).unwrap());
     let use_regs = bx.icmp(IntPredicate::IntULT, reg_count_v, bx.const_u64(max_regs));
     bx.cond_br(use_regs, in_reg, in_mem);
 
@@ -447,7 +447,7 @@ fn emit_s390x_va_arg<'ll, 'tcx>(
 
     // Update the register count.
     let new_reg_count_v = bx.add(reg_count_v, bx.const_u64(1));
-    bx.store(new_reg_count_v, reg_count, Align::from_bytes(8).expect("invariant: alignment is a valid power of 2"));
+    bx.store(new_reg_count_v, reg_count, Align::from_bytes(8).unwrap());
     bx.br(end);
 
     // Emit code to load the value if it was passed in memory.
@@ -573,8 +573,8 @@ fn emit_x86_64_sysv64_va_arg<'ll, 'tcx>(
     let gp_offset_ptr = va_list_addr;
     let fp_offset_ptr = bx.inbounds_ptradd(va_list_addr, bx.cx.const_usize(unsigned_int_offset));
 
-    let gp_offset_v = bx.load(bx.type_i32(), gp_offset_ptr, Align::from_bytes(8).expect("invariant: alignment is a valid power of 2"));
-    let fp_offset_v = bx.load(bx.type_i32(), fp_offset_ptr, Align::from_bytes(4).expect("invariant: alignment is a valid power of 2"));
+    let gp_offset_v = bx.load(bx.type_i32(), gp_offset_ptr, Align::from_bytes(8).unwrap());
+    let fp_offset_v = bx.load(bx.type_i32(), fp_offset_ptr, Align::from_bytes(4).unwrap());
 
     let mut use_regs = bx.const_bool(false);
 
@@ -605,7 +605,7 @@ fn emit_x86_64_sysv64_va_arg<'ll, 'tcx>(
     // in different register classes or requires an alignment greater
     // than 8 for general purpose registers and 16 for XMM registers.
     //
-    // tRust: known issue — (llvm): This really results in shameful code when we end up needing to
+    // FIXME(llvm): This really results in shameful code when we end up needing to
     // collect arguments from different places; often what should result in a
     // simple assembling of a structure from scattered addresses has many more
     // loads than necessary. Can we clean this up?
@@ -619,7 +619,7 @@ fn emit_x86_64_sysv64_va_arg<'ll, 'tcx>(
                 let reg_addr = bx.inbounds_ptradd(reg_save_area_v, gp_offset_v);
 
                 // Copy into a temporary if the type is more aligned than the register save area.
-                let gp_align = Align::from_bytes(8).expect("invariant: alignment is a valid power of 2");
+                let gp_align = Align::from_bytes(8).unwrap();
                 copy_to_temporary_if_more_aligned(bx, reg_addr, layout, gp_align)
             }
             Primitive::Float(_) => bx.inbounds_ptradd(reg_save_area_v, fp_offset_v),
@@ -685,7 +685,7 @@ fn emit_x86_64_sysv64_va_arg<'ll, 'tcx>(
                     let reg_addr = bx.inbounds_ptradd(reg_save_area_v, gp_offset_v);
 
                     // Copy into a temporary if the type is more aligned than the register save area.
-                    let gp_align = Align::from_bytes(8).expect("invariant: alignment is a valid power of 2");
+                    let gp_align = Align::from_bytes(8).unwrap();
                     copy_to_temporary_if_more_aligned(bx, reg_addr, layout, gp_align)
                 }
             }
@@ -702,14 +702,14 @@ fn emit_x86_64_sysv64_va_arg<'ll, 'tcx>(
         let offset = bx.const_u32(num_gp_registers * 8);
         let sum = bx.add(gp_offset_v, offset);
         // An alignment of 8 because `__va_list_tag` is 8-aligned and this is its first field.
-        bx.store(sum, gp_offset_ptr, Align::from_bytes(8).expect("invariant: alignment is a valid power of 2"));
+        bx.store(sum, gp_offset_ptr, Align::from_bytes(8).unwrap());
     }
 
     // l->fp_offset = l->fp_offset + num_fp * 16.
     if num_fp_registers > 0 {
         let offset = bx.const_u32(num_fp_registers * 16);
         let sum = bx.add(fp_offset_v, offset);
-        bx.store(sum, fp_offset_ptr, Align::from_bytes(4).expect("invariant: alignment is a valid power of 2"));
+        bx.store(sum, fp_offset_ptr, Align::from_bytes(4).unwrap());
     }
 
     bx.br(end);
@@ -823,9 +823,9 @@ fn emit_hexagon_va_arg_musl<'ll, 'tcx>(
     // Arguments <= 32 bits (4 bytes) use 4-byte alignment, > 32 bits use 8-byte alignment
     let type_size_bits = bx.cx.size_of(target_ty).bits();
     let arg_align = if type_size_bits > 32 {
-        Align::from_bytes(8).expect("invariant: alignment is a valid power of 2")
+        Align::from_bytes(8).unwrap()
     } else {
-        Align::from_bytes(4).expect("invariant: alignment is a valid power of 2")
+        Align::from_bytes(4).unwrap()
     };
     let aligned_current = round_pointer_up_to_alignment(bx, current_ptr, arg_align, bx.type_ptr());
 
@@ -929,7 +929,7 @@ fn emit_xtensa_va_arg<'ll, 'tcx>(
     // Primitive arguments are never split between registers and the stack. For example, if loading an 8 byte
     // primitive value and va_ndx = 20, we instead bump the offset and read everything from va_stk.
     let va_list_addr = list.immediate();
-    // tRust: known issue — handle multi-field structs that split across regsave/stack?
+    // FIXME: handle multi-field structs that split across regsave/stack?
     let layout = bx.cx.layout_of(target_ty);
     let from_stack = bx.append_sibling_block("va_arg.from_stack");
     let from_regsave = bx.append_sibling_block("va_arg.from_regsave");
@@ -944,7 +944,7 @@ fn emit_xtensa_va_arg<'ll, 'tcx>(
     let offset = bx.load(bx.type_i32(), offset_ptr, bx.tcx().data_layout.i32_align);
     let offset = round_up_to_alignment(bx, offset, layout.align.abi);
 
-    let slot_size = layout.size.align_to(Align::from_bytes(4).expect("invariant: alignment is a valid power of 2")).bytes() as i32;
+    let slot_size = layout.size.align_to(Align::from_bytes(4).unwrap()).bytes() as i32;
 
     // Update the offset in va_list, by adding the slot's size.
     let offset_next = bx.add(offset, bx.const_i32(slot_size));
@@ -982,7 +982,6 @@ fn emit_xtensa_va_arg<'ll, 'tcx>(
     // update va_ndx
     bx.store(offset_next_corrected, offset_ptr, ptr_align_abi);
 
-    // SAFETY: The va_list pointer dereference and byte offset are valid because the va_list was allocated by the caller with the correct ABI layout.
     // let stack_value_ptr = unsafe { (*va).va_stk.byte_add(offset_corrected) };
     let stack_area_ptr = bx.inbounds_ptradd(va_list_addr, bx.cx.const_usize(0));
     let stack_area = bx.load(bx.type_ptr(), stack_area_ptr, ptr_align_abi);
@@ -996,7 +995,6 @@ fn emit_xtensa_va_arg<'ll, 'tcx>(
     // targets supported by rustc are little-endian so don't worry about it.
 
     // if from_regsave {
-    // SAFETY: The va_list pointer dereference and byte offset are valid because the va_list was allocated by the caller with the correct ABI layout.
     //     unsafe { *regsave_value_ptr }
     // } else {
     //     unsafe { *stack_value_ptr }
@@ -1080,13 +1078,12 @@ pub(super) fn emit_va_arg<'ll, 'tcx>(
             ForceRightAdjust::Yes,
         ),
         Arch::RiscV32 if target.llvm_abiname == LlvmAbi::Ilp32e => {
-            // tRust: known issue — clang manually adjusts the alignment for this ABI. It notes:
+            // FIXME: clang manually adjusts the alignment for this ABI. It notes:
             //
             // > To be compatible with GCC's behaviors, we force arguments with
             // > 2×XLEN-bit alignment and size at most 2×XLEN bits like `long long`,
             // > `unsigned long long` and `double` to have 4-byte alignment. This
             // > behavior may be changed when RV32E/ILP32E is ratified.
-            // tRust: invariant — c-variadic lowering must not target RISC-V ilp32e until its custom va_arg ABI is implemented
             bug!("c-variadic calls with ilp32e use a custom ABI and are not currently implemented");
         }
         Arch::RiscV32 | Arch::LoongArch32 => emit_ptr_va_arg(
@@ -1178,13 +1175,11 @@ pub(super) fn emit_va_arg<'ll, 'tcx>(
             ForceRightAdjust::No,
         ),
 
-        // tRust: invariant — BPF targets never admit C-variadic functions
         Arch::Bpf => bug!("bpf does not support c-variadic functions"),
-        // tRust: invariant — SPIR-V targets never admit C-variadic functions
         Arch::SpirV => bug!("spirv does not support c-variadic functions"),
 
         Arch::Mips | Arch::Mips32r6 | Arch::Mips64 | Arch::Mips64r6 => {
-            // tRust: known issue — port MipsTargetLowering::lowerVAARG.
+            // FIXME: port MipsTargetLowering::lowerVAARG.
             bx.va_arg(addr.immediate(), bx.cx.layout_of(target_ty).llvm_type(bx.cx))
         }
         Arch::Sparc | Arch::Avr | Arch::M68k | Arch::Msp430 => {

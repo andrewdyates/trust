@@ -807,13 +807,13 @@ pub fn compile_declarative_macro(
         // Convert the lhs into `MatcherLoc` form, which is better for doing the
         // actual matching.
         let mbe::TokenTree::Delimited(.., delimited) = lhs_tt else {
-            return dummy_syn_ext(guar.expect("invariant: guar is set when lhs is not delimited")); // tRust: unwrap -> expect
+            return dummy_syn_ext(guar.unwrap());
         };
         let lhs = mbe::macro_parser::compute_locs(&delimited.tts);
         if let Some(args) = args {
             let args_span = args.span();
             let mbe::TokenTree::Delimited(.., delimited) = args else {
-                return dummy_syn_ext(guar.expect("invariant: guar is set when args is not delimited")); // tRust: unwrap -> expect
+                return dummy_syn_ext(guar.unwrap());
             };
             let args = mbe::macro_parser::compute_locs(&delimited.tts);
             let body_span = lhs_span;
@@ -1439,7 +1439,7 @@ fn check_matcher_core<'tt>(
                 // case, we make a temp copy of suffix and stuff
                 // delimiter in there.
                 //
-                // tRust: known issue —: Should I first scan suffix_first to see if
+                // FIXME: Should I first scan suffix_first to see if
                 // delimiter is already in it before I go through the
                 // work of cloning it? But then again, this way I may
                 // get a "tighter" span?

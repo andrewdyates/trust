@@ -487,7 +487,7 @@ where
         // fails to reach a fixpoint but ends up getting an error after
         // running for some additional step.
         //
-        // tRust: known issue (@lcnr) — While I believe an error here to be possible, we
+        // FIXME(@lcnr): While I believe an error here to be possible, we
         // currently don't have any test which actually triggers it. @lqd
         // created a minimization for an ICE in typenum, but that one no
         // longer fails here. cc trait-system-refactor-initiative#105.
@@ -679,7 +679,7 @@ where
     ///
     /// If we have a projection, check that its self type is a rigid projection.
     /// If so, continue searching by recursively calling after normalization.
-    // tRust: known issue — This may recurse infinitely, but I can't seem to trigger it without
+    // FIXME: This may recurse infinitely, but I can't seem to trigger it without
     // hitting another overflow error something. Add a depth parameter needed later.
     fn assemble_alias_bound_candidates_recur<G: GoalKind<D>>(
         &mut self,
@@ -866,7 +866,7 @@ where
             }
         }
 
-        // tRust: known issue — We only need to do *any* of this if we're considering a trait goal,
+        // FIXME: We only need to do *any* of this if we're considering a trait goal,
         // since we don't need to look at any supertrait or anything if we are doing
         // a projection goal.
         if let Some(principal) = bounds.principal() {
@@ -1083,7 +1083,7 @@ where
                     } else {
                         // We don't want to use impls if they constrain the opaque.
                         //
-                        // tRust: known issue (trait-system-refactor-initiative#229) — This isn't
+                        // FIXME(trait-system-refactor-initiative#229): This isn't
                         // perfect yet as it still allows us to incorrectly constrain
                         // other inference variables.
                         Err(NoSolution)
@@ -1232,7 +1232,7 @@ where
         param_env: I::ParamEnv,
         assumption: I::Clause,
     ) -> Result<(CandidateSource<I>, Certainty), NoSolution> {
-        // tRust: known issue — This should be fixed, but it also requires changing the behavior
+        // FIXME: This should be fixed, but it also requires changing the behavior
         // in the old solver which is currently relied on.
         if assumption.has_bound_vars() {
             return Ok((CandidateSource::ParamEnv(ParamEnvSource::NonGlobal), Certainty::Yes));

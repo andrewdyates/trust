@@ -3,8 +3,8 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::*;
 use trust_types::formula_arena::{FormulaArena, FormulaRef};
+use trust_types::*;
 
 /// tRust: Broad backend role buckets used by routing heuristics.
 ///
@@ -52,7 +52,8 @@ pub enum BackendRole {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackendSelection {
     pub index: usize,
-    pub name: String,
+    // tRust #907: Interned backend name — small set repeated across all selections.
+    pub name: trust_types::Symbol,
     pub role: BackendRole,
     pub can_handle: bool,
 }

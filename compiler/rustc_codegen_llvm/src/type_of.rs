@@ -19,7 +19,6 @@ fn uncached_llvm_type<'a, 'tcx>(
     defer: &mut Option<(&'a Type, TyAndLayout<'tcx>)>,
 ) -> &'a Type {
     match layout.backend_repr {
-        // tRust: invariant — scalar layouts are handled by the scalar-specific path before reaching `uncached_llvm_type`
         BackendRepr::Scalar(_) => bug!("handled elsewhere"),
         BackendRepr::SimdVector { element, count } => {
             let element = layout.scalar_llvm_type_at(cx, element);
@@ -38,7 +37,7 @@ fn uncached_llvm_type<'a, 'tcx>(
     }
 
     let name = match layout.ty.kind() {
-        // tRust: known issue — (eddyb) producing readable type names for trait objects can result
+        // FIXME(eddyb) producing readable type names for trait objects can result
         // in problematically distinct types due to HRTB and subtyping (see #47638).
         // ty::Dynamic(..) |
         ty::Adt(..) | ty::Closure(..) | ty::CoroutineClosure(..) | ty::Foreign(..) | ty::Coroutine(..) | ty::Str
@@ -50,13 +49,13 @@ fn uncached_llvm_type<'a, 'tcx>(
                 (layout.ty.kind(), &layout.variants)
             {
                 if def.is_enum() {
-                    write!(&mut name, "::{}", def.variant(index).name).expect("invariant: write to string/buffer succeeds");
+                    write!(&mut name, "::{}", def.variant(index).name).unwrap();
                 }
             }
             if let (&ty::Coroutine(_, _), &Variants::Single { index }) =
                 (layout.ty.kind(), &layout.variants)
             {
-                write!(&mut name, "::{}", ty::CoroutineArgs::variant_name(index)).expect("invariant: write to string/buffer succeeds");
+                write!(&mut name, "::{}", ty::CoroutineArgs::variant_name(index)).unwrap();
             }
             Some(name)
         }
@@ -132,7 +131,6 @@ fn struct_llfields<'a, 'tcx>(
     }
     if layout.is_sized() && field_count > 0 {
         if offset > layout.size {
-            // tRust: invariant — laying out the LLVM fields for a sized type must never advance past the Rust layout size
             bug!("layout: {:#?} stride: {:?} offset: {:?}", layout, layout.size, offset);
         }
         let padding = layout.size - offset;
@@ -309,7 +307,6 @@ impl<'tcx> LayoutLlvmExt<'tcx> for TyAndLayout<'tcx> {
         // In other words, this should generally not look at the type at all, but only at the
         // layout.
         let BackendRepr::ScalarPair(a, b) = self.backend_repr else {
-            // tRust: invariant — `scalar_pair_element_llvm_type` is only called for scalar-pair layouts
             bug!("TyAndLayout::scalar_pair_element_llty({:?}): not applicable", self);
         };
         let scalar = [a, b][index];

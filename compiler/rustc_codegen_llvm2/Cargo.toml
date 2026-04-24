@@ -1,0 +1,32 @@
+# rustc_codegen_llvm2: LLVM2 codegen backend adapter for rustc
+#
+# Thin adapter that implements the real rustc CodegenBackend trait by delegating
+# to trust-llvm2-bridge. This crate lives in compiler/ because it needs
+# #![feature(rustc_private)] to access rustc internals.
+#
+# Part of #829 (CodegenBackend for LLVM2).
+#
+# Author: Andrew Yates <andrew@andrewdyates.com>
+# Copyright 2026 Andrew Yates | License: Apache 2.0
+
+[package]
+name = "rustc_codegen_llvm2"
+version = "0.0.0"
+edition = "2024"
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+# tidy-alphabetical-start
+rustc_codegen_ssa = { path = "../rustc_codegen_ssa" }
+rustc_data_structures = { path = "../rustc_data_structures" }
+rustc_metadata = { path = "../rustc_metadata" }
+rustc_middle = { path = "../rustc_middle" }
+rustc_session = { path = "../rustc_session" }
+rustc_span = { path = "../rustc_span" }
+tracing = "0.1"
+trust-llvm2-bridge = { path = "../../crates/trust-llvm2-bridge" }
+trust-mir-extract = { path = "../../crates/trust-mir-extract" }
+trust-types = { path = "../../crates/trust-types" }
+# tidy-alphabetical-end

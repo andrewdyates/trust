@@ -66,7 +66,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
         let mut self_types = vec![];
         let mut generic_args: Vec<(Symbol, String)> = vec![];
         let mut crate_local = false;
-        // tRust: known issue (-Zlower-impl-trait-in-trait-to-assoc-ty) — HIR is not present for RPITITs,
+        // FIXME(-Zlower-impl-trait-in-trait-to-assoc-ty): HIR is not present for RPITITs,
         // but I guess we could synthesize one here. We don't see any errors that rely on
         // that yet, though.
         let item_context = self.describe_enclosure(obligation.cause.body_id).unwrap_or("");

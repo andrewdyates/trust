@@ -18,7 +18,7 @@ impl<'tcx> Printer<'tcx> for TypeNamePrinter<'tcx> {
     }
 
     fn print_region(&mut self, _region: ty::Region<'_>) -> Result<(), PrintError> {
-        // tRust: known issue — most regions have been erased by the time this code runs.
+        // FIXME: most regions have been erased by the time this code runs.
         // Just printing `'_` is a bit hacky but gives mostly good results, and
         // doing better is difficult. See `should_print_optional_region`.
         write!(self, "'_")
@@ -59,11 +59,8 @@ impl<'tcx> Printer<'tcx> for TypeNamePrinter<'tcx> {
             | ty::Coroutine(def_id, args) => self.print_def_path(def_id, args),
             ty::Foreign(def_id) => self.print_def_path(def_id, &[]),
 
-            // tRust: invariant — free aliases are not expected during type name printing
             ty::Alias(ty::Free, _) => bug!("type_name: unexpected free alias"),
-            // tRust: invariant — inherent projections are not expected during type name printing
             ty::Alias(ty::Inherent, _) => bug!("type_name: unexpected inherent projection"),
-            // tRust: invariant — CoroutineWitness types should not appear in user-facing type names
             ty::CoroutineWitness(..) => bug!("type_name: unexpected `CoroutineWitness`"),
         }
     }
@@ -118,7 +115,7 @@ impl<'tcx> Printer<'tcx> for TypeNamePrinter<'tcx> {
     ) -> Result<(), PrintError> {
         print_prefix(self)?;
 
-        write!(self.path, "::{}", disambiguated_data.data).expect("invariant: write! to String cannot fail");
+        write!(self.path, "::{}", disambiguated_data.data).unwrap();
 
         Ok(())
     }
@@ -207,6 +204,6 @@ impl Write for TypeNamePrinter<'_> {
 
 pub fn type_name<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
     let mut p = TypeNamePrinter { tcx, path: String::new() };
-    p.print_type(ty).expect("invariant: print_type to String-backed printer cannot fail");
+    p.print_type(ty).unwrap();
     p.path
 }

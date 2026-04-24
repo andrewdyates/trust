@@ -39,7 +39,7 @@ impl CacheEntry {
         }
 
         let pos = self.file.relative_position(pos);
-        let line_index = self.file.lookup_line(pos).expect("invariant: pos is within the cached file's line range"); // tRust: unwrap -> expect
+        let line_index = self.file.lookup_line(pos).unwrap();
         let line_bounds = self.file.line_bounds(line_index);
         self.line_number = line_index + 1;
         self.line = line_bounds;

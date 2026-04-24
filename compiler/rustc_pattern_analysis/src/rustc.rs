@@ -121,7 +121,7 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
     /// Type inference occasionally gives us opaque types in places where corresponding patterns
     /// have more specific types. To avoid inconsistencies as well as detect opaque uninhabited
     /// types, we use the corresponding hidden type if possible.
-    // tRust: known issue (#132279) — This will be unnecessary once we have a TypingMode which supports revealing
+    // FIXME(#132279): This will be unnecessary once we have a TypingMode which supports revealing
     // opaque types defined in a body.
     #[inline]
     pub fn reveal_opaque_ty(&self, ty: Ty<'tcx>) -> RevealedTy<'tcx> {
@@ -390,7 +390,7 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
                         let is_doc_hidden =
                             cx.tcx.is_doc_hidden(variant_def_id) && !variant_def_id.is_local();
                         let visibility = if !is_inhabited {
-                            // tRust: known issue — handle empty+hidden
+                            // FIXME: handle empty+hidden
                             VariantVisibility::Empty
                         } else if is_unstable || is_doc_hidden {
                             VariantVisibility::Hidden
@@ -410,7 +410,7 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
             ty::Ref(..) => ConstructorSet::Ref,
             ty::Never => ConstructorSet::NoConstructors,
             // This type is one for which we cannot list constructors, like `str` or `f64`.
-            // tRust: known issue (Nadrieril) — which of these are actually allowed?
+            // FIXME(Nadrieril): which of these are actually allowed?
             ty::Float(_)
             | ty::Str
             | ty::Foreign(_)
@@ -533,7 +533,7 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
             PatKind::Constant { value } => {
                 match ty.kind() {
                     ty::Bool => {
-                        ctor = Bool(value.try_to_bool().expect("invariant: ty::Bool pattern constant must be convertible to bool")); // tRust: unwrap -> expect
+                        ctor = Bool(value.try_to_bool().unwrap());
                         fields = vec![];
                         arity = 0;
                     }
@@ -720,8 +720,8 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
             Finite(_) => {
                 let size = ty.primitive_size(tcx);
                 let bits = match *ty.kind() {
-                    ty::Int(_) => miint.as_finite_int(size.bits()).expect("invariant: Finite variant always yields Some from as_finite_int"), // tRust: unwrap -> expect
-                    _ => miint.as_finite_uint().expect("invariant: Finite variant always yields Some from as_finite_uint"), // tRust: unwrap -> expect
+                    ty::Int(_) => miint.as_finite_int(size.bits()).unwrap(),
+                    _ => miint.as_finite_uint().unwrap(),
                 };
                 match ScalarInt::try_from_uint(bits, size) {
                     Some(scalar) => {
@@ -746,7 +746,7 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
             "_".to_string()
         } else if range.is_singleton() {
             let lo = cx.hoist_pat_range_bdy(range.lo, ty);
-            let value = ty::Value { ty: ty.inner(), valtree: lo.as_finite().expect("invariant: singleton range boundary is always Finite") }; // tRust: unwrap -> expect
+            let value = ty::Value { ty: ty.inner(), valtree: lo.as_finite().unwrap() };
             value.to_string()
         } else {
             // We convert to an inclusive range for diagnostics.
@@ -758,8 +758,8 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
                 // fictitious values after `{u,i}size::MAX` (see [`IntRange::split`] for why we do
                 // this). We show this to the user as `usize::MAX..` which is slightly incorrect but
                 // probably clear enough.
-                let max = ty.numeric_max_val(cx.tcx).expect("invariant: numeric type always has a max value"); // tRust: unwrap -> expect
-                let max = ty::ValTree::from_scalar_int(cx.tcx, max.try_to_scalar_int().expect("invariant: numeric max value is always a scalar int")); // tRust: unwrap -> expect
+                let max = ty.numeric_max_val(cx.tcx).unwrap();
+                let max = ty::ValTree::from_scalar_int(cx.tcx, max.try_to_scalar_int().unwrap());
                 lo = PatRangeBoundary::Finite(max);
             }
             let hi = if let Some(hi) = range.hi.minus_one() {
@@ -812,17 +812,17 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
                     &enum_info,
                     &subpatterns,
                 )
-                .expect("invariant: writing to String never fails"); // tRust: unwrap -> expect
+                .unwrap();
                 s
             }
             Ref => {
                 let mut s = String::new();
-                print::write_ref_like(&mut s, pat.ty().inner(), &print(&pat.fields[0])).expect("invariant: writing to String never fails"); // tRust: unwrap -> expect
+                print::write_ref_like(&mut s, pat.ty().inner(), &print(&pat.fields[0])).unwrap();
                 s
             }
             DerefPattern(_) if pat.ty().is_box() && !self.tcx.features().deref_patterns() => {
-                // tRust: known issue (deref_patterns) — Remove this special handling once `box_patterns` is gone.
-                // tRust: known issue (@dianne) — `box _` syntax is exposed on stable in diagnostics, e.g. to
+                // FIXME(deref_patterns): Remove this special handling once `box_patterns` is gone.
+                // HACK(@dianne): `box _` syntax is exposed on stable in diagnostics, e.g. to
                 // witness non-exhaustiveness of `match Box::new(0) { Box { .. } if false => {} }`.
                 // To avoid changing diagnostics before deref pattern syntax is finalized, let's use
                 // `box _` syntax unless `deref_patterns` is enabled.
@@ -859,7 +859,7 @@ impl<'p, 'tcx: 'p> RustcPatCtxt<'p, 'tcx> {
                 let suffix = suffix.iter().map(print).collect::<Vec<_>>();
 
                 let mut s = String::new();
-                print::write_slice_like(&mut s, &prefix, has_dot_dot, &suffix).expect("invariant: writing to String never fails"); // tRust: unwrap -> expect
+                print::write_slice_like(&mut s, &prefix, has_dot_dot, &suffix).unwrap();
                 s
             }
             Never if self.tcx.features().never_patterns() => "!".to_string(),

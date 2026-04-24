@@ -59,9 +59,7 @@ impl UnwindContext {
                                 | gimli::DW_EH_PE_sdata8.0,
                         )
                     } else {
-                        // tRust: Unsupported architecture for PIC eh_frame pointer encoding
-                        bug!("unimplemented: unsupported architecture for PIC eh_frame pointer encoding: {:?}",
-                             module.isa().triple().architecture)
+                        todo!()
                     }
                 } else {
                     gimli::DwEhPe(gimli::DW_EH_PE_indirect.0 | gimli::DW_EH_PE_absptr.0)
@@ -285,8 +283,6 @@ impl UnwindContext {
         // Everything after this line up to the end of the file is loosely based on
         // https://github.com/bytecodealliance/wasmtime/blob/4471a82b0c540ff48960eca6757ccce5b1b5c3e4/crates/jit/src/unwind/systemv.rs
         #[cfg(target_os = "macos")]
-        // SAFETY: The pointer is valid, properly aligned, and points to
-        // an initialized value of the correct type.
         unsafe {
             // On macOS, `__register_frame` takes a pointer to a single FDE
             let start = eh_frame.as_ptr();
@@ -309,8 +305,6 @@ impl UnwindContext {
         #[cfg(not(target_os = "macos"))]
         {
             // On other platforms, `__register_frame` will walk the FDEs until an entry of length 0
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because `eh_frame` was relocated for this JIT module and terminated with a zero-length record immediately above.
             unsafe { __register_frame(eh_frame.as_ptr()) };
         }
     }

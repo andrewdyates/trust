@@ -24,7 +24,7 @@ pub fn walk_types<'tcx, V: SpannedTypeVisitor<'tcx>>(
     match kind {
         // Walk over the signature of the function
         DefKind::AssocFn | DefKind::Fn => {
-            let hir_sig = tcx.hir_node_by_def_id(item).fn_decl().expect("invariant: AssocFn/Fn def must have a fn_decl"); // tRust: unwrap -> expect
+            let hir_sig = tcx.hir_node_by_def_id(item).fn_decl().unwrap();
             // If the type of the item uses `_`, we're gonna error out anyway, but
             // typeck (which type_of invokes below), will call back into opaque_types_defined_by
             // causing a cycle. So we just bail out in this case.
@@ -66,14 +66,14 @@ pub fn walk_types<'tcx, V: SpannedTypeVisitor<'tcx>>(
         }
         // Look at field types
         DefKind::Struct | DefKind::Union | DefKind::Enum => {
-            let span = tcx.def_ident_span(item).expect("invariant: Struct/Union/Enum must have a def_ident_span"); // tRust: unwrap -> expect
+            let span = tcx.def_ident_span(item).unwrap();
             let ty = tcx.type_of(item).instantiate_identity();
             try_visit!(visitor.visit(span, ty));
             let ty::Adt(def, args) = ty.kind() else {
                 span_bug!(span, "invalid type for {kind:?}: {:#?}", ty.kind())
             };
             for field in def.all_fields() {
-                let span = tcx.def_ident_span(field.did).expect("invariant: field must have a def_ident_span"); // tRust: unwrap -> expect
+                let span = tcx.def_ident_span(field.did).unwrap();
                 let ty = field.ty(tcx, args);
                 try_visit!(visitor.visit(span, ty));
             }
@@ -87,7 +87,7 @@ pub fn walk_types<'tcx, V: SpannedTypeVisitor<'tcx>>(
         DefKind::InlineConst | DefKind::Closure | DefKind::SyntheticCoroutineBody => {}
         DefKind::Impl { of_trait } => {
             if of_trait {
-                let span = tcx.hir_node_by_def_id(item).expect_item().expect_impl().of_trait.expect("invariant: of_trait is true so of_trait field must be Some").trait_ref.path.span; // tRust: unwrap -> expect
+                let span = tcx.hir_node_by_def_id(item).expect_item().expect_impl().of_trait.unwrap().trait_ref.path.span;
                 let args = &tcx.impl_trait_ref(item).instantiate_identity().args[1..];
                 try_visit!(visitor.visit(span, args));
             }

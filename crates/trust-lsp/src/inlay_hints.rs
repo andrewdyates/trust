@@ -70,7 +70,12 @@ pub(crate) fn inlay_hints_for_report(
     let mut hints = Vec::new();
 
     for func in &report.functions {
-        let hint = build_function_hint(func, &params.text_document.uri, params.range.start.line, params.range.end.line);
+        let hint = build_function_hint(
+            func,
+            &params.text_document.uri,
+            params.range.start.line,
+            params.range.end.line,
+        );
         if let Some(h) = hint {
             hints.push(h);
         }
@@ -92,14 +97,9 @@ fn build_function_hint(
     visible_end: u32,
 ) -> Option<InlayHint> {
     // Find the function's location from its first obligation with a source span.
-    let (file, line) = func
-        .obligations
-        .iter()
-        .find_map(|ob| {
-            ob.location.as_ref().map(|loc| {
-                (file_to_uri(&loc.file), loc.line_start.saturating_sub(1))
-            })
-        })?;
+    let (file, line) = func.obligations.iter().find_map(|ob| {
+        ob.location.as_ref().map(|loc| (file_to_uri(&loc.file), loc.line_start.saturating_sub(1)))
+    })?;
 
     // Only include hints for the requested document.
     if file != uri {
@@ -185,7 +185,7 @@ mod tests {
             },
             functions: vec![
                 FunctionProofReport {
-                    function: "safe_fn".to_string(),
+                    function: "safe_fn".into(),
                     summary: FunctionSummary {
                         total_obligations: 2,
                         proved: 2,
@@ -211,7 +211,7 @@ mod tests {
                             outcome: ObligationOutcome::Proved {
                                 strength: ProofStrength::smt_unsat(),
                             },
-                            solver: "z4".to_string(),
+                            solver: "z4".into(),
                             time_ms: 3,
                             evidence: None,
                         },
@@ -229,14 +229,14 @@ mod tests {
                             outcome: ObligationOutcome::Proved {
                                 strength: ProofStrength::smt_unsat(),
                             },
-                            solver: "z4".to_string(),
+                            solver: "z4".into(),
                             time_ms: 2,
                             evidence: None,
                         },
                     ],
                 },
                 FunctionProofReport {
-                    function: "risky_fn".to_string(),
+                    function: "risky_fn".into(),
                     summary: FunctionSummary {
                         total_obligations: 2,
                         proved: 0,
@@ -258,10 +258,8 @@ mod tests {
                             line_end: 10,
                             col_end: 10,
                         }),
-                        outcome: ObligationOutcome::Failed {
-                            counterexample: None,
-                        },
-                        solver: "z4".to_string(),
+                        outcome: ObligationOutcome::Failed { counterexample: None },
+                        solver: "z4".into(),
                         time_ms: 5,
                         evidence: None,
                     }],
@@ -312,9 +310,7 @@ mod tests {
     fn test_inlay_hints_filter_by_visible_range() {
         let report = make_report();
         let params = InlayHintParams {
-            text_document: TextDocumentIdentifier {
-                uri: "file:///src/lib.rs".to_string(),
-            },
+            text_document: TextDocumentIdentifier { uri: "file:///src/lib.rs".to_string() },
             range: Range {
                 start: Position { line: 0, character: 0 },
                 end: Position { line: 5, character: 0 },
@@ -353,7 +349,13 @@ mod tests {
         assert_eq!(ProofStatus::from_verdict(&FunctionVerdict::Verified), ProofStatus::Proved);
         assert_eq!(ProofStatus::from_verdict(&FunctionVerdict::HasViolations), ProofStatus::Failed);
         assert_eq!(ProofStatus::from_verdict(&FunctionVerdict::Inconclusive), ProofStatus::Unknown);
-        assert_eq!(ProofStatus::from_verdict(&FunctionVerdict::RuntimeChecked), ProofStatus::RuntimeChecked);
-        assert_eq!(ProofStatus::from_verdict(&FunctionVerdict::NoObligations), ProofStatus::NoObligations);
+        assert_eq!(
+            ProofStatus::from_verdict(&FunctionVerdict::RuntimeChecked),
+            ProofStatus::RuntimeChecked
+        );
+        assert_eq!(
+            ProofStatus::from_verdict(&FunctionVerdict::NoObligations),
+            ProofStatus::NoObligations
+        );
     }
 }

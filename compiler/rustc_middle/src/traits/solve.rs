@@ -30,7 +30,7 @@ impl<'tcx> std::ops::Deref for ExternalConstraints<'tcx> {
     }
 }
 
-// tRust: known issue — Having to clone `region_constraints` for folding feels bad and
+// FIXME: Having to clone `region_constraints` for folding feels bad and
 // probably isn't great wrt performance.
 //
 // Not sure how to fix this, maybe we should also intern `opaque_types` and

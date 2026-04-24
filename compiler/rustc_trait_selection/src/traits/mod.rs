@@ -206,7 +206,7 @@ pub fn type_known_to_meet_bound_modulo_regions<'tcx>(
     pred_known_to_hold_modulo_regions(infcx, param_env, trait_ref)
 }
 
-/// tRust: known issue (@lcnr) — this function doesn't seem right and shouldn't exist?
+/// FIXME(@lcnr): this function doesn't seem right and shouldn't exist?
 ///
 /// Ping me on zulip if you want to use this method and need help with finding
 /// an appropriate replacement.
@@ -258,7 +258,7 @@ fn do_normalize_predicates<'tcx>(
 ) -> Result<Vec<ty::Clause<'tcx>>, ErrorGuaranteed> {
     let span = cause.span;
 
-    // tRust: known issue — We should really... do something with these region
+    // FIXME. We should really... do something with these region
     // obligations. But this call just continues the older
     // behavior (i.e., doesn't cause any new bugs), and it would
     // take some further refactoring to actually solve them. In
@@ -285,7 +285,7 @@ fn do_normalize_predicates<'tcx>(
 
     // We can use the `elaborated_env` here; the region code only
     // cares about declarations like `'a: 'b`.
-    // tRust: known issue — It's very weird that we ignore region obligations but apparently
+    // FIXME: It's very weird that we ignore region obligations but apparently
     // still need to use `resolve_regions` as we need the resolved regions in
     // the normalized predicates.
     let errors = infcx.resolve_regions(cause.body_id, elaborated_env, []);
@@ -308,7 +308,6 @@ fn do_normalize_predicates<'tcx>(
             //
             // @lcnr: Let's still ICE here for now. I want a test case
             // for that.
-            // tRust: invariant — Inference variables in normalized parameter environment
             span_bug!(
                 span,
                 "inference variables in normalized parameter environment: {}",
@@ -318,7 +317,7 @@ fn do_normalize_predicates<'tcx>(
     }
 }
 
-// tRust: known issue — this is gonna need to be removed ...
+// FIXME: this is gonna need to be removed ...
 /// Normalizes the parameter environment, reporting errors if they occur.
 #[instrument(level = "debug", skip(tcx))]
 pub fn normalize_param_env_or_error<'tcx>(
@@ -355,7 +354,7 @@ pub fn normalize_param_env_or_error<'tcx>(
                 }
 
                 fn fold_const(&mut self, c: ty::Const<'tcx>) -> ty::Const<'tcx> {
-                    // tRust: known issue (return_type_notation) — track binders in this normalizer, as
+                    // FIXME(return_type_notation): track binders in this normalizer, as
                     // `ty::Const::normalize` can only work with properly preserved binders.
 
                     if c.has_escaping_bound_vars() {
@@ -420,7 +419,7 @@ pub fn normalize_param_env_or_error<'tcx>(
         return elaborated_env;
     }
 
-    // tRust: accepted tradeoff — we are trying to normalize the param-env inside *itself*. The problem is that
+    // HACK: we are trying to normalize the param-env inside *itself*. The problem is that
     // normalization expects its param-env to be already normalized, which means we have
     // a circularity.
     //
@@ -481,7 +480,7 @@ pub fn normalize_param_env_or_error<'tcx>(
 /// Deeply normalize the param env using the next solver ignoring
 /// region errors.
 ///
-/// tRust: known issue (-Zhigher-ranked-assumptions) — this is a hack to work around
+/// FIXME(-Zhigher-ranked-assumptions): this is a hack to work around
 /// the fact that we don't support placeholder assumptions right now
 /// and is necessary for `compare_method_predicate_entailment`, see the
 /// use of this function for more info. We should remove this once we
@@ -522,7 +521,7 @@ pub fn deeply_normalize_param_env_ignoring_regions<'tcx>(
     };
 
     debug!("do_normalize_predicates: normalized predicates = {:?}", predicates);
-    // tRust: known issue (-Zhigher-ranked-assumptions) — We're ignoring region errors for now.
+    // FIXME(-Zhigher-ranked-assumptions): We're ignoring region errors for now.
     // There're placeholder constraints `leaking` out.
     // See the fixme in the enclosing function's docs for more.
     let _errors = infcx.resolve_regions(cause.body_id, elaborated_env, []);
@@ -530,7 +529,6 @@ pub fn deeply_normalize_param_env_ignoring_regions<'tcx>(
     let predicates = match infcx.fully_resolve(predicates) {
         Ok(predicates) => predicates,
         Err(fixup_err) => {
-            // tRust: invariant — Inference variables in normalized parameter environment
             span_bug!(
                 span,
                 "inference variables in normalized parameter environment: {}",
@@ -557,13 +555,14 @@ pub enum EvaluateConstErr {
     EvaluationFailure(ErrorGuaranteed),
 }
 
-// tRust: known issue (BoxyUwU) — Private this once we `generic_const_exprs` isn't doing its own normalization routine
-// tRust: known issue (generic_const_exprs) — Consider accepting a `ty::UnevaluatedConst` when we are not rolling our own
+// FIXME(BoxyUwU): Private this once we `generic_const_exprs` isn't doing its own normalization routine
+// FIXME(generic_const_exprs): Consider accepting a `ty::UnevaluatedConst` when we are not rolling our own
 // normalization scheme
 /// Evaluates a type system constant returning a `ConstKind::Error` in cases where CTFE failed and
 /// returning the passed in constant if it was not fully concrete (i.e. depended on generic parameters
 /// or inference variables)
 ///
+
 /// `normalize_erasing_regions` or the `normalize` functions on `ObligationCtxt`/`FnCtxt`/`InferCtxt`.
 pub fn evaluate_const<'tcx>(
     infcx: &InferCtxt<'tcx>,
@@ -579,12 +578,13 @@ pub fn evaluate_const<'tcx>(
     }
 }
 
-// tRust: known issue (BoxyUwU) — Private this once we `generic_const_exprs` isn't doing its own normalization routine
-// tRust: known issue (generic_const_exprs) — Consider accepting a `ty::UnevaluatedConst` when we are not rolling our own
+// FIXME(BoxyUwU): Private this once we `generic_const_exprs` isn't doing its own normalization routine
+// FIXME(generic_const_exprs): Consider accepting a `ty::UnevaluatedConst` when we are not rolling our own
 // normalization scheme
 /// Evaluates a type system constant making sure to not allow constants that depend on generic parameters
 /// or inference variables to succeed in evaluating.
 ///
+
 /// `normalize_erasing_regions` or the `normalize` functions on `ObligationCtxt`/`FnCtxt`/`InferCtxt`.
 #[instrument(level = "debug", skip(infcx), ret)]
 pub fn try_evaluate_const<'tcx>(
@@ -617,7 +617,7 @@ pub fn try_evaluate_const<'tcx>(
             // typeck and not doing so has a lot of (undesirable) fallout (#101478, #119821).
             // As a result we always use a revealed env when resolving the instance to evaluate.
             //
-            // tRust: known issue — `const_eval_resolve_for_typeck` should probably just modify the env itself
+            // FIXME: `const_eval_resolve_for_typeck` should probably just modify the env itself
             // instead of having this logic here
             let (args, typing_env) = match opt_anon_const_kind {
                 // We handle `generic_const_exprs` separately as reasonable ways of handling constants in the type system
@@ -701,7 +701,7 @@ pub fn try_evaluate_const<'tcx>(
                     // - Repeat expr count back compat consts have also been handled separately
                     // So we are free to simply defer evaluation here.
                     //
-                    // tRust: known issue — This assumes that `args` are normalized which is not necessarily true
+                    // FIXME: This assumes that `args` are normalized which is not necessarily true
                     //
                     // Const patterns are converted to type system constants before being
                     // evaluated. However, we don't care about them here as pattern evaluation
@@ -724,7 +724,7 @@ pub fn try_evaluate_const<'tcx>(
             let erased_uv = tcx.erase_and_anonymize_regions(uv);
 
             use rustc_middle::mir::interpret::ErrorHandled;
-            // tRust: known issue — `def_span` will point at the definition of this const; ideally, we'd point at
+            // FIXME: `def_span` will point at the definition of this const; ideally, we'd point at
             // where it gets used as a const generic.
             match tcx.const_eval_resolve_for_typeck(typing_env, erased_uv, tcx.def_span(uv.def)) {
                 Ok(Ok(val)) => Ok(ty::Const::new_value(

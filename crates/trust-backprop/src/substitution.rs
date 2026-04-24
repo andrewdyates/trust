@@ -26,11 +26,7 @@ pub enum SubstitutionError {
 
     /// Sort mismatch between formal parameter and actual argument.
     #[error("sort mismatch for `{name}`: expected {expected:?}, got {actual:?}")]
-    SortMismatch {
-        name: String,
-        expected: Sort,
-        actual: Sort,
-    },
+    SortMismatch { name: String, expected: Sort, actual: Sort },
 
     /// Substitution depth exceeded (protection against infinite expansion).
     #[error("substitution depth limit {limit} exceeded")]
@@ -137,10 +133,7 @@ fn sorts_compatible(expected: &Sort, actual: &Sort) -> bool {
 /// # Errors
 ///
 /// Returns `SubstitutionError` on variable capture or depth overflow.
-pub fn substitute(
-    formula: &Formula,
-    map: &SubstitutionMap,
-) -> Result<Formula, SubstitutionError> {
+pub fn substitute(formula: &Formula, map: &SubstitutionMap) -> Result<Formula, SubstitutionError> {
     substitute_inner(formula, map, 0, 100)
 }
 
@@ -167,10 +160,9 @@ fn substitute_inner(
         return Err(SubstitutionError::DepthExceeded { limit: max_depth });
     }
 
-    let recurse =
-        |f: &Formula| -> Result<Formula, SubstitutionError> {
-            substitute_inner(f, map, depth + 1, max_depth)
-        };
+    let recurse = |f: &Formula| -> Result<Formula, SubstitutionError> {
+        substitute_inner(f, map, depth + 1, max_depth)
+    };
 
     let recurse_box =
         |f: &Formula| -> Result<Box<Formula>, SubstitutionError> { Ok(Box::new(recurse(f)?)) };
@@ -186,7 +178,9 @@ fn substitute_inner(
         }
 
         // Literals: no substitution needed.
-        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => Ok(formula.clone()),
+        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {
+            Ok(formula.clone())
+        }
 
         // Boolean connectives
         Formula::Not(inner) => Ok(Formula::Not(recurse_box(inner)?)),
@@ -198,9 +192,7 @@ fn substitute_inner(
             let subs: Result<Vec<_>, _> = disjuncts.iter().map(&recurse).collect();
             Ok(Formula::Or(subs?))
         }
-        Formula::Implies(lhs, rhs) => {
-            Ok(Formula::Implies(recurse_box(lhs)?, recurse_box(rhs)?))
-        }
+        Formula::Implies(lhs, rhs) => Ok(Formula::Implies(recurse_box(lhs)?, recurse_box(rhs)?)),
 
         // Comparisons
         Formula::Eq(l, r) => Ok(Formula::Eq(recurse_box(l)?, recurse_box(r)?)),
@@ -258,8 +250,7 @@ fn substitute_inner(
 
         // Quantifiers: capture-avoiding substitution.
         Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
-            let bound_names: FxHashSet<&str> =
-                bindings.iter().map(|(n, _)| n.as_str()).collect();
+            let bound_names: FxHashSet<&str> = bindings.iter().map(|(n, _)| n.as_str()).collect();
 
             // Check for capture: if any replacement formula contains a free variable
             // that is bound by this quantifier, we have capture.
@@ -299,9 +290,7 @@ fn substitute_inner(
         }
 
         // Arrays
-        Formula::Select(arr, idx) => {
-            Ok(Formula::Select(recurse_box(arr)?, recurse_box(idx)?))
-        }
+        Formula::Select(arr, idx) => Ok(Formula::Select(recurse_box(arr)?, recurse_box(idx)?)),
         Formula::Store(arr, idx, val) => {
             Ok(Formula::Store(recurse_box(arr)?, recurse_box(idx)?, recurse_box(val)?))
         }
@@ -345,11 +334,7 @@ pub fn simplify(formula: &Formula) -> Formula {
                 .map(simplify)
                 .flat_map(|f| {
                     // Flatten nested And
-                    if let Formula::And(inner) = f {
-                        inner
-                    } else {
-                        vec![f]
-                    }
+                    if let Formula::And(inner) = f { inner } else { vec![f] }
                 })
                 .filter(|f| !matches!(f, Formula::Bool(true)))
                 .collect();
@@ -360,9 +345,14 @@ pub fn simplify(formula: &Formula) -> Formula {
             }
             match simplified.len() {
                 0 => Formula::Bool(true),
-                1 => // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-                simplified.into_iter().next()
-                    .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
+                1 =>
+                // SAFETY: match arm guarantees len == 1, so .next() returns Some.
+                {
+                    simplified
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
+                }
                 _ => Formula::And(simplified),
             }
         }
@@ -371,13 +361,7 @@ pub fn simplify(formula: &Formula) -> Formula {
             let simplified: Vec<Formula> = disjuncts
                 .iter()
                 .map(simplify)
-                .flat_map(|f| {
-                    if let Formula::Or(inner) = f {
-                        inner
-                    } else {
-                        vec![f]
-                    }
-                })
+                .flat_map(|f| if let Formula::Or(inner) = f { inner } else { vec![f] })
                 .filter(|f| !matches!(f, Formula::Bool(false)))
                 .collect();
 
@@ -386,9 +370,14 @@ pub fn simplify(formula: &Formula) -> Formula {
             }
             match simplified.len() {
                 0 => Formula::Bool(false),
-                1 => // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-                simplified.into_iter().next()
-                    .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
+                1 =>
+                // SAFETY: match arm guarantees len == 1, so .next() returns Some.
+                {
+                    simplified
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
+                }
                 _ => Formula::Or(simplified),
             }
         }
@@ -407,11 +396,7 @@ pub fn simplify(formula: &Formula) -> Formula {
         Formula::Eq(l, r) => {
             let l_s = simplify(l);
             let r_s = simplify(r);
-            if l_s == r_s {
-                Formula::Bool(true)
-            } else {
-                Formula::Eq(Box::new(l_s), Box::new(r_s))
-            }
+            if l_s == r_s { Formula::Bool(true) } else { Formula::Eq(Box::new(l_s), Box::new(r_s)) }
         }
 
         // For all other formulas, just recurse and rebuild.
@@ -429,9 +414,11 @@ pub fn rename_variable(formula: &Formula, old_name: &str, new_name: &str) -> For
         Formula::Var(name, sort) if name == old_name => {
             Formula::Var(new_name.to_string(), sort.clone())
         }
-        Formula::Var(..) | Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {
-            formula.clone()
-        }
+        Formula::Var(..)
+        | Formula::Bool(_)
+        | Formula::Int(_)
+        | Formula::UInt(_)
+        | Formula::BitVec { .. } => formula.clone(),
 
         Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
             // If the old name is bound here, don't rename inside.
@@ -472,9 +459,7 @@ fn infer_var_sort(formula: &Formula, var_name: &str) -> Option<Sort> {
         | Formula::BvSignExt(inner, _) => infer_var_sort(inner, var_name),
         Formula::BvExtract { inner, .. } => infer_var_sort(inner, var_name),
 
-        Formula::And(fs) | Formula::Or(fs) => {
-            fs.iter().find_map(|f| infer_var_sort(f, var_name))
-        }
+        Formula::And(fs) | Formula::Or(fs) => fs.iter().find_map(|f| infer_var_sort(f, var_name)),
 
         Formula::Implies(l, r)
         | Formula::Eq(l, r)
@@ -567,13 +552,9 @@ mod tests {
 
     #[test]
     fn test_substitution_map_from_params_and_args() {
-        let params = vec![
-            ("a".to_string(), Sort::Int),
-            ("b".to_string(), Sort::Int),
-        ];
+        let params = vec![("a".to_string(), Sort::Int), ("b".to_string(), Sort::Int)];
         let args = vec![int_var("x"), int_var("y")];
-        let map = SubstitutionMap::from_params_and_args(&params, &args)
-            .expect("should build map");
+        let map = SubstitutionMap::from_params_and_args(&params, &args).expect("should build map");
         assert_eq!(map.len(), 2);
         assert_eq!(map.get("a"), Some(&int_var("x")));
         assert_eq!(map.get("b"), Some(&int_var("y")));
@@ -593,10 +574,7 @@ mod tests {
 
     #[test]
     fn test_substitution_map_fewer_args_than_params() {
-        let params = vec![
-            ("a".to_string(), Sort::Int),
-            ("b".to_string(), Sort::Int),
-        ];
+        let params = vec![("a".to_string(), Sort::Int), ("b".to_string(), Sort::Int)];
         let args = vec![int_var("x")];
         let map = SubstitutionMap::from_params_and_args(&params, &args)
             .expect("should handle fewer args");
@@ -668,10 +646,7 @@ mod tests {
         // n > 0 => 10 > 0
         let f = Formula::Gt(Box::new(int_var("n")), Box::new(Formula::Int(0)));
         let result = substitute(&f, &map).expect("should succeed");
-        assert_eq!(
-            result,
-            Formula::Gt(Box::new(Formula::Int(10)), Box::new(Formula::Int(0)))
-        );
+        assert_eq!(result, Formula::Gt(Box::new(Formula::Int(10)), Box::new(Formula::Int(0))));
     }
 
     #[test]
@@ -745,7 +720,7 @@ mod tests {
         let mut map = SubstitutionMap::new();
         map.insert("x", Sort::Int, Formula::Int(42));
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(Box::new(int_var("x")), Box::new(Formula::Int(0)))),
         );
         let result = substitute(&f, &map).expect("should succeed");
@@ -758,13 +733,9 @@ mod tests {
         // forall y. (x + y > 0) with x -> y+1
         // This should detect capture: y in the replacement would be captured.
         let mut map = SubstitutionMap::new();
-        map.insert(
-            "x",
-            Sort::Int,
-            Formula::Add(Box::new(int_var("y")), Box::new(Formula::Int(1))),
-        );
+        map.insert("x", Sort::Int, Formula::Add(Box::new(int_var("y")), Box::new(Formula::Int(1))));
         let f = Formula::Forall(
-            vec![("y".to_string(), Sort::Int)],
+            vec![("y".into(), Sort::Int)],
             Box::new(Formula::Gt(
                 Box::new(Formula::Add(Box::new(int_var("x")), Box::new(int_var("y")))),
                 Box::new(Formula::Int(0)),
@@ -796,17 +767,18 @@ mod tests {
         map.insert("b", Sort::BitVec(64), bv64_var("y"));
         let f = Formula::BvAdd(Box::new(bv64_var("a")), Box::new(bv64_var("b")), 64);
         let result = substitute(&f, &map).expect("should succeed");
-        assert_eq!(
-            result,
-            Formula::BvAdd(Box::new(bv64_var("x")), Box::new(bv64_var("y")), 64)
-        );
+        assert_eq!(result, Formula::BvAdd(Box::new(bv64_var("x")), Box::new(bv64_var("y")), 64));
     }
 
     #[test]
     fn test_substitute_in_select_store() {
         let mut map = SubstitutionMap::new();
         let arr_sort = Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int));
-        map.insert("arr", arr_sort, var("my_array", Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int))));
+        map.insert(
+            "arr",
+            arr_sort,
+            var("my_array", Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int))),
+        );
         map.insert("idx", Sort::Int, Formula::Int(3));
 
         let f = Formula::Select(
@@ -841,7 +813,7 @@ mod tests {
     #[test]
     fn test_free_variables_bound_not_free() {
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(Box::new(int_var("x")), Box::new(Formula::Int(0)))),
         );
         let vars = free_variables(&f);
@@ -852,7 +824,7 @@ mod tests {
     fn test_free_variables_mixed_bound_and_free() {
         // forall x. (x + y > 0) -- y is free, x is bound
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(
                 Box::new(Formula::Add(Box::new(int_var("x")), Box::new(int_var("y")))),
                 Box::new(Formula::Int(0)),
@@ -867,9 +839,9 @@ mod tests {
     fn test_free_variables_nested_quantifiers() {
         // forall x. exists y. (x + y + z > 0) -- z is free
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Exists(
-                vec![("y".to_string(), Sort::Int)],
+                vec![("y".into(), Sort::Int)],
                 Box::new(Formula::Gt(
                     Box::new(Formula::Add(
                         Box::new(Formula::Add(Box::new(int_var("x")), Box::new(int_var("y")))),
@@ -910,14 +882,8 @@ mod tests {
 
     #[test]
     fn test_simplify_not_bool() {
-        assert_eq!(
-            simplify(&Formula::Not(Box::new(Formula::Bool(true)))),
-            Formula::Bool(false)
-        );
-        assert_eq!(
-            simplify(&Formula::Not(Box::new(Formula::Bool(false)))),
-            Formula::Bool(true)
-        );
+        assert_eq!(simplify(&Formula::Not(Box::new(Formula::Bool(true)))), Formula::Bool(false));
+        assert_eq!(simplify(&Formula::Not(Box::new(Formula::Bool(false)))), Formula::Bool(true));
     }
 
     #[test]
@@ -983,15 +949,9 @@ mod tests {
     #[test]
     fn test_simplify_nested_and_flattening() {
         // And(And(a, b), c) -> And(a, b, c)
-        let f = Formula::And(vec![
-            Formula::And(vec![int_var("a"), int_var("b")]),
-            int_var("c"),
-        ]);
+        let f = Formula::And(vec![Formula::And(vec![int_var("a"), int_var("b")]), int_var("c")]);
         let result = simplify(&f);
-        assert_eq!(
-            result,
-            Formula::And(vec![int_var("a"), int_var("b"), int_var("c")])
-        );
+        assert_eq!(result, Formula::And(vec![int_var("a"), int_var("b"), int_var("c")]));
     }
 
     // --- rename_variable tests ---
@@ -1014,17 +974,14 @@ mod tests {
     fn test_rename_variable_in_addition() {
         let f = Formula::Add(Box::new(int_var("x")), Box::new(int_var("y")));
         let result = rename_variable(&f, "x", "a");
-        assert_eq!(
-            result,
-            Formula::Add(Box::new(int_var("a")), Box::new(int_var("y")))
-        );
+        assert_eq!(result, Formula::Add(Box::new(int_var("a")), Box::new(int_var("y"))));
     }
 
     #[test]
     fn test_rename_respects_binding() {
         // forall x. x > 0 -- renaming x to y should not affect the bound x
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Gt(Box::new(int_var("x")), Box::new(Formula::Int(0)))),
         );
         let result = rename_variable(&f, "x", "y");

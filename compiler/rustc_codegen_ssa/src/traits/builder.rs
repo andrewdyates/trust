@@ -67,7 +67,7 @@ pub trait BuilderMethods<'a, 'tcx>:
 
     fn set_span(&mut self, span: Span);
 
-    // NOTE(eddyb): Could be replaced with append_sibling_block for clarity.
+    // FIXME(eddyb) replace uses of this with `append_sibling_block`.
     fn append_block(cx: &'a Self::CodegenCx, llfn: Self::Function, name: &str) -> Self::BasicBlock;
 
     fn append_sibling_block(&mut self, name: &str) -> Self::BasicBlock;
@@ -413,7 +413,7 @@ pub trait BuilderMethods<'a, 'tcx>:
         lhs: Self::Value,
         rhs: Self::Value,
     ) -> Self::Value {
-        // NOTE: Implementation designed for LLVM optimization; cg_llvm
+        // FIXME: This implementation was designed around LLVM's ability to optimize, but `cg_llvm`
         // overrides this to just use `@llvm.scmp`/`ucmp` since LLVM 20. This default impl should be
         // reevaluated with respect to the remaining backends like cg_gcc, whether they might use
         // specialized implementations as well, or continue to use a generic implementation here.
@@ -498,7 +498,7 @@ pub trait BuilderMethods<'a, 'tcx>:
         assert!(src.llextra.is_none(), "cannot directly copy from unsized values");
         assert!(dst.llextra.is_none(), "cannot directly copy into unsized values");
         if flags.contains(MemFlags::NONTEMPORAL) {
-            // tRust: known workaround — This is inefficient but there is no nontemporal memcpy.
+            // HACK(nox): This is inefficient but there is no nontemporal memcpy.
             let ty = self.backend_type(layout);
             let val = self.load_from_place(ty, src);
             self.store_to_place_with_flags(val, dst, flags);
@@ -517,7 +517,7 @@ pub trait BuilderMethods<'a, 'tcx>:
     ///
     /// Avoids `alloca`s for Immediates and ScalarPairs.
     ///
-    /// NOTE: Could optimize Ref type handling similarly to scalar types.
+    /// FIXME: Maybe do something smarter for Ref types too?
     /// For now, the `typed_swap_nonoverlapping` intrinsic just doesn't call this for those
     /// cases (in non-debug), preferring the fallback body instead.
     fn typed_place_swap(

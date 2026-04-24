@@ -128,11 +128,7 @@ pub fn generate_vcs_with_specs(
     let mut callee_assumptions: Vec<(Formula, FactId, FactSource)> = Vec::new();
     for callee_name in &call_sites {
         for fact in specs.postconditions_for(callee_name) {
-            callee_assumptions.push((
-                fact.predicate.clone(),
-                fact.id,
-                fact.source.clone(),
-            ));
+            callee_assumptions.push((fact.predicate.clone(), fact.id, fact.source.clone()));
         }
     }
 
@@ -226,7 +222,7 @@ impl DispositionSummary {
                 VcDisposition::SatisfiedFromNotes { .. } => summary.from_notes += 1,
                 VcDisposition::RequiresSolver => summary.require_solver += 1,
                 VcDisposition::SolverWithAssumption { .. } => summary.with_assumptions += 1,
-                _ => {},
+                _ => {}
             }
         }
         summary
@@ -256,10 +252,10 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::usize(), name: None },         // _0: return
+                    LocalDecl { index: 0, ty: Ty::usize(), name: None }, // _0: return
                     LocalDecl { index: 1, ty: Ty::usize(), name: Some("input".into()) }, // _1: input
-                    LocalDecl { index: 2, ty: Ty::usize(), name: Some("n".into()) },     // _2: n = parse(input)
-                    LocalDecl { index: 3, ty: Ty::usize(), name: Some("r".into()) },     // _3: r = sqrt(n)
+                    LocalDecl { index: 2, ty: Ty::usize(), name: Some("n".into()) }, // _2: n = parse(input)
+                    LocalDecl { index: 3, ty: Ty::usize(), name: Some("r".into()) }, // _3: r = sqrt(n)
                 ],
                 blocks: vec![
                     BasicBlock {
@@ -332,13 +328,15 @@ mod tests {
     #[test]
     fn test_spec_database_records_and_retrieves_postconditions() {
         let mut specs = SpecDatabase::new();
-        let formula = Formula::Ge(
-            Box::new(Formula::Var("n".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0)));
 
-        let fact_id =
-            specs.record_proved_postcondition("parse", formula.clone(), "z4", ProofStrength::smt_unsat());
+        let fact_id = specs.record_proved_postcondition(
+            "parse",
+            formula.clone(),
+            "z4",
+            ProofStrength::smt_unsat(),
+        );
 
         assert_eq!(specs.len(), 1);
         assert!(!specs.is_empty());
@@ -360,10 +358,8 @@ mod tests {
         // Record a postcondition for some callee (won't match midpoint_function's
         // call sites since it has none, but we can still verify the mechanism with
         // a function that has calls).
-        let formula = Formula::Ge(
-            Box::new(Formula::Var("n".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0)));
         specs.record_proved_postcondition("parse", formula, "z4", ProofStrength::smt_unsat());
 
         let annotated = generate_vcs_with_specs(&func, &specs);
@@ -381,10 +377,8 @@ mod tests {
         let mut specs = SpecDatabase::new();
 
         // parse() postcondition: n >= 0
-        let postcond = Formula::Ge(
-            Box::new(Formula::Var("n".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let postcond =
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0)));
         specs.record_proved_postcondition(
             "parse",
             postcond.clone(),
@@ -412,14 +406,10 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::usize(), name: None },         // _0: return
+                    LocalDecl { index: 0, ty: Ty::usize(), name: None }, // _0: return
                     LocalDecl { index: 1, ty: Ty::usize(), name: Some("input".into()) },
                     LocalDecl { index: 2, ty: Ty::usize(), name: Some("n".into()) },
-                    LocalDecl {
-                        index: 3,
-                        ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                        name: None,
-                    },
+                    LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 ],
                 blocks: vec![
                     // bb0: n = parse(input)
@@ -478,10 +468,8 @@ mod tests {
         let mut specs = SpecDatabase::new();
 
         // parse() postcondition: n >= 0
-        let postcond = Formula::Ge(
-            Box::new(Formula::Var("n".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let postcond =
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0)));
         specs.record_proved_postcondition(
             "parse",
             postcond.clone(),
@@ -508,14 +496,8 @@ mod tests {
     #[test]
     fn test_exact_formula_match_satisfies_from_notes() {
         let overflow_formula = Formula::And(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("n".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Le(
-                Box::new(Formula::Var("n".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Le(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]);
 
         let mut specs = SpecDatabase::new();
@@ -541,7 +523,7 @@ mod tests {
             AnnotatedVc {
                 vc: VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "test".to_string(),
+                    function: "test".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -549,8 +531,8 @@ mod tests {
                 disposition: VcDisposition::SatisfiedFromNotes {
                     fact_id: FactId(0),
                     source: FactSource::ProvedPostcondition(ProvedPostcondition {
-                        function: "f".to_string(),
-                        solver: "z4".to_string(),
+                        function: "f".into(),
+                        solver: "z4".into(),
                         strength: ProofStrength::smt_unsat(),
                     }),
                 },
@@ -561,7 +543,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::usize(), Ty::usize()),
                     },
-                    function: "test".to_string(),
+                    function: "test".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
@@ -581,7 +563,7 @@ mod tests {
             AnnotatedVc {
                 vc: VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "test".to_string(),
+                    function: "test".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -594,7 +576,7 @@ mod tests {
             AnnotatedVc {
                 vc: VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "test".to_string(),
+                    function: "test".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -604,7 +586,7 @@ mod tests {
             AnnotatedVc {
                 vc: VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "test".to_string(),
+                    function: "test".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
@@ -612,8 +594,8 @@ mod tests {
                 disposition: VcDisposition::SolverWithAssumption {
                     fact_id: FactId(1),
                     source: FactSource::ProvedPostcondition(ProvedPostcondition {
-                        function: "f".to_string(),
-                        solver: "z4".to_string(),
+                        function: "f".into(),
+                        solver: "z4".into(),
                         strength: ProofStrength::smt_unsat(),
                     }),
                 },
@@ -638,14 +620,10 @@ mod tests {
     fn test_multiple_callee_postconditions() {
         let mut specs = SpecDatabase::new();
 
-        let f1 = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
-        let f2 = Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        );
+        let f1 =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
+        let f2 =
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100)));
 
         specs.record_proved_postcondition("parse", f1, "z4", ProofStrength::smt_unsat());
         specs.record_proved_postcondition("parse", f2, "z4", ProofStrength::smt_unsat());

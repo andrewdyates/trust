@@ -13,7 +13,7 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         let local_decls = &body.local_decls;
         for block in body.basic_blocks.as_mut() {
-            let terminator = block.terminator.as_mut().expect("invariant: basic block must have a terminator"); // tRust: unwrap elimination
+            let terminator = block.terminator.as_mut().unwrap();
             if let TerminatorKind::Call { func, args, destination, target, .. } =
                 &mut terminator.kind
                 && let ty::FnDef(def_id, generic_args) = *func.ty(local_decls, tcx).kind()
@@ -30,7 +30,7 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                             sym::overflow_checks => RuntimeChecks::OverflowChecks,
                             _ => unreachable!(),
                         };
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         block.statements.push(Statement::new(
                             terminator.source_info,
                             StatementKind::Assign(Box::new((
@@ -41,7 +41,7 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         terminator.kind = TerminatorKind::Goto { target };
                     }
                     sym::forget => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         block.statements.push(Statement::new(
                             terminator.source_info,
                             StatementKind::Assign(Box::new((
@@ -56,9 +56,8 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         terminator.kind = TerminatorKind::Goto { target };
                     }
                     sym::copy_nonoverlapping => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([src, dst, count]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             bug!("Wrong arguments for copy_non_overlapping intrinsic");
                         };
                         block.statements.push(Statement::new(
@@ -76,9 +75,8 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         terminator.kind = TerminatorKind::Goto { target };
                     }
                     sym::assume => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([arg]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             bug!("Wrong arguments for assume intrinsic");
                         };
                         block.statements.push(Statement::new(
@@ -100,9 +98,8 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                     | sym::unchecked_rem
                     | sym::unchecked_shl
                     | sym::unchecked_shr => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([lhs, rhs]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             bug!("Wrong arguments for {} intrinsic", intrinsic.name);
                         };
                         let bin_op = match intrinsic.name {
@@ -117,7 +114,6 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                             sym::unchecked_rem => BinOp::Rem,
                             sym::unchecked_shl => BinOp::ShlUnchecked,
                             sym::unchecked_shr => BinOp::ShrUnchecked,
-                            // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
                             _ => bug!("unexpected intrinsic"),
                         };
                         block.statements.push(Statement::new(
@@ -130,16 +126,14 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         terminator.kind = TerminatorKind::Goto { target };
                     }
                     sym::add_with_overflow | sym::sub_with_overflow | sym::mul_with_overflow => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([lhs, rhs]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             bug!("Wrong arguments for {} intrinsic", intrinsic.name);
                         };
                         let bin_op = match intrinsic.name {
                             sym::add_with_overflow => BinOp::AddWithOverflow,
                             sym::sub_with_overflow => BinOp::SubWithOverflow,
                             sym::mul_with_overflow => BinOp::MulWithOverflow,
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             _ => bug!("unexpected intrinsic"),
                         };
                         block.statements.push(Statement::new(
@@ -153,7 +147,6 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                     }
                     sym::read_via_copy => {
                         let Ok([arg]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(terminator.source_info.span, "Wrong number of arguments");
                         };
                         let derefed_place = if let Some(place) = arg.node.place()
@@ -161,7 +154,6 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         {
                             tcx.mk_place_deref(local.into())
                         } else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Only passing a local is supported"
@@ -187,15 +179,14 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                     }
                     // `write_via_move` is already lowered during MIR building.
                     sym::discriminant_value => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([arg]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Wrong arguments for discriminant_value intrinsic"
                             );
                         };
-                        let arg = arg.node.place().expect("invariant: discriminant_value argument must be a place"); // tRust: unwrap elimination
+                        let arg = arg.node.place().unwrap();
                         let arg = tcx.mk_place_deref(arg);
                         block.statements.push(Statement::new(
                             terminator.source_info,
@@ -207,9 +198,8 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         terminator.kind = TerminatorKind::Goto { target };
                     }
                     sym::offset => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([ptr, delta]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Wrong number of arguments for offset intrinsic",
@@ -225,22 +215,21 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                         terminator.kind = TerminatorKind::Goto { target };
                     }
                     sym::slice_get_unchecked => {
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let Ok([ptrish, index]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Wrong number of arguments for {intrinsic:?}",
                             );
                         };
 
-                        let place = ptrish.node.place().expect("invariant: slice_get_unchecked pointer must be a place"); // tRust: unwrap elimination
+                        let place = ptrish.node.place().unwrap();
                         assert!(!place.is_indirect());
                         let updated_place = place.project_deeper(
                             &[
                                 ProjectionElem::Deref,
                                 ProjectionElem::Index(
-                                    index.node.place().expect("invariant: slice_get_unchecked index must be a place").as_local().expect("invariant: slice index must be a local"), // tRust: unwrap elimination
+                                    index.node.place().unwrap().as_local().unwrap(),
                                 ),
                             ],
                             tcx,
@@ -262,7 +251,6 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                                 BorrowKind::Mut { kind: MutBorrowKind::Default },
                                 updated_place,
                             ),
-                            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                             _ => bug!("Unknown return type {ret_ty:?}"),
                         };
 
@@ -275,7 +263,6 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                     sym::transmute | sym::transmute_unchecked => {
                         let dst_ty = destination.ty(local_decls, tcx).ty;
                         let Ok([arg]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Wrong number of arguments for transmute intrinsic",
@@ -300,18 +287,16 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                     }
                     sym::aggregate_raw_ptr => {
                         let Ok([data, meta]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Wrong number of arguments for aggregate_raw_ptr intrinsic",
                             );
                         };
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         let pointer_ty = generic_args.type_at(0);
                         let kind = if let ty::RawPtr(pointee_ty, mutability) = pointer_ty.kind() {
                             AggregateKind::RawPtr(*pointee_ty, *mutability)
                         } else {
-                            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                             span_bug!(
                                 terminator.source_info.span,
                                 "Return type of aggregate_raw_ptr intrinsic must be a raw pointer",
@@ -329,13 +314,12 @@ impl<'tcx> crate::MirPass<'tcx> for LowerIntrinsics {
                     }
                     sym::ptr_metadata => {
                         let Ok([ptr]) = take_array(args) else {
-                            // tRust: invariant: type system guarantee — intrinsic call signature is validated by type checking
                             span_bug!(
                                 terminator.source_info.span,
                                 "Wrong number of arguments for ptr_metadata intrinsic",
                             );
                         };
-                        let target = target.expect("invariant: intrinsic call must have a target block"); // tRust: unwrap elimination
+                        let target = target.unwrap();
                         block.statements.push(Statement::new(
                             terminator.source_info,
                             StatementKind::Assign(Box::new((

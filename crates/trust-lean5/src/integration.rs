@@ -65,9 +65,7 @@ impl CertificationBridge {
     /// Create a new bridge with default pipeline settings.
     #[must_use]
     pub fn new() -> Self {
-        CertificationBridge {
-            pipeline: CertificationPipeline::new(),
-        }
+        CertificationBridge { pipeline: CertificationPipeline::new() }
     }
 
     /// Create a bridge with a custom CertificationPipeline.
@@ -160,9 +158,7 @@ impl CertificationBridge {
 
                 // Build VcSnapshot from the VC
                 let vc_snapshot = VcSnapshot::from_vc(vc).map_err(|e| {
-                    CertificateError::SerializationFailed {
-                        reason: format!("VcSnapshot: {e}"),
-                    }
+                    CertificateError::SerializationFailed { reason: format!("VcSnapshot: {e}") }
                 })?;
 
                 // Compute function body hash from VC formula bytes
@@ -177,7 +173,7 @@ impl CertificationBridge {
 
                 // Build ProofCertificate
                 let mut proof_cert = ProofCertificate::new_trusted(
-                    vc.function.clone(),
+                    vc.function.to_string(),
                     function_hash,
                     vc_snapshot,
                     solver_info,
@@ -203,23 +199,18 @@ impl CertificationBridge {
                     *time_ms,
                 );
 
-                Ok(PipelineOutput::Certified {
-                    certificate: proof_cert,
-                    chain,
-                })
+                Ok(PipelineOutput::Certified { certificate: proof_cert, chain })
             }
             CertificationResult::Trusted { certificate, time_ms } => {
                 // tRust #758: Trusted certificates are NOT kernel-verified.
                 // Produce a Trusted-level ProofCertificate (no upgrade to Certified).
                 let solver_info = extract_solver_info(result, *time_ms);
                 let vc_snapshot = VcSnapshot::from_vc(vc).map_err(|e| {
-                    CertificateError::SerializationFailed {
-                        reason: format!("VcSnapshot: {e}"),
-                    }
+                    CertificateError::SerializationFailed { reason: format!("VcSnapshot: {e}") }
                 })?;
                 let function_hash = compute_function_hash(vc);
                 let proof_cert = ProofCertificate::new_trusted(
-                    vc.function.clone(),
+                    vc.function.to_string(),
                     function_hash,
                     vc_snapshot,
                     solver_info,
@@ -236,17 +227,14 @@ impl CertificationBridge {
                     false, // NOT lean5-verified
                     *time_ms,
                 );
-                Ok(PipelineOutput::Certified {
-                    certificate: proof_cert,
-                    chain,
-                })
+                Ok(PipelineOutput::Certified { certificate: proof_cert, chain })
             }
-            CertificationResult::Rejected { reason, .. } => Ok(PipelineOutput::NoCertificate {
-                reason: format!("lean5 rejected: {reason}"),
-            }),
-            CertificationResult::Skipped { reason } => Ok(PipelineOutput::NoCertificate {
-                reason: format!("skipped: {reason}"),
-            }),
+            CertificationResult::Rejected { reason, .. } => {
+                Ok(PipelineOutput::NoCertificate { reason: format!("lean5 rejected: {reason}") })
+            }
+            CertificationResult::Skipped { reason } => {
+                Ok(PipelineOutput::NoCertificate { reason: format!("skipped: {reason}") })
+            }
         }
     }
 }
@@ -261,7 +249,7 @@ impl Default for CertificationBridge {
 fn extract_solver_info(result: &VerificationResult, lean5_time_ms: u64) -> SolverInfo {
     match result {
         VerificationResult::Proved { solver, time_ms, strength, .. } => SolverInfo {
-            name: solver.clone(),
+            name: solver.to_string(),
             version: "unknown".to_string(),
             time_ms: *time_ms + lean5_time_ms,
             strength: strength.clone(),
@@ -305,7 +293,7 @@ fn build_chain(
         step_type: ChainStepType::VcGeneration,
         tool: "trust-vcgen".to_string(),
         tool_version: "0.1.0".to_string(),
-        input_hash: sha256_hex(&vc.function),
+        input_hash: sha256_hex(vc.function.as_str()),
         output_hash: vc_hash.clone(),
         time_ms: 0, // VC generation time not tracked here
         timestamp: timestamp.to_string(),
@@ -363,7 +351,7 @@ mod tests {
     fn sample_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_div".to_string(),
+            function: "test_div".into(),
             location: SourceSpan::default(),
             formula: Formula::Not(Box::new(Formula::Eq(
                 Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -375,18 +363,16 @@ mod tests {
 
     fn proved_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 5,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed {
-            solver: "z4".to_string(),
-            time_ms: 3,
-            counterexample: None,
-        }
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 3, counterexample: None }
     }
 
     // -----------------------------------------------------------------------
@@ -526,10 +512,7 @@ mod tests {
 
         assert!(!output.is_certified());
         if let PipelineOutput::NoCertificate { reason } = &output {
-            assert!(
-                reason.contains("rejected") || reason.contains("kernel"),
-                "reason: {reason}"
-            );
+            assert!(reason.contains("rejected") || reason.contains("kernel"), "reason: {reason}");
         }
     }
 
@@ -547,13 +530,7 @@ mod tests {
         assert!(store.is_empty());
 
         let output = bridge
-            .certify_and_store(
-                &vc,
-                &result,
-                vec![0xBE, 0xEF],
-                "2026-03-28T00:00:00Z",
-                &mut store,
-            )
+            .certify_and_store(&vc, &result, vec![0xBE, 0xEF], "2026-03-28T00:00:00Z", &mut store)
             .expect("should succeed");
 
         assert!(output.is_certified());
@@ -573,13 +550,7 @@ mod tests {
         let mut store = CertificateStore::new("test-crate");
 
         let output = bridge
-            .certify_and_store(
-                &vc,
-                &result,
-                vec![1],
-                "2026-03-28T00:00:00Z",
-                &mut store,
-            )
+            .certify_and_store(&vc, &result, vec![1], "2026-03-28T00:00:00Z", &mut store)
             .expect("should succeed");
 
         assert!(!output.is_certified());
@@ -593,14 +564,14 @@ mod tests {
 
         let vc1 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "func_a".to_string(),
+            function: "func_a".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
         let vc2 = VerificationCondition {
             kind: VcKind::Assertion { message: "invariant".to_string() },
-            function: "func_b".to_string(),
+            function: "func_b".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -634,9 +605,7 @@ mod tests {
             .expect("should succeed");
 
         if let PipelineOutput::Certified { chain, .. } = &output {
-            chain
-                .verify_integrity()
-                .expect("unchecked chain should have valid integrity");
+            chain.verify_integrity().expect("unchecked chain should have valid integrity");
             assert_eq!(chain.len(), 2);
             assert_eq!(chain.steps[0].step_type, ChainStepType::VcGeneration);
             assert_eq!(chain.steps[1].step_type, ChainStepType::SolverProof);
@@ -678,14 +647,14 @@ mod tests {
     fn test_compute_function_hash_different_formulas() {
         let vc1 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
         let vc2 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,

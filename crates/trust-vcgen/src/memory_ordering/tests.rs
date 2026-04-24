@@ -6,8 +6,8 @@
 use super::*;
 
 use trust_types::{
-    AtomicOpKind, AtomicOperation, AtomicOrdering, ConcurrencyPoint,
-    HappensBeforeEdgeKind, Place, SourceSpan, VcKind,
+    AtomicOpKind, AtomicOperation, AtomicOrdering, ConcurrencyPoint, HappensBeforeEdgeKind, Place,
+    SourceSpan, VcKind,
 };
 
 use crate::data_race::{AccessKind, MemoryOrdering};
@@ -177,11 +177,7 @@ fn test_race_condition_read_write_not_write_write() {
 // AtomicAccessLog tests
 // -----------------------------------------------------------------------
 
-fn make_atomic_entry(
-    location: &str,
-    kind: AccessKind,
-    thread: &str,
-) -> AtomicAccessEntry {
+fn make_atomic_entry(location: &str, kind: AccessKind, thread: &str) -> AtomicAccessEntry {
     AtomicAccessEntry {
         location: location.to_string(),
         access_kind: kind,
@@ -193,9 +189,21 @@ fn make_atomic_entry(
 #[test]
 fn test_atomic_log_record_and_query() {
     let mut log = AtomicAccessLog::new();
-    let idx0 = log.record(make_atomic_entry("flag", AccessKind::AtomicWrite(MemoryOrdering::Release), "t1"));
-    let idx1 = log.record(make_atomic_entry("flag", AccessKind::AtomicRead(MemoryOrdering::Acquire), "t2"));
-    let idx2 = log.record(make_atomic_entry("counter", AccessKind::AtomicWrite(MemoryOrdering::Relaxed), "t1"));
+    let idx0 = log.record(make_atomic_entry(
+        "flag",
+        AccessKind::AtomicWrite(MemoryOrdering::Release),
+        "t1",
+    ));
+    let idx1 = log.record(make_atomic_entry(
+        "flag",
+        AccessKind::AtomicRead(MemoryOrdering::Acquire),
+        "t2",
+    ));
+    let idx2 = log.record(make_atomic_entry(
+        "counter",
+        AccessKind::AtomicWrite(MemoryOrdering::Relaxed),
+        "t1",
+    ));
 
     assert_eq!(idx0, 0);
     assert_eq!(idx1, 1);
@@ -215,7 +223,11 @@ fn test_atomic_log_try_record_non_atomic() {
 #[test]
 fn test_atomic_log_try_record_atomic() {
     let mut log = AtomicAccessLog::new();
-    let result = log.try_record(make_atomic_entry("x", AccessKind::AtomicWrite(MemoryOrdering::SeqCst), "t1"));
+    let result = log.try_record(make_atomic_entry(
+        "x",
+        AccessKind::AtomicWrite(MemoryOrdering::SeqCst),
+        "t1",
+    ));
     assert_eq!(result, Some(0));
     assert_eq!(log.len(), 1);
 }
@@ -224,7 +236,11 @@ fn test_atomic_log_try_record_atomic() {
 fn test_atomic_log_accesses_to() {
     let mut log = AtomicAccessLog::new();
     log.record(make_atomic_entry("flag", AccessKind::AtomicWrite(MemoryOrdering::Release), "t1"));
-    log.record(make_atomic_entry("counter", AccessKind::AtomicWrite(MemoryOrdering::Relaxed), "t1"));
+    log.record(make_atomic_entry(
+        "counter",
+        AccessKind::AtomicWrite(MemoryOrdering::Relaxed),
+        "t1",
+    ));
     log.record(make_atomic_entry("flag", AccessKind::AtomicRead(MemoryOrdering::Acquire), "t2"));
 
     let flag_accesses = log.accesses_to("flag");
@@ -364,8 +380,18 @@ fn test_detector_no_race_two_reads() {
 #[test]
 fn test_detector_no_race_both_atomic() {
     let mut det = DataRaceDetector::new();
-    det.add_access("x", AccessKind::AtomicWrite(MemoryOrdering::Relaxed), "t1", SourceSpan::default());
-    det.add_access("x", AccessKind::AtomicRead(MemoryOrdering::Relaxed), "t2", SourceSpan::default());
+    det.add_access(
+        "x",
+        AccessKind::AtomicWrite(MemoryOrdering::Relaxed),
+        "t1",
+        SourceSpan::default(),
+    );
+    det.add_access(
+        "x",
+        AccessKind::AtomicRead(MemoryOrdering::Relaxed),
+        "t2",
+        SourceSpan::default(),
+    );
 
     let races = det.detect_races();
     assert!(races.is_empty(), "two atomic accesses do not race");
@@ -374,7 +400,12 @@ fn test_detector_no_race_both_atomic() {
 #[test]
 fn test_detector_race_atomic_vs_non_atomic() {
     let mut det = DataRaceDetector::new();
-    det.add_access("x", AccessKind::AtomicWrite(MemoryOrdering::Relaxed), "t1", SourceSpan::default());
+    det.add_access(
+        "x",
+        AccessKind::AtomicWrite(MemoryOrdering::Relaxed),
+        "t1",
+        SourceSpan::default(),
+    );
     det.add_access("x", AccessKind::Read, "t2", SourceSpan::default());
 
     let races = det.detect_races();
@@ -385,13 +416,23 @@ fn test_detector_race_atomic_vs_non_atomic() {
 fn test_detector_transitive_hb_prevents_race() {
     let mut det = DataRaceDetector::new();
     let w = det.add_access("x", AccessKind::Write, "t1", SourceSpan::default());
-    let rel = det.add_access("flag", AccessKind::AtomicWrite(MemoryOrdering::Release), "t1", SourceSpan::default());
-    let acq = det.add_access("flag", AccessKind::AtomicRead(MemoryOrdering::Acquire), "t2", SourceSpan::default());
+    let rel = det.add_access(
+        "flag",
+        AccessKind::AtomicWrite(MemoryOrdering::Release),
+        "t1",
+        SourceSpan::default(),
+    );
+    let acq = det.add_access(
+        "flag",
+        AccessKind::AtomicRead(MemoryOrdering::Acquire),
+        "t2",
+        SourceSpan::default(),
+    );
     let r = det.add_access("x", AccessKind::Read, "t2", SourceSpan::default());
 
-    det.add_happens_before(w, rel);   // program order in t1
-    det.add_sync_pair(rel, acq);      // release-acquire sync
-    det.add_happens_before(acq, r);   // program order in t2
+    det.add_happens_before(w, rel); // program order in t1
+    det.add_sync_pair(rel, acq); // release-acquire sync
+    det.add_happens_before(acq, r); // program order in t2
 
     let races = det.detect_races();
     // The write-read pair on "x" should be ordered via transitive HB.
@@ -644,11 +685,8 @@ fn test_ordering_violation_serialization_roundtrip() {
 
 #[test]
 fn test_memory_model_check_result_serialization_roundtrip() {
-    let result = MemoryModelCheckResult {
-        races: vec![],
-        ordering_violations: vec![],
-        is_sound: true,
-    };
+    let result =
+        MemoryModelCheckResult { races: vec![], ordering_violations: vec![], is_sound: true };
     let json = serde_json::to_string(&result).expect("serialize");
     let round: MemoryModelCheckResult = serde_json::from_str(&json).expect("deserialize");
     assert!(round.is_sound);
@@ -1035,9 +1073,9 @@ fn test_empty_operations_produce_no_vcs() {
 #[test]
 fn test_multiple_violations_in_one_pass() {
     let ops = [
-        make_atomic_op(AtomicOpKind::Load, AtomicOrdering::Release, None),       // L1
-        make_atomic_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None),       // L2
-        make_atomic_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),       // L5
+        make_atomic_op(AtomicOpKind::Load, AtomicOrdering::Release, None), // L1
+        make_atomic_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None), // L2
+        make_atomic_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None), // L5
     ];
     let vcs = MemoryModelChecker::check_operation_legality(&ops, "multi_fn");
     assert_eq!(vcs.len(), 3, "should detect all 3 violations");
@@ -1172,8 +1210,14 @@ fn test_hb_graph_spawn_join_edges() {
     // Test HB relationships
     assert!(graph.happens_before(&main_spawn, &child_entry), "spawn HB");
     assert!(graph.happens_before(&child_exit, &main_join), "join HB");
-    assert!(graph.happens_before(&main_spawn, &child_exit), "transitive: spawn -> child PO -> exit");
-    assert!(graph.happens_before(&child_entry, &main_join), "transitive: child entry -> PO -> exit -> join");
+    assert!(
+        graph.happens_before(&main_spawn, &child_exit),
+        "transitive: spawn -> child PO -> exit"
+    );
+    assert!(
+        graph.happens_before(&child_entry, &main_join),
+        "transitive: child entry -> PO -> exit -> join"
+    );
 
     // Non-ordered pairs (concurrent)
     assert!(!graph.are_ordered(&main_work, &child_work), "main_work and child_work are concurrent");
@@ -1259,9 +1303,21 @@ fn make_spawn_join_function() -> trust_types::VerifiableFunction {
         body: trust_types::VerifiableBody {
             locals: vec![
                 trust_types::LocalDecl { index: 0, ty: trust_types::Ty::Unit, name: None },
-                trust_types::LocalDecl { index: 1, ty: trust_types::Ty::Unit, name: Some("closure".into()) },
-                trust_types::LocalDecl { index: 2, ty: trust_types::Ty::Unit, name: Some("handle".into()) },
-                trust_types::LocalDecl { index: 3, ty: trust_types::Ty::Unit, name: Some("result".into()) },
+                trust_types::LocalDecl {
+                    index: 1,
+                    ty: trust_types::Ty::Unit,
+                    name: Some("closure".into()),
+                },
+                trust_types::LocalDecl {
+                    index: 2,
+                    ty: trust_types::Ty::Unit,
+                    name: Some("handle".into()),
+                },
+                trust_types::LocalDecl {
+                    index: 3,
+                    ty: trust_types::Ty::Unit,
+                    name: Some("result".into()),
+                },
             ],
             blocks: vec![
                 // bb0: spawn
@@ -1337,11 +1393,9 @@ fn test_build_happens_before_with_spawn_join() {
     assert!(graph.happens_before(&bb0, &bb3), "bb0 -> bb3 (transitive)");
 
     // Spawn edge should exist
-    let child_entry = ConcurrencyPoint::new("test::spawner", trust_types::BlockId(0), "spawned_at_bb0");
-    assert!(
-        graph.happens_before(&bb0, &child_entry),
-        "spawn point should HB child entry"
-    );
+    let child_entry =
+        ConcurrencyPoint::new("test::spawner", trust_types::BlockId(0), "spawned_at_bb0");
+    assert!(graph.happens_before(&bb0, &child_entry), "spawn point should HB child entry");
 }
 
 #[test]
@@ -1351,7 +1405,11 @@ fn test_build_happens_before_empty_function() {
         def_path: "test::empty".to_string(),
         span: trust_types::SourceSpan::default(),
         body: trust_types::VerifiableBody {
-            locals: vec![trust_types::LocalDecl { index: 0, ty: trust_types::Ty::Unit, name: None }],
+            locals: vec![trust_types::LocalDecl {
+                index: 0,
+                ty: trust_types::Ty::Unit,
+                name: None,
+            }],
             blocks: vec![trust_types::BasicBlock {
                 id: trust_types::BlockId(0),
                 stmts: vec![],
@@ -1392,12 +1450,6 @@ fn test_build_happens_before_with_release_acquire() {
     // Find the release and acquire points and verify HB
     let release = ConcurrencyPoint::new("flag", trust_types::BlockId(0), "t1");
     let acquire = ConcurrencyPoint::new("flag", trust_types::BlockId(1), "t2");
-    assert!(
-        graph.happens_before(&release, &acquire),
-        "release should HB acquire"
-    );
-    assert_eq!(
-        graph.edge_kind(&release, &acquire),
-        Some(HappensBeforeEdgeKind::SyncWith)
-    );
+    assert!(graph.happens_before(&release, &acquire), "release should HB acquire");
+    assert_eq!(graph.edge_kind(&release, &acquire), Some(HappensBeforeEdgeKind::SyncWith));
 }

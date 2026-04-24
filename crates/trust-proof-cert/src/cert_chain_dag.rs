@@ -7,7 +7,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -26,12 +26,13 @@ use crate::{CertError, FunctionHash, ProofCertificate};
 /// enabling tamper detection across the entire dependency chain.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CertificateDependencyDag {
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Certificates in the DAG, keyed by certificate ID.
-    pub certificates: FxHashMap<String, ProofCertificate>,
+    pub certificates: BTreeMap<String, ProofCertificate>,
     /// Dependency edges: cert ID -> list of dependency cert IDs.
-    pub dependencies: FxHashMap<String, Vec<String>>,
+    pub dependencies: BTreeMap<String, Vec<String>>,
     /// Merkle hash for each certificate (covers cert content + dependency hashes).
-    pub merkle_hashes: FxHashMap<String, [u8; 32]>,
+    pub merkle_hashes: BTreeMap<String, [u8; 32]>,
     /// DAG name (e.g., crate name).
     pub name: String,
     /// Format version.
@@ -45,9 +46,9 @@ impl CertificateDependencyDag {
     /// Create a new empty DAG.
     pub fn new(name: &str) -> Self {
         CertificateDependencyDag {
-            certificates: FxHashMap::default(),
-            dependencies: FxHashMap::default(),
-            merkle_hashes: FxHashMap::default(),
+            certificates: BTreeMap::new(),
+            dependencies: BTreeMap::new(),
+            merkle_hashes: BTreeMap::new(),
             name: name.to_string(),
             version: DAG_FORMAT_VERSION,
         }
@@ -69,9 +70,7 @@ impl CertificateDependencyDag {
         for dep_id in &dependency_ids {
             if !self.certificates.contains_key(dep_id) {
                 return Err(CertError::VerificationFailed {
-                    reason: format!(
-                        "dependency '{dep_id}' not found in DAG for cert '{cert_id}'"
-                    ),
+                    reason: format!("dependency '{dep_id}' not found in DAG for cert '{cert_id}'"),
                 });
             }
         }
@@ -113,9 +112,9 @@ impl CertificateDependencyDag {
 
     /// Return all certificate IDs in topological order (dependencies before dependents).
     pub fn topological_order(&self) -> Result<Vec<String>, CertError> {
-        let mut visited: FxHashSet<String> = FxHashSet::default();
+        let mut visited: BTreeSet<String> = BTreeSet::new();
         let mut order: Vec<String> = Vec::new();
-        let mut in_progress: FxHashSet<String> = FxHashSet::default();
+        let mut in_progress: BTreeSet<String> = BTreeSet::new();
 
         for id in self.certificates.keys() {
             if !visited.contains(id) {
@@ -204,8 +203,8 @@ impl CertificateDependencyDag {
     fn topo_visit(
         &self,
         id: &str,
-        visited: &mut FxHashSet<String>,
-        in_progress: &mut FxHashSet<String>,
+        visited: &mut BTreeSet<String>,
+        in_progress: &mut BTreeSet<String>,
         order: &mut Vec<String>,
     ) -> Result<(), CertError> {
         if in_progress.contains(id) {
@@ -273,19 +272,14 @@ impl CertificateDependencyDag {
     ///
     /// Returns the IDs of revoked certificates. Also removes any certificates
     /// that transitively depended on revoked certificates.
-    pub fn revoke_stale(
-        &mut self,
-        current_hashes: &FxHashMap<String, FunctionHash>,
-    ) -> Vec<String> {
+    pub fn revoke_stale(&mut self, current_hashes: &BTreeMap<String, FunctionHash>) -> Vec<String> {
         // First pass: find directly stale certs
-        let mut stale: FxHashSet<String> = FxHashSet::default();
+        let mut stale: BTreeSet<String> = BTreeSet::new();
         for (cert_id, cert) in &self.certificates {
             if let Some(current_hash) = current_hashes.get(&cert.function)
                 && !cert.is_fresh_for(current_hash)
             {
-
-                    stale.insert(cert_id.clone());
-
+                stale.insert(cert_id.clone());
             }
             // If function not in current_hashes, leave cert alone (might be external)
         }
@@ -348,9 +342,9 @@ pub struct DagVerificationResult {
 /// hashes match. Returns an error describing the first failure.
 pub fn verify_cert_chain(
     certs: &[ProofCertificate],
-    dependencies: &FxHashMap<String, Vec<String>>,
+    dependencies: &BTreeMap<String, Vec<String>>,
 ) -> Result<(), CertError> {
-    let mut seen: FxHashSet<String> = FxHashSet::default();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
 
     for cert in certs {
         let cert_id = &cert.id.0;
@@ -358,9 +352,7 @@ pub fn verify_cert_chain(
         // Verify VC hash
         if !cert.verify_vc_hash() {
             return Err(CertError::VerificationFailed {
-                reason: format!(
-                    "certificate '{cert_id}' has invalid VC hash"
-                ),
+                reason: format!("certificate '{cert_id}' has invalid VC hash"),
             });
         }
 
@@ -398,9 +390,9 @@ pub struct CertificateArchive {
     /// All certificates in the archive.
     pub certificates: Vec<ProofCertificate>,
     /// Dependency edges: cert ID -> list of dependency cert IDs.
-    pub dependencies: FxHashMap<String, Vec<String>>,
+    pub dependencies: BTreeMap<String, Vec<String>>,
     /// Optional metadata.
-    pub metadata: FxHashMap<String, String>,
+    pub metadata: BTreeMap<String, String>,
 }
 
 /// Current archive format version.
@@ -410,17 +402,15 @@ impl CertificateArchive {
     /// Create a new archive from a DAG.
     pub fn from_dag(dag: &CertificateDependencyDag) -> Result<Self, CertError> {
         let order = dag.topological_order()?;
-        let certificates: Vec<ProofCertificate> = order
-            .iter()
-            .filter_map(|id| dag.certificates.get(id).cloned())
-            .collect();
+        let certificates: Vec<ProofCertificate> =
+            order.iter().filter_map(|id| dag.certificates.get(id).cloned()).collect();
 
         Ok(CertificateArchive {
             format: "trust-cert-archive".to_string(),
             format_version: ARCHIVE_FORMAT_VERSION,
             certificates,
             dependencies: dag.dependencies.clone(),
-            metadata: FxHashMap::default(),
+            metadata: BTreeMap::new(),
         })
     }
 
@@ -429,11 +419,7 @@ impl CertificateArchive {
         let mut dag = CertificateDependencyDag::new(name);
 
         for cert in &self.certificates {
-            let deps = self
-                .dependencies
-                .get(&cert.id.0)
-                .cloned()
-                .unwrap_or_default();
+            let deps = self.dependencies.get(&cert.id.0).cloned().unwrap_or_default();
             dag.add_certificate(cert.clone(), deps)?;
         }
 
@@ -485,7 +471,7 @@ pub trait CertificateStoreLookups {
 
     /// Revoke (remove) all certificates for functions whose source hash changed.
     /// Returns the IDs of removed certificates.
-    fn revoke_changed(&mut self, current_hashes: &FxHashMap<String, FunctionHash>) -> Vec<String>;
+    fn revoke_changed(&mut self, current_hashes: &BTreeMap<String, FunctionHash>) -> Vec<String>;
 }
 
 impl CertificateStoreLookups for crate::CertificateStore {
@@ -493,11 +479,7 @@ impl CertificateStoreLookups for crate::CertificateStore {
         self.certificates
             .values()
             .filter(|cert| {
-                cert.vc_snapshot
-                    .location
-                    .as_ref()
-                    .map(|loc| loc.file == file_path)
-                    .unwrap_or(false)
+                cert.vc_snapshot.location.as_ref().map(|loc| loc.file == file_path).unwrap_or(false)
             })
             .collect()
     }
@@ -506,15 +488,12 @@ impl CertificateStoreLookups for crate::CertificateStore {
         self.certificates.values().find(|cert| cert.id.0 == hash)
     }
 
-    fn revoke_changed(&mut self, current_hashes: &FxHashMap<String, FunctionHash>) -> Vec<String> {
+    fn revoke_changed(&mut self, current_hashes: &BTreeMap<String, FunctionHash>) -> Vec<String> {
         let stale_ids: Vec<String> = self
             .certificates
             .iter()
             .filter(|(_id, cert)| {
-                current_hashes
-                    .get(&cert.function)
-                    .map(|h| !cert.is_fresh_for(h))
-                    .unwrap_or(false)
+                current_hashes.get(&cert.function).map(|h| !cert.is_fresh_for(h)).unwrap_or(false)
             })
             .map(|(id, _)| id.clone())
             .collect();
@@ -534,14 +513,14 @@ impl CertificateStoreLookups for crate::CertificateStore {
 
 #[cfg(test)]
 mod tests {
-    use trust_types::fx::FxHashMap;
+    use std::collections::BTreeMap;
 
     use trust_types::{Formula, ProofStrength, SourceSpan, VcKind, VerificationCondition};
 
     use super::*;
     use crate::{
-        CertificateChain, CertificateStore, ChainStep, ChainStepType,
-        FunctionHash, SolverInfo, VcSnapshot,
+        CertificateChain, CertificateStore, ChainStep, ChainStepType, FunctionHash, SolverInfo,
+        VcSnapshot,
     };
 
     fn sample_solver_info() -> SolverInfo {
@@ -556,10 +535,8 @@ mod tests {
 
     fn sample_vc(function: &str, file: &str) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "must hold".to_string(),
-            },
-            function: function.to_string(),
+            kind: VcKind::Assertion { message: "must hold".to_string() },
+            function: function.into(),
             location: SourceSpan {
                 file: file.to_string(),
                 line_start: 10,
@@ -587,11 +564,7 @@ mod tests {
         )
     }
 
-    fn sample_certificate_in_file(
-        function: &str,
-        timestamp: &str,
-        file: &str,
-    ) -> ProofCertificate {
+    fn sample_certificate_in_file(function: &str, timestamp: &str, file: &str) -> ProofCertificate {
         ProofCertificate::new_trusted(
             function.to_string(),
             FunctionHash::from_bytes(format!("{function}-body").as_bytes()),
@@ -645,12 +618,10 @@ mod tests {
         dag.add_certificate(cert_c, vec![]).expect("add C");
 
         // B depends on C
-        dag.add_certificate(cert_b, vec![id_c.clone()])
-            .expect("add B");
+        dag.add_certificate(cert_b, vec![id_c.clone()]).expect("add B");
 
         // A depends on B
-        dag.add_certificate(cert_a, vec![id_b.clone()])
-            .expect("add A");
+        dag.add_certificate(cert_a, vec![id_b.clone()]).expect("add A");
 
         assert_eq!(dag.len(), 3);
         assert_eq!(dag.get_dependencies(&id_a), Some(vec![id_b.clone()].as_slice()));
@@ -710,8 +681,7 @@ mod tests {
 
         dag.add_certificate(cert_c, vec![]).expect("add C");
         dag.add_certificate(cert_b, vec![id_c]).expect("add B");
-        dag.add_certificate(cert_a, vec![id_b.clone()])
-            .expect("add A");
+        dag.add_certificate(cert_a, vec![id_b.clone()]).expect("add A");
 
         // Tamper with cert B's VC hash
         if let Some(cert_b_mut) = dag.certificates.get_mut(&id_b) {
@@ -767,26 +737,16 @@ mod tests {
         let id_a = cert_a.id.0.clone();
 
         dag.add_certificate(cert_c, vec![]).expect("add C");
-        dag.add_certificate(cert_b, vec![id_c.clone()])
-            .expect("add B");
-        dag.add_certificate(cert_a, vec![id_b.clone()])
-            .expect("add A");
+        dag.add_certificate(cert_b, vec![id_c.clone()]).expect("add B");
+        dag.add_certificate(cert_a, vec![id_b.clone()]).expect("add A");
 
         // C's source changed
-        let mut current_hashes = FxHashMap::default();
-        current_hashes.insert(
-            "crate::c".to_string(),
-            FunctionHash::from_bytes(b"crate::c-body-MODIFIED"),
-        );
+        let mut current_hashes: BTreeMap<String, FunctionHash> = BTreeMap::new();
+        current_hashes
+            .insert("crate::c".to_string(), FunctionHash::from_bytes(b"crate::c-body-MODIFIED"));
         // B and A still have same hash
-        current_hashes.insert(
-            "crate::b".to_string(),
-            FunctionHash::from_bytes(b"crate::b-body"),
-        );
-        current_hashes.insert(
-            "crate::a".to_string(),
-            FunctionHash::from_bytes(b"crate::a-body"),
-        );
+        current_hashes.insert("crate::b".to_string(), FunctionHash::from_bytes(b"crate::b-body"));
+        current_hashes.insert("crate::a".to_string(), FunctionHash::from_bytes(b"crate::a-body"));
 
         let revoked = dag.revoke_stale(&current_hashes);
 
@@ -814,23 +774,14 @@ mod tests {
         // C and D are independent leaves, B depends on C
         dag.add_certificate(cert_c, vec![]).expect("add C");
         dag.add_certificate(cert_d.clone(), vec![]).expect("add D");
-        dag.add_certificate(cert_b, vec![id_c.clone()])
-            .expect("add B");
+        dag.add_certificate(cert_b, vec![id_c.clone()]).expect("add B");
 
         // Only C changed
-        let mut current_hashes = FxHashMap::default();
-        current_hashes.insert(
-            "crate::c".to_string(),
-            FunctionHash::from_bytes(b"crate::c-body-MODIFIED"),
-        );
-        current_hashes.insert(
-            "crate::b".to_string(),
-            FunctionHash::from_bytes(b"crate::b-body"),
-        );
-        current_hashes.insert(
-            "crate::d".to_string(),
-            FunctionHash::from_bytes(b"crate::d-body"),
-        );
+        let mut current_hashes: BTreeMap<String, FunctionHash> = BTreeMap::new();
+        current_hashes
+            .insert("crate::c".to_string(), FunctionHash::from_bytes(b"crate::c-body-MODIFIED"));
+        current_hashes.insert("crate::b".to_string(), FunctionHash::from_bytes(b"crate::b-body"));
+        current_hashes.insert("crate::d".to_string(), FunctionHash::from_bytes(b"crate::d-body"));
 
         let revoked = dag.revoke_stale(&current_hashes);
 
@@ -896,10 +847,7 @@ mod tests {
 
         assert_eq!(restored.format, "trust-cert-archive");
         assert_eq!(restored.certificates.len(), 2);
-        assert_eq!(
-            restored.metadata.get("build"),
-            Some(&"abc123".to_string())
-        );
+        assert_eq!(restored.metadata.get("build"), Some(&"abc123".to_string()));
 
         // Import back to DAG
         let restored_dag = restored.to_dag("restored").expect("import should succeed");
@@ -921,7 +869,7 @@ mod tests {
         let id_c = cert_c.id.0.clone();
         let id_b = cert_b.id.0.clone();
 
-        let mut deps = FxHashMap::default();
+        let mut deps: BTreeMap<String, Vec<String>> = BTreeMap::new();
         deps.insert(cert_a.id.0.clone(), vec![id_b.clone()]);
         deps.insert(cert_b.id.0.clone(), vec![id_c.clone()]);
 
@@ -935,7 +883,7 @@ mod tests {
         let mut cert = sample_certificate("crate::foo", "2026-03-30T00:00:00Z");
         cert.vc_hash[0] ^= 0xFF; // tamper
 
-        let result = verify_cert_chain(&[cert], &FxHashMap::default());
+        let result = verify_cert_chain(&[cert], &BTreeMap::new());
         assert!(result.is_err());
         let err_msg = format!("{}", result.unwrap_err());
         assert!(err_msg.contains("invalid VC hash"));
@@ -945,7 +893,7 @@ mod tests {
     fn test_verify_cert_chain_missing_dependency() {
         let cert_a = sample_certificate("crate::a", "2026-03-30T00:00:00Z");
 
-        let mut deps = FxHashMap::default();
+        let mut deps: BTreeMap<String, Vec<String>> = BTreeMap::new();
         deps.insert(cert_a.id.0.clone(), vec!["nonexistent".to_string()]);
 
         let result = verify_cert_chain(&[cert_a], &deps);
@@ -971,10 +919,8 @@ mod tests {
         let id_a = cert_a.id.0.clone();
 
         dag.add_certificate(cert_c, vec![]).expect("add C");
-        dag.add_certificate(cert_b, vec![id_c.clone()])
-            .expect("add B");
-        dag.add_certificate(cert_a, vec![id_b.clone()])
-            .expect("add A");
+        dag.add_certificate(cert_b, vec![id_c.clone()]).expect("add B");
+        dag.add_certificate(cert_a, vec![id_b.clone()]).expect("add A");
 
         let order = dag.topological_order().expect("should produce order");
         assert_eq!(order.len(), 3);
@@ -1006,10 +952,8 @@ mod tests {
 
     #[test]
     fn test_dag_file_persistence() {
-        let path = std::env::temp_dir().join(format!(
-            "trust-cert-dag-test-{}.json",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("trust-cert-dag-test-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
 
         let mut dag = CertificateDependencyDag::new("file-test");
@@ -1017,8 +961,7 @@ mod tests {
         dag.add_certificate(cert, vec![]).expect("add cert");
 
         dag.save_to_file(&path).expect("save should succeed");
-        let loaded =
-            CertificateDependencyDag::load_from_file(&path).expect("load should succeed");
+        let loaded = CertificateDependencyDag::load_from_file(&path).expect("load should succeed");
 
         assert_eq!(loaded.name, dag.name);
         assert_eq!(loaded.len(), dag.len());
@@ -1034,12 +977,9 @@ mod tests {
     fn test_store_find_by_file() {
         let mut store = CertificateStore::new("test-crate");
 
-        let cert1 =
-            sample_certificate_in_file("crate::foo", "2026-03-30T00:00:00Z", "src/foo.rs");
-        let cert2 =
-            sample_certificate_in_file("crate::bar", "2026-03-30T00:00:01Z", "src/bar.rs");
-        let cert3 =
-            sample_certificate_in_file("crate::baz", "2026-03-30T00:00:02Z", "src/foo.rs");
+        let cert1 = sample_certificate_in_file("crate::foo", "2026-03-30T00:00:00Z", "src/foo.rs");
+        let cert2 = sample_certificate_in_file("crate::bar", "2026-03-30T00:00:01Z", "src/bar.rs");
+        let cert3 = sample_certificate_in_file("crate::baz", "2026-03-30T00:00:02Z", "src/foo.rs");
 
         store.insert(cert1.clone(), sample_chain());
         store.insert(cert2.clone(), sample_chain());
@@ -1087,15 +1027,13 @@ mod tests {
         assert_eq!(store.len(), 2);
 
         // foo's source changed, bar stayed the same
-        let mut current_hashes = FxHashMap::default();
+        let mut current_hashes: BTreeMap<String, FunctionHash> = BTreeMap::new();
         current_hashes.insert(
             "crate::foo".to_string(),
             FunctionHash::from_bytes(b"crate::foo-body-MODIFIED"),
         );
-        current_hashes.insert(
-            "crate::bar".to_string(),
-            FunctionHash::from_bytes(b"crate::bar-body"),
-        );
+        current_hashes
+            .insert("crate::bar".to_string(), FunctionHash::from_bytes(b"crate::bar-body"));
 
         let revoked = store.revoke_changed(&current_hashes);
         assert_eq!(revoked.len(), 1);
@@ -1119,8 +1057,7 @@ mod tests {
         let id_b = cert_b.id.0.clone();
 
         dag.add_certificate(cert_c, vec![]).expect("add C");
-        dag.add_certificate(cert_b, vec![id_c.clone()])
-            .expect("add B");
+        dag.add_certificate(cert_b, vec![id_c.clone()]).expect("add B");
 
         // Verify passes initially
         let result = dag.verify().expect("initial verify");

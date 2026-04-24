@@ -53,7 +53,7 @@ impl<
     {
         let kind = if self.is_subgraph { "subgraph" } else { "digraph" };
         let cluster = if self.is_subgraph { "cluster_" } else { "" }; // Print border around graph
-        // tRust: known issue (richkadel) — If/when migrating the MIR graphviz to this generic implementation,
+        // FIXME(richkadel): If/when migrating the MIR graphviz to this generic implementation,
         // prepend "Mir_" to the graphviz_safe_def_name(def_id)
         writeln!(w, "{} {}{} {{", kind, cluster, self.graphviz_name)?;
 
@@ -102,7 +102,7 @@ impl<
 
         write!(w, r#"<table border="0" cellborder="1" cellspacing="0">"#)?;
 
-        // tRust: known issue (richkadel) — If/when migrating the MIR graphviz to this generic implementation,
+        // FIXME(richkadel): If/when migrating the MIR graphviz to this generic implementation,
         // we need generic way to know if node header should have a different color. For example,
         // for MIR:
         //

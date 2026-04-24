@@ -161,7 +161,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for MatchAgainstHigherRankedOutlives<'tcx>
         a: T,
         b: T,
     ) -> RelateResult<'tcx, T> {
-        // tRust: known issue —(@lcnr): This is weird. We are ignoring the ambient variance
+        // FIXME(@lcnr): This is weird. We are ignoring the ambient variance
         // here, effectively treating everything as being in either a covariant
         // or contravariant context.
         //
@@ -189,7 +189,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for MatchAgainstHigherRankedOutlives<'tcx>
 
     #[instrument(skip(self), level = "trace")]
     fn tys(&mut self, pattern: Ty<'tcx>, value: Ty<'tcx>) -> RelateResult<'tcx, Ty<'tcx>> {
-        // tRust: known issue —(non_lifetime_binders): What to do here?
+        // FIXME(non_lifetime_binders): What to do here?
         if matches!(pattern.kind(), ty::Error(_) | ty::Bound(..)) {
             // Unlike normal `TypeRelation` rules, `ty::Error` does not equal any type.
             self.no_match()

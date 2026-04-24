@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-debug: Binary black-box violation finder
 //!
 //! Takes compiled binaries as black boxes, lifts them to our verification IR,
@@ -17,27 +17,8 @@
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
 pub(crate) mod binary;
-pub(crate) mod blame;
-pub(crate) mod cfg;
-pub(crate) mod cfg_fast;
-pub(crate) mod diff_diagnosis;
-pub(crate) mod differential;
-pub(crate) mod exploitability;
 pub(crate) mod injection;
-pub(crate) mod interactive;
-pub(crate) mod library_summaries;
-pub(crate) mod lifter;
-pub(crate) mod minimization;
-pub(crate) mod pcode;
-pub(crate) mod proof_explain;
-pub(crate) mod report;
-pub(crate) mod root_cause;
-pub(crate) mod scoring;
-pub(crate) mod security;
-pub(crate) mod severity;
-pub(crate) mod trace_minimize;
-pub(crate) mod triage;
-pub(crate) mod vex_lift;
+pub mod profiling;
 pub(crate) mod violations;
 
 use trust_types::*;
@@ -328,6 +309,9 @@ pub fn analyze(
     config: &DebugConfig,
     router: &trust_router::Router,
 ) -> DebugReport {
+    // tRust: #906 — Profile top-level analyze() call
+    let _top_scope = profiling::ProfileScope::new("debug::analyze", profiling::Category::Trust);
+
     let mut all_violations = Vec::new();
     let mut total_vcs = 0;
 
@@ -337,16 +321,26 @@ pub fn analyze(
 
         // L0 Safety VCs (overflow, div-by-zero, OOB)
         if config.analyses.safety {
-            let vcs = trust_vcgen::generate_vcs(func);
+            let vcs = {
+                // tRust: #906 — Profile VC generation
+                let _scope =
+                    profiling::ProfileScope::new("vcgen::generate_vcs", profiling::Category::Trust);
+                trust_vcgen::generate_vcs(func)
+            };
             total_vcs += vcs.len();
-            let results = router.verify_all(&vcs);
+            let results = {
+                // tRust: #906 — Profile solver dispatch
+                let _scope =
+                    profiling::ProfileScope::new("router::verify_all", profiling::Category::Trust);
+                router.verify_all(&vcs)
+            };
             for (vc, result) in &results {
                 if let VerificationResult::Failed { counterexample, solver, time_ms } = result {
                     func_violations.push(safety_violation(
                         func,
                         vc,
                         counterexample,
-                        solver,
+                        solver.as_str(),
                         *time_ms,
                     ));
                 }
@@ -355,7 +349,14 @@ pub fn analyze(
 
         // Taint flow analysis
         if config.analyses.taint_flow {
-            let taint_result = analyze_taint(&func.body, &config.taint_policy);
+            let taint_result = {
+                // tRust: #906 — Profile taint analysis
+                let _scope = profiling::ProfileScope::new(
+                    "debug::analyze_taint",
+                    profiling::Category::Trust,
+                );
+                analyze_taint(&func.body, &config.taint_policy)
+            };
             for violation in &taint_result.violations {
                 func_violations.push(taint_violation(func, violation));
             }
@@ -363,6 +364,11 @@ pub fn analyze(
 
         // Injection pattern detection
         if config.analyses.injection {
+            // tRust: #906 — Profile injection detection
+            let _scope = profiling::ProfileScope::new(
+                "debug::detect_injections",
+                profiling::Category::Trust,
+            );
             let injection_violations =
                 injection::detect_injections(func, &config.injection_patterns);
             func_violations.extend(injection_violations);
@@ -374,7 +380,14 @@ pub fn analyze(
 
     // Phase 2: Cross-function analysis
     if config.analyses.privilege_escalation || config.analyses.taint_flow {
-        let reachability = trust_vcgen::reachability::analyze_reachability(input.call_graph());
+        let reachability = {
+            // tRust: #906 — Profile reachability analysis
+            let _scope = profiling::ProfileScope::new(
+                "vcgen::analyze_reachability",
+                profiling::Category::Trust,
+            );
+            trust_vcgen::reachability::analyze_reachability(input.call_graph())
+        };
 
         // Dead code detection
         for unreachable in &reachability.unreachable {
@@ -390,7 +403,7 @@ pub fn analyze(
                 ),
                 flow_path: vec![],
                 counterexample: None,
-                solver: "static-analysis".to_string(),
+                solver: "static-analysis".into(),
                 time_ms: 0,
             });
         }
@@ -398,13 +411,16 @@ pub fn analyze(
 
     // Phase 3: Exploitation chain analysis
     let chains = if config.chain_analysis {
+        // tRust: #906 — Profile exploit chain building
+        let _scope =
+            profiling::ProfileScope::new("debug::build_exploit_chains", profiling::Category::Trust);
         violations::build_exploit_chains(&all_violations)
     } else {
         vec![]
     };
 
     // Sort by severity (most severe first)
-    all_violations.sort_by(|a, b| a.severity.cmp(&b.severity));
+    all_violations.sort_by_key(|a| a.severity);
 
     // Assign sequential IDs
     for (i, v) in all_violations.iter_mut().enumerate() {
@@ -478,7 +494,7 @@ fn taint_violation(func: &VerifiableFunction, violation: &TaintFlowViolation) ->
         ),
         flow_path: violation.path.clone(),
         counterexample: None,
-        solver: "taint-analysis".to_string(),
+        solver: "taint-analysis".into(),
         time_ms: 0,
     }
 }
@@ -788,12 +804,12 @@ mod tests {
                     sink_func: "execute".to_string(),
                     taint_source: "user-input".to_string(),
                 },
-                function: "test::handler".to_string(),
+                function: "test::handler".into(),
                 location: None,
                 description: "SQL injection".to_string(),
                 flow_path: vec![],
                 counterexample: None,
-                solver: "taint-analysis".to_string(),
+                solver: "taint-analysis".into(),
                 time_ms: 0,
             }],
             chains: vec![],

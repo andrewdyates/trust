@@ -53,7 +53,6 @@ fn render_region_vid<'tcx>(
             }
             ty::BoundRegionKind::ClosureEnv | ty::BoundRegionKind::Anon => " (for<'_>)".to_string(),
             ty::BoundRegionKind::NamedForPrinting(_) => {
-                // tRust: invariant — pretty-printing only
                 bug!("only used for pretty printing")
             }
         },
@@ -102,10 +101,10 @@ impl<'a, 'this, 'tcx> dot::Labeller<'this> for RawConstraints<'a, 'tcx> {
     type Edge = OutlivesConstraint<'tcx>;
 
     fn graph_id(&'this self) -> dot::Id<'this> {
-        dot::Id::new("RegionInferenceContext").expect("invariant: graphviz node ID must be valid")
+        dot::Id::new("RegionInferenceContext").unwrap()
     }
     fn node_id(&'this self, n: &RegionVid) -> dot::Id<'this> {
-        dot::Id::new(format!("r{}", n.index())).expect("invariant: graphviz node ID must be valid")
+        dot::Id::new(format!("r{}", n.index())).unwrap()
     }
     fn node_shape(&'this self, _node: &RegionVid) -> Option<dot::LabelText<'this>> {
         Some(dot::LabelText::LabelStr(Cow::Borrowed("box")))
@@ -153,10 +152,10 @@ impl<'a, 'this, 'tcx> dot::Labeller<'this> for SccConstraints<'a, 'tcx> {
     type Edge = (ConstraintSccIndex, ConstraintSccIndex);
 
     fn graph_id(&'this self) -> dot::Id<'this> {
-        dot::Id::new("RegionInferenceContext".to_string()).expect("invariant: graphviz node ID must be valid")
+        dot::Id::new("RegionInferenceContext".to_string()).unwrap()
     }
     fn node_id(&'this self, n: &ConstraintSccIndex) -> dot::Id<'this> {
-        dot::Id::new(format!("r{}", n.index())).expect("invariant: graphviz node ID must be valid")
+        dot::Id::new(format!("r{}", n.index())).unwrap()
     }
     fn node_shape(&'this self, _node: &ConstraintSccIndex) -> Option<dot::LabelText<'this>> {
         Some(dot::LabelText::LabelStr(Cow::Borrowed("box")))

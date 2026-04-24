@@ -17,7 +17,7 @@
 use trust_types::fx::{FxHashMap, FxHashSet};
 
 use sha2::{Digest, Sha256};
-use trust_types::{Formula, VerificationCondition, VerificationResult};
+use trust_types::{Formula, Symbol, VerificationCondition, VerificationResult};
 
 use crate::independence::{ConstraintIndependence, free_variables, partition_constraints};
 
@@ -39,11 +39,7 @@ pub struct SplitterConfig {
 
 impl Default for SplitterConfig {
     fn default() -> Self {
-        Self {
-            max_cache_entries: 10_000,
-            min_conjuncts_to_split: 2,
-            enable_projection: true,
-        }
+        Self { max_cache_entries: 10_000, min_conjuncts_to_split: 2, enable_projection: true }
     }
 }
 
@@ -122,11 +118,7 @@ impl SplitterStats {
     #[must_use]
     pub fn hit_rate(&self) -> f64 {
         let total = self.cache_hits + self.cache_misses;
-        if total == 0 {
-            0.0
-        } else {
-            self.cache_hits as f64 / total as f64
-        }
+        if total == 0 { 0.0 } else { self.cache_hits as f64 / total as f64 }
     }
 
     /// Split rate: fraction of queries that were actually split.
@@ -228,15 +220,15 @@ impl SubQuerySplitter {
         // Update average partitions
         self.stats.total_sub_queries += num_partitions;
         if self.stats.queries_split > 0 {
-            self.stats.avg_partitions = self.stats.total_sub_queries as f64
-                / self.stats.queries_processed as f64;
+            self.stats.avg_partitions =
+                self.stats.total_sub_queries as f64 / self.stats.queries_processed as f64;
         }
 
         let mut cached = Vec::new();
         let mut uncached = Vec::new();
 
         for (idx, partition) in partitions.into_iter().enumerate() {
-            let key = sub_query_hash(&partition, &vc.function);
+            let key = sub_query_hash(&partition, vc.function.as_str());
             let variables = free_variables(&partition);
 
             if let Some(result) = self.cache_lookup(&key) {
@@ -262,7 +254,7 @@ impl SubQuerySplitter {
             cached,
             uncached,
             total_partitions: num_partitions,
-            function: vc.function.clone(),
+            function: vc.function.as_str().to_string(),
             original_vc_kind: vc.kind.clone(),
         }
     }
@@ -272,16 +264,14 @@ impl SubQuerySplitter {
     /// Performs LRU eviction if the cache exceeds `max_cache_entries`.
     pub fn store_result(&mut self, cache_key: &str, result: VerificationResult) {
         // Evict if at capacity
-        if self.cache.len() >= self.config.max_cache_entries
-            && !self.cache.contains_key(cache_key)
+        if self.cache.len() >= self.config.max_cache_entries && !self.cache.contains_key(cache_key)
         {
             self.evict_lru();
         }
 
         self.access_counter += 1;
         self.cache.insert(cache_key.to_string(), result);
-        self.access_order
-            .insert(cache_key.to_string(), self.access_counter);
+        self.access_order.insert(cache_key.to_string(), self.access_counter);
         self.stats.cache_entries = self.cache.len();
     }
 
@@ -299,14 +289,14 @@ impl SubQuerySplitter {
     ) -> Option<VerificationResult> {
         let mut all_proved = true;
         let mut total_time_ms: u64 = 0;
-        let mut solver_name = String::from("split-cache");
+        let mut solver_name: Symbol = "split-cache".into();
 
         // Check cached results
         for cached in &split.cached {
             match &cached.result {
                 VerificationResult::Proved { time_ms, solver, .. } => {
                     total_time_ms += time_ms;
-                    solver_name = solver.clone();
+                    solver_name = *solver;
                 }
                 VerificationResult::Failed { .. } => {
                     return Some(cached.result.clone());
@@ -326,13 +316,12 @@ impl SubQuerySplitter {
                 match result {
                     VerificationResult::Proved { time_ms, solver, .. } => {
                         total_time_ms += time_ms;
-                        solver_name = solver.clone();
+                        solver_name = *solver;
                     }
                     VerificationResult::Failed { .. } => {
                         return Some(result.clone());
                     }
-                    VerificationResult::Unknown { .. }
-                    | VerificationResult::Timeout { .. } => {
+                    VerificationResult::Unknown { .. } | VerificationResult::Timeout { .. } => {
                         all_proved = false;
                     }
                     _ => {
@@ -401,11 +390,8 @@ impl SubQuerySplitter {
 
     /// Evict the least-recently-used entry from the cache.
     fn evict_lru(&mut self) {
-        if let Some(lru_key) = self
-            .access_order
-            .iter()
-            .min_by_key(|(_, order)| **order)
-            .map(|(k, _)| k.clone())
+        if let Some(lru_key) =
+            self.access_order.iter().min_by_key(|(_, order)| **order).map(|(k, _)| k.clone())
         {
             self.cache.remove(&lru_key);
             self.access_order.remove(&lru_key);
@@ -491,7 +477,7 @@ mod tests {
     fn make_vc(name: &str, formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: name.to_string(),
+            function: name.into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -500,29 +486,31 @@ mod tests {
 
     fn proved_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 10,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     fn proved_result_with_time(ms: u64) -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: ms,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed {
-            solver: "z4".to_string(),
-            time_ms: 5,
-            counterexample: None,
-        }
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 5, counterexample: None }
     }
 
     fn unknown_result() -> VerificationResult {
         VerificationResult::Unknown {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 100,
             reason: "timeout".to_string(),
         }
@@ -555,10 +543,7 @@ mod tests {
     #[test]
     fn test_split_single_formula_no_splitting() {
         let mut splitter = SubQuerySplitter::default();
-        let vc = make_vc(
-            "foo",
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        );
+        let vc = make_vc("foo", Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))));
 
         let result = splitter.split(&vc);
         assert_eq!(result.total_partitions, 1);
@@ -709,10 +694,7 @@ mod tests {
     #[test]
     fn test_store_and_retrieve_result() {
         let mut splitter = SubQuerySplitter::default();
-        let vc = make_vc(
-            "foo",
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(42))),
-        );
+        let vc = make_vc("foo", Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(42))));
 
         // Split and store
         let split = splitter.split(&vc);
@@ -731,10 +713,8 @@ mod tests {
 
     #[test]
     fn test_lru_eviction() {
-        let mut splitter = SubQuerySplitter::new(SplitterConfig {
-            max_cache_entries: 2,
-            ..Default::default()
-        });
+        let mut splitter =
+            SubQuerySplitter::new(SplitterConfig { max_cache_entries: 2, ..Default::default() });
 
         // Insert 3 entries — should evict the first
         splitter.store_result("key_a", proved_result());
@@ -748,10 +728,8 @@ mod tests {
 
     #[test]
     fn test_lru_access_refreshes_order() {
-        let mut splitter = SubQuerySplitter::new(SplitterConfig {
-            max_cache_entries: 2,
-            ..Default::default()
-        });
+        let mut splitter =
+            SubQuerySplitter::new(SplitterConfig { max_cache_entries: 2, ..Default::default() });
 
         splitter.store_result("key_a", proved_result());
         splitter.store_result("key_b", proved_result());
@@ -769,10 +747,8 @@ mod tests {
 
     #[test]
     fn test_lru_eviction_stats() {
-        let mut splitter = SubQuerySplitter::new(SplitterConfig {
-            max_cache_entries: 3,
-            ..Default::default()
-        });
+        let mut splitter =
+            SubQuerySplitter::new(SplitterConfig { max_cache_entries: 3, ..Default::default() });
 
         for i in 0..5 {
             splitter.store_result(&format!("key_{i}"), proved_result());
@@ -803,7 +779,7 @@ mod tests {
                 partition_index: 1,
             }],
             total_partitions: 2,
-            function: "foo".to_string(),
+            function: "foo".into(),
             original_vc_kind: VcKind::DivisionByZero,
         };
 
@@ -833,7 +809,7 @@ mod tests {
                 partition_index: 1,
             }],
             total_partitions: 2,
-            function: "foo".to_string(),
+            function: "foo".into(),
             original_vc_kind: VcKind::DivisionByZero,
         };
 
@@ -861,7 +837,7 @@ mod tests {
                 partition_index: 1,
             }],
             total_partitions: 2,
-            function: "foo".to_string(),
+            function: "foo".into(),
             original_vc_kind: VcKind::DivisionByZero,
         };
 
@@ -891,7 +867,7 @@ mod tests {
                 partition_index: 0,
             }],
             total_partitions: 1,
-            function: "foo".to_string(),
+            function: "foo".into(),
             original_vc_kind: VcKind::DivisionByZero,
         };
 
@@ -917,7 +893,7 @@ mod tests {
                 partition_index: 1,
             }],
             total_partitions: 2,
-            function: "foo".to_string(),
+            function: "foo".into(),
             original_vc_kind: VcKind::DivisionByZero,
         };
 
@@ -942,21 +918,13 @@ mod tests {
 
     #[test]
     fn test_stats_hit_rate() {
-        let stats = SplitterStats {
-            cache_hits: 3,
-            cache_misses: 1,
-            ..Default::default()
-        };
+        let stats = SplitterStats { cache_hits: 3, cache_misses: 1, ..Default::default() };
         assert!((stats.hit_rate() - 0.75).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_stats_split_rate() {
-        let stats = SplitterStats {
-            queries_processed: 10,
-            queries_split: 4,
-            ..Default::default()
-        };
+        let stats = SplitterStats { queries_processed: 10, queries_split: 4, ..Default::default() };
         assert!((stats.split_rate() - 0.4).abs() < f64::EPSILON);
     }
 
@@ -1149,10 +1117,7 @@ mod tests {
 
         // First sub-query proves, second fails
         let mut solved = FxHashMap::default();
-        solved.insert(
-            split.uncached[0].cache_key.clone(),
-            proved_result_with_time(5),
-        );
+        solved.insert(split.uncached[0].cache_key.clone(), proved_result_with_time(5));
         solved.insert(split.uncached[1].cache_key.clone(), failed_result());
 
         let combined = splitter.combine_results(&split, &solved);

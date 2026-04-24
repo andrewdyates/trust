@@ -88,7 +88,7 @@ impl Category {
             | ExprKind::ConstContinue { .. }
             | ExprKind::Return { .. }
             | ExprKind::Become { .. } =>
-            // tRust: known issue — these probably want their own (upstream #27840)
+            // FIXME(#27840) these probably want their own
             // category, like "nonterminating"
             {
                 Some(Category::Rvalue(RvalueFunc::Into))

@@ -135,7 +135,6 @@ impl LlvmType for Reg {
                 32 => cx.type_f32(),
                 64 => cx.type_f64(),
                 128 => cx.type_f128(),
-                // tRust: invariant — ABI float registers only use 16-, 32-, 64-, or 128-bit widths
                 _ => bug!("unsupported float: {:?}", self),
             },
             RegKind::Vector => cx.type_vector(cx.type_i8(), self.size.bytes()),
@@ -218,7 +217,6 @@ impl<'ll, 'tcx> ArgAbiExt<'ll, 'tcx> for ArgAbi<'tcx, Ty<'tcx>> {
             }
             // Unsized indirect arguments cannot be stored
             PassMode::Indirect { attrs: _, meta_attrs: Some(_), on_stack: _ } => {
-                // tRust: invariant — only sized argument ABIs may be stored into Rust places; unsized indirect args are handled separately
                 bug!("unsized `ArgAbi` cannot be stored");
             }
             PassMode::Cast { cast, pad_i32: _ } => {
@@ -275,7 +273,6 @@ impl<'ll, 'tcx> ArgAbiExt<'ll, 'tcx> for ArgAbi<'tcx, Ty<'tcx>> {
                 OperandValue::Pair(next(), next()).store(bx, dst);
             }
             PassMode::Indirect { attrs: _, meta_attrs: Some(_), on_stack: _ } => {
-                // tRust: invariant — only sized argument ABIs may be stored into Rust places; unsized indirect args are handled separately
                 bug!("unsized `ArgAbi` cannot be stored");
             }
             PassMode::Direct(_)
@@ -664,12 +661,10 @@ impl<'ll, 'tcx> FnAbiLlvmExt<'ll, 'tcx> for FnAbi<'tcx, Ty<'tcx>> {
 
         // Some intrinsics require that an elementtype attribute (with the pointee type of a
         // pointer argument) is added to the callsite.
-        // SAFETY: The LLVM context is valid, and the type reference is a valid LLVM type.
         let element_type_index = unsafe { llvm::LLVMRustGetElementTypeArgIndex(callsite) };
         if element_type_index >= 0 {
             let arg_ty = self.args[element_type_index as usize].layout.ty;
             let pointee_ty = arg_ty.builtin_deref(true).expect("Must be pointer argument");
-            // SAFETY: The LLVM context is valid, and the type reference is a valid LLVM type.
             let element_type_attr = unsafe {
                 llvm::LLVMRustCreateElementTypeAttr(bx.llcx, bx.layout_of(pointee_ty).llvm_type(bx))
             };

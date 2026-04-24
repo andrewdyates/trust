@@ -48,7 +48,6 @@ pub trait Projectable<'tcx, Prov: Provenance>: Sized + std::fmt::Debug {
             // We need to consult `meta` metadata
             match layout.ty.kind() {
                 ty::Slice(..) | ty::Str => self.meta().unwrap_meta().to_target_usize(ecx),
-                // tRust: invariant — len on unsized types only supports slices and str
                 _ => bug!("len not supported on unsized type {:?}", layout.ty),
             }
         } else {
@@ -56,7 +55,6 @@ pub trait Projectable<'tcx, Prov: Provenance>: Sized + std::fmt::Debug {
             // e.g., SIMD types. (But not all repr(simd) types even have FieldsShape::Array!)
             match layout.fields {
                 abi::FieldsShape::Array { count, .. } => interp_ok(count),
-                // tRust: invariant — len on sized types only supports arrays
                 _ => bug!("len not supported on sized type {:?}", layout.ty),
             }
         }
@@ -136,7 +134,7 @@ impl<'a, 'tcx, Prov: Provenance, P: Projectable<'tcx, Prov>> ArrayIterator<'a, '
     }
 }
 
-// tRust: known issue — Working around https://github.com/rust-lang/rust/issues/54385
+// FIXME: Working around https://github.com/rust-lang/rust/issues/54385
 impl<'tcx, Prov, M> InterpCx<'tcx, M>
 where
     Prov: Provenance,
@@ -253,7 +251,6 @@ where
                 let field_layout = base.layout().field(self, 0);
                 (offset, field_layout)
             }
-            // tRust: invariant — match arms cover all valid cases for this type/value
             _ => span_bug!(
                 self.cur_span(),
                 "`project_index` called on non-array type {:?}",
@@ -270,7 +267,7 @@ where
         &self,
         base: &P,
     ) -> InterpResult<'tcx, (P, u64)> {
-        assert!(base.layout().ty.ty_adt_def().expect("invariant: SIMD type must be an ADT to access elements").repr().simd());
+        assert!(base.layout().ty.ty_adt_def().unwrap().repr().simd());
         // SIMD types must be newtypes around arrays, so all we have to do is project to their only field.
         let array = self.project_field(base, FieldIdx::ZERO)?;
         let len = array.len(self)?;
@@ -292,7 +289,7 @@ where
 
         let index = if from_end {
             assert!(0 < offset && offset <= min_length);
-            n.checked_sub(offset).expect("invariant: slice length n >= offset when truncating from end")
+            n.checked_sub(offset).unwrap()
         } else {
             assert!(offset < min_length);
             offset
@@ -308,7 +305,6 @@ where
         base: &'a P,
     ) -> InterpResult<'tcx, ArrayIterator<'a, 'tcx, M::Provenance, P>> {
         let abi::FieldsShape::Array { stride, .. } = base.layout().fields else {
-            // tRust: invariant — project_array_fields requires an array layout
             span_bug!(
                 self.cur_span(),
                 "project_array_fields: expected an array layout, got {:#?}",
@@ -319,7 +315,7 @@ where
         let field_layout = base.layout().field(self, 0);
         // Ensure that all the offsets are in-bounds once, up-front.
         debug!("project_array_fields: {base:?} {len}");
-        base.offset(len * stride, self.layout_of(self.tcx.types.unit).expect("invariant: unit type layout is always available"), self)?;
+        base.offset(len * stride, self.layout_of(self.tcx.types.unit).unwrap(), self)?;
         // Create the iterator.
         interp_ok(ArrayIterator {
             base,
@@ -344,7 +340,7 @@ where
                 // This can only be reached in ConstProp and non-rustc-MIR.
                 throw_ub!(BoundsCheckFailed { len, index: from.saturating_add(to) });
             }
-            len.checked_sub(to).expect("invariant: total length >= to index for subslice computation")
+            len.checked_sub(to).unwrap()
         } else {
             to
         };
@@ -354,7 +350,6 @@ where
         let from_offset = match base.layout().fields {
             abi::FieldsShape::Array { stride, .. } => stride * from, // `Size` multiplication is checked
             _ => {
-                // tRust: invariant — index projection requires an array or slice layout
                 span_bug!(
                     self.cur_span(),
                     "unexpected layout of index access: {:#?}",
@@ -364,7 +359,7 @@ where
         };
 
         // Compute meta and new layout
-        let inner_len = actual_to.checked_sub(from).expect("invariant: actual_to >= from for subslice length computation");
+        let inner_len = actual_to.checked_sub(from).unwrap();
         let (meta, ty) = match base.layout().ty.kind() {
             // It is not nice to match on the type, but that seems to be the only way to
             // implement this.
@@ -376,7 +371,6 @@ where
                 (MemPlaceMeta::Meta(len), base.layout().ty)
             }
             _ => {
-                // tRust: invariant — subslice projection requires an array or slice type
                 span_bug!(
                     self.cur_span(),
                     "cannot subslice non-array type: `{:?}`",
@@ -398,7 +392,6 @@ where
         use rustc_middle::mir::ProjectionElem::*;
         interp_ok(match proj_elem {
             OpaqueCast(ty) => {
-                // tRust: invariant — OpaqueCast projections are removed during borrowck and should not appear in runtime MIR
                 span_bug!(self.cur_span(), "OpaqueCast({ty}) encountered after borrowck")
             }
             UnwrapUnsafeBinder(target) => base.transmute(self.layout_of(target)?, self)?,

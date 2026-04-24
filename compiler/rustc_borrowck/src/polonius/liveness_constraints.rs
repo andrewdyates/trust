@@ -46,7 +46,7 @@ impl<'tcx> VarianceExtractor<'_, 'tcx> {
         // present in the constraint graph as they are live, and liveness edges construction has a
         // fallback for this case.
         //
-        // // NOTE: these cases need investigation to not ignore regions these cases better to not ignore regions
+        // FIXME: that being said, we need to investigate these cases better to not ignore regions
         // in general.
         if region.is_bound() {
             // We ignore these because they cannot be turned into the vids we need.
@@ -58,7 +58,7 @@ impl<'tcx> VarianceExtractor<'_, 'tcx> {
             // show up here looks like either an issue upstream or a combination with unexpectedly
             // continuing compilation too far when we're in a tainted by errors situation.
             //
-            // // NOTE: investigate the `generic_const_exprs` test that triggers this issue, test that triggers this issue,
+            // FIXME: investigate the `generic_const_exprs` test that triggers this issue,
             // `ui/const-generics/generic_const_exprs/issue-97047-ice-2.rs`
             return;
         }

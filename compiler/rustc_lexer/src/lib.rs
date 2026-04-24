@@ -313,7 +313,7 @@ pub fn validate_raw_str(input: &str, prefix_len: u32) -> Result<(), RawStrError>
     let mut cursor = Cursor::new(input, FrontmatterAllowed::No);
     // Move past the leading `r` or `br`.
     for _ in 0..prefix_len {
-        cursor.bump().expect("invariant: raw string prefix characters must be present in non-empty input"); // tRust: unwrap -> expect
+        cursor.bump().unwrap();
     }
     cursor.raw_double_quoted_string(prefix_len).map(|_| ())
 }

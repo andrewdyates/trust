@@ -225,17 +225,11 @@ pub(super) fn codegen_x86_llvm_intrinsic_call<'tcx>(
                 _CMP_EQ_UQ | _CMP_EQ_US => FloatCC::UnorderedOrEqual,
                 _CMP_NGE_US | _CMP_NGE_UQ => FloatCC::UnorderedOrLessThan,
                 _CMP_NGT_US | _CMP_NGT_UQ => FloatCC::UnorderedOrLessThanOrEqual,
-                // tRust: CMP_FALSE always returns false; not directly representable as FloatCC
-                _CMP_FALSE_OQ | _CMP_FALSE_OS => {
-                    bug!("unimplemented: CMP_FALSE float comparison predicate is not supported in Cranelift")
-                }
+                _CMP_FALSE_OQ | _CMP_FALSE_OS => todo!(),
                 _CMP_NEQ_OQ | _CMP_NEQ_OS => FloatCC::OrderedNotEqual,
                 _CMP_GE_OS | _CMP_GE_OQ => FloatCC::GreaterThanOrEqual,
                 _CMP_GT_OS | _CMP_GT_OQ => FloatCC::GreaterThan,
-                // tRust: CMP_TRUE always returns true; not directly representable as FloatCC
-                _CMP_TRUE_UQ | _CMP_TRUE_US => {
-                    bug!("unimplemented: CMP_TRUE float comparison predicate is not supported in Cranelift")
-                }
+                _CMP_TRUE_UQ | _CMP_TRUE_US => todo!(),
 
                 kind => unreachable!("kind {:?}", kind),
             };

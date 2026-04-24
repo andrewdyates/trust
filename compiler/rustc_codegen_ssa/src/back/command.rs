@@ -166,12 +166,6 @@ impl Command {
                     .saturating_add(nul)
                     .saturating_add(ptr_size)
             });
-            // SAFETY: `sysconf(_SC_ARG_MAX)` is a POSIX-specified call with no // tRust:
-            // preconditions beyond passing a valid configuration name. `_SC_ARG_MAX`
-            // is a well-defined constant. The call returns `c_long` (-1 on error),
-            // which we handle in the match below.
-            // SAFETY: `_SC_ARG_MAX` is a valid `sysconf` selector, so this call
-            // has no preconditions beyond the constant itself.
             let arg_max = match unsafe { libc::sysconf(libc::_SC_ARG_MAX) } {
                 -1 => return false, // Go to OS anyway.
                 max => max as usize,

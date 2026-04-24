@@ -192,7 +192,7 @@ impl ProofFrontier {
                     VerificationResult::Unknown { .. } | VerificationResult::Timeout { .. } => {
                         unknown += 1;
                     }
-                    _ => {},
+                    _ => {}
                 }
             }
         }
@@ -223,13 +223,10 @@ fn compute_changes(
     // Check VCs present in new results.
     for (vc_id, &new_status) in new {
         if let Some(&old_status) = old.get(vc_id)
-            && old_status != new_status {
-                changes.push(VcStatusChange {
-                    vc_id: vc_id.clone(),
-                    old_status,
-                    new_status,
-                });
-            }
+            && old_status != new_status
+        {
+            changes.push(VcStatusChange { vc_id: vc_id.clone(), old_status, new_status });
+        }
         // VCs that appear for the first time are not status *changes*.
     }
 
@@ -270,7 +267,7 @@ mod tests {
     fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
         VerificationCondition {
             kind,
-            function: function.to_string(),
+            function: function.into(),
             location: SourceSpan {
                 file: "test.rs".into(),
                 line_start: 1,
@@ -289,7 +286,7 @@ mod tests {
             time_ms: 1,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
-                solver_warnings: None,
+            solver_warnings: None,
         }
     }
 
@@ -339,20 +336,8 @@ mod tests {
     #[test]
     fn test_frontier_from_mixed_results() {
         let cr = make_crate_result(vec![
-            (
-                "foo",
-                vec![
-                    (VcKind::DivisionByZero, proved()),
-                    (VcKind::IndexOutOfBounds, failed()),
-                ],
-            ),
-            (
-                "bar",
-                vec![
-                    (VcKind::Postcondition, unknown()),
-                    (VcKind::Unreachable, timeout()),
-                ],
-            ),
+            ("foo", vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())]),
+            ("bar", vec![(VcKind::Postcondition, unknown()), (VcKind::Unreachable, timeout())]),
         ]);
         let frontier = ProofFrontier::from_verification_result(&cr);
         assert_eq!(frontier.trusted, 1);
@@ -369,10 +354,7 @@ mod tests {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
         let cr = make_crate_result(vec![(
             "foo",
-            vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, proved()),
-            ],
+            vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, proved())],
         )]);
         tracker.observe(&cr);
         let score = tracker.convergence_score().expect("should have score");
@@ -384,10 +366,7 @@ mod tests {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
         let cr = make_crate_result(vec![(
             "foo",
-            vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, failed()),
-            ],
+            vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())],
         )]);
         tracker.observe(&cr);
         let score = tracker.convergence_score().expect("should have score");
@@ -405,10 +384,7 @@ mod tests {
     #[test]
     fn test_first_observation_no_changes() {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
-        let cr = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, proved())],
-        )]);
+        let cr = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, proved())])]);
         let changes = tracker.observe(&cr);
         assert!(changes.is_empty(), "first observation should produce no changes");
     }
@@ -417,17 +393,11 @@ mod tests {
     fn test_improvement_detected() {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
         // Iteration 0: foo/div-by-zero fails.
-        let cr0 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, failed())],
-        )]);
+        let cr0 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, failed())])]);
         tracker.observe(&cr0);
 
         // Iteration 1: foo/div-by-zero now proved.
-        let cr1 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, proved())],
-        )]);
+        let cr1 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, proved())])]);
         let changes = tracker.observe(&cr1);
         assert_eq!(changes.len(), 1);
         assert!(changes[0].is_improvement());
@@ -439,17 +409,11 @@ mod tests {
     fn test_regression_detected() {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
         // Iteration 0: proved.
-        let cr0 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, proved())],
-        )]);
+        let cr0 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, proved())])]);
         tracker.observe(&cr0);
 
         // Iteration 1: now fails.
-        let cr1 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, failed())],
-        )]);
+        let cr1 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, failed())])]);
         let changes = tracker.observe(&cr1);
         assert_eq!(changes.len(), 1);
         assert!(changes[0].is_regression());
@@ -462,20 +426,14 @@ mod tests {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
         let cr = make_crate_result(vec![(
             "foo",
-            vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, failed()),
-            ],
+            vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())],
         )]);
         tracker.observe(&cr);
 
         // Observe same result — no changes.
         let cr2 = make_crate_result(vec![(
             "foo",
-            vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, failed()),
-            ],
+            vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())],
         )]);
         let changes = tracker.observe(&cr2);
         assert!(changes.is_empty(), "identical results should produce no changes");
@@ -488,18 +446,12 @@ mod tests {
         // Iteration 0: two VCs.
         let cr0 = make_crate_result(vec![(
             "foo",
-            vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, proved()),
-            ],
+            vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, proved())],
         )]);
         tracker.observe(&cr0);
 
         // Iteration 1: one VC disappeared.
-        let cr1 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, proved())],
-        )]);
+        let cr1 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, proved())])]);
         let changes = tracker.observe(&cr1);
         assert_eq!(changes.len(), 1);
         // Disappeared proved VC is a regression.
@@ -584,26 +536,17 @@ mod tests {
         let mut tracker = VerificationConvergenceTracker::new(3, 10);
 
         // Iteration 0: failed.
-        let cr0 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, failed())],
-        )]);
+        let cr0 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, failed())])]);
         tracker.observe(&cr0);
 
         // Iteration 1: proved (improvement).
-        let cr1 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, proved())],
-        )]);
+        let cr1 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, proved())])]);
         let changes1 = tracker.observe(&cr1);
         assert_eq!(changes1.len(), 1);
         assert!(changes1[0].is_improvement());
 
         // Iteration 2: back to failed (regression).
-        let cr2 = make_crate_result(vec![(
-            "foo",
-            vec![(VcKind::DivisionByZero, failed())],
-        )]);
+        let cr2 = make_crate_result(vec![("foo", vec![(VcKind::DivisionByZero, failed())])]);
         let changes2 = tracker.observe(&cr2);
         assert_eq!(changes2.len(), 1);
         assert!(changes2[0].is_regression());

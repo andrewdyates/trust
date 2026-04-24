@@ -56,12 +56,7 @@ pub fn find_function(source: &str, name: &str) -> Vec<FunctionLocation> {
         let line = source[..item_offset].matches('\n').count() + 1;
         let indent = extract_indent(source, item_offset);
 
-        results.push(FunctionLocation {
-            item_offset,
-            fn_offset: fn_byte_offset,
-            line,
-            indent,
-        });
+        results.push(FunctionLocation { item_offset, fn_offset: fn_byte_offset, line, indent });
     }
 
     results
@@ -94,7 +89,9 @@ fn find_item_start(source: &str, fn_offset: usize) -> usize {
 
         // Try stripping known qualifiers from the end of current
         let mut matched = false;
-        for qualifier in &["pub(super)", "pub(crate)", "pub(self)", "pub", "async", "unsafe", "const", "extern"] {
+        for qualifier in
+            &["pub(super)", "pub(crate)", "pub(self)", "pub", "async", "unsafe", "const", "extern"]
+        {
             if current.ends_with(qualifier) {
                 let start = current.len() - qualifier.len();
                 // Check it's a token boundary (not part of another word)
@@ -124,21 +121,14 @@ fn find_item_start(source: &str, fn_offset: usize) -> usize {
     // If everything between line_start and pos is whitespace,
     // the item starts at line_start (preserving indentation context).
     let between = &source[line_start..pos];
-    if between.chars().all(|c| c == ' ' || c == '\t') {
-        line_start
-    } else {
-        pos
-    }
+    if between.chars().all(|c| c == ' ' || c == '\t') { line_start } else { pos }
 }
 
 /// Extract the indentation (leading whitespace) of the line containing `offset`.
 fn extract_indent(source: &str, offset: usize) -> String {
     let line_start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
     let line_rest = &source[line_start..];
-    line_rest
-        .chars()
-        .take_while(|c| *c == ' ' || *c == '\t')
-        .collect()
+    line_rest.chars().take_while(|c| *c == ' ' || *c == '\t').collect()
 }
 
 #[cfg(test)]

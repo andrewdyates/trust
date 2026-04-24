@@ -36,7 +36,7 @@ const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(&[
     Allow(Target::MacroDef),
     Allow(Target::Crate),
     Allow(Target::Mod),
-    Allow(Target::Use), // tRust: known issue — I don't think this does anything?
+    Allow(Target::Use), // FIXME I don't think this does anything?
     Allow(Target::Const),
     Allow(Target::AssocConst),
     Allow(Target::AssocTy),
@@ -149,7 +149,7 @@ impl<S: Stage> AttributeParser<S> for StabilityParser {
     }
 }
 
-// tRust: known issue — (jdonszelmann) change to Single
+// FIXME(jdonszelmann) change to Single
 #[derive(Default)]
 pub(crate) struct BodyStabilityParser {
     stability: Option<(DefaultBodyStability, Span)>,
@@ -252,7 +252,7 @@ impl<S: Stage> AttributeParser<S> for ConstStabilityParser {
         Allow(Target::Method(MethodKind::Trait { body: true })),
         Allow(Target::Impl { of_trait: false }),
         Allow(Target::Impl { of_trait: true }),
-        Allow(Target::Use), // tRust: known issue — I don't think this does anything?
+        Allow(Target::Use), // FIXME I don't think this does anything?
         Allow(Target::Const),
         Allow(Target::AssocConst),
         Allow(Target::Trait),
@@ -324,10 +324,10 @@ pub(crate) fn parse_stability<S: Stage>(
         let word = param.path().word();
         match word.map(|i| i.name) {
             Some(sym::feature) => {
-                insert_value_into_option_or_error(cx, &param, &mut feature, word.expect("invariant: matched Some(sym::feature) so word is Some"))? // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut feature, word.unwrap())?
             }
             Some(sym::since) => {
-                insert_value_into_option_or_error(cx, &param, &mut since, word.expect("invariant: matched Some(sym::since) so word is Some"))? // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut since, word.unwrap())?
             }
             _ => {
                 cx.expected_specific_argument(param_span, &[sym::feature, sym::since]);
@@ -394,17 +394,17 @@ pub(crate) fn parse_unstability<S: Stage>(
         let word = param.path().word();
         match word.map(|i| i.name) {
             Some(sym::feature) => {
-                insert_value_into_option_or_error(cx, &param, &mut feature, word.expect("invariant: matched Some(sym::feature) so word is Some"))? // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut feature, word.unwrap())?
             }
             Some(sym::reason) => {
-                insert_value_into_option_or_error(cx, &param, &mut reason, word.expect("invariant: matched Some(sym::reason) so word is Some"))? // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut reason, word.unwrap())?
             }
             Some(sym::issue) => {
-                insert_value_into_option_or_error(cx, &param, &mut issue, word.expect("invariant: matched Some(sym::issue) so word is Some"))?; // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut issue, word.unwrap())?;
 
                 // These unwraps are safe because `insert_value_into_option_or_error` ensures the meta item
                 // is a name/value pair string literal.
-                issue_num = match issue.expect("invariant: insert_value_into_option_or_error just set issue to Some").as_str() { // tRust: unwrap -> expect
+                issue_num = match issue.unwrap().as_str() {
                     "none" => None,
                     issue_str => match issue_str.parse::<NonZero<u32>>() {
                         Ok(num) => Some(num),
@@ -413,7 +413,7 @@ pub(crate) fn parse_unstability<S: Stage>(
                                 session_diagnostics::InvalidIssueString {
                                     span: param.span(),
                                     cause: session_diagnostics::InvalidIssueStringCause::from_int_error_kind(
-                                        param.args().name_value().expect("invariant: issue param is a name/value pair").value_span, // tRust: unwrap -> expect
+                                        param.args().name_value().unwrap().value_span,
                                         err.kind(),
                                     ),
                                 },
@@ -424,10 +424,10 @@ pub(crate) fn parse_unstability<S: Stage>(
                 };
             }
             Some(sym::implied_by) => {
-                insert_value_into_option_or_error(cx, &param, &mut implied_by, word.expect("invariant: matched Some(sym::implied_by) so word is Some"))? // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut implied_by, word.unwrap())?
             }
             Some(sym::old_name) => {
-                insert_value_into_option_or_error(cx, &param, &mut old_name, word.expect("invariant: matched Some(sym::old_name) so word is Some"))? // tRust: unwrap -> expect
+                insert_value_into_option_or_error(cx, &param, &mut old_name, word.unwrap())?
             }
             _ => {
                 cx.expected_specific_argument(

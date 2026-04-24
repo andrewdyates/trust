@@ -7,13 +7,10 @@ macro_rules! define_tests {
         #[test]
         fn $name() {
             let unambig = $kind::$variant::<'_, ()> { $($init)* };
-            // SAFETY: `$kind` is `repr(C)` and its discriminant type is `repr(u8)`, so the
-            // layout is identical regardless of the ZST type argument (`()` vs `AmbigArg`).
             let unambig_to_ambig = unsafe { std::mem::transmute::<_, $kind<'_, AmbigArg>>(unambig) };
 
             assert!(matches!(&unambig_to_ambig, &$kind::$variant { $($init)* }));
 
-            // SAFETY: Same layout guarantee as above; round-tripping back to the original type.
             let ambig_to_unambig = unsafe { std::mem::transmute::<_, $kind<'_, ()>>(unambig_to_ambig) };
 
             assert!(matches!(&ambig_to_unambig, &$kind::$variant { $($init)* }));
@@ -64,8 +61,6 @@ fn trait_object_roundtrips_impl(syntax: TraitObjectSyntax) {
         syntax: LifetimeSyntax::Implicit,
     };
     let unambig = TyKind::TraitObject::<'_, ()>(&[], TaggedRef::new(&lt, syntax));
-    // SAFETY: `TyKind` is `repr(C)` with `repr(u8)` discriminant, so the layout is
-    // identical for different ZST type arguments (`()` vs `AmbigArg`).
     let unambig_to_ambig = unsafe { std::mem::transmute::<_, TyKind<'_, AmbigArg>>(unambig) };
 
     match unambig_to_ambig {
@@ -75,7 +70,6 @@ fn trait_object_roundtrips_impl(syntax: TraitObjectSyntax) {
         _ => panic!("`TyKind::TraitObject` did not roundtrip"),
     };
 
-    // SAFETY: Same layout guarantee as above; round-tripping back to the original type.
     let ambig_to_unambig = unsafe { std::mem::transmute::<_, TyKind<'_, ()>>(unambig_to_ambig) };
 
     match ambig_to_unambig {

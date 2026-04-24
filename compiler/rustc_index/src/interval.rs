@@ -275,7 +275,7 @@ impl<I: Idx> IntervalSet<I> {
     pub fn insert_all(&mut self) {
         self.clear();
         if let Some(end) = self.domain.checked_sub(1) {
-            self.map.push((0, end.try_into().expect("invariant: domain-1 fits in interval index type"))); // tRust: unwrap -> expect
+            self.map.push((0, end.try_into().unwrap()));
         }
         debug_assert!(self.check_invariants());
     }

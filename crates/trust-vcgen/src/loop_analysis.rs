@@ -21,6 +21,7 @@ pub(crate) enum StepDirection {
 
 /// An induction variable detected inside a loop.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields read in tests; struct populated by detect_loops
 pub(crate) struct InductionVar {
     /// Local variable index in the function body.
     pub(crate) local_idx: usize,
@@ -42,11 +43,11 @@ pub(crate) struct LoopInfo {
     /// Block ID of the loop header (target of the back-edge).
     pub(crate) header: BlockId,
     /// Block ID of the latch (source of the back-edge).
-    pub(crate) latch: BlockId,
+    pub(crate) _latch: BlockId,
     /// All blocks in the loop body (header through latch, inclusive).
     pub(crate) body_blocks: Vec<BlockId>,
     /// Blocks that exit the loop (successors of body blocks that are outside the loop).
-    pub(crate) exit_blocks: Vec<BlockId>,
+    pub(crate) _exit_blocks: Vec<BlockId>,
     /// Induction variables detected in this loop (populated by `find_induction_variables`).
     pub(crate) induction_vars: Vec<InductionVar>,
 }
@@ -94,9 +95,9 @@ pub(crate) fn detect_loops(func: &VerifiableFunction) -> Vec<LoopInfo> {
 
                 loops.push(LoopInfo {
                     header,
-                    latch,
+                    _latch: latch,
                     body_blocks,
-                    exit_blocks,
+                    _exit_blocks: exit_blocks,
                     induction_vars: Vec::new(),
                 });
             }
@@ -150,10 +151,7 @@ pub(crate) fn find_induction_variables(
 
                 let step = detect_step(rvalue, local_idx);
                 if let Some(step_val) = step {
-                    let name = decl
-                        .name
-                        .clone()
-                        .unwrap_or_else(|| format!("_{local_idx}"));
+                    let name = decl.name.clone().unwrap_or_else(|| format!("_{local_idx}"));
                     let direction = if step_val > 0 {
                         StepDirection::Ascending
                     } else {
@@ -223,10 +221,12 @@ fn find_init_value(
         }
         for stmt in &block.stmts {
             if let Statement::Assign { place, rvalue, .. } = stmt
-                && place.local == local_idx && place.projections.is_empty()
-                    && let Rvalue::Use(op) = rvalue {
-                        return Some(crate::operand_to_formula(func, op));
-                    }
+                && place.local == local_idx
+                && place.projections.is_empty()
+                && let Rvalue::Use(op) = rvalue
+            {
+                return Some(crate::operand_to_formula(func, op));
+            }
         }
     }
     None
@@ -442,11 +442,7 @@ mod tests {
                         terminator: Terminator::Goto(BlockId(0)),
                     },
                     // bb2 (exit): return
-                    BasicBlock {
-                        id: BlockId(2),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 1,
                 return_ty: Ty::Unit,
@@ -606,7 +602,7 @@ mod tests {
         let loops = detect_loops(&func);
         assert_eq!(loops.len(), 1, "sum loop has exactly one loop");
         assert_eq!(loops[0].header, BlockId(1));
-        assert_eq!(loops[0].latch, BlockId(2));
+        assert_eq!(loops[0]._latch, BlockId(2));
         assert!(loops[0].body_blocks.contains(&BlockId(1)));
         assert!(loops[0].body_blocks.contains(&BlockId(2)));
     }
@@ -618,9 +614,9 @@ mod tests {
         assert_eq!(loops.len(), 1);
         // bb3 is the exit block (otherwise target of SwitchInt in bb1)
         assert!(
-            loops[0].exit_blocks.contains(&BlockId(3)),
+            loops[0]._exit_blocks.contains(&BlockId(3)),
             "bb3 should be an exit block, got: {:?}",
-            loops[0].exit_blocks
+            loops[0]._exit_blocks
         );
     }
 
@@ -630,7 +626,7 @@ mod tests {
         let loops = detect_loops(&func);
         assert_eq!(loops.len(), 1);
         assert_eq!(loops[0].header, BlockId(0));
-        assert_eq!(loops[0].latch, BlockId(1));
+        assert_eq!(loops[0]._latch, BlockId(1));
     }
 
     #[test]
@@ -714,10 +710,7 @@ mod tests {
     fn test_binary_search_has_exit_block() {
         let func = binary_search_function();
         let loops = detect_loops(&func);
-        assert!(
-            loops[0].exit_blocks.contains(&BlockId(3)),
-            "bb3 should be exit block"
-        );
+        assert!(loops[0]._exit_blocks.contains(&BlockId(3)), "bb3 should be exit block");
     }
 
     #[test]
@@ -726,10 +719,7 @@ mod tests {
         let loops = detect_loops(&func);
         let ivars = find_induction_variables(&loops[0], &func);
         assert!(!ivars.is_empty(), "should find at least one induction variable");
-        assert!(
-            ivars.iter().any(|v| v.name == "i"),
-            "should find `i` as induction variable"
-        );
+        assert!(ivars.iter().any(|v| v.name == "i"), "should find `i` as induction variable");
     }
 
     #[test]

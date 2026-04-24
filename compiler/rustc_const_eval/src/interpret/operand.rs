@@ -84,9 +84,7 @@ impl<Prov: Provenance> Immediate<Prov> {
     pub fn to_scalar(self) -> Scalar<Prov> {
         match self {
             Immediate::Scalar(val) => val,
-            // tRust: invariant — Immediate variant must match expected ABI: scalar expected but got ScalarPair
             Immediate::ScalarPair(..) => bug!("Got a scalar pair where a scalar was expected"),
-            // tRust: invariant — scalar value must be initialized, never Uninit
             Immediate::Uninit => bug!("Got uninit where a scalar was expected"),
         }
     }
@@ -94,7 +92,7 @@ impl<Prov: Provenance> Immediate<Prov> {
     #[inline]
     #[cfg_attr(debug_assertions, track_caller)] // only in debug builds due to perf (see #98980)
     pub fn to_scalar_int(self) -> ScalarInt {
-        self.to_scalar().try_to_scalar_int().expect("invariant: Immediate::Scalar always holds a valid ScalarInt")
+        self.to_scalar().try_to_scalar_int().unwrap()
     }
 
     #[inline]
@@ -102,9 +100,7 @@ impl<Prov: Provenance> Immediate<Prov> {
     pub fn to_scalar_pair(self) -> (Scalar<Prov>, Scalar<Prov>) {
         match self {
             Immediate::ScalarPair(val1, val2) => (val1, val2),
-            // tRust: invariant — Immediate variant must match expected ABI: ScalarPair expected but got Scalar
             Immediate::Scalar(..) => bug!("Got a scalar where a scalar pair was expected"),
-            // tRust: invariant — ScalarPair value must be initialized, never Uninit
             Immediate::Uninit => bug!("Got uninit where a scalar pair was expected"),
         }
     }
@@ -116,7 +112,6 @@ impl<Prov: Provenance> Immediate<Prov> {
         match self {
             Immediate::ScalarPair(val1, val2) => (val1, MemPlaceMeta::Meta(val2)),
             Immediate::Scalar(val) => (val, MemPlaceMeta::None),
-            // tRust: invariant — scalar or ScalarPair value must be initialized, never Uninit
             Immediate::Uninit => bug!("Got uninit where a scalar or scalar pair was expected"),
         }
     }
@@ -162,7 +157,6 @@ impl<Prov: Provenance> Immediate<Prov> {
                 assert!(abi.is_sized(), "{msg}: unsized immediates are not a thing");
             }
             _ => {
-                // tRust: invariant — Immediate value must match the expected backend ABI representation
                 bug!("{msg}: value {self:?} does not match ABI {abi:?})",)
             }
         }
@@ -232,7 +226,7 @@ impl<Prov: Provenance> std::fmt::Display for ImmTy<'_, Prov> {
                     write!(f, "{:x}: {}", s, self.layout.ty)
                 }
                 Immediate::ScalarPair(a, b) => {
-                    // tRust: known issue (oli-obk) — at least print tuples and slices nicely
+                    // FIXME(oli-obk): at least print tuples and slices nicely
                     write!(f, "({:x}, {:x}): {}", a, b, self.layout.ty)
                 }
                 Immediate::Uninit => {
@@ -320,7 +314,7 @@ impl<'tcx, Prov: Provenance> ImmTy<'tcx, Prov> {
         // Can use any typing env, since `bool` is always monomorphic.
         let layout = tcx
             .layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(tcx.types.bool))
-            .expect("invariant: scalar value is valid for its type during const-eval");
+            .unwrap();
         Self::from_scalar(Scalar::from_bool(b), layout)
     }
 
@@ -329,7 +323,7 @@ impl<'tcx, Prov: Provenance> ImmTy<'tcx, Prov> {
         // Can use any typing env, since `Ordering` is always monomorphic.
         let ty = tcx.ty_ordering_enum(DUMMY_SP);
         let layout =
-            tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty)).expect("invariant: fully monomorphized type layout is always computable");
+            tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(ty)).unwrap();
         Self::from_scalar(Scalar::Int(c.into()), layout)
     }
 
@@ -339,7 +333,7 @@ impl<'tcx, Prov: Provenance> ImmTy<'tcx, Prov> {
             .layout_of(
                 cx.typing_env().as_query_input(Ty::new_tup(cx.tcx(), &[a.layout.ty, b.layout.ty])),
             )
-            .expect("invariant: scalar pair values are valid for their types during const-eval");
+            .unwrap();
         Self::from_scalar_pair(a.to_scalar(), b.to_scalar(), layout)
     }
 
@@ -433,7 +427,6 @@ impl<'tcx, Prov: Provenance> ImmTy<'tcx, Prov> {
                 })
             }
             // everything else is a bug
-            // tRust: invariant — match arms cover all valid cases for this type/value
             _ => bug!(
                 "invalid field access on immediate {} at offset {}, original layout {:#?}",
                 self,
@@ -683,10 +676,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     abi::Scalar::Initialized { .. }
                 )
         ) {
-            // tRust: invariant — primitive read requires a type with Scalar or ScalarPair ABI
             span_bug!(self.cur_span(), "primitive read not possible for type: {}", op.layout().ty);
         }
-        let imm = self.read_immediate_raw(op)?.right().expect("invariant: read_immediate_raw returns Right for non-uninit operands");
+        let imm = self.read_immediate_raw(op)?.right().unwrap();
         if matches!(*imm, Immediate::Uninit) {
             throw_ub!(InvalidUninitBytes(None));
         }
@@ -825,7 +817,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 self.layout_of(normalized_place_ty)?,
                 op.layout,
             ) {
-                // tRust: invariant — MIR place type must match the interpreter operand type after evaluation
                 span_bug!(
                     self.cur_span(),
                     "eval_place of a MIR place with type {} produced an interpreter operand with type {}",
@@ -851,7 +842,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         use rustc_middle::mir::Operand::*;
         let op = match mir_op {
-            // tRust: known issue — do some more logic on `move` to invalidate the old location
+            // FIXME: do some more logic on `move` to invalidate the old location
             &Copy(place) | &Move(place) => self.eval_place_to_op(place, layout)?,
 
             &RuntimeChecks(checks) => {

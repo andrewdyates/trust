@@ -22,7 +22,7 @@ pub(crate) fn target() -> Target {
             // The default on linux is to have `default_uwtable=true`, but on
             // this target we get an "`__aeabi_unwind_cpp_pr0` not defined"
             // linker error, so set it to `true` here.
-            // tRust: known issue (#146996) — Remove this override once #146996 has been fixed.
+            // FIXME(#146996): Remove this override once #146996 has been fixed.
             default_uwtable: false,
             ..base::linux_gnu::opts()
         },

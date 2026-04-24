@@ -158,10 +158,7 @@ pub struct ModularVcResult {
 /// Body VCs are generated via the standard `generate_vcs` pipeline and then
 /// augmented with callee assumptions where available.
 #[must_use]
-pub fn modular_vcgen(
-    func: &VerifiableFunction,
-    summaries: &SummaryDatabase,
-) -> ModularVcResult {
+pub fn modular_vcgen(func: &VerifiableFunction, summaries: &SummaryDatabase) -> ModularVcResult {
     // tRust: Generate base body VCs using the standard pipeline.
     let body_vcs = crate::generate_vcs(func);
 
@@ -179,10 +176,8 @@ pub fn modular_vcgen(
                     // assume postconditions.
                     for (i, pre) in summary.preconditions.iter().enumerate() {
                         precondition_vcs.push(VerificationCondition {
-                            kind: VcKind::Precondition {
-                                callee: callee_name.clone(),
-                            },
-                            function: func.name.clone(),
+                            kind: VcKind::Precondition { callee: callee_name.clone() },
+                            function: func.name.as_str().into(),
                             location: span.clone(),
                             formula: Formula::Not(Box::new(pre.clone())),
                             contract_metadata: None,
@@ -209,7 +204,9 @@ pub fn modular_vcgen(
     } else {
         let assumption = if callee_assumptions.len() == 1 {
             // SAFETY: len == 1 guarantees .next() returns Some.
-            callee_assumptions.into_iter().next()
+            callee_assumptions
+                .into_iter()
+                .next()
                 .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
         } else {
             Formula::And(callee_assumptions)
@@ -218,10 +215,7 @@ pub fn modular_vcgen(
         body_vcs
             .into_iter()
             .map(|vc| VerificationCondition {
-                formula: Formula::Implies(
-                    Box::new(assumption.clone()),
-                    Box::new(vc.formula),
-                ),
+                formula: Formula::Implies(Box::new(assumption.clone()), Box::new(vc.formula)),
                 kind: vc.kind,
                 function: vc.function,
                 location: vc.location,
@@ -320,37 +314,34 @@ pub fn generate_modular_vcs(
     for block in &func.body.blocks {
         if let Terminator::Call { func: callee_name, span, .. } = &block.terminator
             && let Some(summary) = summaries.get(callee_name)
-                && summary.proved {
-                    for (i, pre) in summary.preconditions.iter().enumerate() {
-                        vcs.push(VerificationCondition {
-                            kind: VcKind::Precondition {
-                                callee: callee_name.clone(),
-                            },
-                            function: func.name.clone(),
-                            location: span.clone(),
-                            formula: Formula::Not(Box::new(pre.clone())),
-                            contract_metadata: None,
-                        });
-                        let _check = ContractCheck::PreConditionAtCallSite {
-                            callee: callee_name.clone(),
-                            precondition_index: i,
-                        };
-                    }
-                }
+            && summary.proved
+        {
+            for (i, pre) in summary.preconditions.iter().enumerate() {
+                vcs.push(VerificationCondition {
+                    kind: VcKind::Precondition { callee: callee_name.clone() },
+                    function: func.name.as_str().into(),
+                    location: span.clone(),
+                    formula: Formula::Not(Box::new(pre.clone())),
+                    contract_metadata: None,
+                });
+                let _check = ContractCheck::PreConditionAtCallSite {
+                    callee: callee_name.clone(),
+                    precondition_index: i,
+                };
+            }
+        }
     }
 
     // 2. Postcondition checks at return points
     for (i, post) in func.postconditions.iter().enumerate() {
         vcs.push(VerificationCondition {
             kind: VcKind::Postcondition,
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             location: func.span.clone(),
             formula: Formula::Not(Box::new(post.clone())),
             contract_metadata: None,
         });
-        let _check = ContractCheck::PostConditionOnReturn {
-            postcondition_index: i,
-        };
+        let _check = ContractCheck::PostConditionOnReturn { postcondition_index: i };
     }
 
     // Note: Contract structs carry string bodies, not parsed formulas.
@@ -374,11 +365,7 @@ mod tests {
                     LocalDecl { index: 0, ty: Ty::usize(), name: None },
                     LocalDecl { index: 1, ty: Ty::usize(), name: Some("input".into()) },
                     LocalDecl { index: 2, ty: Ty::usize(), name: Some("n".into()) },
-                    LocalDecl {
-                        index: 3,
-                        ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                        name: None,
-                    },
+                    LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 ],
                 blocks: vec![
                     // bb0: n = parse(input)
@@ -447,11 +434,7 @@ mod tests {
                     LocalDecl { index: 1, ty: Ty::usize(), name: Some("input".into()) },
                     LocalDecl { index: 2, ty: Ty::usize(), name: Some("parsed".into()) },
                     LocalDecl { index: 3, ty: Ty::usize(), name: Some("result".into()) },
-                    LocalDecl {
-                        index: 4,
-                        ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                        name: None,
-                    },
+                    LocalDecl { index: 4, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 ],
                 blocks: vec![
                     // bb0: parsed = validate(input)
@@ -578,9 +561,7 @@ mod tests {
             Box::new(Formula::Int(0)),
         );
 
-        let summary = FunctionSummary::new("parse")
-            .with_postcondition(postcond.clone())
-            .proved();
+        let summary = FunctionSummary::new("parse").with_postcondition(postcond.clone()).proved();
         db.insert(summary);
 
         let result = modular_vcgen(&func, &db);
@@ -622,10 +603,7 @@ mod tests {
         let result = modular_vcgen(&func, &db);
 
         // Should generate 1 precondition VC for parse's precondition
-        assert_eq!(
-            result.precondition_vcs.len(), 1,
-            "should generate one precondition VC"
-        );
+        assert_eq!(result.precondition_vcs.len(), 1, "should generate one precondition VC");
         let pre_vc = &result.precondition_vcs[0];
         assert!(
             matches!(&pre_vc.kind, VcKind::Precondition { callee } if callee == "parse"),
@@ -645,8 +623,7 @@ mod tests {
         let mut db = SummaryDatabase::new();
 
         // Insert unproved summary — should be treated as havoc
-        let summary = FunctionSummary::new("parse")
-            .with_postcondition(Formula::Bool(true));
+        let summary = FunctionSummary::new("parse").with_postcondition(Formula::Bool(true));
         // Note: not calling .proved()
         db.insert(summary);
 
@@ -662,15 +639,12 @@ mod tests {
         let func = caller_two_callees();
         let mut db = SummaryDatabase::new();
 
-        let postcond = Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        );
+        let postcond =
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100)));
 
         // validate has a proved summary; unknown_fn does not
-        let summary = FunctionSummary::new("validate")
-            .with_postcondition(postcond.clone())
-            .proved();
+        let summary =
+            FunctionSummary::new("validate").with_postcondition(postcond.clone()).proved();
         db.insert(summary);
 
         let result = modular_vcgen(&func, &db);
@@ -691,23 +665,14 @@ mod tests {
     #[test]
     fn test_summary_sync_to_spec_db() {
         let mut db = SummaryDatabase::new();
-        let postcond = Formula::Ge(
-            Box::new(Formula::Var("n".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let postcond =
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0)));
 
         // Proved summary syncs to spec db
-        db.insert(
-            FunctionSummary::new("parse")
-                .with_postcondition(postcond.clone())
-                .proved(),
-        );
+        db.insert(FunctionSummary::new("parse").with_postcondition(postcond.clone()).proved());
 
         // Unproved summary does NOT sync
-        db.insert(
-            FunctionSummary::new("unsafe_parse")
-                .with_postcondition(Formula::Bool(true)),
-        );
+        db.insert(FunctionSummary::new("unsafe_parse").with_postcondition(Formula::Bool(true)));
 
         let mut spec_db = SpecDatabase::new();
         db.sync_to_spec_db(&mut spec_db);
@@ -728,16 +693,10 @@ mod tests {
         let func = caller_with_arithmetic();
         let mut db = SummaryDatabase::new();
 
-        let postcond = Formula::Ge(
-            Box::new(Formula::Var("n".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let postcond =
+            Formula::Ge(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0)));
 
-        db.insert(
-            FunctionSummary::new("parse")
-                .with_postcondition(postcond.clone())
-                .proved(),
-        );
+        db.insert(FunctionSummary::new("parse").with_postcondition(postcond.clone()).proved());
 
         let result = modular_vcgen(&func, &db);
 
@@ -748,10 +707,7 @@ mod tests {
         for vc in &result.body_vcs {
             match &vc.formula {
                 Formula::Implies(premise, conclusion) => {
-                    assert_eq!(
-                        **premise, postcond,
-                        "premise should be parse's postcondition"
-                    );
+                    assert_eq!(**premise, postcond, "premise should be parse's postcondition");
                     assert!(
                         !matches!(conclusion.as_ref(), Formula::Implies(..)),
                         "conclusion should not be double-wrapped"
@@ -857,12 +813,8 @@ mod tests {
             callee: "parse".to_string(),
             precondition_index: 0,
         };
-        let post = ContractCheck::PostConditionOnReturn {
-            postcondition_index: 1,
-        };
-        let frame = ContractCheck::FramePreservation {
-            variable: "state".to_string(),
-        };
+        let post = ContractCheck::PostConditionOnReturn { postcondition_index: 1 };
+        let frame = ContractCheck::FramePreservation { variable: "state".to_string() };
 
         assert_eq!(pre, pre.clone());
         assert_eq!(post, post.clone());
@@ -884,11 +836,7 @@ mod tests {
             Box::new(Formula::Int(0)),
         );
 
-        db.insert(
-            FunctionSummary::new("parse")
-                .with_precondition(precond.clone())
-                .proved(),
-        );
+        db.insert(FunctionSummary::new("parse").with_precondition(precond.clone()).proved());
 
         let vcs = generate_modular_vcs(&func, &db);
 
@@ -915,9 +863,7 @@ mod tests {
             def_path: "test::producer".to_string(),
             span: SourceSpan::default(),
             body: VerifiableBody {
-                locals: vec![
-                    LocalDecl { index: 0, ty: Ty::usize(), name: None },
-                ],
+                locals: vec![LocalDecl { index: 0, ty: Ty::usize(), name: None }],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![],
@@ -946,10 +892,8 @@ mod tests {
 
     #[test]
     fn test_generate_modular_vcs_postcondition_from_field() {
-        let postcond = Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        );
+        let postcond =
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100)));
 
         let func = VerifiableFunction {
             name: "bounded".to_string(),
@@ -1003,11 +947,7 @@ mod tests {
         let mut db = SummaryDatabase::new();
 
         let precond = Formula::Bool(true);
-        db.insert(
-            FunctionSummary::new("parse")
-                .with_precondition(precond)
-                .proved(),
-        );
+        db.insert(FunctionSummary::new("parse").with_precondition(precond).proved());
 
         let verifier = ModularVerifier::new(db);
         let vcs = verifier.verify(&func);
@@ -1022,15 +962,9 @@ mod tests {
         let mut db = SummaryDatabase::new();
 
         // Unproved summary should not generate precondition VCs
-        db.insert(
-            FunctionSummary::new("parse")
-                .with_precondition(Formula::Bool(true)),
-        );
+        db.insert(FunctionSummary::new("parse").with_precondition(Formula::Bool(true)));
 
         let vcs = generate_modular_vcs(&func, &db);
-        assert!(
-            vcs.is_empty(),
-            "unproved summary should not generate modular VCs"
-        );
+        assert!(vcs.is_empty(), "unproved summary should not generate modular VCs");
     }
 }

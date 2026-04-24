@@ -96,7 +96,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
             let name = &format!("{:?}_cleanup_trampoline_{:?}", self.bb, target);
             let trampoline_llbb = Bx::append_block(fx.cx, fx.llfn, name);
             let mut trampoline_bx = Bx::build(fx.cx, trampoline_llbb);
-            trampoline_bx.cleanup_ret(self.funclet(fx).expect("invariant: cleanup pad must have funclet"), Some(lltarget));
+            trampoline_bx.cleanup_ret(self.funclet(fx).unwrap(), Some(lltarget));
             trampoline_llbb
         } else {
             lltarget
@@ -117,7 +117,6 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                 (Some(f), Some(t_f)) => (f != t_f, f != t_f),
                 (Some(_), None) => {
                     let span = self.terminator.source_info.span;
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     span_bug!(span, "{:?} - jump out of cleanup?", self.terminator);
                 }
             };
@@ -148,7 +147,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
             if is_cleanupret {
                 // micro-optimization: generate a `ret` rather than a jump
                 // to a trampoline.
-                bx.cleanup_ret(self.funclet(fx).expect("invariant: cleanup pad must have funclet"), Some(lltarget));
+                bx.cleanup_ret(self.funclet(fx).unwrap(), Some(lltarget));
             } else {
                 bx.br(lltarget);
             }
@@ -401,7 +400,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         if target_iter.len() == 1 {
             // If there are two targets (one conditional, one fallback), emit `br` instead of
             // `switch`.
-            let (test_value, target) = target_iter.next().expect("invariant: switch must have at least one target");
+            let (test_value, target) = target_iter.next().unwrap();
             let otherwise = targets.otherwise();
             let lltarget = helper.llbb_with_cleanup(self, target);
             let llotherwise = helper.llbb_with_cleanup(self, otherwise);
@@ -421,7 +420,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     1 => {
                         bx.cond_br_with_expect(discr_value, lltarget, llotherwise, expect);
                     }
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     _ => bug!(),
                 }
             } else {
@@ -479,8 +477,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             //   worse generated code because LLVM can no longer tell that the value being switched
             //   on can only have two values, e.g. 0 and 1.
             //
-            let (test_value1, target1) = target_iter.next().expect("invariant: bool switch must have true target");
-            let (_test_value2, target2) = target_iter.next().expect("invariant: bool switch must have false target");
+            let (test_value1, target1) = target_iter.next().unwrap();
+            let (_test_value2, target2) = target_iter.next().unwrap();
             let ll1 = helper.llbb_with_cleanup(self, target1);
             let ll2 = helper.llbb_with_cleanup(self, target2);
             let switch_llty = bx.immediate_backend_type(bx.layout_of(switch_ty));
@@ -531,7 +529,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     // Explicitly end the lifetime of the `va_list`, improves LLVM codegen.
                     bx.lifetime_end(va_list.val.llval, va_list.layout.size);
                 }
-                // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                 _ => bug!("C-variadic function must have a `VaList` place"),
             }
         }
@@ -564,14 +561,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             PassMode::Cast { cast: cast_ty, pad_i32: _ } => {
                 let op = match self.locals[mir::RETURN_PLACE] {
                     LocalRef::Operand(op) => op,
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                     LocalRef::PendingOperand => bug!("use of return before def"),
                     LocalRef::Place(cg_place) => OperandRef {
                         val: Ref(cg_place.val),
                         layout: cg_place.layout,
                         move_annotation: None,
                     },
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                     LocalRef::UnsizedPlace(_) => bug!("return type must be sized"),
                 };
                 let llslot = match op.val {
@@ -587,7 +582,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         );
                         place_val.llval
                     }
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                     ZeroSized => bug!("ZST return value shouldn't be in PassMode::Cast"),
                 };
                 load_cast(bx, cast_ty, llslot, self.fn_abi.ret.layout.align.abi)
@@ -626,7 +620,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             &args1[..]
         };
         let (maybe_null, drop_fn, fn_abi, drop_instance) = match ty.kind() {
-            // NOTE(eddyb): Some of this logic could be moved into
+            // FIXME(eddyb) perhaps move some of this logic into
             // `Instance::resolve_drop_in_place`?
             ty::Dynamic(_, _) => {
                 // IN THIS ARM, WE HAVE:
@@ -855,7 +849,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
         if is_valid {
             // a NOP
-            let target = target.expect("invariant: non-diverging call must have return target");
+            let target = target.unwrap();
             return Some(helper.funclet_br(self, bx, target, mergeable_succ));
         }
 
@@ -929,11 +923,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     // it is `func returning noop future`
                     ty::InstanceKind::DropGlue(_, None) => {
                         // Empty drop glue; a no-op.
-                        let target = target.expect("invariant: non-diverging intrinsic must have return target");
+                        let target = target.unwrap();
                         return helper.funclet_br(self, bx, target, mergeable_succ);
                     }
                     ty::InstanceKind::Intrinsic(def_id) => {
-                        let intrinsic = bx.tcx().intrinsic(def_id).expect("invariant: def_id confirmed as intrinsic");
+                        let intrinsic = bx.tcx().intrinsic(def_id).unwrap();
                         if let Some(merging_succ) = self.codegen_panic_intrinsic(
                             &helper,
                             bx,
@@ -958,7 +952,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         } else if let Some(local) = destination.as_local() {
                             match self.locals[local] {
                                 LocalRef::Place(dest) => (dest, None),
-                                // tRust: invariant: type system guarantee — return types must be Sized, enforced by type checking
                                 LocalRef::UnsizedPlace(_) => bug!("return type must be sized"),
                                 LocalRef::PendingOperand => {
                                     // Currently, intrinsics always need a location to store
@@ -969,7 +962,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                                     (tmp, Some(local))
                                 }
                                 LocalRef::Operand(_) => {
-                                    // tRust: invariant: algorithm precondition — place locals are assigned exactly once in codegen
                                     bug!("place local already assigned to");
                                 }
                             }
@@ -984,7 +976,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             //
                             // If someone changes that, please update this code path
                             // to create a temporary.
-                            // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                             span_bug!(self.mir.span, "can't directly store to unaligned value");
                         }
 
@@ -1010,7 +1001,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             }
                             Err(instance) => {
                                 if intrinsic.must_be_overridden {
-                                    // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                                     span_bug!(
                                         fn_span,
                                         "intrinsic {} must be overridden by codegen backend, but isn't",
@@ -1039,7 +1029,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             def_id,
                             generic_args,
                         )
-                        .expect("invariant: fn ptr resolution must succeed for known def_id");
+                        .unwrap();
 
                         (None, Some(bx.get_fn_addr(instance)))
                     }
@@ -1047,7 +1037,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 }
             }
             ty::FnPtr(..) => (None, Some(callee.immediate())),
-            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
             _ => bug!("{} is not callable", callee.layout.ty),
         };
 
@@ -1055,7 +1044,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             && let Some(name) = bx.tcx().codegen_fn_attrs(instance.def_id()).symbol_name
             && name.as_str().starts_with("llvm.")
             // This is the only LLVM intrinsic we use that unwinds
-            // NOTE: Either add unwind support to codegen_llvm_intrinsic_call or replace usage of
+            // FIXME either add unwind support to codegen_llvm_intrinsic_call or replace usage of
             // this intrinsic with something else
             && name.as_str() != "llvm.wasm.throw"
         {
@@ -1070,14 +1059,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             } else if let Some(index) = destination.as_local() {
                 match self.locals[index] {
                     LocalRef::Place(dest) => ReturnDest::Store(dest),
-                    // tRust: invariant: type system guarantee — return types must be Sized, enforced by type checking
                     LocalRef::UnsizedPlace(_) => bug!("return type must be sized"),
                     LocalRef::PendingOperand => {
                         // Handle temporary places, specifically `Operand` ones, as
                         // they don't have `alloca`s.
                         ReturnDest::DirectOperand(index)
                     }
-                    // tRust: invariant: algorithm precondition — place locals are assigned exactly once in codegen
                     LocalRef::Operand(_) => bug!("place local already assigned to"),
                 }
             } else {
@@ -1106,7 +1093,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
         }
 
-        // NOTE(eddyb): Could avoid computing fn_abi when instance is
+        // FIXME(eddyb) avoid computing this if possible, when `instance` is
         // available - right now `sig` is only needed for getting the `abi`
         // and figuring out how many extra args were passed to a C-variadic `fn`.
         let sig = callee.layout.ty.fn_sig(bx.tcx());
@@ -1139,7 +1126,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 if fn_abi.ret.is_indirect() {
                     match self.make_return_dest(bx, destination, &fn_abi.ret, &mut llargs) {
                         ReturnDest::Nothing => {}
-                        // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                         _ => bug!(
                             "tail calls to functions with indirect returns cannot store into a destination"
                         ),
@@ -1248,62 +1234,64 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         continue;
                     }
                     _ => {
-                        // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                         span_bug!(fn_span, "can't codegen a virtual call on {:#?}", op);
                     }
                 }
             }
 
-            // tRust: upstream fix for rust-lang/rust#155241 — arguments passed indirectly via
-            // a hidden pointer must be copied to an alloca, except for by-val or by-move.
-            // Ported from rust-lang/rust#155343.
-            let by_move = if let PassMode::Indirect { on_stack: false, .. } = fn_abi.args[i].mode
-                && kind == CallKind::Tail
-            {
-                // Special logic for tail calls with `PassMode::Indirect { on_stack: false, .. }` arguments.
-                let Some(tmp) = tail_call_temporaries[i].take() else {
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
-                    span_bug!(fn_span, "missing temporary for indirect tail call argument #{i}")
-                };
-
-                let local = self.mir.args_iter().nth(i).expect("invariant: argument index must be in range");
-
-                match &self.locals[local] {
-                    LocalRef::Place(arg) => {
-                        bx.typed_place_copy(arg.val, tmp.val, fn_abi.args[i].layout);
-                        op.val = Ref(arg.val);
+            match kind {
+                CallKind::Normal => {
+                    // The callee needs to own the argument memory if we pass it
+                    // by-ref, so make a local copy of non-immediate constants.
+                    if let &mir::Operand::Copy(_) | &mir::Operand::Constant(_) = &arg.node
+                        && let Ref(PlaceValue { llextra: None, .. }) = op.val
+                    {
+                        let tmp = PlaceRef::alloca(bx, op.layout);
+                        bx.lifetime_start(tmp.val.llval, tmp.layout.size);
+                        op.store_with_annotation(bx, tmp);
+                        op.val = Ref(tmp.val);
+                        lifetime_ends_after_call.push((tmp.val.llval, tmp.layout.size));
                     }
-                    LocalRef::Operand(arg) => {
-                        let Ref(place_value) = arg.val else {
-                            // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
-                            bug!("only `Ref` should use `PassMode::Indirect`");
+                }
+                CallKind::Tail => {
+                    if let PassMode::Indirect { on_stack: false, .. } = fn_abi.args[i].mode {
+                        let Some(tmp) = tail_call_temporaries[i].take() else {
+                            span_bug!(
+                                fn_span,
+                                "missing temporary for indirect tail call argument #{i}"
+                            )
                         };
-                        bx.typed_place_copy(place_value, tmp.val, fn_abi.args[i].layout);
-                        op.val = arg.val;
-                    }
-                    LocalRef::UnsizedPlace(_) => {
-                        // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
-                        span_bug!(fn_span, "unsized types are not supported")
-                    }
-                    LocalRef::PendingOperand => {
-                        // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
-                        span_bug!(fn_span, "argument local should not be pending")
-                    }
-                };
 
-                bx.lifetime_end(tmp.val.llval, tmp.layout.size);
-                // We have stored the argument for the callee in the corresponding caller's slot.
-                // Because guaranteed tail calls demand that the caller's signature matches the callee's,
-                // the argument must be a by-move argument.
-                true
-            } else {
-                matches!(arg.node, mir::Operand::Move(_))
-            };
+                        let local = self.mir.args_iter().nth(i).unwrap();
+
+                        match &self.locals[local] {
+                            LocalRef::Place(arg) => {
+                                bx.typed_place_copy(arg.val, tmp.val, fn_abi.args[i].layout);
+                                op.val = Ref(arg.val);
+                            }
+                            LocalRef::Operand(arg) => {
+                                let Ref(place_value) = arg.val else {
+                                    bug!("only `Ref` should use `PassMode::Indirect`");
+                                };
+                                bx.typed_place_copy(place_value, tmp.val, fn_abi.args[i].layout);
+                                op.val = arg.val;
+                            }
+                            LocalRef::UnsizedPlace(_) => {
+                                span_bug!(fn_span, "unsized types are not supported")
+                            }
+                            LocalRef::PendingOperand => {
+                                span_bug!(fn_span, "argument local should not be pending")
+                            }
+                        };
+
+                        bx.lifetime_end(tmp.val.llval, tmp.layout.size);
+                    }
+                }
+            }
 
             self.codegen_argument(
                 bx,
                 op,
-                by_move,
                 &mut llargs,
                 &fn_abi.args[i],
                 &mut lifetime_ends_after_call,
@@ -1338,11 +1326,10 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 terminator, location, fn_span
             );
 
-            let last_arg = fn_abi.args.last().expect("invariant: function ABI must have at least one argument");
+            let last_arg = fn_abi.args.last().unwrap();
             self.codegen_argument(
                 bx,
                 location,
-                false,
                 &mut llargs,
                 last_arg,
                 &mut lifetime_ends_after_call,
@@ -1352,7 +1339,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let fn_ptr = match (instance, llfn) {
             (Some(instance), None) => bx.get_fn_addr(instance),
             (_, Some(llfn)) => llfn,
-            // tRust: invariant: type system guarantee — callee type must be a function type, enforced by type checking
             _ => span_bug!(fn_span, "no instance or llfn for call"),
         };
         self.set_debug_loc(bx, source_info);
@@ -1424,10 +1410,9 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             def_id,
                             args,
                         )
-                        .expect("invariant: asm sym fn ptr resolution must succeed");
+                        .unwrap();
                         InlineAsmOperandRef::SymFn { instance }
                     } else {
-                        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                         span_bug!(span, "invalid type for asm sym (fn)");
                     }
                 }
@@ -1488,7 +1473,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             // This is implicitly ensured by the reverse postorder traversal,
             // and the assertion explicitly guarantees that.
             let mut successors = data.terminator().successors();
-            let succ = successors.next().expect("invariant: inline asm must have at least one successor");
+            let succ = successors.next().unwrap();
             assert!(matches!(self.cached_llbbs[succ], CachedLlbb::None));
             self.cached_llbbs[succ] = CachedLlbb::Skip;
             bb = succ;
@@ -1628,11 +1613,9 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     mergeable_succ(),
                 ),
             mir::TerminatorKind::CoroutineDrop | mir::TerminatorKind::Yield { .. } => {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!("coroutine ops in codegen")
             }
             mir::TerminatorKind::FalseEdge { .. } | mir::TerminatorKind::FalseUnwind { .. } => {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!("borrowck false edges in codegen")
             }
 
@@ -1665,7 +1648,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         &mut self,
         bx: &mut Bx,
         op: OperandRef<'tcx, Bx::Value>,
-        by_move: bool,
         llargs: &mut Vec<Bx::Value>,
         arg: &ArgAbi<'tcx, Ty<'tcx>>,
         lifetime_ends_after_call: &mut Vec<(Bx::Value, Size)>,
@@ -1682,7 +1664,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     llargs.push(b);
                     return;
                 }
-                // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                 _ => bug!("codegen_argument: {:?} invalid for pair argument", op),
             },
             PassMode::Indirect { attrs: _, meta_attrs: Some(_), on_stack: _ } => match op.val {
@@ -1691,7 +1672,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     llargs.push(b);
                     return;
                 }
-                // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                 _ => bug!("codegen_argument: {:?} invalid for unsized indirect argument", op),
             },
             _ => {}
@@ -1722,21 +1702,18 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 _ => (op.immediate_or_packed_pair(bx), arg.layout.align.abi, false),
             },
             Ref(op_place_val) => match arg.mode {
-                // tRust: upstream fix for rust-lang/rust#155241 — copy to alloca when
-                // argument is neither by-val nor by-move for indirect pointer.
-                PassMode::Indirect { attrs, on_stack, .. } => {
-                    // For `foo(packed.large_field)`, and types with <4 byte alignment on x86,
-                    // alignment requirements may be higher than the type's alignment, so copy
-                    // to a higher-aligned alloca.
+                PassMode::Indirect { attrs, .. } => {
                     let required_align = match attrs.pointee_align {
                         Some(pointee_align) => cmp::max(pointee_align, arg.layout.align.abi),
                         None => arg.layout.align.abi,
                     };
-                    // Copy to an alloca when the argument is neither by-val nor by-move.
-                    if op_place_val.align < required_align || (!on_stack && !by_move) {
+                    if op_place_val.align < required_align {
+                        // For `foo(packed.large_field)`, and types with <4 byte alignment on x86,
+                        // alignment requirements may be higher than the type's alignment, so copy
+                        // to a higher-aligned alloca.
                         let scratch = PlaceValue::alloca(bx, arg.layout.size, required_align);
                         bx.lifetime_start(scratch.llval, arg.layout.size);
-                        op.store_with_annotation(bx, scratch.with_type(arg.layout));
+                        bx.typed_place_copy(scratch, op_place_val, op.layout);
                         lifetime_ends_after_call.push((scratch.llval, arg.layout.size));
                         (scratch.llval, scratch.align, true)
                     } else {
@@ -1750,7 +1727,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     if on_stack {
                         // It doesn't seem like any target can have `byval` ZSTs, so this assert
                         // is here to replace a would-be untested codepath.
-                        // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                         bug!("ZST {op:?} passed on stack with abi {arg:?}");
                     }
                     // Though `extern "Rust"` doesn't pass ZSTs, some ABIs pass
@@ -1759,7 +1735,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     let scratch = PlaceRef::alloca(bx, arg.layout);
                     (scratch.val.llval, scratch.val.align, true)
                 }
-                // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                 _ => bug!("ZST {op:?} wasn't ignored, but was passed with abi {arg:?}"),
             },
         };
@@ -1824,34 +1799,23 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         lifetime_ends_after_call: &mut Vec<(Bx::Value, Size)>,
     ) -> usize {
         let tuple = self.codegen_operand(bx, operand);
-        // tRust: upstream fix for rust-lang/rust#155241 — track whether the tuple operand
-        // is a move to propagate by_move to codegen_argument for untupled rust-call args.
-        let by_move = matches!(operand, mir::Operand::Move(_));
 
         // Handle both by-ref and immediate tuples.
         if let Ref(place_val) = tuple.val {
             if place_val.llextra.is_some() {
-                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                 bug!("closure arguments must be sized");
             }
             let tuple_ptr = place_val.with_type(tuple.layout);
             for i in 0..tuple.layout.fields.count() {
                 let field_ptr = tuple_ptr.project_field(bx, i);
                 let field = bx.load_operand(field_ptr);
-                self.codegen_argument(
-                    bx,
-                    field,
-                    by_move,
-                    llargs,
-                    &args[i],
-                    lifetime_ends_after_call,
-                );
+                self.codegen_argument(bx, field, llargs, &args[i], lifetime_ends_after_call);
             }
         } else {
             // If the tuple is immediate, the elements are as well.
             for i in 0..tuple.layout.fields.count() {
                 let op = tuple.extract_field(self, bx, i);
-                self.codegen_argument(bx, op, by_move, llargs, &args[i], lifetime_ends_after_call);
+                self.codegen_argument(bx, op, llargs, &args[i], lifetime_ends_after_call);
             }
         }
         tuple.layout.fields.count()
@@ -1884,7 +1848,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     }
 
     /// Returns the landing/cleanup pad wrapper around the given basic block.
-    // NOTE(eddyb): Should be renamed to eh_pad_for for clarity.
+    // FIXME(eddyb) rename this to `eh_pad_for`.
     fn landing_pad_for(&mut self, bb: mir::BasicBlock) -> Bx::BasicBlock {
         if let Some(landing_pad) = self.landing_pads[bb] {
             return landing_pad;
@@ -1895,7 +1859,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         landing_pad
     }
 
-    // NOTE(eddyb): Should be renamed to eh_pad_for_uncached for clarity.
+    // FIXME(eddyb) rename this to `eh_pad_for_uncached`.
     fn landing_pad_for_uncached(&mut self, bb: mir::BasicBlock) -> Bx::BasicBlock {
         let llbb = self.llbb(bb);
         if base::wants_new_eh_instructions(self.cx.sess()) {
@@ -2093,11 +2057,10 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
     /// Get the backend `BasicBlock` for a MIR `BasicBlock`, either already
     /// cached in `self.cached_llbbs`, or created on demand (and cached).
-    // NOTE(eddyb): `llbb` and other `ll`-prefixed names should use a
-    // backend-agnostic naming convention.
+    // FIXME(eddyb) rename `llbb` and other `ll`-prefixed things to use a
     // more backend-agnostic prefix such as `cg` (i.e. this would be `cgbb`).
     pub fn llbb(&mut self, bb: mir::BasicBlock) -> Bx::BasicBlock {
-        self.try_llbb(bb).expect("invariant: basic block must have LLVM equivalent")
+        self.try_llbb(bb).unwrap()
     }
 
     /// Like `llbb`, but may fail if the basic block should be skipped.
@@ -2127,7 +2090,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let dest = if let Some(index) = dest.as_local() {
             match self.locals[index] {
                 LocalRef::Place(dest) => dest,
-                // tRust: invariant: type system guarantee — return types must be Sized, enforced by type checking
                 LocalRef::UnsizedPlace(_) => bug!("return type must be sized"),
                 LocalRef::PendingOperand => {
                     // Handle temporary places, specifically `Operand` ones, as
@@ -2144,7 +2106,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     };
                 }
                 LocalRef::Operand(_) => {
-                    // tRust: invariant: algorithm precondition — place locals are assigned exactly once in codegen
                     bug!("place local already assigned to");
                 }
             }
@@ -2159,7 +2120,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 //
                 // If someone changes that, please update this code path
                 // to create a temporary.
-                // tRust: invariant: structural invariant — local reference variant is constrained by prior initialization
                 span_bug!(self.mir.span, "can't directly store to unaligned value");
             }
             llargs.push(dest.val.llval);
@@ -2228,7 +2188,7 @@ fn load_cast<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     if let Some(offset_from_start) = cast.rest_offset {
         assert!(cast.prefix[1..].iter().all(|p| p.is_none()));
         assert_eq!(cast.rest.unit.size, cast.rest.total);
-        let first_ty = bx.reg_backend_type(&cast.prefix[0].expect("invariant: cast prefix must have first element"));
+        let first_ty = bx.reg_backend_type(&cast.prefix[0].unwrap());
         let second_ty = bx.reg_backend_type(&cast.rest.unit);
         let first = bx.load(first_ty, ptr, align);
         let second_ptr = bx.inbounds_ptradd(ptr, bx.const_usize(offset_from_start.bytes()));

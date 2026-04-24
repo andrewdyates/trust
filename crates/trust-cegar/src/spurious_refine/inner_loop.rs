@@ -193,10 +193,7 @@ impl SpuriousRefinementLoop {
         self.stats.counterexamples_checked += 1;
 
         // Compute abstract states under current predicates.
-        let abstract_states = blocks
-            .iter()
-            .map(|b| abstract_block(b, &self.predicates))
-            .collect();
+        let abstract_states = blocks.iter().map(|b| abstract_block(b, &self.predicates)).collect();
 
         let checker = CounterexampleChecker::new(abstract_states);
         let mut inner_iteration = 0;
@@ -239,12 +236,7 @@ impl SpuriousRefinementLoop {
             }
             CexCheckResult::Spurious { path_a, path_b, unsat_core, .. } => {
                 // Step 2: Apply refinement strategy.
-                let new_preds = self.apply_strategy(
-                    cex,
-                    &path_a,
-                    &path_b,
-                    &unsat_core,
-                )?;
+                let new_preds = self.apply_strategy(cex, &path_a, &path_b, &unsat_core)?;
 
                 // Step 3: Check for convergence (fixed point).
                 let mut actually_new = Vec::new();
@@ -263,9 +255,7 @@ impl SpuriousRefinementLoop {
                     if self.config.detect_fixed_point {
                         self.stats.fixed_point_count += 1;
                         self.stats.total_inner_iterations += inner_iteration;
-                        return Ok(InnerLoopOutcome::FixedPoint {
-                            iterations: inner_iteration,
-                        });
+                        return Ok(InnerLoopOutcome::FixedPoint { iterations: inner_iteration });
                     }
                     // Without fixed-point detection, stall.
                     self.stats.total_inner_iterations += inner_iteration;
@@ -277,9 +267,7 @@ impl SpuriousRefinementLoop {
                 if self.is_converged() {
                     self.stats.fixed_point_count += 1;
                     self.stats.total_inner_iterations += inner_iteration;
-                    return Ok(InnerLoopOutcome::FixedPoint {
-                        iterations: inner_iteration,
-                    });
+                    return Ok(InnerLoopOutcome::FixedPoint { iterations: inner_iteration });
                 }
 
                 // Successfully refined.
@@ -306,9 +294,7 @@ impl SpuriousRefinementLoop {
             InnerRefinementStrategy::PredicateRefinement => {
                 Ok(predicate_refine(cex, &self.predicates))
             }
-            InnerRefinementStrategy::TraceRefinement => {
-                Ok(trace_refine(cex, &self.predicates))
-            }
+            InnerRefinementStrategy::TraceRefinement => Ok(trace_refine(cex, &self.predicates)),
             InnerRefinementStrategy::InterpolantBased => {
                 interpolant_refine(cex, path_a, path_b, unsat_core, &self.predicates)
             }

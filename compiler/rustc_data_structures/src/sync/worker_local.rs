@@ -138,9 +138,6 @@ impl<T> Deref for WorkerLocal<T> {
     fn deref(&self) -> &T {
         // This is safe because `verify` will only return values less than
         // `self.registry.thread_limit` which is the size of the `self.locals` array.
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `WorkerLocal` keeps the registry alive, so
-        // `verify()`'s in-bounds index still refers to this registry's slot.
         unsafe { &self.locals.get_unchecked(self.registry.id().verify()).0 }
     }
 }

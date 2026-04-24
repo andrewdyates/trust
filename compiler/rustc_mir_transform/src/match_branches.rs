@@ -1,6 +1,3 @@
-//! tRust: MIR optimization that simplifies switch branches by unifying targets
-//! tRust: with equivalent statements.
-
 use rustc_abi::Integer;
 use rustc_const_eval::const_eval::mk_eval_cx_for_const_val;
 use rustc_middle::mir::*;
@@ -119,7 +116,7 @@ impl<'tcx, 'a> SimplifyMatch<'tcx, 'a> {
         consts: &[(u128, &ConstOperand<'tcx>)],
         otherwise: Option<&ConstOperand<'tcx>>,
     ) -> Option<StatementKind<'tcx>> {
-        // NOTE: Only bool constants handled; could be extended to other types.
+        // FIXME: extend to any case.
         let (first_case, first_const, mut others) = split_first_case(consts, otherwise);
         if !first_const.ty().is_bool() {
             return None;
@@ -130,7 +127,7 @@ impl<'tcx, 'a> SimplifyMatch<'tcx, 'a> {
         }) {
             // Make value conditional on switch condition.
             let size =
-                self.tcx.layout_of(self.typing_env.as_query_input(self.discr_ty)).expect("invariant: discriminant type must have a layout").size; // tRust: unwrap elimination
+                self.tcx.layout_of(self.typing_env.as_query_input(self.discr_ty)).unwrap().size;
             let const_cmp = Operand::const_from_scalar(
                 self.tcx,
                 self.discr_ty,
@@ -195,7 +192,7 @@ impl<'tcx, 'a> SimplifyMatch<'tcx, 'a> {
             return None;
         }
         let discr_layout =
-            self.tcx.layout_of(self.typing_env.as_query_input(self.discr_ty)).expect("invariant: discriminant type must have a layout"); // tRust: unwrap elimination
+            self.tcx.layout_of(self.typing_env.as_query_input(self.discr_ty)).unwrap();
         if consts.iter().all(|&(case, const_)| {
             let Some(scalar_int) = const_.const_.try_eval_scalar_int(self.tcx, self.typing_env)
             else {
@@ -451,7 +448,7 @@ fn can_cast(
     cast_ty: Ty<'_>,
     target_scalar: ScalarInt,
 ) -> bool {
-    let from_scalar = ScalarInt::try_from_uint(src_val.into(), src_layout.size).expect("invariant: source value must fit in source layout"); // tRust: unwrap elimination
+    let from_scalar = ScalarInt::try_from_uint(src_val.into(), src_layout.size).unwrap();
     let v = match src_layout.ty.kind() {
         ty::Uint(_) => from_scalar.to_uint(src_layout.size),
         ty::Int(_) => from_scalar.to_int(src_layout.size) as u128,
@@ -465,7 +462,7 @@ fn can_cast(
         _ => return false,
     };
     let v = size.truncate(v);
-    let cast_scalar = ScalarInt::try_from_uint(v, size).expect("invariant: truncated value must fit in target size"); // tRust: unwrap elimination
+    let cast_scalar = ScalarInt::try_from_uint(v, size).unwrap();
     cast_scalar == target_scalar
 }
 

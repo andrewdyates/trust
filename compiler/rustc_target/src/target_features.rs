@@ -136,7 +136,7 @@ static ARM_FEATURES: &[(&str, Stability, ImpliedFeatures)] = &[
     ("sha2", Unstable(sym::arm_target_feature), &["neon"]),
     // This can be *disabled* on non-`hf` targets to enable the use
     // of hardfloats while keeping the softfloat ABI.
-    // tRust: known issue — before stabilization: Should we expose this as a `hard-float` target feature instead of
+    // FIXME before stabilization: Should we expose this as a `hard-float` target feature instead of
     // matching the odd negative feature LLVM uses?
     ("soft-float", Unstable(sym::arm_target_feature), &[]),
     // This is needed for inline assembly, but shouldn't be stabilized as-is
@@ -940,7 +940,7 @@ pub fn all_rust_features() -> impl Iterator<Item = (&'static str, Stability)> {
 // certain size to have their "proper" ABI on each architecture.
 // Note that they must be kept sorted by vector size.
 const X86_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI: &'static [(u64, &'static str)] =
-    &[(128, "sse"), (256, "avx"), (512, "avx512f")]; // tRust: known issue — might need changes for AVX10.
+    &[(128, "sse"), (256, "avx"), (512, "avx512f")]; // FIXME: might need changes for AVX10.
 const AARCH64_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI: &'static [(u64, &'static str)] =
     &[(128, "neon")];
 
@@ -1037,7 +1037,7 @@ impl Target {
             Arch::AmdGpu => AMDGPU_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI,
             Arch::Nvptx64 | Arch::Bpf | Arch::M68k | Arch::Avr => &[], // no vector ABI
             Arch::CSky => CSKY_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI,
-            // tRust: known issue — for some tier3 targets, we are overly cautious and always give warnings
+            // FIXME: for some tier3 targets, we are overly cautious and always give warnings
             // when passing args in vector registers.
             Arch::Msp430 | Arch::SpirV | Arch::Xtensa | Arch::Other(_) => &[],
         }
@@ -1143,7 +1143,7 @@ impl Target {
             Arch::Arm => {
                 // On ARM, ABI handling is reasonably sane; we use `llvm_floatabi` to indicate
                 // to LLVM which ABI we are going for.
-                match self.llvm_floatabi.expect("invariant: ARM targets always have llvm_floatabi set") { // tRust: unwrap -> expect
+                match self.llvm_floatabi.unwrap() {
                     FloatAbi::Soft => {
                         // Nothing special required, will use soft-float ABI throughout.
                         // We can even allow `-soft-float` here; in fact that is useful as it lets

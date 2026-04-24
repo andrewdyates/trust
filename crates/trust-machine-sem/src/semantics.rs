@@ -24,9 +24,5 @@ pub trait Semantics {
     ///
     /// Returns `SemError` if the instruction uses an unsupported opcode or
     /// has an unexpected operand structure.
-    fn effects(
-        &self,
-        state: &MachineState,
-        insn: &Instruction,
-    ) -> Result<Vec<Effect>, SemError>;
+    fn effects(&self, state: &MachineState, insn: &Instruction) -> Result<Vec<Effect>, SemError>;
 }

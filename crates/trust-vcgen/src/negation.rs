@@ -72,7 +72,7 @@ fn build_negation_overflow_vc(
 
     Some(VerificationCondition {
         kind: VcKind::NegationOverflow { ty },
-        function: func.name.clone(),
+        function: func.name.as_str().into(),
         location: stmt_span.clone(), // tRust: use per-statement span, not function span
         formula,
         contract_metadata: None,

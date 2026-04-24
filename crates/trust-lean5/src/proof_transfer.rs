@@ -158,11 +158,7 @@ fn vec_formula_similarity(xs: &[Formula], ys: &[Formula]) -> f64 {
     if max_len == 0 {
         return 1.0;
     }
-    let paired_sim: f64 = xs
-        .iter()
-        .zip(ys.iter())
-        .map(|(x, y)| formula_similarity(x, y))
-        .sum();
+    let paired_sim: f64 = xs.iter().zip(ys.iter()).map(|(x, y)| formula_similarity(x, y)).sum();
     paired_sim / max_len as f64
 }
 
@@ -173,11 +169,7 @@ fn hypothesis_overlap(a: &[Formula], b: &[Formula]) -> f64 {
     }
     let matches: f64 = a
         .iter()
-        .map(|ha| {
-            b.iter()
-                .map(|hb| formula_similarity(ha, hb))
-                .fold(0.0_f64, f64::max)
-        })
+        .map(|ha| b.iter().map(|hb| formula_similarity(ha, hb)).fold(0.0_f64, f64::max))
         .sum();
     matches / a.len() as f64
 }
@@ -209,11 +201,7 @@ pub fn find_transferable(
             let score = similarity_score(src, target);
             if score >= TRANSFER_THRESHOLD {
                 let required_adaptations = compute_adaptations(src, target);
-                Some(TransferCandidate {
-                    source: src.clone(),
-                    score,
-                    required_adaptations,
-                })
+                Some(TransferCandidate { source: src.clone(), score, required_adaptations })
             } else {
                 None
             }
@@ -270,14 +258,9 @@ fn compute_adaptations(source: &LemmaSignature, target: &LemmaSignature) -> Vec<
 
     // Check for extra hypotheses in target that source lacks
     for th in &target.hypotheses {
-        let has_match = source
-            .hypotheses
-            .iter()
-            .any(|sh| formula_similarity(sh, th) > 0.7);
+        let has_match = source.hypotheses.iter().any(|sh| formula_similarity(sh, th) > 0.7);
         if !has_match {
-            adaptations.push(Adaptation::AddHypothesis {
-                hypothesis: th.clone(),
-            });
+            adaptations.push(Adaptation::AddHypothesis { hypothesis: th.clone() });
         }
     }
 
@@ -290,10 +273,7 @@ fn compute_adaptations(source: &LemmaSignature, target: &LemmaSignature) -> Vec<
 fn collect_renames(src: &Formula, tgt: &Formula, out: &mut Vec<Adaptation>) {
     match (src, tgt) {
         (Formula::Var(a, sa), Formula::Var(b, sb)) if sa == sb && a != b => {
-            let rename = Adaptation::Rename {
-                from: a.clone(),
-                to: b.clone(),
-            };
+            let rename = Adaptation::Rename { from: a.clone(), to: b.clone() };
             if !out.contains(&rename) {
                 out.push(rename);
             }
@@ -337,11 +317,7 @@ mod tests {
     }
 
     fn sig(name: &str, hyps: Vec<Formula>, conclusion: Formula) -> LemmaSignature {
-        LemmaSignature {
-            name: name.to_string(),
-            hypotheses: hyps,
-            conclusion,
-        }
+        LemmaSignature { name: name.to_string(), hypotheses: hyps, conclusion }
     }
 
     // --- 1. Identical lemmas have similarity 1.0 ---
@@ -365,16 +341,8 @@ mod tests {
     // --- 3. Variable rename detected ---
     #[test]
     fn test_similarity_score_renamed_variable_high() {
-        let a = sig(
-            "lem_a",
-            vec![],
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        );
-        let b = sig(
-            "lem_b",
-            vec![],
-            Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))),
-        );
+        let a = sig("lem_a", vec![], Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))));
+        let b = sig("lem_b", vec![], Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))));
         let score = similarity_score(&a, &b);
         // Var same sort ≠ name → 0.8, combined with Int match → high
         assert!(score > 0.5, "expected > 0.5, got {score}");
@@ -399,23 +367,13 @@ mod tests {
     // --- 6. find_transferable returns sorted candidates ---
     #[test]
     fn test_find_transferable_sorted_by_score() {
-        let target = sig(
-            "goal",
-            vec![],
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        );
+        let target =
+            sig("goal", vec![], Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))));
         // Close match: same shape, different var name
-        let close = sig(
-            "close",
-            vec![],
-            Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))),
-        );
+        let close =
+            sig("close", vec![], Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))));
         // Distant match: different structure entirely
-        let distant = sig(
-            "distant",
-            vec![],
-            Formula::Lt(Box::new(var("a")), Box::new(var("b"))),
-        );
+        let distant = sig("distant", vec![], Formula::Lt(Box::new(var("a")), Box::new(var("b"))));
 
         let results = find_transferable(&[distant.clone(), close.clone()], &target);
         assert!(!results.is_empty());
@@ -436,11 +394,7 @@ mod tests {
     #[test]
     fn test_adapt_proof_no_transfer() {
         let a = sig("src", vec![], Formula::Bool(true));
-        let b = sig(
-            "tgt",
-            vec![var("x"), var("y"), var("z")],
-            Formula::Int(999),
-        );
+        let b = sig("tgt", vec![var("x"), var("y"), var("z")], Formula::Int(999));
         let result = adapt_proof(&a, &b);
         assert_eq!(result, TransferResult::NoTransfer);
     }
@@ -448,16 +402,8 @@ mod tests {
     // --- 9. adapt_proof returns NeedsAdaptation with renames ---
     #[test]
     fn test_adapt_proof_needs_rename() {
-        let a = sig(
-            "src",
-            vec![],
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        );
-        let b = sig(
-            "tgt",
-            vec![],
-            Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))),
-        );
+        let a = sig("src", vec![], Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))));
+        let b = sig("tgt", vec![], Formula::Eq(Box::new(var("y")), Box::new(Formula::Int(0))));
         let result = adapt_proof(&a, &b);
         match result {
             TransferResult::NeedsAdaptation(adaptations) => {
@@ -476,11 +422,7 @@ mod tests {
     // --- 10. adapt_proof detects AddHypothesis ---
     #[test]
     fn test_adapt_proof_add_hypothesis() {
-        let src = sig(
-            "src",
-            vec![],
-            Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
-        );
+        let src = sig("src", vec![], Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))));
         let extra_hyp = Formula::Gt(Box::new(var("x")), Box::new(Formula::Int(0)));
         let tgt = sig(
             "tgt",
@@ -491,9 +433,7 @@ mod tests {
         match result {
             TransferResult::NeedsAdaptation(adaptations) => {
                 assert!(
-                    adaptations.contains(&Adaptation::AddHypothesis {
-                        hypothesis: extra_hyp,
-                    }),
+                    adaptations.contains(&Adaptation::AddHypothesis { hypothesis: extra_hyp }),
                     "expected AddHypothesis, got {adaptations:?}"
                 );
             }
@@ -504,20 +444,11 @@ mod tests {
     // --- 11. formula_similarity symmetric ---
     #[test]
     fn test_formula_similarity_symmetric() {
-        let a = Formula::Implies(
-            Box::new(var("x")),
-            Box::new(Formula::Bool(true)),
-        );
-        let b = Formula::Implies(
-            Box::new(var("y")),
-            Box::new(Formula::Bool(false)),
-        );
+        let a = Formula::Implies(Box::new(var("x")), Box::new(Formula::Bool(true)));
+        let b = Formula::Implies(Box::new(var("y")), Box::new(Formula::Bool(false)));
         let ab = formula_similarity(&a, &b);
         let ba = formula_similarity(&b, &a);
-        assert!(
-            (ab - ba).abs() < f64::EPSILON,
-            "similarity not symmetric: {ab} vs {ba}"
-        );
+        assert!((ab - ba).abs() < f64::EPSILON, "similarity not symmetric: {ab} vs {ba}");
     }
 
     // --- 12. hypothesis_overlap with identical sets ---
@@ -532,37 +463,19 @@ mod tests {
     #[test]
     fn test_transfer_candidate_partial_eq() {
         let s = sig("s", vec![], Formula::Bool(true));
-        let c1 = TransferCandidate {
-            source: s.clone(),
-            score: 0.5,
-            required_adaptations: vec![],
-        };
-        let c2 = TransferCandidate {
-            source: s,
-            score: 0.5,
-            required_adaptations: vec![],
-        };
+        let c1 = TransferCandidate { source: s.clone(), score: 0.5, required_adaptations: vec![] };
+        let c2 = TransferCandidate { source: s, score: 0.5, required_adaptations: vec![] };
         assert_eq!(c1, c2);
     }
 
     // --- 14. Adaptation enum variants constructible ---
     #[test]
     fn test_adaptation_variants() {
-        let rename = Adaptation::Rename {
-            from: "a".to_string(),
-            to: "b".to_string(),
-        };
-        let spec = Adaptation::Specialize {
-            variable: "T".to_string(),
-            term: Formula::Int(42),
-        };
-        let generalize = Adaptation::Generalize {
-            term: Formula::Int(0),
-            variable: "n".to_string(),
-        };
-        let hyp = Adaptation::AddHypothesis {
-            hypothesis: Formula::Bool(true),
-        };
+        let rename = Adaptation::Rename { from: "a".to_string(), to: "b".to_string() };
+        let spec = Adaptation::Specialize { variable: "T".to_string(), term: Formula::Int(42) };
+        let generalize =
+            Adaptation::Generalize { term: Formula::Int(0), variable: "n".to_string() };
+        let hyp = Adaptation::AddHypothesis { hypothesis: Formula::Bool(true) };
         // Verify Debug works (compile-time check, runtime smoke test)
         assert!(!format!("{rename:?}").is_empty());
         assert!(!format!("{spec:?}").is_empty());

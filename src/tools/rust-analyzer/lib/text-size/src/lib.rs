@@ -6,6 +6,7 @@
 //!   * Providing standard vocabulary types for applications where text ranges
 //!     are pervasive.
 //!
+
 //! strings. In the overwhelming majority of cases, using `usize` and
 //! `std::ops::Range<usize>` is better. In particular, if you are publishing a
 //! library, using only std types in the interface would make it more

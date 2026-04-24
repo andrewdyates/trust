@@ -60,7 +60,7 @@ pub(super) fn inferred_outlives_crate(tcx: TyCtxt<'_>, (): ()) -> CratePredicate
     // Convert the inferred predicates into the "collected" form the
     // global data structure expects.
     //
-    // tRust: known issue — -- consider correcting impedance mismatch in some way,
+    // FIXME -- consider correcting impedance mismatch in some way,
     // probably by updating the global data structure.
     let predicates = global_inferred_outlives
         .iter()

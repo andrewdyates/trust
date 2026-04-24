@@ -9,11 +9,12 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use trust_types::parse_spec_expr_result;
+
 use crate::gate_diagnostics::{
     DiagnosticKind, FixSuggestion, GateDiagnostic, Severity, suggest_fix,
 };
 use crate::proposer::{Proposal, ProposalKind};
-use trust_types::parse_spec_expr_result;
 
 /// Configuration for the structural gate.
 #[derive(Debug, Clone)]
@@ -59,10 +60,7 @@ impl ScopedVar {
     /// Create a new scoped variable.
     #[must_use]
     pub fn new(name: impl Into<String>, ty: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            ty: ty.into(),
-        }
+        Self { name: name.into(), ty: ty.into() }
     }
 }
 
@@ -83,28 +81,19 @@ impl GateResult {
     /// Number of rejections in the result.
     #[must_use]
     pub fn rejection_count(&self) -> usize {
-        self.diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Reject)
-            .count()
+        self.diagnostics.iter().filter(|d| d.severity == Severity::Reject).count()
     }
 
     /// Number of warnings in the result.
     #[must_use]
     pub fn warning_count(&self) -> usize {
-        self.diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Warn)
-            .count()
+        self.diagnostics.iter().filter(|d| d.severity == Severity::Warn).count()
     }
 
     /// Get all rejection diagnostics.
     #[must_use]
     pub fn rejections(&self) -> Vec<&GateDiagnostic> {
-        self.diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Reject)
-            .collect()
+        self.diagnostics.iter().filter(|d| d.severity == Severity::Reject).collect()
     }
 }
 
@@ -128,9 +117,7 @@ impl StructuralGate {
     /// Create a new structural gate with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            config: GateConfig::default(),
-        }
+        Self { config: GateConfig::default() }
     }
 
     /// Create a structural gate with custom configuration.
@@ -158,25 +145,19 @@ impl StructuralGate {
         // Attach fix suggestions to diagnostics that lack them
         for diag in &mut diagnostics {
             if diag.suggestion.is_none()
-                && let Some(fix) = suggest_fix(&diag.kind, &spec_body) {
-                    diag.suggestion = Some(fix);
-                }
+                && let Some(fix) = suggest_fix(&diag.kind, &spec_body)
+            {
+                diag.suggestion = Some(fix);
+            }
         }
 
         let passed = if self.config.strict_mode {
-            !diagnostics
-                .iter()
-                .any(|d| d.severity >= Severity::Warn)
+            !diagnostics.iter().any(|d| d.severity >= Severity::Warn)
         } else {
             !diagnostics.iter().any(|d| d.severity == Severity::Reject)
         };
 
-        GateResult {
-            passed,
-            diagnostics,
-            function_name: proposal.function_name.clone(),
-            spec_body,
-        }
+        GateResult { passed, diagnostics, function_name: proposal.function_name.clone(), spec_body }
     }
 
     /// Validate multiple proposals, returning results for each.
@@ -188,10 +169,7 @@ impl StructuralGate {
     /// Filter proposals, keeping only those that pass the gate.
     #[must_use]
     pub fn filter(&self, proposals: Vec<Proposal>) -> Vec<Proposal> {
-        proposals
-            .into_iter()
-            .filter(|p| self.check(p).passed)
-            .collect()
+        proposals.into_iter().filter(|p| self.check(p).passed).collect()
     }
 
     // --- Individual checks ---
@@ -295,15 +273,14 @@ impl StructuralGate {
         // SafeArithmetic, AddBoundsCheck, and AddNonZeroCheck contain Rust code,
         // not spec expressions, so we skip the spec parser for those.
         if is_spec_bearing_kind(kind)
-            && let Err(parse_err) = parse_spec_expr_result(trimmed) {
-                diagnostics.push(GateDiagnostic::reject(
-                    DiagnosticKind::SyntaxError,
-                    format!(
-                        "spec body failed to parse as a valid spec expression: {parse_err}"
-                    ),
-                    trimmed,
-                ));
-            }
+            && let Err(parse_err) = parse_spec_expr_result(trimmed)
+        {
+            diagnostics.push(GateDiagnostic::reject(
+                DiagnosticKind::SyntaxError,
+                format!("spec body failed to parse as a valid spec expression: {parse_err}"),
+                trimmed,
+            ));
+        }
     }
 
     fn check_unsafe_content(&self, spec_body: &str, diagnostics: &mut Vec<GateDiagnostic>) {
@@ -325,7 +302,9 @@ impl StructuralGate {
         }
 
         // #[trusted] attribute
-        if spec_body.contains("#[trusted]") || spec_body.contains("trusted") && spec_body.contains('#') {
+        if spec_body.contains("#[trusted]")
+            || spec_body.contains("trusted") && spec_body.contains('#')
+        {
             diagnostics.push(GateDiagnostic::reject(
                 DiagnosticKind::UnsafeContent,
                 "spec contains #[trusted] attribute, which bypasses verification",
@@ -445,13 +424,14 @@ impl StructuralGate {
 
         // For postconditions, check if spec just says "result == result"
         if matches!(kind, ProposalKind::AddPostcondition { .. })
-            && (trimmed == "result == result" || trimmed == "ret == ret") {
-                diagnostics.push(GateDiagnostic::reject(
-                    DiagnosticKind::Tautology,
-                    "postcondition is a tautology on the return value",
-                    trimmed,
-                ));
-            }
+            && (trimmed == "result == result" || trimmed == "ret == ret")
+        {
+            diagnostics.push(GateDiagnostic::reject(
+                DiagnosticKind::Tautology,
+                "postcondition is a tautology on the return value",
+                trimmed,
+            ));
+        }
     }
 
     fn check_contradiction(
@@ -560,10 +540,7 @@ impl StructuralGate {
         if depth > self.config.max_depth {
             diagnostics.push(GateDiagnostic::reject(
                 DiagnosticKind::ComplexityExceeded,
-                format!(
-                    "spec nesting depth {depth} exceeds maximum {}",
-                    self.config.max_depth
-                ),
+                format!("spec nesting depth {depth} exceeds maximum {}", self.config.max_depth),
                 trimmed,
             ));
         }
@@ -608,14 +585,14 @@ impl StructuralGate {
         }
 
         let identifiers = extract_identifiers(spec_body);
-        let scope_names: Vec<&str> = self.config.scope_vars.iter().map(|v| v.name.as_str()).collect();
+        let scope_names: Vec<&str> =
+            self.config.scope_vars.iter().map(|v| v.name.as_str()).collect();
 
         // Built-in identifiers that are always in scope for specs
         let builtins: &[&str] = &[
-            "true", "false", "result", "ret", "old", "self",
-            "usize", "u8", "u16", "u32", "u64", "u128",
-            "isize", "i8", "i16", "i32", "i64", "i128",
-            "f32", "f64", "bool", "MAX", "MIN", "len",
+            "true", "false", "result", "ret", "old", "self", "usize", "u8", "u16", "u32", "u64",
+            "u128", "isize", "i8", "i16", "i32", "i64", "i128", "f32", "f64", "bool", "MAX", "MIN",
+            "len",
         ];
 
         for ident in &identifiers {
@@ -677,9 +654,10 @@ fn is_self_equality(s: &str) -> bool {
 fn is_self_reflexive_comparison(s: &str) -> bool {
     for op in &[">=", "<="] {
         if let Some((left, right)) = split_binary_op(s, op)
-            && left == right {
-                return true;
-            }
+            && left == right
+        {
+            return true;
+        }
     }
     false
 }
@@ -750,11 +728,7 @@ fn split_binary_op<'a>(s: &'a str, op: &str) -> Option<(&'a str, &'a str)> {
             } else {
                 let prev = bytes[i - 1];
                 // For "==", ensure previous char is not '!' or '>' or '<'
-                if op == "==" {
-                    prev != b'!' && prev != b'>' && prev != b'<'
-                } else {
-                    true
-                }
+                if op == "==" { prev != b'!' && prev != b'>' && prev != b'<' } else { true }
             };
             let after_ok = if i + op_len >= bytes.len() {
                 true
@@ -811,11 +785,7 @@ fn contains_assignment(s: &str) -> bool {
         if bytes[i] == b'=' {
             // Check it's not part of ==, !=, >=, <=, =>
             let prev = if i > 0 { Some(bytes[i - 1]) } else { None };
-            let next = if i + 1 < bytes.len() {
-                Some(bytes[i + 1])
-            } else {
-                None
-            };
+            let next = if i + 1 < bytes.len() { Some(bytes[i + 1]) } else { None };
 
             let is_comparison = matches!(prev, Some(b'!' | b'>' | b'<' | b'='))
                 || matches!(next, Some(b'=' | b'>'));
@@ -846,11 +816,7 @@ fn count_operators(s: &str) -> usize {
         if single_ops.contains(&ch) {
             // Skip if part of a two-character operator
             let prev = if i > 0 { Some(bytes[i - 1] as char) } else { None };
-            let next = if i + 1 < bytes.len() {
-                Some(bytes[i + 1] as char)
-            } else {
-                None
-            };
+            let next = if i + 1 < bytes.len() { Some(bytes[i + 1] as char) } else { None };
 
             let is_double = match ch {
                 '&' => matches!(prev, Some('&')) || matches!(next, Some('&')),
@@ -894,13 +860,16 @@ fn extract_identifiers(s: &str) -> Vec<String> {
         if ch.is_alphanumeric() || ch == '_' {
             current.push(ch);
         } else {
-            if !current.is_empty() && current.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
+            if !current.is_empty()
+                && current.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+            {
                 identifiers.push(current.clone());
             }
             current.clear();
         }
     }
-    if !current.is_empty() && current.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
+    if !current.is_empty() && current.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+    {
         identifiers.push(current);
     }
 
@@ -910,12 +879,27 @@ fn extract_identifiers(s: &str) -> Vec<String> {
 /// Check if an identifier looks like a type method (e.g., checked_add, try_from).
 fn is_type_method(ident: &str) -> bool {
     let known_methods = [
-        "checked_add", "checked_sub", "checked_mul", "checked_div",
-        "checked_neg", "checked_shl", "checked_shr",
-        "saturating_add", "saturating_sub", "saturating_mul",
-        "wrapping_add", "wrapping_sub", "wrapping_mul",
-        "try_from", "try_into", "expect", "unwrap",
-        "len", "is_empty", "contains", "size_of",
+        "checked_add",
+        "checked_sub",
+        "checked_mul",
+        "checked_div",
+        "checked_neg",
+        "checked_shl",
+        "checked_shr",
+        "saturating_add",
+        "saturating_sub",
+        "saturating_mul",
+        "wrapping_add",
+        "wrapping_sub",
+        "wrapping_mul",
+        "try_from",
+        "try_into",
+        "expect",
+        "unwrap",
+        "len",
+        "is_empty",
+        "contains",
+        "size_of",
     ];
     known_methods.contains(&ident)
 }
@@ -929,9 +913,7 @@ mod tests {
         Proposal {
             function_path: "test::func".into(),
             function_name: "func".into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: spec.into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: spec.into() },
             confidence: 0.8,
             rationale: "test".into(),
         }
@@ -941,9 +923,7 @@ mod tests {
         Proposal {
             function_path: "test::func".into(),
             function_name: "func".into(),
-            kind: ProposalKind::AddPostcondition {
-                spec_body: spec.into(),
-            },
+            kind: ProposalKind::AddPostcondition { spec_body: spec.into() },
             confidence: 0.8,
             rationale: "test".into(),
         }
@@ -953,9 +933,7 @@ mod tests {
         Proposal {
             function_path: "test::func".into(),
             function_name: "func".into(),
-            kind: ProposalKind::AddInvariant {
-                spec_body: spec.into(),
-            },
+            kind: ProposalKind::AddInvariant { spec_body: spec.into() },
             confidence: 0.8,
             rationale: "test".into(),
         }
@@ -1143,9 +1121,12 @@ mod tests {
         let result = gate.check(&make_precondition("true && x > 0"));
         // Should pass (warning, not rejection)
         assert!(result.passed);
-        assert!(result.diagnostics.iter().any(|d| {
-            d.kind == DiagnosticKind::Tautology && d.severity == Severity::Warn
-        }));
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| { d.kind == DiagnosticKind::Tautology && d.severity == Severity::Warn })
+        );
     }
 
     #[test]
@@ -1192,10 +1173,7 @@ mod tests {
 
     #[test]
     fn test_gate_rejects_contradiction_with_existing_spec() {
-        let config = GateConfig {
-            existing_specs: vec!["x > 0".to_string()],
-            ..Default::default()
-        };
+        let config = GateConfig { existing_specs: vec!["x > 0".to_string()], ..Default::default() };
         let gate = StructuralGate::with_config(config);
         let result = gate.check(&make_precondition("!(x > 0)"));
         assert!(!result.passed);
@@ -1206,10 +1184,7 @@ mod tests {
 
     #[test]
     fn test_gate_rejects_too_long_spec() {
-        let config = GateConfig {
-            max_length: 20,
-            ..Default::default()
-        };
+        let config = GateConfig { max_length: 20, ..Default::default() };
         let gate = StructuralGate::with_config(config);
         let result = gate.check(&make_precondition("very_long_variable_name > another_long_name"));
         assert!(!result.passed);
@@ -1218,10 +1193,7 @@ mod tests {
 
     #[test]
     fn test_gate_rejects_too_many_operators() {
-        let config = GateConfig {
-            max_operators: 2,
-            ..Default::default()
-        };
+        let config = GateConfig { max_operators: 2, ..Default::default() };
         let gate = StructuralGate::with_config(config);
         let result = gate.check(&make_precondition("a > 0 && b > 0 && c > 0"));
         assert!(!result.passed);
@@ -1230,10 +1202,7 @@ mod tests {
 
     #[test]
     fn test_gate_rejects_too_deep_nesting() {
-        let config = GateConfig {
-            max_depth: 2,
-            ..Default::default()
-        };
+        let config = GateConfig { max_depth: 2, ..Default::default() };
         let gate = StructuralGate::with_config(config);
         let result = gate.check(&make_precondition("(((x > 0)))"));
         assert!(!result.passed);
@@ -1294,10 +1263,7 @@ mod tests {
     #[test]
     fn test_gate_rejects_out_of_scope_variable() {
         let config = GateConfig {
-            scope_vars: vec![
-                ScopedVar::new("x", "u64"),
-                ScopedVar::new("y", "u64"),
-            ],
+            scope_vars: vec![ScopedVar::new("x", "u64"), ScopedVar::new("y", "u64")],
             ..Default::default()
         };
         let gate = StructuralGate::with_config(config);
@@ -1309,10 +1275,7 @@ mod tests {
     #[test]
     fn test_gate_accepts_in_scope_variables() {
         let config = GateConfig {
-            scope_vars: vec![
-                ScopedVar::new("x", "u64"),
-                ScopedVar::new("y", "u64"),
-            ],
+            scope_vars: vec![ScopedVar::new("x", "u64"), ScopedVar::new("y", "u64")],
             ..Default::default()
         };
         let gate = StructuralGate::with_config(config);
@@ -1323,10 +1286,8 @@ mod tests {
 
     #[test]
     fn test_gate_allows_builtins_in_scope() {
-        let config = GateConfig {
-            scope_vars: vec![ScopedVar::new("x", "u64")],
-            ..Default::default()
-        };
+        let config =
+            GateConfig { scope_vars: vec![ScopedVar::new("x", "u64")], ..Default::default() };
         let gate = StructuralGate::with_config(config);
         let result = gate.check(&make_precondition("x < u64::MAX"));
         // "u64" and "MAX" are builtins
@@ -1381,7 +1342,7 @@ mod tests {
         let gate = StructuralGate::new();
         let proposals = vec![
             make_precondition("x > 0"),
-            make_precondition("true"),  // tautology
+            make_precondition("true"), // tautology
             make_precondition("y != 0"),
         ];
         let results = gate.check_all(&proposals);
@@ -1396,8 +1357,8 @@ mod tests {
         let gate = StructuralGate::new();
         let proposals = vec![
             make_precondition("x > 0"),
-            make_precondition("true"),           // tautology -- rejected
-            make_precondition("assume(false)"),   // unsound -- rejected
+            make_precondition("true"),          // tautology -- rejected
+            make_precondition("assume(false)"), // unsound -- rejected
             make_precondition("y != 0"),
         ];
         let filtered = gate.filter(proposals);
@@ -1406,10 +1367,7 @@ mod tests {
 
     #[test]
     fn test_gate_strict_mode_rejects_warnings() {
-        let config = GateConfig {
-            strict_mode: true,
-            ..Default::default()
-        };
+        let config = GateConfig { strict_mode: true, ..Default::default() };
         let gate = StructuralGate::with_config(config);
         let result = gate.check(&make_precondition("true && x > 0"));
         // In strict mode, the redundant-true warning becomes a rejection
@@ -1691,8 +1649,7 @@ mod tests {
         // Should not get a parser SyntaxError (Rust code is not spec expr)
         assert!(
             !result.diagnostics.iter().any(|d| {
-                d.kind == DiagnosticKind::SyntaxError
-                    && d.message.contains("failed to parse")
+                d.kind == DiagnosticKind::SyntaxError && d.message.contains("failed to parse")
             }),
             "parser should not be applied to SafeArithmetic proposals"
         );
@@ -1714,8 +1671,7 @@ mod tests {
         // Should not get a parser-based SyntaxError
         assert!(
             !result.diagnostics.iter().any(|d| {
-                d.kind == DiagnosticKind::SyntaxError
-                    && d.message.contains("failed to parse")
+                d.kind == DiagnosticKind::SyntaxError && d.message.contains("failed to parse")
             }),
             "parser should not be applied to AddBoundsCheck proposals"
         );
@@ -1736,8 +1692,7 @@ mod tests {
         let result = gate.check(&proposal);
         assert!(
             !result.diagnostics.iter().any(|d| {
-                d.kind == DiagnosticKind::SyntaxError
-                    && d.message.contains("failed to parse")
+                d.kind == DiagnosticKind::SyntaxError && d.message.contains("failed to parse")
             }),
             "parser should not be applied to AddNonZeroCheck proposals"
         );
@@ -1757,22 +1712,14 @@ mod tests {
 
     #[test]
     fn test_is_spec_bearing_kind_classification() {
-        assert!(is_spec_bearing_kind(&ProposalKind::AddPrecondition {
-            spec_body: String::new()
-        }));
-        assert!(is_spec_bearing_kind(&ProposalKind::AddPostcondition {
-            spec_body: String::new()
-        }));
-        assert!(is_spec_bearing_kind(&ProposalKind::AddInvariant {
-            spec_body: String::new()
-        }));
+        assert!(is_spec_bearing_kind(&ProposalKind::AddPrecondition { spec_body: String::new() }));
+        assert!(is_spec_bearing_kind(&ProposalKind::AddPostcondition { spec_body: String::new() }));
+        assert!(is_spec_bearing_kind(&ProposalKind::AddInvariant { spec_body: String::new() }));
         assert!(!is_spec_bearing_kind(&ProposalKind::SafeArithmetic {
             original: String::new(),
             replacement: String::new(),
         }));
-        assert!(!is_spec_bearing_kind(&ProposalKind::AddBoundsCheck {
-            check_expr: String::new()
-        }));
+        assert!(!is_spec_bearing_kind(&ProposalKind::AddBoundsCheck { check_expr: String::new() }));
         assert!(!is_spec_bearing_kind(&ProposalKind::AddNonZeroCheck {
             check_expr: String::new()
         }));

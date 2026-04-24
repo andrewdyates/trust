@@ -122,7 +122,7 @@ fn default_enum_substructure(
                         .map(|field| {
                             cx.field_imm(
                                 field.span,
-                                field.ident.expect("invariant: struct field in derive(Default) must have an ident"), // tRust: unwrap -> expect
+                                field.ident.unwrap(),
                                 match &field.default {
                                     // We use `Default::default()`.
                                     None => default_call(cx, field.span),

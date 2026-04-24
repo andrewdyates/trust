@@ -86,7 +86,6 @@ impl<'a, 'tcx> Visitor<'tcx> for LoanInvalidationsGenerator<'a, 'tcx> {
             | StatementKind::Retag { .. }
             | StatementKind::BackwardIncompatibleDropHint { .. }
             | StatementKind::SetDiscriminant { .. } => {
-                // tRust: invariant: MIR phase guarantee — these statements are lowered before the borrowck MIR phase
                 bug!("Statement not allowed in this MIR phase")
             }
         }
@@ -326,7 +325,6 @@ impl<'a, 'tcx> LoanInvalidationsGenerator<'a, 'tcx> {
                 self.consume_operand(location, op);
             }
 
-            // tRust: invariant: MIR phase guarantee — CopyForDeref is expanded before borrowck MIR
             Rvalue::CopyForDeref(_) => bug!("`CopyForDeref` in borrowck"),
         }
     }
@@ -400,7 +398,7 @@ impl<'a, 'tcx> LoanInvalidationsGenerator<'a, 'tcx> {
                         // unique or mutable borrows are invalidated by writes.
                         // Reservations count as writes since we need to check
                         // that activating the borrow will be OK
-                        // // NOTE: this activates the borrow on access, which is the correct behavior. to do?
+                        // FIXME(bob_twinkles) is this actually the right thing to do?
                         this.emit_loan_invalidated_at(borrow_index, location);
                     }
                 }

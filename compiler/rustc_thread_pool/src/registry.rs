@@ -47,9 +47,6 @@ impl ThreadBuilder {
     /// Executes the main loop for this thread. This will not return until the
     /// thread pool is dropped.
     pub fn run(self) {
-        // SAFETY: `run` consumes the `ThreadBuilder`, transferring exclusive ownership of its
-        // worker state into `main_loop`, which creates the thread-local `WorkerThread` and keeps
-        // it alive for the lifetime of this worker thread.
         unsafe { main_loop(self) }
     }
 }
@@ -229,9 +226,6 @@ fn default_global_registry() -> Result<Arc<Registry>, ThreadPoolBuildError> {
             let registry = &*worker_thread.registry;
             let index = worker_thread.index;
 
-            // SAFETY: the leaked `WorkerThread` stays valid for the remainder of the process, and
-            // `registry.thread_infos[index]` is owned by that live registry, so publishing this
-            // worker in TLS and setting its primed latch cannot outlive either pointer.
             unsafe {
                 WorkerThread::set_current(worker_thread);
 
@@ -326,9 +320,6 @@ impl Registry {
     }
 
     pub fn current() -> Arc<Registry> {
-        // SAFETY: `WorkerThread::current()` returns the TLS pointer for this thread; if it is
-        // non-null, that `WorkerThread` and its `Arc<Registry>` stay alive for the whole worker
-        // thread, and if it is null we fall back to the process-global registry.
         unsafe {
             let worker_thread = WorkerThread::current();
             let registry = if worker_thread.is_null() {
@@ -344,9 +335,6 @@ impl Registry {
     /// is better than `Registry::current().num_threads()` because it
     /// avoids incrementing the `Arc`.
     pub(super) fn current_num_threads() -> usize {
-        // SAFETY: the TLS worker pointer, when non-null, is valid on the current worker thread,
-        // so reading its registry is sound; otherwise we query the already-initialized global
-        // registry.
         unsafe {
             let worker_thread = WorkerThread::current();
             if worker_thread.is_null() {
@@ -359,8 +347,6 @@ impl Registry {
 
     /// Returns the current `WorkerThread` if it's part of this `Registry`.
     pub(super) fn current_thread(&self) -> Option<&WorkerThread> {
-        // SAFETY: the TLS pointer is only ever set to the current thread's live `WorkerThread`,
-        // and we return it only after checking that it belongs to this registry.
         unsafe {
             let worker = WorkerThread::current().as_ref()?;
             if worker.registry().id() == self.id() { Some(worker) } else { None }
@@ -432,8 +418,6 @@ impl Registry {
     /// deque. Else, it will inject from the outside (which is slower).
     pub(super) fn inject_or_push(&self, job_ref: JobRef) {
         let worker_thread = WorkerThread::current();
-        // SAFETY: if the TLS pointer is non-null, it names the live worker for this thread; we
-        // only call `push` when that worker belongs to `self`, which satisfies `push`'s contract.
         unsafe {
             if !worker_thread.is_null() && (*worker_thread).registry().id() == self.id() {
                 (*worker_thread).push(job_ref);
@@ -519,9 +503,6 @@ impl Registry {
         OP: FnOnce(&WorkerThread, bool) -> R + Send,
         R: Send,
     {
-        // SAFETY: the TLS pointer is valid for the current worker thread; if it is non-null we
-        // either hand the same live worker to `op` or forward to helpers that keep any stack job
-        // and latch alive until completion.
         unsafe {
             let worker_thread = WorkerThread::current();
             if worker_thread.is_null() {
@@ -553,21 +534,15 @@ impl Registry {
                 |injected| {
                     let worker_thread = WorkerThread::current();
                     assert!(injected && !worker_thread.is_null());
-                    // SAFETY: the injected job is now running on a pool worker, so the TLS
-                    // pointer is the current live `WorkerThread` for the duration of `op`.
                     op(unsafe { &*worker_thread }, true)
                 },
                 LatchRef::new(l),
             );
-            // SAFETY: `job` stays on this stack frame until after we wait for its latch below, so
-            // the advertised `JobRef` remains valid until the worker executes it exactly once.
             self.inject(unsafe { job.as_job_ref() });
             self.release_thread();
             job.latch.wait_and_reset(); // Make sure we can use the same latch again next time.
             self.acquire_thread();
 
-            // SAFETY: we only extract the result after waiting for the job's latch, which means
-            // the stack job has completed and initialized its result slot.
             unsafe { job.into_result() }
         })
     }
@@ -587,20 +562,12 @@ impl Registry {
             |injected| {
                 let worker_thread = WorkerThread::current();
                 assert!(injected && !worker_thread.is_null());
-                // SAFETY: this closure only runs on an injected pool worker, so the TLS pointer is
-                // a valid `WorkerThread` for the duration of `op`.
                 op(unsafe { &*worker_thread }, true)
             },
             latch,
         );
-        // SAFETY: `job` remains on this stack frame until we wait for its latch and extract its
-        // result, so the queued `JobRef` cannot outlive the underlying `StackJob`.
         self.inject(unsafe { job.as_job_ref() });
-        // SAFETY: `current_thread` is the caller's live worker thread, and `job.latch` lives in
-        // the stack job that stays in scope until this wait finishes.
         unsafe { current_thread.wait_until(&job.latch) };
-        // SAFETY: the latch wait above guarantees that the cross-pool job has finished writing its
-        // result before we consume the stack job.
         unsafe { job.into_result() }
     }
 
@@ -636,8 +603,6 @@ impl Registry {
     pub(super) fn terminate(&self) {
         if self.terminate_count.fetch_sub(1, Ordering::AcqRel) == 1 {
             for (i, thread_info) in self.thread_infos.iter().enumerate() {
-                // SAFETY: each `terminate` latch is stored inside this live registry, and the
-                // caller still holds the registry alive for the duration of `terminate()`.
                 unsafe { OnceLatch::set_and_tickle_one(&thread_info.terminate, self, i) };
             }
         }
@@ -655,8 +620,6 @@ impl Registry {
 pub fn mark_blocked() {
     let worker_thread = WorkerThread::current();
     assert!(!worker_thread.is_null());
-    // SAFETY: `mark_blocked` is only called from a Rayon worker thread, so the TLS pointer names
-    // the current live worker and its registry for the duration of this call.
     unsafe {
         let registry = &(*worker_thread).registry;
         registry.sleep.mark_blocked(&registry.deadlock_handler)
@@ -797,9 +760,6 @@ impl WorkerThread {
 
     #[inline]
     pub(super) unsafe fn push_fifo(&self, job: JobRef) {
-        // SAFETY: `self.fifo` is embedded in this live worker thread, so the indirection `JobRef`
-        // returned by `fifo.push` remains valid while the worker exists, and we enqueue it
-        // immediately onto the same worker.
         unsafe { self.push(self.fifo.push(job)) };
     }
 
@@ -837,8 +797,6 @@ impl WorkerThread {
     /// stealing tasks as necessary.
     #[inline]
     pub(super) unsafe fn wait_until<L: AsCoreLatch + ?Sized>(&self, latch: &L) {
-        // SAFETY: `wait_until` requires the caller to keep `latch` alive for the whole wait, and
-        // this simply forwards that same borrowed latch to the shared implementation.
         unsafe { self.wait_or_steal_until(latch, false) };
     }
 
@@ -895,8 +853,6 @@ impl WorkerThread {
         }
 
         // Wait for the jobs to finish.
-        // SAFETY: `latch` is still borrowed from the caller and remains alive until this helper
-        // returns, so waiting on it here preserves `wait_until`'s contract.
         unsafe { self.wait_until(latch) };
         debug_assert!(latch.as_core_latch().probe());
     }
@@ -909,12 +865,8 @@ impl WorkerThread {
         let latch = latch.as_core_latch();
         if !latch.probe() {
             if steal {
-                // SAFETY: we pass the same live worker thread and borrowed latch to the cold path,
-                // preserving the caller's guarantee that `latch` stays valid while waiting.
                 unsafe { self.wait_or_steal_until_cold(latch) };
             } else {
-                // SAFETY: the caller's borrow of `latch` outlives this call, and `wait_until_cold`
-                // does not retain the reference beyond the wait.
                 unsafe { self.wait_until_cold(latch) };
             }
         }
@@ -933,8 +885,6 @@ impl WorkerThread {
             // Check for local work *before* we start marking ourself idle,
             // especially to avoid modifying shared sleep state.
             if let Some(job) = self.take_local_job() {
-                // SAFETY: `take_local_job` removed this `JobRef` from the worker's queues, so this
-                // thread now has exclusive responsibility to execute it exactly once.
                 unsafe { self.execute(job) };
                 continue;
             }
@@ -943,8 +893,6 @@ impl WorkerThread {
             while !latch.probe() {
                 if let Some(job) = self.find_work() {
                     self.registry.sleep.work_found();
-                    // SAFETY: `find_work` returns an owned `JobRef` taken from a queue or injector,
-                    // and this loop consumes each such job at most once.
                     unsafe { self.execute(job) };
                     // The job might have injected local work, so go back to the outer loop.
                     continue 'outer;
@@ -989,16 +937,12 @@ impl WorkerThread {
         let index = self.index;
 
         registry.acquire_thread();
-        // SAFETY: this worker owns `thread_infos[index].terminate`, and both the worker and its
-        // registry remain alive until shutdown completes and this call returns.
         unsafe { self.wait_or_steal_until(&registry.thread_infos[index].terminate, true) };
 
         // Should not be any work left in our queue.
         debug_assert!(self.take_local_job().is_none());
 
         // Let registry know we are done
-        // SAFETY: `thread_infos[index].stopped` lives inside the same live registry, and we do not
-        // access the latch again after notifying any waiters.
         unsafe { Latch::set(&registry.thread_infos[index].stopped) };
     }
 
@@ -1013,8 +957,6 @@ impl WorkerThread {
 
     pub(super) fn yield_now(&self) -> Yield {
         match self.find_work() {
-            // SAFETY: `find_work` hands us an unexecuted `JobRef` removed from shared queues, so
-            // executing it here satisfies the one-shot `JobRef` contract.
             Some(job) => unsafe {
                 self.execute(job);
                 Yield::Executed
@@ -1025,8 +967,6 @@ impl WorkerThread {
 
     pub(super) fn yield_local(&self) -> Yield {
         match self.take_local_job() {
-            // SAFETY: `take_local_job` removes the job from this worker's local structures, giving
-            // this thread exclusive responsibility to execute it once.
             Some(job) => unsafe {
                 self.execute(job);
                 Yield::Executed
@@ -1037,8 +977,6 @@ impl WorkerThread {
 
     #[inline]
     pub(super) unsafe fn execute(&self, job: JobRef) {
-        // SAFETY: callers only pass live `JobRef`s taken from a queue exactly once, so invoking
-        // the stored job entry point upholds `JobRef`'s validity and single-execution contract.
         unsafe { job.execute() };
     }
 
@@ -1083,15 +1021,11 @@ impl WorkerThread {
 
 unsafe fn main_loop(thread: ThreadBuilder) {
     let worker_thread = &WorkerThread::from(thread);
-    // SAFETY: `worker_thread` is a stack local that lives for the rest of this function, i.e. for
-    // the lifetime of the worker thread, and TLS is still empty at thread startup.
     unsafe { WorkerThread::set_current(worker_thread) };
     let registry = &*worker_thread.registry;
     let index = worker_thread.index;
 
     // let registry know we are ready to do work
-    // SAFETY: the primed latch is stored in this worker's live registry entry, and after setting
-    // it we do not access the latch through the raw pointer again.
     unsafe { Latch::set(&registry.thread_infos[index].primed) };
 
     // Worker threads should not panic. If they do, just abort, as the
@@ -1104,8 +1038,6 @@ unsafe fn main_loop(thread: ThreadBuilder) {
         registry.catch_unwind(|| handler(index));
     }
 
-    // SAFETY: `worker_thread` is the current thread's live `WorkerThread`, already installed in
-    // TLS above, so it may wait on its own termination latch until shutdown completes.
     unsafe { worker_thread.wait_until_out_of_work() };
 
     // Normal termination, do not abort.
@@ -1130,8 +1062,6 @@ where
     OP: FnOnce(&WorkerThread, bool) -> R + Send,
     R: Send,
 {
-    // SAFETY: if TLS contains a worker pointer, it names the current thread's live `WorkerThread`
-    // for the duration of `op`; otherwise we delegate to the global registry helper.
     unsafe {
         let owner_thread = WorkerThread::current();
         if !owner_thread.is_null() {

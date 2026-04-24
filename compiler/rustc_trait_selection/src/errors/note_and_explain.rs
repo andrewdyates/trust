@@ -76,7 +76,6 @@ impl<'a> DescriptionCtx<'a> {
             ty::RePlaceholder(_) | ty::ReError(_) => return None,
 
             ty::ReVar(_) | ty::ReBound(..) | ty::ReErased => {
-                // tRust: invariant — fr.kind should not be ty::ReVar(_) | ty::ReBound(..) | ty::ReErased at this point in processing
                 bug!("unexpected region for DescriptionCtx: {:?}", region);
             }
         };

@@ -13,6 +13,7 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::BTreeSet;
+use std::fmt::Write;
 #[cfg(not(feature = "pipeline-v2"))]
 use std::io::Write as _;
 #[cfg(not(feature = "pipeline-v2"))]
@@ -21,7 +22,6 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 #[cfg(not(feature = "pipeline-v2"))]
 use std::time::{Duration, Instant};
-use std::fmt::Write;
 
 use trust_types::*;
 
@@ -163,15 +163,12 @@ impl SmtLibBackend {
 pub(crate) fn kill_process_by_pid(pid: u32) {
     #[cfg(unix)]
     {
-        let _ = std::process::Command::new("kill")
-            .args(["-9", &pid.to_string()])
-            .output();
+        let _ = std::process::Command::new("kill").args(["-9", &pid.to_string()]).output();
     }
     #[cfg(not(unix))]
     {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/PID", &pid.to_string()])
-            .output();
+        let _ =
+            std::process::Command::new("taskkill").args(["/F", "/PID", &pid.to_string()]).output();
     }
 }
 
@@ -181,6 +178,7 @@ pub(crate) fn kill_process_by_pid(pid: u32) {
 /// that should not be trusted as a definitive proof.
 ///
 /// Returns `true` if any unreliability indicator is found in stderr.
+#[cfg(any(not(feature = "pipeline-v2"), test))]
 pub(crate) fn stderr_indicates_unreliable(stderr: &str) -> bool {
     if stderr.is_empty() {
         return false;
@@ -241,12 +239,12 @@ impl VerificationBackend for SmtLibBackend {
                 // see VerificationResult::Timeout instead of Unknown.
                 if e == "solver timeout" {
                     return VerificationResult::Timeout {
-                        solver: "z4-smtlib".to_string(),
+                        solver: "z4-smtlib".into(),
                         timeout_ms: self.timeout_ms,
                     };
                 }
                 return VerificationResult::Unknown {
-                    solver: "z4-smtlib".to_string(),
+                    solver: "z4-smtlib".into(),
                     time_ms: start.elapsed().as_millis() as u64,
                     reason: e,
                 };
@@ -266,7 +264,7 @@ impl VerificationBackend for SmtLibBackend {
         // hit resource limits or used incomplete reasoning.
         if stderr_indicates_unreliable(&stderr) {
             return VerificationResult::Unknown {
-                solver: "z4-smtlib".to_string(),
+                solver: "z4-smtlib".into(),
                 time_ms: elapsed,
                 reason: format!("solver stderr suggests unreliable result: {stderr}"),
             };
@@ -274,11 +272,8 @@ impl VerificationBackend for SmtLibBackend {
 
         // tRust #732: Parse stderr into individual warning lines and pass them
         // through to the result so they are preserved in solver_warnings.
-        let warnings: Vec<String> = stderr
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect();
+        let warnings: Vec<String> =
+            stderr.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
 
         parse_solver_output(&stdout, elapsed, warnings)
     }
@@ -352,7 +347,7 @@ fn collect_vars(formula: &Formula, vars: &mut BTreeSet<(String, Sort)>) {
             }
             Formula::Forall(bindings, _) | Formula::Exists(bindings, _) => {
                 for (name, _) in bindings {
-                    bound_names.insert(name.clone());
+                    bound_names.insert(name.to_string());
                 }
             }
             _ => {}
@@ -385,7 +380,7 @@ pub(crate) fn parse_solver_output(
 
     if trimmed.starts_with("unsat") {
         return VerificationResult::Proved {
-            solver: "z4-smtlib".to_string(),
+            solver: "z4-smtlib".into(),
             time_ms: elapsed_ms,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
@@ -396,7 +391,7 @@ pub(crate) fn parse_solver_output(
     if trimmed.starts_with("sat") {
         let counterexample = parse_model(trimmed);
         return VerificationResult::Failed {
-            solver: "z4-smtlib".to_string(),
+            solver: "z4-smtlib".into(),
             time_ms: elapsed_ms,
             counterexample,
         };
@@ -404,7 +399,7 @@ pub(crate) fn parse_solver_output(
 
     if trimmed.starts_with("unknown") {
         return VerificationResult::Unknown {
-            solver: "z4-smtlib".to_string(),
+            solver: "z4-smtlib".into(),
             time_ms: elapsed_ms,
             reason: "solver returned unknown".to_string(),
         };
@@ -412,7 +407,7 @@ pub(crate) fn parse_solver_output(
 
     // Parse errors or unexpected output
     VerificationResult::Unknown {
-        solver: "z4-smtlib".to_string(),
+        solver: "z4-smtlib".into(),
         time_ms: elapsed_ms,
         reason: format!("unexpected solver output: {}", &trimmed[..trimmed.len().min(200)]),
     }
@@ -959,7 +954,7 @@ mod tests {
 
         let l0_vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -968,7 +963,7 @@ mod tests {
 
         let l1_vc = VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -977,7 +972,7 @@ mod tests {
 
         let l2_vc = VerificationCondition {
             kind: VcKind::Deadlock,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,

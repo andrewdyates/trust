@@ -74,11 +74,11 @@ fn implied_outlives_bounds<'a, 'tcx>(
     assert_eq!(obligations.len(), 0);
 
     // Because of #109628, we may have unexpected placeholders. Ignore them!
-    // tRust: known issue (#109628) — panic in this case once the issue is fixed.
+    // FIXME(#109628): panic in this case once the issue is fixed.
     bounds.retain(|bound| !bound.has_placeholders());
 
     if !constraints.is_empty() {
-        // tRust: known issue (higher_ranked_auto) — Should we register assumptions here?
+        // FIXME(higher_ranked_auto): Should we register assumptions here?
         // We otherwise would get spurious errors if normalizing an implied
         // outlives bound required proving some higher-ranked coroutine obl.
         let QueryRegionConstraints { outlives, assumptions: _ } = constraints;

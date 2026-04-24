@@ -16,7 +16,7 @@ pub(crate) fn target() -> Target {
         | SanitizerSet::MEMORY
         | SanitizerSet::THREAD;
     base.supports_xray = true;
-    // tRust: known issue (compiler-team#422) — musl targets should be dynamically linked by default.
+    // FIXME(compiler-team#422): musl targets should be dynamically linked by default.
     base.crt_static_default = true;
 
     Target {

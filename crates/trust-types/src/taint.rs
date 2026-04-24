@@ -11,9 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    Operand, Place, Rvalue, SourceSpan, Statement, Terminator, VerifiableBody,
-};
+use crate::{Operand, Place, Rvalue, SourceSpan, Statement, Terminator, VerifiableBody};
 
 // ---------------------------------------------------------------------------
 // Core taint label and source/sink types
@@ -520,18 +518,10 @@ impl TaintState {
         body.locals
             .iter()
             .map(|decl| {
-                let labels =
-                    result.tainted_locals.get(&decl.index).cloned().unwrap_or_default();
-                let origins = labels
-                    .iter()
-                    .map(|label| (label.clone(), SourceSpan::default()))
-                    .collect();
-                TaintState {
-                    local: decl.index,
-                    name: decl.name.clone(),
-                    labels,
-                    origins,
-                }
+                let labels = result.tainted_locals.get(&decl.index).cloned().unwrap_or_default();
+                let origins =
+                    labels.iter().map(|label| (label.clone(), SourceSpan::default())).collect();
+                TaintState { local: decl.index, name: decl.name.clone(), labels, origins }
             })
             .collect()
     }
@@ -1164,14 +1154,12 @@ mod tests {
         let result = analyze_taint(&body, &default_web_policy());
 
         assert_eq!(result.violations.len(), 1);
-        assert!(
-            result.flow_edges.iter().any(|edge| {
-                edge.from_local == 1
-                    && edge.to_local == 2
-                    && edge.block == 1
-                    && edge.kind == FlowKind::Assignment
-            })
-        );
+        assert!(result.flow_edges.iter().any(|edge| {
+            edge.from_local == 1
+                && edge.to_local == 2
+                && edge.block == 1
+                && edge.kind == FlowKind::Assignment
+        }));
         assert!(matches!(
             result.tainted_locals.get(&2),
             Some(labels) if labels.contains(&TaintLabel::UserInput)
@@ -1372,14 +1360,8 @@ mod tests {
 
     #[test]
     fn test_lattice_meet_is_intersection() {
-        let a = TaintLattice::from_set(BTreeSet::from([
-            TaintLabel::UserInput,
-            TaintLabel::Secret,
-        ]));
-        let b = TaintLattice::from_set(BTreeSet::from([
-            TaintLabel::Secret,
-            TaintLabel::FileData,
-        ]));
+        let a = TaintLattice::from_set(BTreeSet::from([TaintLabel::UserInput, TaintLabel::Secret]));
+        let b = TaintLattice::from_set(BTreeSet::from([TaintLabel::Secret, TaintLabel::FileData]));
         let met = a.meet(&b);
         assert_eq!(met.len(), 1);
         assert!(met.contains(&TaintLabel::Secret));
@@ -1420,19 +1402,13 @@ mod tests {
 
     #[test]
     fn test_lattice_join_idempotent() {
-        let a = TaintLattice::from_set(BTreeSet::from([
-            TaintLabel::UserInput,
-            TaintLabel::Secret,
-        ]));
+        let a = TaintLattice::from_set(BTreeSet::from([TaintLabel::UserInput, TaintLabel::Secret]));
         assert_eq!(a.join(&a), a);
     }
 
     #[test]
     fn test_lattice_meet_idempotent() {
-        let a = TaintLattice::from_set(BTreeSet::from([
-            TaintLabel::UserInput,
-            TaintLabel::Secret,
-        ]));
+        let a = TaintLattice::from_set(BTreeSet::from([TaintLabel::UserInput, TaintLabel::Secret]));
         assert_eq!(a.meet(&a), a);
     }
 
@@ -1461,10 +1437,7 @@ mod tests {
     #[test]
     fn test_lattice_subset_ordering() {
         let a = TaintLattice::singleton(TaintLabel::UserInput);
-        let b = TaintLattice::from_set(BTreeSet::from([
-            TaintLabel::UserInput,
-            TaintLabel::Secret,
-        ]));
+        let b = TaintLattice::from_set(BTreeSet::from([TaintLabel::UserInput, TaintLabel::Secret]));
         assert!(a.is_subset_of(&b));
         assert!(!b.is_subset_of(&a));
     }
@@ -1514,8 +1487,7 @@ mod tests {
         let prop = TaintPropagator::default();
         let taint_map = BTreeMap::new();
 
-        let result =
-            prop.propagate_operand(&Operand::Constant(ConstValue::Int(42)), &taint_map);
+        let result = prop.propagate_operand(&Operand::Constant(ConstValue::Int(42)), &taint_map);
         assert!(result.is_bottom());
     }
 
@@ -1525,8 +1497,7 @@ mod tests {
         let mut taint_map = BTreeMap::new();
         taint_map.insert(1, TaintLattice::singleton(TaintLabel::UserInput));
 
-        let result =
-            prop.propagate_operand(&Operand::Copy(Place::local(1)), &taint_map);
+        let result = prop.propagate_operand(&Operand::Copy(Place::local(1)), &taint_map);
         assert!(result.contains(&TaintLabel::UserInput));
     }
 
@@ -1562,10 +1533,7 @@ mod tests {
 
     #[test]
     fn test_propagator_cast_disabled_drops_taint() {
-        let prop = TaintPropagator {
-            propagate_casts: false,
-            ..TaintPropagator::default()
-        };
+        let prop = TaintPropagator { propagate_casts: false, ..TaintPropagator::default() };
         let mut taint_map = BTreeMap::new();
         taint_map.insert(1, TaintLattice::singleton(TaintLabel::NetworkData));
 
@@ -1612,17 +1580,13 @@ mod tests {
         let prop = TaintPropagator::default();
         let taint_map = BTreeMap::new(); // no locals are tainted
 
-        let result =
-            prop.propagate_operand(&Operand::Copy(Place::local(5)), &taint_map);
+        let result = prop.propagate_operand(&Operand::Copy(Place::local(5)), &taint_map);
         assert!(result.is_bottom());
     }
 
     #[test]
     fn test_propagator_binary_op_disabled() {
-        let prop = TaintPropagator {
-            propagate_binary_ops: false,
-            ..TaintPropagator::default()
-        };
+        let prop = TaintPropagator { propagate_binary_ops: false, ..TaintPropagator::default() };
         let mut taint_map = BTreeMap::new();
         taint_map.insert(1, TaintLattice::singleton(TaintLabel::UserInput));
 

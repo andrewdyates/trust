@@ -496,7 +496,7 @@ impl Parser {
         self.expect(&Token::RParen, &format!("closing ')' for {label}"))?;
 
         let bound_var = Formula::Var(var_name.clone(), Sort::Int);
-        let bindings = vec![(var_name, Sort::Int)];
+        let bindings = vec![(crate::Symbol::intern(&var_name), Sort::Int)];
 
         // Build range guard: lo <= var && var < hi
         let range_guard = Formula::And(vec![

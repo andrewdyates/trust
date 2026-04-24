@@ -110,7 +110,7 @@ fn get_iosock_param(arch_lib_dir: &str) -> &'static str {
         .unwrap_or_else(|_| "QNX_TARGET_not_set_please_source_qnxsdp-env.sh".into());
     let linker_param = format!("-L{target_dir}/{arch_lib_dir}/io-sock/lib");
 
-    // tRust: known issue — leaking this is kind of weird: we're feeding these into something that expects an
+    // FIXME: leaking this is kind of weird: we're feeding these into something that expects an
     // `AsRef<OsStr>`, but often converts to `OsString` anyways, so shouldn't we just demand an `OsString`?
     linker_param.leak()
 }

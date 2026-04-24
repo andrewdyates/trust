@@ -199,7 +199,6 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
             }
             DefKind::OpaqueTy => ty::Opaque,
             DefKind::TyAlias => ty::Free,
-            // tRust: invariant: unexpected DefKind in AliasTy: <...>
             kind => bug!("unexpected DefKind in AliasTy: {kind:?}"),
         }
     }
@@ -228,7 +227,6 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
             DefKind::AnonConst | DefKind::Ctor(_, CtorKind::Const) => {
                 ty::AliasTermKind::UnevaluatedConst
             }
-            // tRust: invariant: unexpected DefKind in AliasTy: <...>
             kind => bug!("unexpected DefKind in AliasTy: {kind:?}"),
         }
     }
@@ -273,7 +271,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         def_id: Self::DefId,
         args: Self::GenericArgs,
     ) {
-        // tRust: known issue — We could perhaps add a `skip: usize` to `debug_assert_args_compatible`
+        // FIXME: We could perhaps add a `skip: usize` to `debug_assert_args_compatible`
         // to avoid needing to reintern the set of args...
         if cfg!(debug_assertions) {
             self.debug_assert_args_compatible(
@@ -541,7 +539,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
                 }
             }
 
-            // tRust: accepted tradeoff — For integer and float variables we have to manually look at all impls
+            // HACK: For integer and float variables we have to manually look at all impls
             // which have some integer or float as a self type.
             ty::Infer(ty::IntVar(_)) => {
                 use ty::IntTy::*;
@@ -591,7 +589,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
             // `assemble_candidates_after_normalizing_self_ty`.
             ty::Alias(_, _) | ty::Placeholder(..) | ty::Error(_) => (),
 
-            // tRust: known issue — These should ideally not exist as a self type. It would be nice for
+            // FIXME: These should ideally not exist as a self type. It would be nice for
             // the builtin auto trait impls of coroutines to instead directly recurse
             // into the witness.
             ty::CoroutineWitness(..) => (),
@@ -599,7 +597,6 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
             // These variants should not exist as a self type.
             ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_))
             | ty::Param(_)
-            // tRust: invariant: unexpected self type: <...>
             | ty::Bound(_, _) => bug!("unexpected self type: {self_ty}"),
         }
 
@@ -723,7 +720,6 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
 
     fn item_name(self, id: DefId) -> Symbol {
         self.opt_item_name(id).unwrap_or_else(|| {
-            // tRust: invariant: HIR node must have a name
             bug!("item_name: no name for {:?}", self.def_path(id));
         })
     }

@@ -23,10 +23,6 @@ macro_rules! impl_write_unsigned_leb128 {
 
             loop {
                 if value < 0x80 {
-                    // SAFETY: `i < out.len()` because `out` has `max_leb128_len::<$int_ty>()`
-                    // bytes, and LEB128 encoding emits at most ceil(bits/7) bytes — exactly
-                    // `out.len()`. Each loop iteration writes one byte and increments `i`,
-                    // so `i` is always a valid index.
                     unsafe {
                         *out.get_unchecked_mut(i) = value as u8;
                     }
@@ -34,8 +30,6 @@ macro_rules! impl_write_unsigned_leb128 {
                     i = i.debug_strict_add(1);
                     break;
                 } else {
-                    // SAFETY: Same bound as above — `i` is incremented once per iteration
-                    // and the loop runs at most `max_leb128_len` times.
                     unsafe {
                         *out.get_unchecked_mut(i) = ((value & 0x7f) | 0x80) as u8;
                     }
@@ -106,9 +100,6 @@ macro_rules! impl_write_signed_leb128 {
                     byte |= 0x80; // Mark this byte to show that more bytes will follow.
                 }
 
-                // SAFETY: `i < out.len()` because `out` has `max_leb128_len::<$int_ty>()`
-                // bytes (= ceil(bits/7)), and signed LEB128 emits at most that many bytes.
-                // Each loop iteration writes one byte and increments `i`.
                 unsafe {
                     *out.get_unchecked_mut(i) = byte;
                 }

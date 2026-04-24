@@ -73,7 +73,7 @@ pub fn expand_trait_aliases<'tcx>(
                 if !seen_projection_preds.insert(tcx.anonymize_bound_vars(projection_pred)) {
                     continue;
                 }
-                projection_preds.push((projection_pred, *spans.last().expect("invariant: non-empty collection")));
+                projection_preds.push((projection_pred, *spans.last().unwrap()));
             }
             ty::ClauseKind::RegionOutlives(..)
             | ty::ClauseKind::TypeOutlives(..)
@@ -184,9 +184,10 @@ pub(crate) enum TupleArgumentsFlag {
 /// this function unnecessary. However, normalization currently does not do that, so we have
 /// to do this lazily.
 ///
+
 /// discussing it with t-types.
 ///
-/// tRust: known issue (@lcnr) — We may even consider experimenting with eagerly replacing bound vars during
+/// FIXME(@lcnr): We may even consider experimenting with eagerly replacing bound vars during
 /// normalization as well, at which point this function will be unnecessary and can be removed.
 pub fn with_replaced_escaping_bound_vars<
     'a,
@@ -285,7 +286,6 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for PlaceholderReplacer<'_, 'tcx> {
                             .universe_indices
                             .iter()
                             .position(|u| matches!(u, Some(pu) if *pu == p.universe))
-                            // tRust: invariant — Unexpected placeholder universe
                             .unwrap_or_else(|| bug!("Unexpected placeholder universe."));
                         let db = ty::DebruijnIndex::from_usize(
                             self.universe_indices.len() - index + self.current_index.as_usize() - 1,
@@ -314,7 +314,6 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for PlaceholderReplacer<'_, 'tcx> {
                             .universe_indices
                             .iter()
                             .position(|u| matches!(u, Some(pu) if *pu == p.universe))
-                            // tRust: invariant — Unexpected placeholder universe
                             .unwrap_or_else(|| bug!("Unexpected placeholder universe."));
                         let db = ty::DebruijnIndex::from_usize(
                             self.universe_indices.len() - index + self.current_index.as_usize() - 1,
@@ -346,7 +345,6 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for PlaceholderReplacer<'_, 'tcx> {
                         .universe_indices
                         .iter()
                         .position(|u| matches!(u, Some(pu) if *pu == p.universe))
-                        // tRust: invariant — Unexpected placeholder universe
                         .unwrap_or_else(|| bug!("Unexpected placeholder universe."));
                     let db = ty::DebruijnIndex::from_usize(
                         self.universe_indices.len() - index + self.current_index.as_usize() - 1,

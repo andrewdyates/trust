@@ -23,33 +23,22 @@ use trust_types::{Formula, Sort, SourceSpan, VcKind, VerificationCondition};
 /// The returned VCs encode these as separation logic constraints translated
 /// to FOL. If any VC is SAT, the dereference may be unsafe.
 #[must_use]
-pub fn deref_vc(
-    func_name: &str,
-    ptr_name: &str,
-    span: &SourceSpan,
-) -> Vec<VerificationCondition> {
+pub fn deref_vc(func_name: &str, ptr_name: &str, span: &SourceSpan) -> Vec<VerificationCondition> {
     let ptr = Formula::Var(format!("ptr_{ptr_name}"), Sort::Int);
     let heap_var = "heap";
-    let heap = Formula::Var(
-        heap_var.to_string(),
-        Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
-    );
+    let heap =
+        Formula::Var(heap_var.to_string(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)));
 
     let mut vcs = Vec::new();
 
     // VC 1: Non-null check -- ptr == 0 is a violation
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:deref] null check for *{ptr_name}"
-            ),
+            message: format!("[unsafe:sep:deref] null check for *{ptr_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
-        formula: Formula::Eq(
-            Box::new(ptr.clone()),
-            Box::new(Formula::Int(0)),
-        ),
+        formula: Formula::Eq(Box::new(ptr.clone()), Box::new(Formula::Int(0))),
         contract_metadata: None,
     });
 
@@ -60,17 +49,12 @@ pub fn deref_vc(
     let unalloc_sentinel = Formula::Int(-1);
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:deref] allocation validity for *{ptr_name}"
-            ),
+            message: format!("[unsafe:sep:deref] allocation validity for *{ptr_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Eq(
-            Box::new(Formula::Select(
-                Box::new(heap),
-                Box::new(ptr.clone()),
-            )),
+            Box::new(Formula::Select(Box::new(heap), Box::new(ptr.clone()))),
             Box::new(unalloc_sentinel),
         ),
         contract_metadata: None,
@@ -81,24 +65,16 @@ pub fn deref_vc(
     let align = Formula::Var(format!("align_{ptr_name}"), Sort::Int);
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:deref] alignment check for *{ptr_name}"
-            ),
+            message: format!("[unsafe:sep:deref] alignment check for *{ptr_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::And(vec![
             // align > 0 (alignment is always positive)
-            Formula::Gt(
-                Box::new(align.clone()),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(align.clone()), Box::new(Formula::Int(0))),
             // ptr % align != 0
             Formula::Not(Box::new(Formula::Eq(
-                Box::new(Formula::Rem(
-                    Box::new(ptr),
-                    Box::new(align),
-                )),
+                Box::new(Formula::Rem(Box::new(ptr), Box::new(align))),
                 Box::new(Formula::Int(0)),
             ))),
         ]),
@@ -125,10 +101,8 @@ pub fn raw_write_vc(
 ) -> Vec<VerificationCondition> {
     let ptr = Formula::Var(format!("ptr_{ptr_name}"), Sort::Int);
     let heap_var = "heap";
-    let heap = Formula::Var(
-        heap_var.to_string(),
-        Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
-    );
+    let heap =
+        Formula::Var(heap_var.to_string(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)));
 
     let mut vcs = deref_vc(func_name, ptr_name, span);
 
@@ -137,11 +111,9 @@ pub fn raw_write_vc(
     let writable = Formula::Var(format!("writable_{ptr_name}"), Sort::Bool);
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:write] write permission for *{ptr_name}"
-            ),
+            message: format!("[unsafe:sep:write] write permission for *{ptr_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Not(Box::new(writable)),
         contract_metadata: None,
@@ -158,17 +130,12 @@ pub fn raw_write_vc(
     // The written value must be readable back
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:write] post-write consistency for *{ptr_name}"
-            ),
+            message: format!("[unsafe:sep:write] post-write consistency for *{ptr_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Not(Box::new(Formula::Eq(
-            Box::new(Formula::Select(
-                Box::new(post_heap),
-                Box::new(ptr),
-            )),
+            Box::new(Formula::Select(Box::new(post_heap), Box::new(ptr))),
             Box::new(value_formula.clone()),
         ))),
         contract_metadata: None,
@@ -208,28 +175,22 @@ pub fn transmute_vc(
                 "[unsafe:sep:transmute] layout: size_of({src_ty}) != size_of({dst_ty})"
             ),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
-        formula: Formula::Not(Box::new(Formula::Eq(
-            Box::new(src_size),
-            Box::new(dst_size),
-        ))),
+        formula: Formula::Not(Box::new(Formula::Eq(Box::new(src_size), Box::new(dst_size)))),
         contract_metadata: None,
     });
 
     // VC 2: Validity invariant -- the bit pattern must be valid for Dst.
     // Without concrete type info, we model this symbolically.
-    let valid_bits = Formula::Var(
-        format!("valid_bits_{src_ty}_as_{dst_ty}"),
-        Sort::Bool,
-    );
+    let valid_bits = Formula::Var(format!("valid_bits_{src_ty}_as_{dst_ty}"), Sort::Bool);
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
             message: format!(
                 "[unsafe:sep:transmute] validity: bits of {src_ty} invalid for {dst_ty}"
             ),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Not(Box::new(valid_bits)),
         contract_metadata: None,
@@ -239,16 +200,11 @@ pub fn transmute_vc(
     // is a violation (transmute doesn't change alignment)
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep:transmute] alignment: align({dst_ty}) > align({src_ty})"
-            ),
+            message: format!("[unsafe:sep:transmute] alignment: align({dst_ty}) > align({src_ty})"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
-        formula: Formula::Gt(
-            Box::new(dst_align),
-            Box::new(src_align),
-        ),
+        formula: Formula::Gt(Box::new(dst_align), Box::new(src_align)),
         contract_metadata: None,
     });
 

@@ -20,7 +20,7 @@ pub(crate) fn expand(
     let orig_item = item.clone();
 
     // Allow using `#[alloc_error_handler]` on an item statement
-    // tRust: known issue — if we get deref patterns, use them to reduce duplication here
+    // FIXME - if we get deref patterns, use them to reduce duplication here
     let (item, ident, is_stmt, sig_span) = if let Annotatable::Item(item) = &item
         && let ItemKind::Fn(fn_kind) = &item.kind
     {

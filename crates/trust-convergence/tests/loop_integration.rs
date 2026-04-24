@@ -4,7 +4,6 @@
 
 use std::time::Duration;
 
-use trust_convergence::*;
 use trust_convergence::integration::{VcStatus, VerificationConvergenceTracker};
 use trust_convergence::monotonicity::{MonotonicityPolicy, check_monotonicity};
 use trust_convergence::stagnation::StagnationDetector;
@@ -12,9 +11,9 @@ use trust_convergence::termination::{
     ResourceBudget, TerminationAnalyzer, TerminationCriterion, TerminationReason,
 };
 use trust_convergence::widening::{
-    AbstractState, SimpleNarrowing, ThresholdWidening, WideningOperator,
-    narrow_after_widening,
+    AbstractState, SimpleNarrowing, ThresholdWidening, WideningOperator, narrow_after_widening,
 };
+use trust_convergence::*;
 use trust_strengthen::{NoOpLlm, StrengthenConfig};
 use trust_types::*;
 
@@ -32,33 +31,26 @@ fn proved() -> VerificationResult {
     VerificationResult::Proved {
         solver: "z4".into(),
         time_ms: 5,
-        strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+        strength: ProofStrength::smt_unsat(),
+        proof_certificate: None,
+        solver_warnings: None,
+    }
 }
 
 fn failed() -> VerificationResult {
-    VerificationResult::Failed {
-        solver: "z4".into(),
-        time_ms: 10,
-        counterexample: None,
-    }
+    VerificationResult::Failed { solver: "z4".into(), time_ms: 10, counterexample: None }
 }
 
 fn unknown() -> VerificationResult {
-    VerificationResult::Unknown {
-        solver: "z4".into(),
-        time_ms: 100,
-        reason: "incomplete".into(),
-    }
+    VerificationResult::Unknown { solver: "z4".into(), time_ms: 100, reason: "incomplete".into() }
 }
 
 fn crate_result(
     func_name: &str,
     results: Vec<(VcKind, VerificationResult)>,
 ) -> CrateVerificationResult {
-    let vcs: Vec<(VerificationCondition, VerificationResult)> = results
-        .into_iter()
-        .map(|(kind, vr)| (make_vc(kind, func_name), vr))
-        .collect();
+    let vcs: Vec<(VerificationCondition, VerificationResult)> =
+        results.into_iter().map(|(kind, vr)| (make_vc(kind, func_name), vr)).collect();
 
     let mut cr = CrateVerificationResult::new("test_crate");
     cr.add_function(FunctionVerificationResult {
@@ -72,13 +64,7 @@ fn crate_result(
 }
 
 fn frontier(trusted: u32, certified: u32, rt: u32, failed: u32, unknown: u32) -> ProofFrontier {
-    ProofFrontier {
-        trusted,
-        certified,
-        runtime_checked: rt,
-        failed,
-        unknown,
-    }
+    ProofFrontier { trusted, certified, runtime_checked: rt, failed, unknown }
 }
 
 fn state_with(proved: &[&str], proposals: &[&str], round: u32) -> AbstractState {
@@ -92,32 +78,24 @@ fn state_with(proved: &[&str], proposals: &[&str], round: u32) -> AbstractState 
 #[test]
 fn test_loop_single_iteration_no_convergence() {
     let mut tracker = VerificationConvergenceTracker::new(2, 8);
-    let iteration = crate_result("compute", vec![
-        (VcKind::DivisionByZero, proved()),
-        (
-            VcKind::ArithmeticOverflow {
-                op: BinOp::Add,
-                operand_tys: (Ty::u32(), Ty::u32()),
-            },
-            failed(),
-        ),
-        (VcKind::Postcondition, unknown()),
-    ]);
+    let iteration = crate_result(
+        "compute",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (
+                VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
+                failed(),
+            ),
+            (VcKind::Postcondition, unknown()),
+        ],
+    );
 
     let changes = tracker.observe(&iteration);
-    let decision = tracker
-        .tracker()
-        .latest_report()
-        .expect("tracker should have a report")
-        .decision;
+    let decision =
+        tracker.tracker().latest_report().expect("tracker should have a report").decision;
 
     assert!(changes.is_empty());
-    assert!(matches!(
-        decision,
-        ConvergenceDecision::Continue {
-            verdict: StepVerdict::Improved
-        }
-    ));
+    assert!(matches!(decision, ConvergenceDecision::Continue { verdict: StepVerdict::Improved }));
     assert_eq!(tracker.current_iteration(), 1);
     assert!(tracker.current_statuses().values().any(|status| *status == VcStatus::Failed));
 }
@@ -125,46 +103,54 @@ fn test_loop_single_iteration_no_convergence() {
 #[test]
 fn test_loop_three_iterations_gradual_improvement() {
     let mut tracker = VerificationConvergenceTracker::new(2, 8);
-    let mut analyzer = TerminationAnalyzer::with_criterion(
-        TerminationCriterion::ConfidenceThreshold(1.0),
-    );
+    let mut analyzer =
+        TerminationAnalyzer::with_criterion(TerminationCriterion::ConfidenceThreshold(1.0));
     let iterations = [
-        crate_result("compute", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, failed()),
-            (VcKind::Postcondition, failed()),
-            (
-                VcKind::ArithmeticOverflow {
-                    op: BinOp::Add,
-                    operand_tys: (Ty::u32(), Ty::u32()),
-                },
-                failed(),
-            ),
-        ]),
-        crate_result("compute", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, proved()),
-            (VcKind::Postcondition, proved()),
-            (
-                VcKind::ArithmeticOverflow {
-                    op: BinOp::Add,
-                    operand_tys: (Ty::u32(), Ty::u32()),
-                },
-                failed(),
-            ),
-        ]),
-        crate_result("compute", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, proved()),
-            (VcKind::Postcondition, proved()),
-            (
-                VcKind::ArithmeticOverflow {
-                    op: BinOp::Add,
-                    operand_tys: (Ty::u32(), Ty::u32()),
-                },
-                proved(),
-            ),
-        ]),
+        crate_result(
+            "compute",
+            vec![
+                (VcKind::DivisionByZero, proved()),
+                (VcKind::IndexOutOfBounds, failed()),
+                (VcKind::Postcondition, failed()),
+                (
+                    VcKind::ArithmeticOverflow {
+                        op: BinOp::Add,
+                        operand_tys: (Ty::u32(), Ty::u32()),
+                    },
+                    failed(),
+                ),
+            ],
+        ),
+        crate_result(
+            "compute",
+            vec![
+                (VcKind::DivisionByZero, proved()),
+                (VcKind::IndexOutOfBounds, proved()),
+                (VcKind::Postcondition, proved()),
+                (
+                    VcKind::ArithmeticOverflow {
+                        op: BinOp::Add,
+                        operand_tys: (Ty::u32(), Ty::u32()),
+                    },
+                    failed(),
+                ),
+            ],
+        ),
+        crate_result(
+            "compute",
+            vec![
+                (VcKind::DivisionByZero, proved()),
+                (VcKind::IndexOutOfBounds, proved()),
+                (VcKind::Postcondition, proved()),
+                (
+                    VcKind::ArithmeticOverflow {
+                        op: BinOp::Add,
+                        operand_tys: (Ty::u32(), Ty::u32()),
+                    },
+                    proved(),
+                ),
+            ],
+        ),
     ];
 
     let mut history = Vec::new();
@@ -220,17 +206,16 @@ fn test_loop_regression_detected_and_rolled_back() {
     let previous = frontier(2, 0, 0, 0, 0);
     let current = frontier(1, 0, 0, 1, 0);
     let monotonicity = check_monotonicity(&previous, &current, MonotonicityPolicy::Strict);
-    let rollback_target = if monotonicity.should_rollback() {
-        previous.clone()
-    } else {
-        current.clone()
-    };
+    let rollback_target =
+        if monotonicity.should_rollback() { previous.clone() } else { current.clone() };
 
     assert!(monotonicity.should_rollback());
-    assert!(monotonicity
-        .violation_reason
-        .expect("strict policy should explain the regression")
-        .contains("static proofs decreased"));
+    assert!(
+        monotonicity
+            .violation_reason
+            .expect("strict policy should explain the regression")
+            .contains("static proofs decreased")
+    );
     assert_eq!(rollback_target, previous);
 }
 
@@ -242,17 +227,14 @@ fn test_loop_termination_by_budget_exhaustion() {
     );
     let f0 = frontier(1, 0, 0, 1, 0);
     let f1 = frontier(2, 0, 0, 0, 0);
-    let history = vec![
-        IterationSnapshot::new(0, f0.clone()),
-        IterationSnapshot::new(1, f1.clone()),
-    ];
+    let history =
+        vec![IterationSnapshot::new(0, f0.clone()), IterationSnapshot::new(1, f1.clone())];
 
     analyzer.record_iteration(None, &f0, Duration::from_millis(60));
     analyzer.record_iteration(Some(&f0), &f1, Duration::from_millis(60));
 
-    let reason = analyzer
-        .should_terminate(&history)
-        .expect("solver-time budget should be exhausted");
+    let reason =
+        analyzer.should_terminate(&history).expect("solver-time budget should be exhausted");
     assert!(matches!(reason, TerminationReason::BudgetExhausted { .. }));
 }
 
@@ -265,26 +247,18 @@ fn test_loop_termination_by_max_iterations() {
         IterationSnapshot::new(2, frontier(2, 0, 0, 1, 0)),
     ];
 
-    let reason = analyzer
-        .should_terminate(&history)
-        .expect("iteration limit should stop the loop");
-    assert!(matches!(
-        reason,
-        TerminationReason::MaxIterations {
-            limit: 3,
-            reached: 3
-        }
-    ));
+    let reason = analyzer.should_terminate(&history).expect("iteration limit should stop the loop");
+    assert!(matches!(reason, TerminationReason::MaxIterations { limit: 3, reached: 3 }));
 }
 
 #[test]
 fn test_loop_strengthen_breaks_stagnation() {
     let mut tracker = VerificationConvergenceTracker::new(2, 8);
     let mut detector = StagnationDetector::with_threshold(1);
-    let stalled = crate_result("safe_divide", vec![
-        (VcKind::DivisionByZero, failed()),
-        (VcKind::Postcondition, failed()),
-    ]);
+    let stalled = crate_result(
+        "safe_divide",
+        vec![(VcKind::DivisionByZero, failed()), (VcKind::Postcondition, failed())],
+    );
 
     tracker.observe(&stalled);
     let first_frontier = ProofFrontier::from_verification_result(&stalled);
@@ -294,15 +268,14 @@ fn test_loop_strengthen_breaks_stagnation() {
     let second_frontier = ProofFrontier::from_verification_result(&stalled);
     assert!(detector.observe(&second_frontier).is_stagnant());
 
-    let strengthen_output =
-        trust_strengthen::run(&stalled, &StrengthenConfig::default(), &NoOpLlm);
+    let strengthen_output = trust_strengthen::run(&stalled, &StrengthenConfig::default(), &NoOpLlm);
     assert!(strengthen_output.has_proposals);
     assert_eq!(strengthen_output.failures_analyzed, 2);
 
-    let improved = crate_result("safe_divide", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::Postcondition, failed()),
-    ]);
+    let improved = crate_result(
+        "safe_divide",
+        vec![(VcKind::DivisionByZero, proved()), (VcKind::Postcondition, failed())],
+    );
     let changes = tracker.observe(&improved);
     let improved_frontier = ProofFrontier::from_verification_result(&improved);
 
@@ -331,11 +304,7 @@ fn test_loop_widening_then_narrowing_precision_recovery() {
 #[test]
 fn test_loop_convergence_prediction_accuracy() {
     let mut analyzer = TerminationAnalyzer::new(vec![], ResourceBudget::unlimited());
-    let frontiers = [
-        frontier(1, 0, 0, 3, 0),
-        frontier(2, 0, 0, 2, 0),
-        frontier(3, 0, 0, 1, 0),
-    ];
+    let frontiers = [frontier(1, 0, 0, 3, 0), frontier(2, 0, 0, 2, 0), frontier(3, 0, 0, 1, 0)];
     let mut previous = None;
 
     for current in &frontiers {
@@ -363,11 +332,14 @@ fn test_loop_full_orchestration_to_completion() {
 
     let mut history = Vec::new();
     let mut previous_frontier = None;
-    let mut current = crate_result("orchestrated", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-        (VcKind::Postcondition, failed()),
-    ]);
+    let mut current = crate_result(
+        "orchestrated",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (VcKind::IndexOutOfBounds, failed()),
+            (VcKind::Postcondition, failed()),
+        ],
+    );
 
     for iteration in 0..6 {
         tracker.observe(&current);
@@ -394,17 +366,23 @@ fn test_loop_full_orchestration_to_completion() {
             let strengthen_output =
                 trust_strengthen::run(&current, &StrengthenConfig::default(), &NoOpLlm);
             assert!(strengthen_output.has_proposals);
-            crate_result("orchestrated", vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, proved()),
-                (VcKind::Postcondition, failed()),
-            ])
+            crate_result(
+                "orchestrated",
+                vec![
+                    (VcKind::DivisionByZero, proved()),
+                    (VcKind::IndexOutOfBounds, proved()),
+                    (VcKind::Postcondition, failed()),
+                ],
+            )
         } else if current_frontier.failed > 0 {
-            crate_result("orchestrated", vec![
-                (VcKind::DivisionByZero, proved()),
-                (VcKind::IndexOutOfBounds, proved()),
-                (VcKind::Postcondition, proved()),
-            ])
+            crate_result(
+                "orchestrated",
+                vec![
+                    (VcKind::DivisionByZero, proved()),
+                    (VcKind::IndexOutOfBounds, proved()),
+                    (VcKind::Postcondition, proved()),
+                ],
+            )
         } else {
             current.clone()
         };

@@ -461,7 +461,7 @@ impl<'a> StripUnconfigured<'a> {
     }
 }
 
-/// tRust: known issue —: Still used by Rustdoc, should be removed after
+/// FIXME: Still used by Rustdoc, should be removed after
 pub fn parse_cfg_old<'a>(meta_item: &'a MetaItem, sess: &Session) -> Option<&'a MetaItemInner> {
     let span = meta_item.span;
     match meta_item.meta_item_list() {

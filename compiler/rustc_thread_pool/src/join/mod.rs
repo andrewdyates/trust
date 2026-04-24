@@ -127,47 +127,43 @@ where
         move |migrated| f(FnContext::new(migrated))
     }
 
-    registry::in_worker(|worker_thread, injected|
-        // SAFETY: `registry::in_worker` passes a live `worker_thread` for this closure, and
-        // `job_b` stays on this stack frame until after `wait_for_jobs` returns, so its `JobRef`,
-        // latch, inline execution, and final result extraction all operate on still-live storage.
-        unsafe {
-            let tlv = tlv::get();
-            // Create virtual wrapper for task b; this all has to be
-            // done here so that the stack frame can keep it all live
-            // long enough.
-            let job_b_started = AtomicBool::new(false);
-            let job_b = StackJob::new(
-                tlv,
-                |migrated| {
-                    job_b_started.store(true, Ordering::Relaxed);
-                    call_b(oper_b)(migrated)
-                },
-                SpinLatch::new(worker_thread),
-            );
-            let job_b_ref = job_b.as_job_ref();
-            let job_b_id = job_b_ref.id();
-            worker_thread.push(job_b_ref);
+    registry::in_worker(|worker_thread, injected| unsafe {
+        let tlv = tlv::get();
+        // Create virtual wrapper for task b; this all has to be
+        // done here so that the stack frame can keep it all live
+        // long enough.
+        let job_b_started = AtomicBool::new(false);
+        let job_b = StackJob::new(
+            tlv,
+            |migrated| {
+                job_b_started.store(true, Ordering::Relaxed);
+                call_b(oper_b)(migrated)
+            },
+            SpinLatch::new(worker_thread),
+        );
+        let job_b_ref = job_b.as_job_ref();
+        let job_b_id = job_b_ref.id();
+        worker_thread.push(job_b_ref);
 
-            // Execute task a; hopefully b gets stolen in the meantime.
-            let status_a = unwind::halt_unwinding(call_a(oper_a, injected));
-            worker_thread.wait_for_jobs::<_, false>(
-                &job_b.latch,
-                || job_b_started.load(Ordering::Relaxed),
-                |job| job.id() == job_b_id,
-                |job| {
-                    debug_assert_eq!(job.id(), job_b_id);
-                    job_b.run_inline(injected);
-                },
-            );
+        // Execute task a; hopefully b gets stolen in the meantime.
+        let status_a = unwind::halt_unwinding(call_a(oper_a, injected));
+        worker_thread.wait_for_jobs::<_, false>(
+            &job_b.latch,
+            || job_b_started.load(Ordering::Relaxed),
+            |job| job.id() == job_b_id,
+            |job| {
+                debug_assert_eq!(job.id(), job_b_id);
+                job_b.run_inline(injected);
+            },
+        );
 
-            // Restore the TLV since we might have run some jobs overwriting it when waiting for job b.
-            tlv::set(tlv);
+        // Restore the TLV since we might have run some jobs overwriting it when waiting for job b.
+        tlv::set(tlv);
 
-            let result_a = match status_a {
-                Ok(v) => v,
-                Err(err) => unwind::resume_unwinding(err),
-            };
-            (result_a, job_b.into_result())
-        })
+        let result_a = match status_a {
+            Ok(v) => v,
+            Err(err) => unwind::resume_unwinding(err),
+        };
+        (result_a, job_b.into_result())
+    })
 }

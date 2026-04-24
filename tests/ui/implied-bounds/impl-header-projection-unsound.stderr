@@ -1,0 +1,15 @@
+error: lifetime may not live long enough
+  --> $DIR/impl-header-projection-unsound.rs:35:9
+   |
+LL | impl<'short, 'long> LifetimeExtend<'short, 'long>
+   |      ------  ----- lifetime `'long` defined here
+   |      |
+   |      lifetime `'short` defined here
+...
+LL |         short
+   |         ^^^^^ function was supposed to return data with lifetime `'long` but it is returning data with lifetime `'short`
+   |
+   = help: consider adding the following bound: `'short: 'long`
+
+error: aborting due to 1 previous error
+

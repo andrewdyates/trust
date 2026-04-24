@@ -42,7 +42,6 @@ pub(crate) fn declare_simple_fn<'ll>(
     ty: &'ll Type,
 ) -> &'ll Value {
     debug!("declare_simple_fn(name={:?}, ty={:?})", name, ty);
-    // SAFETY: The module is valid, the name is a valid C string, and the function type is valid.
     let llfn = unsafe {
         llvm::LLVMRustGetOrInsertFunction(cx.llmod, name.as_c_char_ptr(), name.len(), ty)
     };
@@ -89,7 +88,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     /// return its Value instead.
     pub(crate) fn declare_global(&self, name: &str, ty: &'ll Type) -> &'ll Value {
         debug!("declare_global(name={:?})", name);
-        // SAFETY: The module is valid, the name buffer and length are valid, and the type is a valid LLVM type.
         unsafe {
             llvm::LLVMRustGetOrInsertGlobal(
                 (**self).borrow().llmod,
@@ -235,7 +233,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     /// Gets declared value by name.
     pub(crate) fn get_declared_value(&self, name: &str) -> Option<&'ll Value> {
         debug!("get_declared_value(name={:?})", name);
-        // SAFETY: The module is valid, and the name buffer and length are valid.
         unsafe { llvm::LLVMRustGetNamedValue(self.llmod(), name.as_c_char_ptr(), name.len()) }
     }
 

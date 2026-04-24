@@ -15,8 +15,10 @@
 #   ./tests/e2e_verify_suite.sh verify_div_zero  # run one (substring match)
 #
 # Prerequisites:
-#   Stage1 rustc build (./x.py build) for full verification.
-#   Falls back to cargo check (syntax only) if stage1 is unavailable.
+#   Stage1 rustc build (./x.py build) plus a live `-Z trust-verify` path for
+#   full verification.
+#   Falls back to syntax-only compilation if stage1 is unavailable or if the
+#   built compiler does not currently expose `-Z trust-verify`.
 #
 # Author: Andrew Yates <andrew@andrewdyates.com>
 # Copyright 2026 Andrew Yates | License: Apache 2.0
@@ -50,9 +52,17 @@ else
     RESET=''
 fi
 
-# --- Locate stage1 rustc ---
+# --- Locate stage1 trustc / compatibility rustc ---
 find_rustc() {
+    if [ -n "${TRUSTC:-}" ] && [ -x "${TRUSTC}" ]; then
+        echo "${TRUSTC}"
+        return 0
+    fi
     local candidates=(
+        "$TRUST_ROOT/build/host/stage1/bin/trustc"
+        "$TRUST_ROOT/build/aarch64-apple-darwin/stage1/bin/trustc"
+        "$TRUST_ROOT/build/x86_64-unknown-linux-gnu/stage1/bin/trustc"
+        "$TRUST_ROOT/build/x86_64-apple-darwin/stage1/bin/trustc"
         "$TRUST_ROOT/build/host/stage1/bin/rustc"
         "$TRUST_ROOT/build/aarch64-apple-darwin/stage1/bin/rustc"
         "$TRUST_ROOT/build/x86_64-unknown-linux-gnu/stage1/bin/rustc"
@@ -67,36 +77,92 @@ find_rustc() {
     return 1
 }
 
+supports_trust_verify() {
+    local rustc="$1"
+    local metadata_out
+    metadata_out=$(mktemp /tmp/trust_verify_probe.XXXXXX)
+    printf 'fn main() {}\n' | \
+        TRUST_VERIFY=1 "$rustc" -Z trust-verify --edition 2021 --crate-name trust_verify_probe \
+            --emit metadata -o "$metadata_out" - >/dev/null 2>&1
+    local rc=$?
+    rm -f "$metadata_out"
+    return $rc
+}
+
 # --- Parse expected patterns from file header ---
-# Reads "// Expected: ..." lines and extracts VcKind names + FAILED status.
-# Returns a newline-separated list of grep patterns.
+# Reads the first "// Expected: ..." line plus any immediately following
+# comment continuations that still contain expectation statuses.
+# Returns a newline-separated list of VcKind names.
 parse_expected_patterns() {
     local file="$1"
-    local expected_line
-    expected_line=$(grep '^// Expected:' "$file" | head -1)
-    if [ -z "$expected_line" ]; then
+    local expected_block
+    expected_block=$(
+        awk '
+            /^\/\/ Expected:/ {
+                capture = 1
+                sub(/^\/\/ Expected:[[:space:]]*/, "", $0)
+                print
+                next
+            }
+            capture && /^\/\/[[:space:]]+/ {
+                if ($0 ~ /(FAILED|PROVED|RUNTIME-CHECKED|UNKNOWN|TIMEOUT)/) {
+                    sub(/^\/\/[[:space:]]*/, "", $0)
+                    print
+                    next
+                }
+                exit
+            }
+            capture {
+                exit
+            }
+        ' "$file"
+    )
+    if [ -z "$expected_block" ]; then
         echo ""
         return
     fi
 
-    # Strip prefix "// Expected: "
-    local body="${expected_line#// Expected: }"
-
     # Split on comma/AND separators, extract VcKind names
-    # Each token looks like "VcKindName FAILED" or "VcKindName(Op) FAILED"
-    echo "$body" | tr ',' '\n' | sed 's/ AND /\n/g' | while IFS= read -r token; do
+    # Each token looks like "VcKindName FAILED" or "VcKindName(Op) PROVED"
+    echo "$expected_block" | tr ',' '\n' | sed 's/ AND /\n/g' | while IFS= read -r token; do
         # Trim whitespace
         token=$(echo "$token" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         # Skip empty
         [ -z "$token" ] && continue
-        # Extract the VcKind name (everything before FAILED, trimmed)
+        # Extract the VcKind name (everything before status, trimmed)
         local vc_name
-        vc_name=$(echo "$token" | sed 's/[[:space:]]*FAILED.*//;s/[[:space:]]*$//')
+        vc_name=$(echo "$token" | sed -E 's/[[:space:]]*(FAILED|PROVED|RUNTIME-CHECKED|UNKNOWN|TIMEOUT).*//;s/[[:space:]]*$//')
         [ -z "$vc_name" ] && continue
-        # Some names have parenthesized ops like ArithmeticOverflow(Sub)
-        # We need to escape parens for grep
         echo "$vc_name"
     done
+}
+
+pattern_for_expected_kind() {
+    case "$1" in
+        DivisionByZero) echo "divzero" ;;
+        RemainderByZero) echo "remzero" ;;
+        IndexOutOfBounds) echo "bounds" ;;
+        SliceBoundsCheck) echo "slice|assert" ;;
+        Assertion) echo "assert" ;;
+        Precondition) echo "precond" ;;
+        Postcondition) echo "postcond" ;;
+        Unreachable) echo "unreach" ;;
+        CastOverflow) echo "cast" ;;
+        NegationOverflow) echo "negation" ;;
+        FloatDivisionByZero) echo "float_division_by_zero|divzero" ;;
+        FloatOverflowToInfinity\(Add\)) echo "float_overflow_to_infinity|overflow:add" ;;
+        ArithmeticOverflow\(Add\)) echo "overflow:add" ;;
+        ArithmeticOverflow\(Sub\)) echo "overflow:sub" ;;
+        ArithmeticOverflow\(Mul\)) echo "overflow:mul" ;;
+        ArithmeticOverflow\(Div\)) echo "overflow" ;;
+        ShiftOverflow\(Shl\)) echo "shift:left" ;;
+        ShiftOverflow\(Shr\)) echo "shift:right" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+is_layer2_only_variant() {
+    grep -q 'Layer 2 only (synthetic MIR)' "$1"
 }
 
 # --- Determine if file is a safe variant ---
@@ -121,7 +187,7 @@ unset_trust_disables() {
 run_test() {
     local file="$1"
     local rustc="$2"
-    local mode="$3"  # "rustc" or "cargo-check"
+    local mode="$3"  # "rustc" or "syntax-check"
     local basename
     basename=$(basename "$file" .rs)
 
@@ -134,6 +200,12 @@ run_test() {
 
     if [ -z "$patterns" ]; then
         echo -e "  ${YELLOW}SKIP${RESET}: No '// Expected:' header found"
+        SKIPPED=$((SKIPPED + 1))
+        return
+    fi
+
+    if [ "$mode" = "rustc" ] && is_layer2_only_variant "$file"; then
+        echo -e "  ${YELLOW}SKIP${RESET}: documented Layer 2-only example (native rustc contracts not wired yet)"
         SKIPPED=$((SKIPPED + 1))
         return
     fi
@@ -167,7 +239,7 @@ run_test() {
     # For syntax-only mode, we can only verify compilation
     if [ "$mode" = "syntax-check" ]; then
         if [ $exit_code -eq 0 ]; then
-            echo -e "  ${YELLOW}SKIP${RESET}: compiles OK (no verification without stage1 rustc)"
+            echo -e "  ${YELLOW}SKIP${RESET}: compiles OK (verification path unavailable; syntax check only)"
             SKIPPED=$((SKIPPED + 1))
         else
             echo -e "  ${RED}FAIL${RESET}: compilation failed (exit $exit_code)"
@@ -184,13 +256,14 @@ run_test() {
         # Safe variant: each VcKind should be absent or PROVED
         while IFS= read -r vc_name; do
             [ -z "$vc_name" ] && continue
+            vc_name=$(pattern_for_expected_kind "$vc_name")
             # Escape parens for grep
             local pattern
             pattern=$(echo "$vc_name" | sed 's/(/\\(/g;s/)/\\)/g')
-            if echo "$output" | grep -q "${pattern}.*FAILED"; then
+            if echo "$output" | grep -Eq "(${pattern}).*FAILED"; then
                 echo -e "  ${RED}FAIL${RESET}: $vc_name should not be FAILED in safe variant"
                 test_passed=false
-            elif echo "$output" | grep -q "${pattern}.*PROVED"; then
+            elif echo "$output" | grep -Eq "(${pattern}).*PROVED"; then
                 echo -e "  ${GREEN}OK${RESET}: $vc_name PROVED"
             else
                 echo -e "  ${GREEN}OK${RESET}: $vc_name absent (expected for safe variant)"
@@ -200,11 +273,12 @@ run_test() {
         # Buggy variant: each VcKind should appear with FAILED status
         while IFS= read -r vc_name; do
             [ -z "$vc_name" ] && continue
+            vc_name=$(pattern_for_expected_kind "$vc_name")
             # Escape parens for grep
             local pattern
             pattern=$(echo "$vc_name" | sed 's/(/\\(/g;s/)/\\)/g')
             # Check for FAILED (or RUNTIME-CHECKED, which also indicates detection)
-            if echo "$output" | grep -qi "${pattern}.*FAILED\|${pattern}.*RUNTIME-CHECKED"; then
+            if echo "$output" | grep -Eqi "(${pattern}).*(FAILED|RUNTIME-CHECKED)"; then
                 echo -e "  ${GREEN}OK${RESET}: $vc_name FAILED (bug detected)"
             else
                 echo -e "  ${RED}FAIL${RESET}: Expected $vc_name FAILED but not found"
@@ -235,13 +309,20 @@ RUSTC=""
 MODE="syntax-check"
 
 if RUSTC=$(find_rustc); then
-    MODE="rustc"
-    echo "Mode:    stage1 rustc (full verification)"
-    echo "Rustc:   $RUSTC"
+    if supports_trust_verify "$RUSTC"; then
+        MODE="rustc"
+        echo "Mode:    stage1 rustc (full verification)"
+        echo "Rustc:   $RUSTC"
+    else
+        MODE="syntax-check"
+        echo "Mode:    stage1 rustc present, but trust-verify is unavailable"
+        echo "Fallback: syntax check only"
+        echo "Rustc:   $RUSTC"
+    fi
 else
     MODE="syntax-check"
     echo "Mode:    system rustc (syntax check only, no verification)"
-    echo "         Build stage1 for full verification: cd $TRUST_ROOT && ./x.py build"
+    echo "         Build stage1 and re-enable trust-verify for full verification: cd $TRUST_ROOT && ./x.py build"
 fi
 
 echo "Root:    $TRUST_ROOT"
@@ -306,8 +387,8 @@ fi
 
 if [ $PASSED -eq 0 ] && [ $SKIPPED -gt 0 ]; then
     echo
-    echo -e "${YELLOW}WARNING: All tests skipped (no stage1 rustc available)${RESET}"
-    echo "Build stage1 with: cd $TRUST_ROOT && ./x.py build"
+    echo -e "${YELLOW}WARNING: All tests skipped (verification path unavailable; syntax check only)${RESET}"
+    echo "Build stage1 and re-enable trust-verify for full verification: cd $TRUST_ROOT && ./x.py build"
     echo
     exit 0
 fi

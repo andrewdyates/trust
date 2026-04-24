@@ -19,31 +19,26 @@ use mini_core::*;
 #[no_mangle]
 extern "C" fn main(argc: isize, _argv: *const *const u8) -> i32 {
     let string = "Arg: %d\n\0";
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     let mut closure = || unsafe {
         libc::printf(string as *const str as *const i8, argc);
     };
     closure();
 
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     let mut closure = || unsafe {
         libc::printf("Argument: %d\n\0" as *const str as *const i8, argc);
     };
     closure();
 
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     let mut closure = |string| unsafe {
         libc::printf(string as *const str as *const i8, argc);
     };
     closure("String arg: %d\n\0");
 
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     let mut closure = |arg: isize| unsafe {
         libc::printf("Int argument: %d\n\0" as *const str as *const i8, arg);
     };
     closure(argc + 1);
 
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     let mut closure = |string, arg: isize| unsafe {
         libc::printf(string as *const str as *const i8, arg);
     };

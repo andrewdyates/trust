@@ -1,7 +1,9 @@
 // examples/demo/safe_binary_search.rs -- Binary search with all bugs fixed.
 //
-// This is the "after" program for the tRust demo. All overflow and underflow
-// bugs are eliminated. tRust proves every verification condition safe.
+// This is the "after" program for the tRust demo. The obvious overflow and
+// underflow bugs are eliminated, but the current checked toolchain still leaves
+// open obligations on this example. Keep it as a workflow/report case study,
+// not as a guaranteed PASS example.
 //
 // Fixes applied:
 //   1. Empty-array guard before `arr.len() - 1`.
@@ -11,10 +13,11 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-/// Binary search over a sorted slice -- fully verified by tRust.
+/// Binary search over a sorted slice.
 ///
 /// Returns `Some(index)` if `target` is found, `None` otherwise.
-/// All arithmetic operations are proven overflow-free by z4.
+/// The source fixes the known midpoint and decrement bugs, but current proof
+/// results may still be incomplete on this example.
 fn binary_search(arr: &[i32], target: i32) -> Option<usize> {
     // FIX 1: guard against empty array (prevents arr.len() - 1 underflow)
     if arr.is_empty() {

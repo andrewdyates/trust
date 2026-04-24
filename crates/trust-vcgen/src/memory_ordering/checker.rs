@@ -73,11 +73,7 @@ impl MemoryModelChecker {
     /// Create a new checker with the given access log and happens-before relation.
     #[must_use]
     pub fn new(log: AtomicAccessLog, hb: HappensBefore) -> Self {
-        Self {
-            log,
-            hb,
-            requirements: Vec::new(),
-        }
+        Self { log, hb, requirements: Vec::new() }
     }
 
     /// Add an ordering requirement for a specific access.
@@ -94,11 +90,7 @@ impl MemoryModelChecker {
         let ordering_violations = self.check_ordering_requirements();
         let is_sound = races.is_empty() && ordering_violations.is_empty();
 
-        MemoryModelCheckResult {
-            races,
-            ordering_violations,
-            is_sound,
-        }
+        MemoryModelCheckResult { races, ordering_violations, is_sound }
     }
 
     /// Check all ordering requirements against actual orderings.
@@ -108,16 +100,17 @@ impl MemoryModelChecker {
         for req in &self.requirements {
             if let Some(entry) = self.log.entries().get(req.access_index)
                 && let Some(actual) = entry.access_kind.ordering()
-                    && !actual.is_at_least(req.required) {
-                        violations.push(OrderingViolation {
-                            access_index: req.access_index,
-                            location: entry.location.clone(),
-                            actual,
-                            required: req.required,
-                            reason: req.reason.clone(),
-                            span: entry.span.clone(),
-                        });
-                    }
+                && !actual.is_at_least(req.required)
+            {
+                violations.push(OrderingViolation {
+                    access_index: req.access_index,
+                    location: entry.location.clone(),
+                    actual,
+                    required: req.required,
+                    reason: req.reason.clone(),
+                    span: entry.span.clone(),
+                });
+            }
         }
 
         violations
@@ -134,35 +127,36 @@ impl MemoryModelChecker {
         let pairs = self.log.find_release_acquire_pairs();
 
         for (release_idx, acquire_idx) in pairs {
-            if let (Some(release), Some(acquire)) = (
-                self.log.entries().get(release_idx),
-                self.log.entries().get(acquire_idx),
-            ) {
+            if let (Some(release), Some(acquire)) =
+                (self.log.entries().get(release_idx), self.log.entries().get(acquire_idx))
+            {
                 // Release side must have at least Release ordering.
                 if let Some(actual) = release.access_kind.ordering()
-                    && !actual.is_at_least(MemoryOrdering::Release) {
-                        violations.push(OrderingViolation {
-                            access_index: release_idx,
-                            location: release.location.clone(),
-                            actual,
-                            required: MemoryOrdering::Release,
-                            reason: "release side of synchronization pair".to_string(),
-                            span: release.span.clone(),
-                        });
-                    }
+                    && !actual.is_at_least(MemoryOrdering::Release)
+                {
+                    violations.push(OrderingViolation {
+                        access_index: release_idx,
+                        location: release.location.clone(),
+                        actual,
+                        required: MemoryOrdering::Release,
+                        reason: "release side of synchronization pair".to_string(),
+                        span: release.span.clone(),
+                    });
+                }
 
                 // Acquire side must have at least Acquire ordering.
                 if let Some(actual) = acquire.access_kind.ordering()
-                    && !actual.is_at_least(MemoryOrdering::Acquire) {
-                        violations.push(OrderingViolation {
-                            access_index: acquire_idx,
-                            location: acquire.location.clone(),
-                            actual,
-                            required: MemoryOrdering::Acquire,
-                            reason: "acquire side of synchronization pair".to_string(),
-                            span: acquire.span.clone(),
-                        });
-                    }
+                    && !actual.is_at_least(MemoryOrdering::Acquire)
+                {
+                    violations.push(OrderingViolation {
+                        access_index: acquire_idx,
+                        location: acquire.location.clone(),
+                        actual,
+                        required: MemoryOrdering::Acquire,
+                        reason: "acquire side of synchronization pair".to_string(),
+                        span: acquire.span.clone(),
+                    });
+                }
             }
         }
 
@@ -193,7 +187,7 @@ impl MemoryModelChecker {
                     thread_a: race.first_thread.clone(),
                     thread_b: race.second_thread.clone(),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: race.first_span.clone(),
                 formula,
                 contract_metadata: None,
@@ -202,10 +196,7 @@ impl MemoryModelChecker {
 
         // VCs for ordering violations
         for violation in &result.ordering_violations {
-            let reach = Formula::Var(
-                format!("reach_{}", violation.access_index),
-                Sort::Bool,
-            );
+            let reach = Formula::Var(format!("reach_{}", violation.access_index), Sort::Bool);
 
             vcs.push(VerificationCondition {
                 kind: VcKind::InsufficientOrdering {
@@ -213,7 +204,7 @@ impl MemoryModelChecker {
                     actual: violation.actual.name().to_string(),
                     required: violation.required.name().to_string(),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: violation.span.clone(),
                 formula: reach,
                 contract_metadata: None,
@@ -295,34 +286,34 @@ impl MemoryModelChecker {
             if matches!(
                 op.op_kind,
                 AtomicOpKind::CompareExchange | AtomicOpKind::CompareExchangeWeak
-            )
-                && let Some(failure_ord) = &op.failure_ordering {
-                    // L3: CAS failure ordering cannot be Release or AcqRel.
-                    if matches!(failure_ord, AtomicOrdering::Release | AtomicOrdering::AcqRel) {
-                        vcs.push(Self::legality_vc(
-                            op,
-                            function_name,
-                            &format!(
-                                "L3: {} failure ordering cannot be {} \
+            ) && let Some(failure_ord) = &op.failure_ordering
+            {
+                // L3: CAS failure ordering cannot be Release or AcqRel.
+                if matches!(failure_ord, AtomicOrdering::Release | AtomicOrdering::AcqRel) {
+                    vcs.push(Self::legality_vc(
+                        op,
+                        function_name,
+                        &format!(
+                            "L3: {} failure ordering cannot be {} \
                                  (failure path is load-only, cannot release)",
-                                op.op_kind, failure_ord
-                            ),
-                        ));
-                    }
-
-                    // L4: CAS failure ordering must not be stronger than success ordering.
-                    if !op.ordering.is_at_least(failure_ord) {
-                        vcs.push(Self::legality_vc(
-                            op,
-                            function_name,
-                            &format!(
-                                "L4: {} failure ordering {} is stronger than \
-                                 success ordering {} (failure must be <= success)",
-                                op.op_kind, failure_ord, op.ordering
-                            ),
-                        ));
-                    }
+                            op.op_kind, failure_ord
+                        ),
+                    ));
                 }
+
+                // L4: CAS failure ordering must not be stronger than success ordering.
+                if !op.ordering.is_at_least(failure_ord) {
+                    vcs.push(Self::legality_vc(
+                        op,
+                        function_name,
+                        &format!(
+                            "L4: {} failure ordering {} is stronger than \
+                                 success ordering {} (failure must be <= success)",
+                            op.op_kind, failure_ord, op.ordering
+                        ),
+                    ));
+                }
+            }
 
             // L5: fence / compiler_fence cannot use Relaxed.
             if op.op_kind.is_fence() && op.ordering == AtomicOrdering::Relaxed {
@@ -355,7 +346,7 @@ impl MemoryModelChecker {
                 actual: op.ordering.to_string(),
                 required: reason.to_string(),
             },
-            function: function_name.to_string(),
+            function: function_name.into(),
             location: op.span.clone(),
             formula: reach,
             contract_metadata: None,

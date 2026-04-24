@@ -16,6 +16,13 @@ from time import time
 from multiprocessing import Pool, cpu_count
 
 try:
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+except ImportError:
+    from urlparse import urlparse
+    from urllib import url2pathname
+
+try:
     import lzma
 except ImportError:
     lzma = None
@@ -107,6 +114,15 @@ def download(path, url, probably_big, verbose):
     _download(path, url, probably_big, verbose, False)
 
 
+def file_url_to_path(url):
+    parsed = urlparse(url)
+    if parsed.scheme != "file":
+        raise RuntimeError("not a file URL: {}".format(url))
+    if parsed.netloc not in ("", "localhost"):
+        raise RuntimeError("unsupported file URL host: {}".format(parsed.netloc))
+    return url2pathname(parsed.path)
+
+
 def _download(path, url, probably_big, verbose, exception):
     # Try to use curl (potentially available on win32
     #    https://devblogs.microsoft.com/commandline/tar-and-curl-come-to-windows/)
@@ -115,6 +131,10 @@ def _download(path, url, probably_big, verbose, exception):
     #  - Otherwise raise the error if appropriate
     if probably_big or verbose:
         eprint("downloading {}".format(url))
+
+    if url.startswith("file://"):
+        shutil.copyfile(file_url_to_path(url), path)
+        return
 
     try:
         if (probably_big or verbose) and "GITHUB_ACTIONS" not in os.environ:

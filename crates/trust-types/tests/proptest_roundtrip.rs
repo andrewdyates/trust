@@ -49,17 +49,14 @@ fn arb_ty() -> impl Strategy<Value = Ty> {
         Just(Ty::Unit),
         Just(Ty::Never),
         prop::sample::select(vec![8u32, 16, 32, 64, 128])
-            .prop_flat_map(|w| prop::bool::ANY.prop_map(move |s| Ty::Int {
-                width: w,
-                signed: s
-            })),
+            .prop_flat_map(|w| prop::bool::ANY.prop_map(move |s| Ty::Int { width: w, signed: s })),
         prop::sample::select(vec![32u32, 64]).prop_map(|w| Ty::Float { width: w }),
     ];
 
     leaf.prop_recursive(
-        3,   // max depth
-        32,  // max nodes
-        4,   // items per collection
+        3,  // max depth
+        32, // max nodes
+        4,  // items per collection
         |inner| {
             prop_oneof![
                 // Ref
@@ -76,10 +73,7 @@ fn arb_ty() -> impl Strategy<Value = Ty> {
                 // Tuple (0-4 elements)
                 prop::collection::vec(inner.clone(), 0..4).prop_map(Ty::Tuple),
                 // Adt (1-3 fields)
-                (
-                    "[a-z]{1,8}",
-                    prop::collection::vec(("[a-z]{1,6}", inner), 1..3)
-                )
+                ("[a-z]{1,8}", prop::collection::vec(("[a-z]{1,6}", inner), 1..3))
                     .prop_map(|(name, fields)| Ty::Adt { name, fields }),
             ]
         },
@@ -100,26 +94,20 @@ fn arb_projection() -> impl Strategy<Value = Projection> {
 }
 
 fn arb_place() -> impl Strategy<Value = Place> {
-    (0..20usize, prop::collection::vec(arb_projection(), 0..3)).prop_map(|(local, projections)| {
-        Place { local, projections }
-    })
+    (0..20usize, prop::collection::vec(arb_projection(), 0..3))
+        .prop_map(|(local, projections)| Place { local, projections })
 }
 
 fn arb_source_span() -> impl Strategy<Value = SourceSpan> {
-    (
-        "[a-z]{1,10}\\.rs",
-        0..1000u32,
-        0..200u32,
-        0..1000u32,
-        0..200u32,
-    )
-        .prop_map(|(file, ls, cs, le, ce)| SourceSpan {
+    ("[a-z]{1,10}\\.rs", 0..1000u32, 0..200u32, 0..1000u32, 0..200u32).prop_map(
+        |(file, ls, cs, le, ce)| SourceSpan {
             file,
             line_start: ls,
             col_start: cs,
             line_end: le,
             col_end: ce,
-        })
+        },
+    )
 }
 
 fn arb_sort() -> impl Strategy<Value = Sort> {
@@ -129,11 +117,12 @@ fn arb_sort() -> impl Strategy<Value = Sort> {
         prop::sample::select(vec![8u32, 16, 32, 64, 128]).prop_map(Sort::BitVec),
     ];
     leaf.prop_recursive(
-        2,  // max depth
-        8,  // max nodes
-        2,  // items per collection
+        2, // max depth
+        8, // max nodes
+        2, // items per collection
         |inner| {
-            (inner.clone(), inner).prop_map(|(idx, elem)| Sort::Array(Box::new(idx), Box::new(elem)))
+            (inner.clone(), inner)
+                .prop_map(|(idx, elem)| Sort::Array(Box::new(idx), Box::new(elem)))
         },
     )
 }
@@ -149,9 +138,9 @@ fn arb_formula() -> impl Strategy<Value = Formula> {
     ];
 
     leaf.prop_recursive(
-        3,   // max depth
-        24,  // max nodes
-        4,   // items per collection
+        3,  // max depth
+        24, // max nodes
+        4,  // items per collection
         |inner| {
             prop_oneof![
                 // Unary
@@ -170,19 +159,26 @@ fn arb_formula() -> impl Strategy<Value = Formula> {
                 prop::collection::vec(inner.clone(), 0..4).prop_map(Formula::And),
                 prop::collection::vec(inner.clone(), 0..4).prop_map(Formula::Or),
                 // Ite
-                (inner.clone(), inner.clone(), inner.clone())
-                    .prop_map(|(c, t, e)| Formula::Ite(Box::new(c), Box::new(t), Box::new(e))),
+                (inner.clone(), inner.clone(), inner.clone()).prop_map(|(c, t, e)| Formula::Ite(
+                    Box::new(c),
+                    Box::new(t),
+                    Box::new(e)
+                )),
                 // BV ops (select a few representative ones)
                 (inner.clone(), inner.clone(), prop::sample::select(vec![8u32, 16, 32, 64]))
                     .prop_map(|(a, b, w)| Formula::BvAdd(Box::new(a), Box::new(b), w)),
                 (inner.clone(), inner.clone(), prop::sample::select(vec![8u32, 16, 32, 64]))
                     .prop_map(|(a, b, w)| Formula::BvSLe(Box::new(a), Box::new(b), w)),
                 // Quantifiers
-                (
-                    prop::collection::vec(("[a-z]{1,4}", arb_sort()), 1..3),
-                    inner.clone(),
-                )
-                    .prop_map(|(bindings, body)| Formula::Forall(bindings, Box::new(body))),
+                (prop::collection::vec(("[a-z]{1,4}", arb_sort()), 1..3), inner.clone(),).prop_map(
+                    |(bindings, body)| Formula::Forall(
+                        bindings
+                            .into_iter()
+                            .map(|(s, sort)| (trust_types::Symbol::intern(&s), sort))
+                            .collect(),
+                        Box::new(body)
+                    )
+                ),
                 // Select/Store
                 (inner.clone(), inner.clone())
                     .prop_map(|(arr, idx)| Formula::Select(Box::new(arr), Box::new(idx))),
@@ -248,8 +244,11 @@ fn arb_vc_kind() -> impl Strategy<Value = VcKind> {
     prop_oneof![
         (arb_bin_op(), arb_ty(), arb_ty())
             .prop_map(|(op, t1, t2)| VcKind::ArithmeticOverflow { op, operand_tys: (t1, t2) }),
-        (arb_bin_op(), arb_ty(), arb_ty())
-            .prop_map(|(op, ot, st)| VcKind::ShiftOverflow { op, operand_ty: ot, shift_ty: st }),
+        (arb_bin_op(), arb_ty(), arb_ty()).prop_map(|(op, ot, st)| VcKind::ShiftOverflow {
+            op,
+            operand_ty: ot,
+            shift_ty: st
+        }),
         Just(VcKind::DivisionByZero),
         Just(VcKind::RemainderByZero),
         Just(VcKind::IndexOutOfBounds),
@@ -257,8 +256,7 @@ fn arb_vc_kind() -> impl Strategy<Value = VcKind> {
         "[a-z ]{1,20}".prop_map(|m| VcKind::Assertion { message: m }),
         "[a-z:]{1,20}".prop_map(|c| VcKind::Precondition { callee: c }),
         Just(VcKind::Postcondition),
-        (arb_ty(), arb_ty())
-            .prop_map(|(f, t)| VcKind::CastOverflow { from_ty: f, to_ty: t }),
+        (arb_ty(), arb_ty()).prop_map(|(f, t)| VcKind::CastOverflow { from_ty: f, to_ty: t }),
         arb_ty().prop_map(|t| VcKind::NegationOverflow { ty: t }),
         Just(VcKind::Unreachable),
         "[a-z]{1,10}".prop_map(|s| VcKind::DeadState { state: s }),
@@ -266,20 +264,16 @@ fn arb_vc_kind() -> impl Strategy<Value = VcKind> {
         "[a-z ]{1,20}".prop_map(|p| VcKind::Temporal { property: p }),
         arb_liveness_property().prop_map(|p| VcKind::Liveness { property: p }),
         arb_fairness_constraint().prop_map(|c| VcKind::Fairness { constraint: c }),
-        ("[a-z]{1,8}", "[a-z]{1,8}", 1..10usize)
-            .prop_map(|(s, k, l)| VcKind::TaintViolation {
-                source_label: s,
-                sink_kind: k,
-                path_length: l,
-            }),
+        ("[a-z]{1,8}", "[a-z]{1,8}", 1..10usize).prop_map(|(s, k, l)| VcKind::TaintViolation {
+            source_label: s,
+            sink_kind: k,
+            path_length: l,
+        }),
         ("[a-z.]{1,15}", "[a-z]{1,10}")
             .prop_map(|(f, a)| VcKind::RefinementViolation { spec_file: f, action: a }),
-        ("[a-z]{1,8}", "[a-z]{1,8}", "[a-z ]{1,15}")
-            .prop_map(|(s, f, r)| VcKind::ResilienceViolation {
-                service: s,
-                failure_mode: f,
-                reason: r,
-            }),
+        ("[a-z]{1,8}", "[a-z]{1,8}", "[a-z ]{1,15}").prop_map(|(s, f, r)| {
+            VcKind::ResilienceViolation { service: s, failure_mode: f, reason: r }
+        }),
         ("[a-z]{1,8}", "[a-z ]{1,15}")
             .prop_map(|(p, v)| VcKind::ProtocolViolation { protocol: p, violation: v }),
         ("[a-z]{1,8}", "[a-z]{1,8}")
@@ -289,33 +283,29 @@ fn arb_vc_kind() -> impl Strategy<Value = VcKind> {
             .prop_map(|(l, u)| VcKind::NeuralOutputRange { lower: l, upper: u }),
         "[0-9.]{1,5}".prop_map(|c| VcKind::NeuralLipschitz { constant: c }),
         (0..100usize).prop_map(|d| VcKind::NeuralMonotonicity { input_dim: d }),
-        ("[a-z]{1,8}", "[a-z]{1,8}", "[a-z]{1,8}")
-            .prop_map(|(v, a, b)| VcKind::DataRace {
-                variable: v,
-                thread_a: a,
-                thread_b: b,
-            }),
-        ("[a-z]{1,8}", "[a-z]{1,8}", "[a-z]{1,8}")
-            .prop_map(|(v, a, r)| VcKind::InsufficientOrdering {
-                variable: v,
-                actual: a,
-                required: r,
-            }),
+        ("[a-z]{1,8}", "[a-z]{1,8}", "[a-z]{1,8}").prop_map(|(v, a, b)| VcKind::DataRace {
+            variable: v,
+            thread_a: a,
+            thread_b: b,
+        }),
+        ("[a-z]{1,8}", "[a-z]{1,8}", "[a-z]{1,8}").prop_map(|(v, a, r)| {
+            VcKind::InsufficientOrdering { variable: v, actual: a, required: r }
+        }),
         ("[a-z_]{1,15}", "[a-z_]{1,15}")
             .prop_map(|(p, c)| VcKind::TranslationValidation { pass: p, check: c }),
     ]
 }
 
 fn arb_contract_metadata() -> impl Strategy<Value = ContractMetadata> {
-    (prop::bool::ANY, prop::bool::ANY, prop::bool::ANY, prop::bool::ANY).prop_map(
-        |(r, e, i, v)| ContractMetadata {
+    (prop::bool::ANY, prop::bool::ANY, prop::bool::ANY, prop::bool::ANY).prop_map(|(r, e, i, v)| {
+        ContractMetadata {
             has_requires: r,
             has_ensures: e,
             has_invariant: i,
             has_variant: v,
             ..ContractMetadata::default()
-        },
-    )
+        }
+    })
 }
 
 fn arb_verification_condition() -> impl Strategy<Value = VerificationCondition> {
@@ -329,7 +319,7 @@ fn arb_verification_condition() -> impl Strategy<Value = VerificationCondition> 
         .prop_map(|(kind, function, location, formula, contract_metadata)| {
             VerificationCondition {
                 kind,
-                function,
+                function: function.into(),
                 location,
                 formula,
                 contract_metadata,

@@ -81,7 +81,7 @@ fn compute_assumptions<'tcx>(
             outlives
                 .into_iter()
                 .map(|(o, _)| o)
-                // tRust: known issue (higher_ranked_auto) — We probably should deeply resolve these before
+                // FIXME(higher_ranked_auto): We probably should deeply resolve these before
                 // filtering out infers which only correspond to unconstrained infer regions
                 // which we can sometimes get.
                 .filter(|o| !o.has_infer()),

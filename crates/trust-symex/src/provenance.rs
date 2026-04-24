@@ -162,33 +162,25 @@ pub enum ProvenanceError {
     #[error("double free: allocation {tag} was already freed")]
     DoubleFree { tag: ProvenanceTag },
 
-    #[error("pointer {ptr_tag} escapes allocation {alloc_tag} (offset {offset}, size {alloc_size})")]
-    OutOfBounds {
-        ptr_tag: ProvenanceTag,
-        alloc_tag: ProvenanceTag,
-        offset: u64,
-        alloc_size: u64,
-    },
+    #[error(
+        "pointer {ptr_tag} escapes allocation {alloc_tag} (offset {offset}, size {alloc_size})"
+    )]
+    OutOfBounds { ptr_tag: ProvenanceTag, alloc_tag: ProvenanceTag, offset: u64, alloc_size: u64 },
 
-    #[error("provenance mismatch: pointer has tag {ptr_tag} but dereferences into allocation {alloc_tag}")]
-    ProvenanceMismatch {
-        ptr_tag: ProvenanceTag,
-        alloc_tag: ProvenanceTag,
-    },
+    #[error(
+        "provenance mismatch: pointer has tag {ptr_tag} but dereferences into allocation {alloc_tag}"
+    )]
+    ProvenanceMismatch { ptr_tag: ProvenanceTag, alloc_tag: ProvenanceTag },
 
-    #[error("borrow stack violation: tag {tag} not found on stack for allocation {alloc_tag} (operation: {operation})")]
-    BorrowStackViolation {
-        tag: ProvenanceTag,
-        alloc_tag: ProvenanceTag,
-        operation: String,
-    },
+    #[error(
+        "borrow stack violation: tag {tag} not found on stack for allocation {alloc_tag} (operation: {operation})"
+    )]
+    BorrowStackViolation { tag: ProvenanceTag, alloc_tag: ProvenanceTag, operation: String },
 
-    #[error("invalid reborrow: cannot create {new_perm} from {existing_perm} for allocation {alloc_tag}")]
-    InvalidReborrow {
-        alloc_tag: ProvenanceTag,
-        existing_perm: Permission,
-        new_perm: Permission,
-    },
+    #[error(
+        "invalid reborrow: cannot create {new_perm} from {existing_perm} for allocation {alloc_tag}"
+    )]
+    InvalidReborrow { alloc_tag: ProvenanceTag, existing_perm: Permission, new_perm: Permission },
 }
 
 // ---------------------------------------------------------------------------
@@ -253,10 +245,7 @@ impl ProvenanceTracker {
             tag,
             size,
             live: true,
-            borrow_stack: vec![BorrowStackItem {
-                tag,
-                permission: Permission::Unique,
-            }],
+            borrow_stack: vec![BorrowStackItem { tag, permission: Permission::Unique }],
             region_id,
         };
         self.allocations.insert(tag, info);
@@ -268,10 +257,7 @@ impl ProvenanceTracker {
 
     /// Free an allocation, marking it as no longer live.
     pub fn deallocate(&mut self, tag: ProvenanceTag) -> Result<(), ProvenanceError> {
-        let info = self
-            .allocations
-            .get_mut(&tag)
-            .ok_or(ProvenanceError::UnknownTag { tag })?;
+        let info = self.allocations.get_mut(&tag).ok_or(ProvenanceError::UnknownTag { tag })?;
         if !info.live {
             return Err(ProvenanceError::DoubleFree { tag });
         }
@@ -281,9 +267,7 @@ impl ProvenanceTracker {
 
     /// Look up allocation info by tag.
     pub fn get_allocation(&self, tag: ProvenanceTag) -> Result<&AllocationInfo, ProvenanceError> {
-        self.allocations
-            .get(&tag)
-            .ok_or(ProvenanceError::UnknownTag { tag })
+        self.allocations.get(&tag).ok_or(ProvenanceError::UnknownTag { tag })
     }
 
     /// Look up the provenance tag for a Layer 1 region.
@@ -304,10 +288,8 @@ impl ProvenanceTracker {
         offset: u64,
         access_size: u64,
     ) -> Result<(), ProvenanceError> {
-        let info = self
-            .allocations
-            .get(&ptr_tag)
-            .ok_or(ProvenanceError::UnknownTag { tag: ptr_tag })?;
+        let info =
+            self.allocations.get(&ptr_tag).ok_or(ProvenanceError::UnknownTag { tag: ptr_tag })?;
 
         if !info.live {
             return Err(ProvenanceError::UseAfterFree { tag: ptr_tag });
@@ -399,10 +381,7 @@ impl ProvenanceTracker {
             }
         }
 
-        info.borrow_stack.push(BorrowStackItem {
-            tag: new_tag,
-            permission,
-        });
+        info.borrow_stack.push(BorrowStackItem { tag: new_tag, permission });
 
         Ok(new_tag)
     }
@@ -462,10 +441,7 @@ impl ProvenanceTracker {
         }
 
         // Find the tag on the stack.
-        let pos = info
-            .borrow_stack
-            .iter()
-            .position(|item| item.tag == use_tag);
+        let pos = info.borrow_stack.iter().position(|item| item.tag == use_tag);
 
         let pos = pos.ok_or(ProvenanceError::BorrowStackViolation {
             tag: use_tag,
@@ -653,9 +629,7 @@ mod tests {
     #[test]
     fn test_dealloc_unknown_tag_error() {
         let mut tracker = ProvenanceTracker::new();
-        let err = tracker
-            .deallocate(ProvenanceTag::from_raw(999))
-            .expect_err("unknown");
+        let err = tracker.deallocate(ProvenanceTag::from_raw(999)).expect_err("unknown");
         assert!(matches!(err, ProvenanceError::UnknownTag { .. }));
     }
 
@@ -700,9 +674,7 @@ mod tests {
     fn test_provenance_match_same() {
         let tracker = ProvenanceTracker::new();
         let tag = ProvenanceTag::from_raw(5);
-        tracker
-            .check_provenance_match(tag, tag)
-            .expect("same tag matches");
+        tracker.check_provenance_match(tag, tag).expect("same tag matches");
     }
 
     #[test]
@@ -710,9 +682,7 @@ mod tests {
         let tracker = ProvenanceTracker::new();
         let t1 = ProvenanceTag::from_raw(1);
         let t2 = ProvenanceTag::from_raw(2);
-        let err = tracker
-            .check_provenance_match(t1, t2)
-            .expect_err("mismatch");
+        let err = tracker.check_provenance_match(t1, t2).expect_err("mismatch");
         assert!(matches!(err, ProvenanceError::ProvenanceMismatch { .. }));
     }
 
@@ -722,9 +692,8 @@ mod tests {
     fn test_push_shared_borrow_from_unique() {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
-        let borrow_tag = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect("shared from unique");
+        let borrow_tag =
+            tracker.push_borrow(alloc, Permission::SharedReadOnly).expect("shared from unique");
         assert_ne!(borrow_tag, alloc);
 
         let info = tracker.get_allocation(alloc).expect("exists");
@@ -735,9 +704,8 @@ mod tests {
     fn test_push_mut_borrow_from_unique() {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
-        let borrow_tag = tracker
-            .push_borrow(alloc, Permission::Unique)
-            .expect("unique from unique");
+        let borrow_tag =
+            tracker.push_borrow(alloc, Permission::Unique).expect("unique from unique");
         assert_ne!(borrow_tag, alloc);
     }
 
@@ -745,12 +713,8 @@ mod tests {
     fn test_push_unique_from_shared_readonly_fails() {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
-        let _shared = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect("shared");
-        let err = tracker
-            .push_borrow(alloc, Permission::Unique)
-            .expect_err("unique from shared");
+        let _shared = tracker.push_borrow(alloc, Permission::SharedReadOnly).expect("shared");
+        let err = tracker.push_borrow(alloc, Permission::Unique).expect_err("unique from shared");
         assert!(matches!(err, ProvenanceError::InvalidReborrow { .. }));
     }
 
@@ -759,9 +723,7 @@ mod tests {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
         tracker.deallocate(alloc).expect("dealloc");
-        let err = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect_err("freed");
+        let err = tracker.push_borrow(alloc, Permission::SharedReadOnly).expect_err("freed");
         assert!(matches!(err, ProvenanceError::UseAfterFree { .. }));
     }
 
@@ -771,12 +733,8 @@ mod tests {
     fn test_use_for_read_valid() {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
-        let shared = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect("shared");
-        tracker
-            .use_for_read(alloc, shared)
-            .expect("read through shared");
+        let shared = tracker.push_borrow(alloc, Permission::SharedReadOnly).expect("shared");
+        tracker.use_for_read(alloc, shared).expect("read through shared");
         // Original tag also readable.
         tracker.use_for_read(alloc, alloc).expect("read through owner");
     }
@@ -794,19 +752,13 @@ mod tests {
     fn test_use_for_write_pops_above() {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
-        let shared = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect("shared");
+        let shared = tracker.push_borrow(alloc, Permission::SharedReadOnly).expect("shared");
 
         // Write through the original unique tag -- should disable shared.
-        tracker
-            .use_for_write(alloc, alloc)
-            .expect("write through owner");
+        tracker.use_for_write(alloc, alloc).expect("write through owner");
 
         // Shared tag should now be disabled.
-        let err = tracker
-            .use_for_read(alloc, shared)
-            .expect_err("shared disabled");
+        let err = tracker.use_for_read(alloc, shared).expect_err("shared disabled");
         assert!(matches!(err, ProvenanceError::BorrowStackViolation { .. }));
     }
 
@@ -814,12 +766,8 @@ mod tests {
     fn test_use_for_write_through_shared_readonly_fails() {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
-        let shared = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect("shared");
-        let err = tracker
-            .use_for_write(alloc, shared)
-            .expect_err("write through readonly");
+        let shared = tracker.push_borrow(alloc, Permission::SharedReadOnly).expect("shared");
+        let err = tracker.use_for_write(alloc, shared).expect_err("write through readonly");
         assert!(matches!(err, ProvenanceError::BorrowStackViolation { .. }));
     }
 
@@ -828,9 +776,7 @@ mod tests {
         let mut tracker = ProvenanceTracker::new();
         let alloc = tracker.allocate(8, None);
         tracker.deallocate(alloc).expect("dealloc");
-        let err = tracker
-            .use_for_write(alloc, alloc)
-            .expect_err("write after free");
+        let err = tracker.use_for_write(alloc, alloc).expect_err("write after free");
         assert!(matches!(err, ProvenanceError::UseAfterFree { .. }));
     }
 
@@ -874,9 +820,7 @@ mod tests {
         let t = tracker.allocate(32, None);
         tracker.deallocate(t).expect("dealloc");
         let vcs = tracker.generate_provenance_vcs();
-        assert!(vcs
-            .iter()
-            .any(|vc| vc.kind == ProvenanceVCKind::NoUseAfterFree));
+        assert!(vcs.iter().any(|vc| vc.kind == ProvenanceVCKind::NoUseAfterFree));
     }
 
     // --- Permission display ---
@@ -894,14 +838,8 @@ mod tests {
     #[test]
     fn test_provenance_vc_kind_display() {
         assert_eq!(ProvenanceVCKind::InBounds.to_string(), "in-bounds");
-        assert_eq!(
-            ProvenanceVCKind::NoUseAfterFree.to_string(),
-            "no-use-after-free"
-        );
-        assert_eq!(
-            ProvenanceVCKind::BorrowStackValid.to_string(),
-            "borrow-stack-valid"
-        );
+        assert_eq!(ProvenanceVCKind::NoUseAfterFree.to_string(), "no-use-after-free");
+        assert_eq!(ProvenanceVCKind::BorrowStackValid.to_string(), "borrow-stack-valid");
     }
 
     // --- Default ---
@@ -921,12 +859,9 @@ mod tests {
         let alloc = tracker.allocate(64, None);
 
         // Create a chain: owner -> mut_borrow -> shared_borrow
-        let mut_tag = tracker
-            .push_borrow(alloc, Permission::Unique)
-            .expect("mut borrow");
-        let shared_tag = tracker
-            .push_borrow(alloc, Permission::SharedReadOnly)
-            .expect("shared from mut");
+        let mut_tag = tracker.push_borrow(alloc, Permission::Unique).expect("mut borrow");
+        let shared_tag =
+            tracker.push_borrow(alloc, Permission::SharedReadOnly).expect("shared from mut");
 
         // Read through all three.
         tracker.use_for_read(alloc, alloc).expect("read owner");
@@ -937,9 +872,7 @@ mod tests {
         tracker.use_for_write(alloc, mut_tag).expect("write mut");
 
         // Shared is now disabled.
-        let err = tracker
-            .use_for_read(alloc, shared_tag)
-            .expect_err("shared disabled");
+        let err = tracker.use_for_read(alloc, shared_tag).expect_err("shared disabled");
         assert!(matches!(err, ProvenanceError::BorrowStackViolation { .. }));
 
         // Mut and owner still work.

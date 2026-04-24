@@ -53,7 +53,7 @@ fn assumed_wf_types<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> &'tcx [(Ty<'
             };
 
             let mut impl_spans = impl_spans(tcx, def_id);
-            tcx.arena.alloc_from_iter(tys.into_iter().map(|ty| (ty, impl_spans.next().expect("invariant: impl_spans must yield at least as many spans as types")))) // tRust: unwrap -> expect
+            tcx.arena.alloc_from_iter(tys.into_iter().map(|ty| (ty, impl_spans.next().unwrap())))
         }
         DefKind::AssocTy if let Some(data) = tcx.opt_rpitit_info(def_id.to_def_id()) => {
             match data {
@@ -88,7 +88,7 @@ fn assumed_wf_types<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> &'tcx [(Ty<'
                             );
                         }
                     }
-                    // tRust: known issue — This could use a real folder, I guess.
+                    // FIXME: This could use a real folder, I guess.
                     let remapped_wf_tys = fold_regions(
                         tcx,
                         tcx.assumed_wf_types(fn_def_id.expect_local()).to_vec(),
@@ -109,7 +109,7 @@ fn assumed_wf_types<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> &'tcx [(Ty<'
                 // the assumed wf types of the trait's RPITIT GAT.
                 ty::ImplTraitInTraitData::Impl { .. } => {
                     let impl_def_id = tcx.local_parent(def_id);
-                    let rpitit_def_id = tcx.trait_item_of(def_id).expect("invariant: RPITIT impl must have a corresponding trait item"); // tRust: unwrap -> expect
+                    let rpitit_def_id = tcx.trait_item_of(def_id).unwrap();
                     let args = ty::GenericArgs::identity_for_item(tcx, def_id).rebase_onto(
                         tcx,
                         impl_def_id.to_def_id(),
@@ -176,7 +176,7 @@ fn impl_spans(tcx: TyCtxt<'_>, def_id: LocalDefId) -> impl Iterator<Item = Span>
         let trait_args = impl_
             .of_trait
             .into_iter()
-            .flat_map(|of_trait| of_trait.trait_ref.path.segments.last().expect("invariant: trait path must have at least one segment").args().args) // tRust: unwrap -> expect
+            .flat_map(|of_trait| of_trait.trait_ref.path.segments.last().unwrap().args().args)
             .map(|arg| arg.span());
         let dummy_spans_for_default_args = impl_
             .of_trait

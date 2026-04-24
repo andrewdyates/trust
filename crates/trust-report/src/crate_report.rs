@@ -21,14 +21,8 @@ use crate::report_builder::build_json_report_with_policy;
 ///
 /// Cross-function spec composition metadata (from_notes, with_assumptions)
 /// is included in the report metadata as additional timing/composition stats.
-pub fn build_crate_verification_report(
-    crate_result: &CrateVerificationResult,
-) -> JsonProofReport {
-    build_crate_verification_report_with_policy(
-        crate_result,
-        RuntimeCheckPolicy::Auto,
-        true,
-    )
+pub fn build_crate_verification_report(crate_result: &CrateVerificationResult) -> JsonProofReport {
+    build_crate_verification_report_with_policy(crate_result, RuntimeCheckPolicy::Auto, true)
 }
 
 /// Build a `JsonProofReport` from a `CrateVerificationResult` with
@@ -39,12 +33,7 @@ pub fn build_crate_verification_report_with_policy(
     overflow_checks: bool,
 ) -> JsonProofReport {
     let all_results = crate_result.all_results();
-    build_json_report_with_policy(
-        &crate_result.crate_name,
-        &all_results,
-        policy,
-        overflow_checks,
-    )
+    build_json_report_with_policy(&crate_result.crate_name, &all_results, policy, overflow_checks)
 }
 
 /// Format a crate-level summary with cross-function spec composition stats.
@@ -60,11 +49,13 @@ pub fn format_crate_verification_summary(
     // tRust: Append cross-function composition stats if any specs were used.
     if crate_result.total_from_notes > 0 || crate_result.total_with_assumptions > 0 {
         text.push_str("\n  Cross-function composition:");
-        let _ = write!(text,
+        let _ = write!(
+            text,
             "\n    {} VCs satisfied from proved callee specs (free)",
             crate_result.total_from_notes
         );
-        let _ = write!(text,
+        let _ = write!(
+            text,
             "\n    {} VCs sent to solver with callee assumptions",
             crate_result.total_with_assumptions
         );

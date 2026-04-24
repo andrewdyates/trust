@@ -61,8 +61,6 @@ struct TimingGuard {
 impl Drop for TimingGuard {
     fn drop(&mut self) {
         self.inner.take();
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `inner.take()` drops the timing guard first, and `profiler` is being manually dropped exactly once.
         unsafe {
             std::mem::ManuallyDrop::drop(&mut self.profiler);
         }
@@ -76,8 +74,6 @@ impl cranelift_codegen::timing::Profiler for MeasuremeProfiler {
             inner: None,
         });
         timing_guard.inner = Some(
-            // SAFETY: The pointer is non-null and properly aligned, derived
-            // from a valid reference or allocation that outlives this use.
             unsafe { &*(&*timing_guard.profiler as &SelfProfilerRef as *const SelfProfilerRef) }
                 .generic_activity(pass.description()),
         );

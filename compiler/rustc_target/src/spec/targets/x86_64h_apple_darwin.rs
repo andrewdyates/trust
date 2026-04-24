@@ -12,7 +12,7 @@ pub(crate) fn target() -> Target {
     // - https://github.com/llvm/llvm-project/blob/bd1f7c417/clang/lib/Driver/ToolChains/Arch/X86.cpp#L77-L78
     // - https://github.com/llvm/llvm-project/blob/bd1f7c417/clang/lib/Driver/ToolChains/Arch/X86.cpp#L133-L141
     //
-    // tRust: known issue — Sadly, turning these off here disables them in such a way that they
+    // FIXME: Sadly, turning these off here disables them in such a way that they
     // aren't re-enabled by `-Ctarget-cpu=native` (on a machine that has them).
     // It would be nice if this were not the case, but fixing it seems tricky
     // (and given that the main use-case for this target is for use in universal

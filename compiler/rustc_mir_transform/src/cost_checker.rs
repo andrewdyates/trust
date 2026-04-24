@@ -1,6 +1,3 @@
-//! tRust: Cost model for MIR inlining decisions, computing instruction
-//! tRust: penalties and bonuses.
-
 use rustc_middle::bug;
 use rustc_middle::mir::visit::*;
 use rustc_middle::mir::*;
@@ -172,7 +169,6 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
             | TerminatorKind::FalseEdge { .. }
             | TerminatorKind::Yield { .. }
             | TerminatorKind::CoroutineDrop) => {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!("{kind:?} should not be in runtime MIR");
             }
         }

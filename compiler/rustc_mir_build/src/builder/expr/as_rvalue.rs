@@ -450,7 +450,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let result_tup = Ty::new_tup(self.tcx, &[ty, bool_ty]);
                 let result_value = self.temp(result_tup, span);
 
-                let op_with_overflow = op.wrapping_to_overflowing().expect("invariant: op has an overflowing variant"); // tRust: unwrap -> expect
+                let op_with_overflow = op.wrapping_to_overflowing().unwrap();
 
                 self.cfg.push_assign(
                     block,
@@ -698,7 +698,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         );
                         this.upvars[upvar_index.index()].mutability
                     }
-                    // tRust: invariant — closure capture places resolve to a field of `CAPTURE_STRUCT_LOCAL`, optionally behind one dereference.
                     _ => bug!("Unexpected capture place"),
                 }
             }
@@ -730,7 +729,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     // Helper to get a `-1` value of the appropriate type
     fn neg_1_literal(&mut self, span: Span, ty: Ty<'tcx>) -> Operand<'tcx> {
         let typing_env = ty::TypingEnv::fully_monomorphized();
-        let size = self.tcx.layout_of(typing_env.as_query_input(ty)).expect("invariant: type has a computable layout").size; // tRust: unwrap -> expect
+        let size = self.tcx.layout_of(typing_env.as_query_input(ty)).unwrap().size;
         let literal = Const::from_bits(self.tcx, size.unsigned_int_max(), typing_env, ty);
 
         self.literal_operand(span, literal)
@@ -740,7 +739,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     fn minval_literal(&mut self, span: Span, ty: Ty<'tcx>) -> Operand<'tcx> {
         assert!(ty.is_signed());
         let typing_env = ty::TypingEnv::fully_monomorphized();
-        let bits = self.tcx.layout_of(typing_env.as_query_input(ty)).expect("invariant: type has a computable layout").size.bits(); // tRust: unwrap -> expect
+        let bits = self.tcx.layout_of(typing_env.as_query_input(ty)).unwrap().size.bits();
         let n = 1 << (bits - 1);
         let literal = Const::from_bits(self.tcx, n, typing_env, ty);
 

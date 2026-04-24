@@ -384,7 +384,7 @@ impl<'tcx> Stable<'tcx> for Ty<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        tables.intern_ty(cx.lift(*self).expect("invariant: Ty must be liftable to current context")) // tRust: unwrap -> expect
+        tables.intern_ty(cx.lift(*self).unwrap())
     }
 }
 
@@ -429,10 +429,8 @@ impl<'tcx> Stable<'tcx> for ty::TyKind<'tcx> {
             ty::FnPtr(sig_tys, hdr) => {
                 TyKind::RigidTy(RigidTy::FnPtr(sig_tys.with(*hdr).stable(tables, cx)))
             }
-            // tRust: UnsafeBinder is an experimental feature not yet supported in SMIR
-            ty::UnsafeBinder(_) => {
-                bug!("unimplemented: UnsafeBinder is not yet supported in stable MIR")
-            }
+            // FIXME(unsafe_binders):
+            ty::UnsafeBinder(_) => todo!(),
             ty::Dynamic(existential_predicates, region) => TyKind::RigidTy(RigidTy::Dynamic(
                 existential_predicates
                     .iter()
@@ -444,10 +442,7 @@ impl<'tcx> Stable<'tcx> for ty::TyKind<'tcx> {
                 tables.closure_def(*def_id),
                 generic_args.stable(tables, cx),
             )),
-            // tRust: CoroutineClosure is not yet supported in stable MIR
-            ty::CoroutineClosure(..) => {
-                bug!("unimplemented: CoroutineClosure is not yet supported in stable MIR")
-            }
+            ty::CoroutineClosure(..) => todo!("FIXME(async_closures): Lower these to SMIR"),
             ty::Coroutine(def_id, generic_args) => TyKind::RigidTy(RigidTy::Coroutine(
                 tables.coroutine_def(*def_id),
                 generic_args.stable(tables, cx),
@@ -487,18 +482,13 @@ impl<'tcx> Stable<'tcx> for ty::Pattern<'tcx> {
     ) -> Self::T {
         match **self {
             ty::PatternKind::Range { start, end } => crate::ty::Pattern::Range {
-                // tRust: known issue (SMIR) — update data structures to not have an Option here anymore
+                // FIXME(SMIR): update data structures to not have an Option here anymore
                 start: Some(start.stable(tables, cx)),
                 end: Some(end.stable(tables, cx)),
                 include_end: true,
             },
-            // tRust: PatternKind::NotNull and Or are experimental features not yet in SMIR
-            ty::PatternKind::NotNull => {
-                bug!("unimplemented: PatternKind::NotNull is not yet supported in stable MIR")
-            }
-            ty::PatternKind::Or(_) => {
-                bug!("unimplemented: PatternKind::Or is not yet supported in stable MIR")
-            }
+            ty::PatternKind::NotNull => todo!(),
+            ty::PatternKind::Or(_) => todo!(),
         }
     }
 }
@@ -511,7 +501,7 @@ impl<'tcx> Stable<'tcx> for ty::Const<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        let ct = cx.lift(*self).expect("invariant: Const must be liftable to current context"); // tRust: unwrap -> expect
+        let ct = cx.lift(*self).unwrap();
         let kind = match ct.kind() {
             ty::ConstKind::Value(cv) => {
                 let const_val = cx.valtree_to_const_val(cv);
@@ -622,7 +612,7 @@ impl<'tcx> Stable<'tcx> for ty::TraitRef<'tcx> {
     ) -> Self::T {
         use crate::ty::TraitRef;
 
-        TraitRef::try_new(tables.trait_def(self.def_id), self.args.stable(tables, cx)).expect("invariant: TraitRef args must include self type") // tRust: unwrap -> expect
+        TraitRef::try_new(tables.trait_def(self.def_id), self.args.stable(tables, cx)).unwrap()
     }
 }
 
@@ -763,12 +753,11 @@ impl<'tcx> Stable<'tcx> for ty::ClauseKind<'tcx> {
             ClauseKind::ConstEvaluatable(const_) => {
                 crate::ty::ClauseKind::ConstEvaluatable(const_.stable(tables, cx))
             }
-            // tRust: HostEffect and UnstableFeature clauses are experimental, not yet in SMIR
             ClauseKind::HostEffect(..) => {
-                bug!("unimplemented: ClauseKind::HostEffect is not yet supported in stable MIR")
+                todo!()
             }
             ClauseKind::UnstableFeature(_) => {
-                bug!("unimplemented: ClauseKind::UnstableFeature is not yet supported in stable MIR")
+                todo!()
             }
         }
     }
@@ -953,7 +942,7 @@ impl<'tcx> Stable<'tcx> for ty::Instance<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        let def = tables.instance_def(cx.lift(*self).expect("invariant: Instance must be liftable to current context")); // tRust: unwrap -> expect
+        let def = tables.instance_def(cx.lift(*self).unwrap());
         let kind = match self.def {
             ty::InstanceKind::Item(..) => crate::mir::mono::InstanceKind::Item,
             ty::InstanceKind::Intrinsic(..) => crate::mir::mono::InstanceKind::Intrinsic,
@@ -1094,7 +1083,7 @@ impl<'tcx> Stable<'tcx> for ty::AssocContainer {
             ty::AssocContainer::Trait => AssocContainer::Trait,
             ty::AssocContainer::InherentImpl => AssocContainer::InherentImpl,
             ty::AssocContainer::TraitImpl(trait_item_id) => {
-                AssocContainer::TraitImpl(tables.assoc_def(trait_item_id.expect("invariant: TraitImpl must have associated trait item DefId"))) // tRust: unwrap -> expect
+                AssocContainer::TraitImpl(tables.assoc_def(trait_item_id.unwrap()))
             }
         }
     }

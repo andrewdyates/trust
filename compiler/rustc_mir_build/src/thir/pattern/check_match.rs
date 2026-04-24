@@ -40,7 +40,7 @@ pub(crate) fn check_match(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(), Err
         tcx,
         thir: &*thir,
         typeck_results,
-        // tRust: known issue — We're in a body, should handle opaques. (upstream #132279)
+        // FIXME(#132279): We're in a body, should handle opaques.
         typing_env: ty::TypingEnv::non_body_analysis(tcx, def_id),
         hir_source: tcx.local_def_id_to_hir_id(def_id),
         let_source: LetSource::None,
@@ -56,7 +56,6 @@ pub(crate) fn check_match(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Result<(), Err
         // other types of MIR don't have function parameters, and we don't need to
         // categorize those for the irrefutable check.
         _ if thir.params.is_empty() => "",
-        // tRust: invariant — only function and closure bodies may carry THIR parameters; all other body kinds reach here with `thir.params.is_empty()`.
         kind => bug!("unexpected function parameters in THIR: {kind:?} {def_id:?}"),
     };
 
@@ -497,14 +496,8 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
                 let pat = &self.thir[snd_arm].pattern;
                 // `pat` should be `Some(<pat_field>)` from a desugared for loop.
                 debug_assert_eq!(pat.span.desugaring_kind(), Some(DesugaringKind::ForLoop));
-                let PatKind::Variant { ref subpatterns, .. } = pat.kind else {
-                    // tRust: invariant — the second arm of a desugared `for` loop always matches `Some(<pat_field>)`.
-                    bug!()
-                };
-                let [pat_field] = &subpatterns[..] else {
-                    // tRust: invariant — that desugared `Some(<pat_field>)` pattern has exactly one field subpattern.
-                    bug!()
-                };
+                let PatKind::Variant { ref subpatterns, .. } = pat.kind else { bug!() };
+                let [pat_field] = &subpatterns[..] else { bug!() };
                 self.check_binding_is_irrefutable(
                     &pat_field.pattern,
                     "`for` loop binding",
@@ -670,7 +663,7 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
             false
         };
 
-        let witness_1 = cx.print_witness_pat(witnesses.get(0).expect("invariant: collection is non-empty")); // tRust: unwrap -> expect
+        let witness_1 = cx.print_witness_pat(witnesses.get(0).unwrap());
 
         self.error = Err(self.tcx.dcx().emit_err(PatternNotCovered {
             span: pat.span,
@@ -865,7 +858,6 @@ fn report_irrefutable_let_patterns(
     }
 
     match source {
-        // tRust: invariant — this lint is only reported for refutable-let forms (`if let`, `while let`, `let else`, and guards), never for plain `let` or the default `None`/`Else` states.
         LetSource::None | LetSource::PlainLet | LetSource::Else => bug!(),
         LetSource::IfLet | LetSource::ElseIfLet => emit_diag!(IrrefutableLetPatternsIfLet),
         LetSource::IfLetGuard => emit_diag!(IrrefutableLetPatternsIfLetGuard),
@@ -997,7 +989,7 @@ fn find_fallback_pattern_typo<'tcx>(
                     } else if cx.tcx.visibility(item.owner_id).is_accessible_from(parent, cx.tcx) {
                         // The const is accessible only through the re-export, point at
                         // the `use`.
-                        let ident = item.kind.ident().expect("invariant: item has an identifier"); // tRust: unwrap -> expect
+                        let ident = item.kind.ident().unwrap();
                         imported.push(ident.name);
                         imported_spans.push(ident.span);
                     }
@@ -1011,7 +1003,7 @@ fn find_fallback_pattern_typo<'tcx>(
                 let vis = cx.tcx.visibility(item.owner_id);
                 if vis.is_accessible_from(parent, cx.tcx) {
                     accessible.push(item_name);
-                    // tRust: known issue — the line below from PR #135310 is a workaround for the ICE in issue
+                    // FIXME: the line below from PR #135310 is a workaround for the ICE in issue
                     // #135289, where a macro in a dependency can create unreachable patterns in the
                     // current crate. Path trimming expects diagnostics for a typoed const, but no
                     // diagnostics are emitted and we ICE. See
@@ -1179,7 +1171,7 @@ fn report_non_exhaustive_match<'p, 'tcx>(
         });
     }
 
-    // tRust: known issue — migration of this diagnostic will require list support
+    // FIXME: migration of this diagnostic will require list support
     let joined_patterns = joined_uncovered_patterns(cx, &witnesses);
     let mut err = struct_span_code_err!(
         cx.tcx.dcx(),
@@ -1391,7 +1383,6 @@ fn joined_uncovered_patterns<'p, 'tcx>(
     const LIMIT: usize = 3;
     let pat_to_str = |pat: &WitnessPat<'p, 'tcx>| cx.print_witness_pat(pat);
     match witnesses {
-        // tRust: invariant — callers only format uncovered-pattern witnesses after exhaustiveness checking produced at least one witness.
         [] => bug!(),
         [witness] => format!("`{}`", cx.print_witness_pat(witness)),
         [head @ .., tail] if head.len() < LIMIT => {

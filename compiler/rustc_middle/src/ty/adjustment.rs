@@ -105,7 +105,7 @@ pub enum Adjust {
     Pointer(PointerCoercion),
 
     /// Take a pinned reference and reborrow as a `Pin<&mut T>` or `Pin<&T>`.
-    // tRust: known issue (pin_ergonomics) — This can be replaced with a `Deref(Pin)` followed by a `Borrow(Pin)`
+    // FIXME(pin_ergonomics): This can be replaced with a `Deref(Pin)` followed by a `Borrow(Pin)`
     ReborrowPin(hir::Mutability),
 }
 
@@ -140,7 +140,7 @@ impl OverloadedDeref {
         tcx.associated_items(trait_def_id)
             .in_definition_order()
             .find(|item| item.is_fn())
-            .expect("invariant: overloaded autoderef step has target type")
+            .unwrap()
             .def_id
     }
 }

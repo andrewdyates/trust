@@ -59,9 +59,7 @@ impl CegarBackend {
     /// Create a new CEGAR backend with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            config: CegarBackendConfig::default(),
-        }
+        Self { config: CegarBackendConfig::default() }
     }
 
     /// Create a CEGAR backend with custom configuration.
@@ -75,9 +73,7 @@ impl CegarBackend {
         // Discover initial predicates from the formula.
         let initial_predicates = discover_initial_predicates(&vc.formula);
 
-        let cegar_config = CegarConfig {
-            max_iterations: self.config.max_iterations,
-        };
+        let cegar_config = CegarConfig { max_iterations: self.config.max_iterations };
         let mut cegar = CegarLoop::new(initial_predicates, cegar_config);
 
         // Run refinement iterations.
@@ -87,7 +83,7 @@ impl CegarBackend {
                 let elapsed = start.elapsed().as_millis() as u64;
                 if elapsed >= self.config.timeout_ms {
                     return VerificationResult::Timeout {
-                        solver: "cegar".to_string(),
+                        solver: "cegar".into(),
                         timeout_ms: self.config.timeout_ms,
                     };
                 }
@@ -102,17 +98,17 @@ impl CegarBackend {
                 CegarStepResult::Safe => {
                     let time_ms = start.elapsed().as_millis() as u64;
                     return VerificationResult::Proved {
-                        solver: "cegar".to_string(),
+                        solver: "cegar".into(),
                         time_ms,
                         strength: ProofStrength::inductive(),
                         proof_certificate: None,
-                solver_warnings: None,
+                        solver_warnings: None,
                     };
                 }
                 CegarStepResult::Unsafe(cex) => {
                     let time_ms = start.elapsed().as_millis() as u64;
                     return VerificationResult::Failed {
-                        solver: "cegar".to_string(),
+                        solver: "cegar".into(),
                         time_ms,
                         counterexample: Some(cex),
                     };
@@ -129,7 +125,7 @@ impl CegarBackend {
 
         let time_ms = start.elapsed().as_millis() as u64;
         VerificationResult::Unknown {
-            solver: "cegar".to_string(),
+            solver: "cegar".into(),
             time_ms,
             reason: "CEGAR refinement did not converge".to_string(),
         }
@@ -149,9 +145,7 @@ impl CegarBackend {
         // can prove it. For false formulas (violation exists), we look for cex.
         match &vc.formula {
             Formula::Bool(true) => CegarStepResult::Safe,
-            Formula::Bool(false) => {
-                CegarStepResult::Unsafe(Counterexample::new(Vec::new()))
-            }
+            Formula::Bool(false) => CegarStepResult::Unsafe(Counterexample::new(Vec::new())),
             _ => {
                 // Generate a synthetic counterexample from formula variables
                 // to drive the CEGAR refinement loop.
@@ -174,28 +168,26 @@ impl CegarBackend {
     fn run_ic3_fallback(&self, vc: &VerificationCondition, start: Instant) -> VerificationResult {
         // Build a transition system from the formula.
         let system = formula_to_transition_system(&vc.formula);
-        let config = Ic3Config {
-            max_depth: self.config.ic3_max_depth,
-            max_block_iterations: 10_000,
-        };
+        let config =
+            Ic3Config { max_depth: self.config.ic3_max_depth, max_block_iterations: 10_000 };
 
         let mut engine = Ic3Engine::new(system, config);
         match engine.check() {
             Ok(Ic3Result::Safe { .. }) => {
                 let time_ms = start.elapsed().as_millis() as u64;
                 VerificationResult::Proved {
-                    solver: "cegar-ic3".to_string(),
+                    solver: "cegar-ic3".into(),
                     time_ms,
                     strength: ProofStrength::inductive(),
                     proof_certificate: None,
-                solver_warnings: None,
+                    solver_warnings: None,
                 }
             }
             Ok(Ic3Result::Unsafe { trace }) => {
                 let time_ms = start.elapsed().as_millis() as u64;
                 let cex = ic3_trace_to_counterexample(&trace);
                 VerificationResult::Failed {
-                    solver: "cegar-ic3".to_string(),
+                    solver: "cegar-ic3".into(),
                     time_ms,
                     counterexample: Some(cex),
                 }
@@ -203,7 +195,7 @@ impl CegarBackend {
             Ok(Ic3Result::Unknown { depth }) => {
                 let time_ms = start.elapsed().as_millis() as u64;
                 VerificationResult::Unknown {
-                    solver: "cegar-ic3".to_string(),
+                    solver: "cegar-ic3".into(),
                     time_ms,
                     reason: format!("IC3 reached depth {depth} without convergence"),
                 }
@@ -212,7 +204,7 @@ impl CegarBackend {
                 // Handle future non-exhaustive Ic3Result variants.
                 let time_ms = start.elapsed().as_millis() as u64;
                 VerificationResult::Unknown {
-                    solver: "cegar-ic3".to_string(),
+                    solver: "cegar-ic3".into(),
                     time_ms,
                     reason: "IC3 returned unrecognized result variant".to_string(),
                 }
@@ -220,7 +212,7 @@ impl CegarBackend {
             Err(e) => {
                 let time_ms = start.elapsed().as_millis() as u64;
                 VerificationResult::Unknown {
-                    solver: "cegar-ic3".to_string(),
+                    solver: "cegar-ic3".into(),
                     time_ms,
                     reason: format!("IC3 error: {e}"),
                 }
@@ -245,10 +237,8 @@ impl crate::VerificationBackend for CegarBackend {
     }
 
     fn can_handle(&self, vc: &VerificationCondition) -> bool {
-        let classification = cegar_classifier::classify_with_threshold(
-            vc,
-            self.config.classifier_threshold,
-        );
+        let classification =
+            cegar_classifier::classify_with_threshold(vc, self.config.classifier_threshold);
         classification.should_use_cegar
     }
 
@@ -293,40 +283,43 @@ fn extract_predicates_recursive(formula: &Formula, predicates: &mut Vec<Predicat
                 }
             }
             if let Some(name) = var_name(lhs)
-                && let Some(val) = const_value(rhs) {
-                    let op = if matches!(formula, Formula::Gt(..)) {
-                        trust_cegar::CmpOp::Gt
-                    } else {
-                        trust_cegar::CmpOp::Ge
-                    };
-                    let pred = Predicate::comparison(&name, op, val.to_string());
-                    if !predicates.contains(&pred) {
-                        predicates.push(pred);
-                    }
+                && let Some(val) = const_value(rhs)
+            {
+                let op = if matches!(formula, Formula::Gt(..)) {
+                    trust_cegar::CmpOp::Gt
+                } else {
+                    trust_cegar::CmpOp::Ge
+                };
+                let pred = Predicate::comparison(&name, op, val.to_string());
+                if !predicates.contains(&pred) {
+                    predicates.push(pred);
                 }
+            }
         }
         Formula::Lt(lhs, rhs) | Formula::Le(lhs, rhs) => {
             if let Some(name) = var_name(lhs)
-                && let Some(val) = const_value(rhs) {
-                    let op = if matches!(formula, Formula::Lt(..)) {
-                        trust_cegar::CmpOp::Lt
-                    } else {
-                        trust_cegar::CmpOp::Le
-                    };
-                    let pred = Predicate::comparison(&name, op, val.to_string());
-                    if !predicates.contains(&pred) {
-                        predicates.push(pred);
-                    }
+                && let Some(val) = const_value(rhs)
+            {
+                let op = if matches!(formula, Formula::Lt(..)) {
+                    trust_cegar::CmpOp::Lt
+                } else {
+                    trust_cegar::CmpOp::Le
+                };
+                let pred = Predicate::comparison(&name, op, val.to_string());
+                if !predicates.contains(&pred) {
+                    predicates.push(pred);
                 }
+            }
         }
         Formula::Eq(lhs, rhs) => {
             if let Some(name) = var_name(lhs)
-                && let Some(val) = const_value(rhs) {
-                    let pred = Predicate::comparison(&name, trust_cegar::CmpOp::Eq, val.to_string());
-                    if !predicates.contains(&pred) {
-                        predicates.push(pred);
-                    }
+                && let Some(val) = const_value(rhs)
+            {
+                let pred = Predicate::comparison(&name, trust_cegar::CmpOp::Eq, val.to_string());
+                if !predicates.contains(&pred) {
+                    predicates.push(pred);
                 }
+            }
         }
         Formula::And(children) | Formula::Or(children) => {
             for child in children {
@@ -367,10 +360,8 @@ fn extract_synthetic_counterexample(formula: &Formula) -> Counterexample {
     let mut vars = FxHashSet::default();
     cegar_classifier::collect_variables(formula, &mut vars);
 
-    let assignments: Vec<(String, CounterexampleValue)> = vars
-        .into_iter()
-        .map(|name| (name, CounterexampleValue::Int(0)))
-        .collect();
+    let assignments: Vec<(String, CounterexampleValue)> =
+        vars.into_iter().map(|name| (name, CounterexampleValue::Int(0))).collect();
 
     Counterexample::new(assignments)
 }
@@ -382,11 +373,7 @@ fn extract_synthetic_counterexample(formula: &Formula) -> Counterexample {
 /// - transition: identity transition (conservative)
 /// - property: the VC's formula (what we want to prove)
 fn formula_to_transition_system(formula: &Formula) -> TransitionSystem {
-    TransitionSystem::new(
-        Formula::Bool(true),
-        Formula::Bool(true),
-        formula.clone(),
-    )
+    TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), formula.clone())
 }
 
 /// Convert an IC3 counterexample trace into a verification counterexample.
@@ -419,7 +406,7 @@ mod tests {
     fn make_vc(kind: VcKind, formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -454,13 +441,13 @@ mod tests {
             ..CegarBackendConfig::default()
         });
         let vc = make_vc(
-            VcKind::NonTermination {
-                context: "loop".to_string(),
-                measure: "n".to_string(),
-            },
+            VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() },
             Formula::Bool(false),
         );
-        assert!(!backend.can_handle(&vc), "NonTermination must NOT use CEGAR (PDR proves safety, not termination)");
+        assert!(
+            !backend.can_handle(&vc),
+            "NonTermination must NOT use CEGAR (PDR proves safety, not termination)"
+        );
     }
 
     #[test]
@@ -578,10 +565,8 @@ mod tests {
 
     #[test]
     fn test_formula_to_transition_system() {
-        let prop = Formula::Gt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let prop =
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let sys = formula_to_transition_system(&prop);
         assert_eq!(sys.init, Formula::Bool(true));
         assert_eq!(sys.transition, Formula::Bool(true));

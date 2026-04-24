@@ -326,7 +326,6 @@ impl<'tcx> Region<'tcx> {
     pub fn as_var(self) -> RegionVid {
         match self.kind() {
             ty::ReVar(vid) => vid,
-            // tRust: invariant: expected region <...> to be of kind ReVar
             _ => bug!("expected region {:?} to be of kind ReVar", self),
         }
     }

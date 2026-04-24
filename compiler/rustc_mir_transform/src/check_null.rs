@@ -1,6 +1,3 @@
-//! tRust: MIR pass that inserts null pointer checks for raw pointer
-//! tRust: dereferences when UB checks are enabled.
-
 use rustc_hir::LangItem;
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};

@@ -18,17 +18,29 @@ pub const FAT_MAGIC_64: u32 = 0xCAFE_BABF;
 
 // -- File types --
 
+#[cfg(test)]
 pub const MH_OBJECT: u32 = 0x1;
+#[cfg(test)]
 pub const MH_EXECUTE: u32 = 0x2;
+#[cfg(test)]
 pub const MH_FVMLIB: u32 = 0x3;
+#[cfg(test)]
 pub const MH_CORE: u32 = 0x4;
+#[cfg(test)]
 pub const MH_PRELOAD: u32 = 0x5;
+#[cfg(test)]
 pub const MH_DYLIB: u32 = 0x6;
+#[cfg(test)]
 pub const MH_DYLINKER: u32 = 0x7;
+#[cfg(test)]
 pub const MH_BUNDLE: u32 = 0x8;
+#[cfg(test)]
 pub const MH_DYLIB_STUB: u32 = 0x9;
+#[cfg(test)]
 pub const MH_DSYM: u32 = 0xA;
+#[cfg(test)]
 pub const MH_KEXT_BUNDLE: u32 = 0xB;
+#[cfg(test)]
 pub const MH_FILESET: u32 = 0xC;
 
 // -- CPU types --
@@ -37,8 +49,9 @@ pub const CPU_TYPE_X86_64: i32 = 0x0100_0007;
 pub const CPU_TYPE_ARM64: i32 = 0x0100_000C;
 
 // CPU subtypes
+#[cfg(test)]
 pub const CPU_SUBTYPE_ARM64_ALL: i32 = 0;
-pub const CPU_SUBTYPE_ARM64E: i32 = 2;
+#[cfg(test)]
 pub const CPU_SUBTYPE_X86_64_ALL: i32 = 3;
 
 // -- Load command types --
@@ -52,8 +65,6 @@ pub const LC_LOAD_DYLIB: u32 = 0x0C;
 pub const LC_ID_DYLIB: u32 = 0x0D;
 pub const LC_LOAD_DYLINKER: u32 = 0x0E;
 pub const LC_ID_DYLINKER: u32 = 0x0F;
-pub const LC_PREBOUND_DYLIB: u32 = 0x10;
-pub const LC_ROUTINES_64: u32 = 0x1A;
 pub const LC_UUID: u32 = 0x1B;
 pub const LC_RPATH: u32 = 0x1C | LC_REQ_DYLD;
 pub const LC_CODE_SIGNATURE: u32 = 0x1D;
@@ -63,21 +74,16 @@ pub const LC_LAZY_LOAD_DYLIB: u32 = 0x20;
 pub const LC_ENCRYPTION_INFO_64: u32 = 0x2C;
 pub const LC_DYLD_INFO: u32 = 0x22;
 pub const LC_DYLD_INFO_ONLY: u32 = 0x22 | LC_REQ_DYLD;
-pub const LC_VERSION_MIN_MACOSX: u32 = 0x24;
-pub const LC_VERSION_MIN_IPHONEOS: u32 = 0x25;
 pub const LC_FUNCTION_STARTS: u32 = 0x26;
-pub const LC_DYLD_ENVIRONMENT: u32 = 0x27;
 pub const LC_MAIN: u32 = 0x28 | LC_REQ_DYLD;
 pub const LC_DATA_IN_CODE: u32 = 0x29;
 pub const LC_SOURCE_VERSION: u32 = 0x2A;
 pub const LC_DYLIB_CODE_SIGN_DRS: u32 = 0x2B;
-pub const LC_LINKER_OPTION: u32 = 0x2D;
 pub const LC_LINKER_OPTIMIZATION_HINT: u32 = 0x2E;
-pub const LC_VERSION_MIN_TVOS: u32 = 0x2F;
-pub const LC_VERSION_MIN_WATCHOS: u32 = 0x30;
 pub const LC_BUILD_VERSION: u32 = 0x32;
 pub const LC_DYLD_EXPORTS_TRIE: u32 = 0x33 | LC_REQ_DYLD;
 pub const LC_DYLD_CHAINED_FIXUPS: u32 = 0x34 | LC_REQ_DYLD;
+#[cfg(test)]
 pub const LC_FILESET_ENTRY: u32 = 0x35 | LC_REQ_DYLD;
 
 // -- Segment / Section flags --
@@ -88,19 +94,14 @@ pub const SEG_NAME_LEN: usize = 16;
 pub const SECT_NAME_LEN: usize = 16;
 
 // Section types (low 8 bits of flags).
+#[cfg(test)]
 pub const S_REGULAR: u32 = 0x0;
 pub const S_ZEROFILL: u32 = 0x1;
+#[cfg(test)]
 pub const S_CSTRING_LITERALS: u32 = 0x2;
-pub const S_4BYTE_LITERALS: u32 = 0x3;
-pub const S_8BYTE_LITERALS: u32 = 0x4;
-pub const S_LITERAL_POINTERS: u32 = 0x5;
-pub const S_NON_LAZY_SYMBOL_POINTERS: u32 = 0x6;
-pub const S_LAZY_SYMBOL_POINTERS: u32 = 0x7;
-pub const S_SYMBOL_STUBS: u32 = 0x8;
-pub const S_MOD_INIT_FUNC_POINTERS: u32 = 0x9;
-pub const S_MOD_TERM_FUNC_POINTERS: u32 = 0xA;
 
 pub const SECTION_TYPE_MASK: u32 = 0x0000_00FF;
+#[cfg(test)]
 pub const SECTION_ATTRIBUTES_MASK: u32 = 0xFFFF_FF00;
 pub const S_ATTR_PURE_INSTRUCTIONS: u32 = 0x8000_0000;
 pub const S_ATTR_SOME_INSTRUCTIONS: u32 = 0x0000_0400;
@@ -117,14 +118,7 @@ pub const N_EXT: u8 = 0x01;
 pub const N_UNDF: u8 = 0x00;
 pub const N_ABS: u8 = 0x02;
 pub const N_SECT: u8 = 0x0E;
-pub const N_PBUD: u8 = 0x0C;
 pub const N_INDR: u8 = 0x0A;
-
-// Reference types (low 4 bits of n_desc for N_EXT | N_UNDF)
-pub const REFERENCE_TYPE_MASK: u16 = 0x000F;
-pub const REFERENCE_FLAG_UNDEFINED_NON_LAZY: u16 = 0;
-pub const REFERENCE_FLAG_UNDEFINED_LAZY: u16 = 1;
-pub const REFERENCE_FLAG_DEFINED: u16 = 2;
 
 // -- Relocation --
 
@@ -132,36 +126,58 @@ pub const REFERENCE_FLAG_DEFINED: u16 = 2;
 pub const RELOC_SIZE: usize = 8;
 
 // AArch64 relocation types
+#[cfg(test)]
 pub const ARM64_RELOC_UNSIGNED: u8 = 0;
+#[cfg(test)]
 pub const ARM64_RELOC_SUBTRACTOR: u8 = 1;
+#[cfg(test)]
 pub const ARM64_RELOC_BRANCH26: u8 = 2;
+#[cfg(test)]
 pub const ARM64_RELOC_PAGE21: u8 = 3;
+#[cfg(test)]
 pub const ARM64_RELOC_PAGEOFF12: u8 = 4;
+#[cfg(test)]
 pub const ARM64_RELOC_GOT_LOAD_PAGE21: u8 = 5;
+#[cfg(test)]
 pub const ARM64_RELOC_GOT_LOAD_PAGEOFF12: u8 = 6;
+#[cfg(test)]
 pub const ARM64_RELOC_POINTER_TO_GOT: u8 = 7;
+#[cfg(test)]
 pub const ARM64_RELOC_TLVP_LOAD_PAGE21: u8 = 8;
+#[cfg(test)]
 pub const ARM64_RELOC_TLVP_LOAD_PAGEOFF12: u8 = 9;
+#[cfg(test)]
 pub const ARM64_RELOC_ADDEND: u8 = 10;
 
 // -- Struct sizes --
 
 pub const MACH_HEADER_64_SIZE: usize = 32;
 pub const LOAD_COMMAND_SIZE: usize = 8;
+#[cfg(test)]
 pub const SEGMENT_COMMAND_64_SIZE: usize = 72;
+#[cfg(test)]
 pub const SECTION_64_SIZE: usize = 80;
 pub const NLIST_64_SIZE: usize = 16;
+#[cfg(test)]
 pub const SYMTAB_COMMAND_SIZE: usize = 24;
+#[cfg(test)]
 pub const DYSYMTAB_COMMAND_SIZE: usize = 80;
-pub const DYLIB_COMMAND_MIN_SIZE: usize = 24;
 pub const UUID_COMMAND_SIZE: usize = 24;
+#[cfg(test)]
 pub const ENTRY_POINT_COMMAND_SIZE: usize = 24;
+#[cfg(test)]
 pub const BUILD_VERSION_COMMAND_SIZE: usize = 24;
+#[cfg(test)]
 pub const BUILD_TOOL_VERSION_SIZE: usize = 8;
+#[cfg(test)]
 pub const LINKEDIT_DATA_COMMAND_SIZE: usize = 16;
+#[cfg(test)]
 pub const SOURCE_VERSION_COMMAND_SIZE: usize = 16;
+#[cfg(test)]
 pub const FAT_HEADER_SIZE: usize = 8;
+#[cfg(test)]
 pub const FAT_ARCH_SIZE: usize = 20;
+#[cfg(test)]
 pub const FAT_ARCH_64_SIZE: usize = 32;
 
 #[cfg(test)]
@@ -239,12 +255,22 @@ mod tests {
         assert_eq!(NLIST_64_SIZE, 16);
         // All struct sizes should be multiples of 4 (natural alignment)
         let sizes = [
-            MACH_HEADER_64_SIZE, LOAD_COMMAND_SIZE, SEGMENT_COMMAND_64_SIZE,
-            SECTION_64_SIZE, NLIST_64_SIZE, SYMTAB_COMMAND_SIZE,
-            DYSYMTAB_COMMAND_SIZE, UUID_COMMAND_SIZE, ENTRY_POINT_COMMAND_SIZE,
-            BUILD_VERSION_COMMAND_SIZE, BUILD_TOOL_VERSION_SIZE,
-            LINKEDIT_DATA_COMMAND_SIZE, SOURCE_VERSION_COMMAND_SIZE,
-            FAT_HEADER_SIZE, FAT_ARCH_SIZE, FAT_ARCH_64_SIZE,
+            MACH_HEADER_64_SIZE,
+            LOAD_COMMAND_SIZE,
+            SEGMENT_COMMAND_64_SIZE,
+            SECTION_64_SIZE,
+            NLIST_64_SIZE,
+            SYMTAB_COMMAND_SIZE,
+            DYSYMTAB_COMMAND_SIZE,
+            UUID_COMMAND_SIZE,
+            ENTRY_POINT_COMMAND_SIZE,
+            BUILD_VERSION_COMMAND_SIZE,
+            BUILD_TOOL_VERSION_SIZE,
+            LINKEDIT_DATA_COMMAND_SIZE,
+            SOURCE_VERSION_COMMAND_SIZE,
+            FAT_HEADER_SIZE,
+            FAT_ARCH_SIZE,
+            FAT_ARCH_64_SIZE,
         ];
         for size in sizes {
             assert_eq!(size % 4, 0, "struct size {size} should be 4-byte aligned");

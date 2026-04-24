@@ -32,10 +32,7 @@ impl LivenessProperty {
     /// Create a new liveness property.
     #[must_use]
     pub fn new(name: impl Into<String>, eventually_formula: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            eventually_formula: eventually_formula.into(),
-        }
+        Self { name: name.into(), eventually_formula: eventually_formula.into() }
     }
 }
 
@@ -50,29 +47,23 @@ pub struct ResponseProperty {
     pub response: String,
 }
 
+#[cfg(test)]
 impl ResponseProperty {
     /// Create a new response property.
     #[must_use]
-    pub(crate) fn new(
+    fn new(
         name: impl Into<String>,
         trigger: impl Into<String>,
         response: impl Into<String>,
     ) -> Self {
-        Self {
-            name: name.into(),
-            trigger: trigger.into(),
-            response: response.into(),
-        }
+        Self { name: name.into(), trigger: trigger.into(), response: response.into() }
     }
 
     /// Convert to a liveness property by encoding as "from any trigger state,
     /// eventually reach a response state".
     #[must_use]
-    pub(crate) fn to_liveness(&self) -> LivenessProperty {
-        LivenessProperty {
-            name: self.name.clone(),
-            eventually_formula: self.response.clone(),
-        }
+    fn to_liveness(&self) -> LivenessProperty {
+        LivenessProperty { name: self.name.clone(), eventually_formula: self.response.clone() }
     }
 }
 
@@ -95,6 +86,7 @@ pub enum LivenessResult {
     },
 }
 
+#[cfg(test)]
 impl LivenessResult {
     /// Returns true if the property is satisfied.
     #[must_use]
@@ -143,9 +135,7 @@ pub fn check_liveness(sm: &StateMachine, prop: &LivenessProperty) -> LivenessRes
         // Skip trivial SCCs (single node with no self-loop)
         if scc.len() == 1 {
             let state = scc[0];
-            let has_self_loop = adj
-                .get(&state)
-                .is_some_and(|succs| succs.contains(&state));
+            let has_self_loop = adj.get(&state).is_some_and(|succs| succs.contains(&state));
             if !has_self_loop {
                 continue;
             }
@@ -170,8 +160,9 @@ pub fn check_liveness(sm: &StateMachine, prop: &LivenessProperty) -> LivenessRes
 ///
 /// For every reachable state with the trigger label, check that all infinite
 /// paths from it eventually reach a state with the response label.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn check_response(sm: &StateMachine, prop: &ResponseProperty) -> LivenessResult {
+fn check_response(sm: &StateMachine, prop: &ResponseProperty) -> LivenessResult {
     if sm.states.is_empty() {
         return LivenessResult::Satisfied;
     }
@@ -189,12 +180,8 @@ pub(crate) fn check_response(sm: &StateMachine, prop: &ResponseProperty) -> Live
         .collect();
 
     // Response states
-    let response_states: FxHashSet<StateId> = sm
-        .states
-        .iter()
-        .filter(|s| s.labels.contains(&prop.response))
-        .map(|s| s.id)
-        .collect();
+    let response_states: FxHashSet<StateId> =
+        sm.states.iter().filter(|s| s.labels.contains(&prop.response)).map(|s| s.id).collect();
 
     // For each trigger state, check liveness of reaching a response state
     for trigger_id in &trigger_states {
@@ -205,9 +192,7 @@ pub(crate) fn check_response(sm: &StateMachine, prop: &ResponseProperty) -> Live
         for scc in &sccs {
             if scc.len() == 1 {
                 let state = scc[0];
-                let has_self_loop = adj
-                    .get(&state)
-                    .is_some_and(|succs| succs.contains(&state));
+                let has_self_loop = adj.get(&state).is_some_and(|succs| succs.contains(&state));
                 if !has_self_loop {
                     continue;
                 }
@@ -348,11 +333,7 @@ struct Lasso {
 
 /// Build a lasso-shaped counterexample: path from initial to an SCC node,
 /// then a cycle within the SCC.
-fn build_lasso(
-    initial: StateId,
-    scc: &[StateId],
-    adj: &FxHashMap<StateId, Vec<StateId>>,
-) -> Lasso {
+fn build_lasso(initial: StateId, scc: &[StateId], adj: &FxHashMap<StateId, Vec<StateId>>) -> Lasso {
     let scc_set: FxHashSet<StateId> = scc.iter().copied().collect();
     let scc_entry = scc[0];
 

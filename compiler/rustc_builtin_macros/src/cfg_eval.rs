@@ -111,25 +111,25 @@ impl CfgEval<'_> {
             match annotatable {
                 Annotatable::Item(_) => {
                     let item =
-                        parser.parse_item(ForceCollect::Yes, AllowConstBlockItems::Yes)?.expect("invariant: reparsed item must produce a result"); // tRust: unwrap -> expect
-                    Annotatable::Item(self.flat_map_item(item).pop().expect("invariant: flat_map_item must produce at least one item")) // tRust: unwrap -> expect
+                        parser.parse_item(ForceCollect::Yes, AllowConstBlockItems::Yes)?.unwrap();
+                    Annotatable::Item(self.flat_map_item(item).pop().unwrap())
                 }
                 Annotatable::AssocItem(_, ctxt) => {
-                    let item = parser.parse_trait_item(ForceCollect::Yes)?.expect("invariant: reparsed trait item must produce outer result").expect("invariant: reparsed trait item must produce inner result"); // tRust: unwrap -> expect
+                    let item = parser.parse_trait_item(ForceCollect::Yes)?.unwrap().unwrap();
                     Annotatable::AssocItem(
-                        self.flat_map_assoc_item(item, ctxt).pop().expect("invariant: flat_map_assoc_item must produce at least one item"), // tRust: unwrap -> expect
+                        self.flat_map_assoc_item(item, ctxt).pop().unwrap(),
                         ctxt,
                     )
                 }
                 Annotatable::ForeignItem(_) => {
-                    let item = parser.parse_foreign_item(ForceCollect::Yes)?.expect("invariant: reparsed foreign item must produce outer result").expect("invariant: reparsed foreign item must produce inner result"); // tRust: unwrap -> expect
-                    Annotatable::ForeignItem(self.flat_map_foreign_item(item).pop().expect("invariant: flat_map_foreign_item must produce at least one item")) // tRust: unwrap -> expect
+                    let item = parser.parse_foreign_item(ForceCollect::Yes)?.unwrap().unwrap();
+                    Annotatable::ForeignItem(self.flat_map_foreign_item(item).pop().unwrap())
                 }
                 Annotatable::Stmt(_) => {
                     let stmt = parser
                         .parse_stmt_without_recovery(false, ForceCollect::Yes, false)?
-                        .expect("invariant: reparsed statement must produce a result"); // tRust: unwrap -> expect
-                    Annotatable::Stmt(Box::new(self.flat_map_stmt(stmt).pop().expect("invariant: flat_map_stmt must produce at least one statement"))) // tRust: unwrap -> expect
+                        .unwrap();
+                    Annotatable::Stmt(Box::new(self.flat_map_stmt(stmt).pop().unwrap()))
                 }
                 Annotatable::Expr(_) => {
                     let mut expr = parser.parse_expr_force_collect()?;

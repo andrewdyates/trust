@@ -206,10 +206,10 @@ impl HeadUsages {
 
     fn ignore_usages(&mut self, usages: HeadUsages) {
         let HeadUsages { inductive, unknown, coinductive, forced_ambiguity } = usages;
-        self.inductive = self.inductive.checked_sub(inductive).expect("invariant: inductive count was previously incremented"); // tRust: unwrap -> expect
-        self.unknown = self.unknown.checked_sub(unknown).expect("invariant: unknown count was previously incremented"); // tRust: unwrap -> expect
-        self.coinductive = self.coinductive.checked_sub(coinductive).expect("invariant: coinductive count was previously incremented"); // tRust: unwrap -> expect
-        self.forced_ambiguity = self.forced_ambiguity.checked_sub(forced_ambiguity).expect("invariant: forced_ambiguity count was previously incremented"); // tRust: unwrap -> expect
+        self.inductive = self.inductive.checked_sub(inductive).unwrap();
+        self.unknown = self.unknown.checked_sub(unknown).unwrap();
+        self.coinductive = self.coinductive.checked_sub(coinductive).unwrap();
+        self.forced_ambiguity = self.forced_ambiguity.checked_sub(forced_ambiguity).unwrap();
     }
 
     fn is_empty(self) -> bool {
@@ -326,11 +326,11 @@ impl CycleHeads {
     }
 
     fn highest_cycle_head(&self) -> (StackDepth, CycleHead) {
-        self.heads.last_key_value().map(|(k, v)| (*k, *v)).expect("invariant: heads map is non-empty") // tRust: unwrap -> expect
+        self.heads.last_key_value().map(|(k, v)| (*k, *v)).unwrap()
     }
 
     fn highest_cycle_head_index(&self) -> StackDepth {
-        self.opt_highest_cycle_head_index().expect("invariant: highest cycle head exists when called") // tRust: unwrap -> expect
+        self.opt_highest_cycle_head_index().unwrap()
     }
 
     fn opt_highest_cycle_head_index(&self) -> Option<StackDepth> {
@@ -343,7 +343,7 @@ impl CycleHeads {
 
     fn remove_highest_cycle_head(&mut self) -> CycleHead {
         let last = self.heads.pop_last();
-        last.expect("invariant: iterator is non-empty").1 // tRust: unwrap -> expect
+        last.unwrap().1
     }
 
     fn insert(
@@ -365,7 +365,7 @@ impl CycleHeads {
     }
 
     fn ignore_usages(&mut self, head_index: StackDepth, usages: HeadUsages) {
-        self.heads.get_mut(&head_index).expect("invariant: head_index exists in heads map").usages.ignore_usages(usages) // tRust: unwrap -> expect
+        self.heads.get_mut(&head_index).unwrap().usages.ignore_usages(usages)
     }
 
     fn iter(&self) -> impl Iterator<Item = (StackDepth, CycleHead)> + '_ {
@@ -705,23 +705,23 @@ impl<D: Delegate<Cx = X>, X: Cx> SearchGraph<D> {
     }
 
     pub fn enter_single_candidate(&mut self) {
-        let prev = self.stack.last_mut().expect("invariant: stack is non-empty during evaluation").candidate_usages.replace(Default::default()); // tRust: unwrap -> expect
+        let prev = self.stack.last_mut().unwrap().candidate_usages.replace(Default::default());
         debug_assert!(prev.is_none(), "existing candidate_usages: {prev:?}");
     }
 
     pub fn finish_single_candidate(&mut self) -> CandidateHeadUsages {
-        self.stack.last_mut().expect("invariant: candidate_usages was set by start_evaluate").candidate_usages.take().expect("invariant: candidate_usages was set by start_evaluate") // tRust: unwrap -> expect
+        self.stack.last_mut().unwrap().candidate_usages.take().unwrap()
     }
 
     pub fn ignore_candidate_head_usages(&mut self, usages: CandidateHeadUsages) {
         if let Some(usages) = usages.usages {
-            let (entry_index, entry) = self.stack.last_mut_with_index().expect("invariant: stack is non-empty during evaluation"); // tRust: unwrap -> expect
+            let (entry_index, entry) = self.stack.last_mut_with_index().unwrap();
             // Ignoring usages only mutates the state for the current `head_index`, so the
             // resulting per-head state is unchanged by iteration order.
             #[allow(rustc::potential_query_instability)]
             for (head_index, usages) in usages.into_iter() {
                 if head_index == entry_index {
-                    entry.usages.expect("invariant: usages is set during evaluation cycle").ignore_usages(usages); // tRust: unwrap -> expect
+                    entry.usages.unwrap().ignore_usages(usages);
                 } else {
                     entry.heads.ignore_usages(head_index, usages);
                 }
@@ -1100,7 +1100,7 @@ impl<D: Delegate<Cx = X>, X: Cx> SearchGraph<D, X> {
                 // apply provisional cache entries which encountered overflow once the
                 // current goal is already part of the same cycle. This check could be
                 // improved but seems to be good enough for now.
-                let last = self.stack.last().expect("invariant: stack is non-empty during evaluation"); // tRust: unwrap -> expect
+                let last = self.stack.last().unwrap();
                 if last.heads.opt_lowest_cycle_head_index().is_none_or(|lowest| lowest > head_index)
                 {
                     continue;

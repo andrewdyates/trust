@@ -14,269 +14,196 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::fmt::Write;
+#[cfg(test)]
+mod tests {
+    use crate::separation_logic::unsafe_ops::UnsafeOpKind;
+    use std::fmt::Write;
+    use trust_types::{
+        BasicBlock, BlockId, Formula, LocalDecl, Operand, Place, Projection, ProofLevel, Rvalue,
+        SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody, VerifiableFunction,
+        VerificationCondition,
+    };
 
-use trust_types::{
-    Formula, Operand, Place, Projection, Rvalue, SourceSpan, Statement,
-    Terminator, VcKind, VerifiableFunction, VerificationCondition,
-};
-
-// ---------------------------------------------------------------------------
-// Unsafe operation classification
-// ---------------------------------------------------------------------------
-
-/// Classification of detected unsafe operations in MIR.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum UnsafeOpKind {
-    /// Raw pointer dereference via Deref projection.
-    RawPointerDeref { pointer_name: String },
-    /// Call to a known transmute function (mem::transmute, etc.).
-    Transmute { callee: String },
-    /// Call to a known FFI/extern function.
-    FfiCall { callee: String },
-    /// Call to other known unsafe functions (ptr::read, ptr::write, etc.).
-    UnsafeFnCall { callee: String },
-    /// AddressOf rvalue (&raw const / &raw mut).
-    RawAddressOf { mutable: bool, place_name: String },
-}
-
-impl UnsafeOpKind {
-    /// Human-readable description for the VcKind::UnsafeOperation desc field.
-    fn description(&self) -> String {
-        match self {
-            UnsafeOpKind::RawPointerDeref { pointer_name } => {
-                format!("raw pointer dereference of `{pointer_name}`")
-            }
-            UnsafeOpKind::Transmute { callee } => {
-                format!("transmute via `{callee}`")
-            }
-            UnsafeOpKind::FfiCall { callee } => {
-                format!("FFI call to `{callee}`")
-            }
-            UnsafeOpKind::UnsafeFnCall { callee } => {
-                format!("unsafe function call to `{callee}`")
-            }
-            UnsafeOpKind::RawAddressOf { mutable, place_name } => {
-                let kind = if *mutable { "&raw mut" } else { "&raw const" };
-                format!("{kind} on `{place_name}`")
-            }
-        }
+    /// Detected unsafe operation with location metadata.
+    struct DetectedUnsafeOp {
+        kind: UnsafeOpKind,
+        span: SourceSpan,
     }
-}
 
-// ---------------------------------------------------------------------------
-// Detection
-// ---------------------------------------------------------------------------
+    /// Scan a function for unsafe operations and return classified detections.
+    fn detect_unsafe_ops(func: &VerifiableFunction) -> Vec<DetectedUnsafeOp> {
+        let mut ops = Vec::new();
 
-/// Detected unsafe operation with location metadata.
-struct DetectedUnsafeOp {
-    kind: UnsafeOpKind,
-    span: SourceSpan,
-}
+        for block in &func.body.blocks {
+            // Check statements for raw pointer derefs and AddressOf
+            for stmt in &block.stmts {
+                if let Statement::Assign { rvalue, span, .. } = stmt {
+                    detect_in_rvalue(rvalue, span, &mut ops);
+                }
+            }
 
-/// Scan a function for unsafe operations and return classified detections.
-fn detect_unsafe_ops(func: &VerifiableFunction) -> Vec<DetectedUnsafeOp> {
-    let mut ops = Vec::new();
-
-    for block in &func.body.blocks {
-        // Check statements for raw pointer derefs and AddressOf
-        for stmt in &block.stmts {
-            if let Statement::Assign { rvalue, span, .. } = stmt {
-                detect_in_rvalue(rvalue, span, &mut ops);
+            // Check terminator for unsafe calls
+            if let Terminator::Call { func: callee, span, .. } = &block.terminator
+                && let Some(op_kind) = classify_call(callee)
+            {
+                ops.push(DetectedUnsafeOp { kind: op_kind, span: span.clone() });
             }
         }
 
-        // Check terminator for unsafe calls
-        if let Terminator::Call { func: callee, span, .. } = &block.terminator
-            && let Some(op_kind) = classify_call(callee) {
+        ops
+    }
+
+    /// Detect unsafe operations in an rvalue.
+    fn detect_in_rvalue(rvalue: &Rvalue, span: &SourceSpan, ops: &mut Vec<DetectedUnsafeOp>) {
+        match rvalue {
+            // Raw pointer dereference via Use/Ref with Deref projection
+            Rvalue::Use(Operand::Copy(place) | Operand::Move(place))
+            | Rvalue::Ref { place, .. }
+            | Rvalue::CopyForDeref(place)
+                if has_deref_projection(place) =>
+            {
                 ops.push(DetectedUnsafeOp {
-                    kind: op_kind,
+                    kind: UnsafeOpKind::RawPointerDeref { pointer_name: format_place(place) },
                     span: span.clone(),
                 });
             }
-    }
-
-    ops
-}
-
-/// Detect unsafe operations in an rvalue.
-fn detect_in_rvalue(
-    rvalue: &Rvalue,
-    span: &SourceSpan,
-    ops: &mut Vec<DetectedUnsafeOp>,
-) {
-    match rvalue {
-        // Raw pointer dereference via Use/Ref with Deref projection
-        Rvalue::Use(Operand::Copy(place) | Operand::Move(place))
-        | Rvalue::Ref { place, .. }
-        | Rvalue::CopyForDeref(place) => {
-            if has_deref_projection(place) {
+            // AddressOf: &raw const / &raw mut
+            Rvalue::AddressOf(mutable, place) => {
                 ops.push(DetectedUnsafeOp {
-                    kind: UnsafeOpKind::RawPointerDeref {
-                        pointer_name: format_place(place),
+                    kind: UnsafeOpKind::RawAddressOf {
+                        mutable: *mutable,
+                        place_name: format_place(place),
                     },
                     span: span.clone(),
                 });
             }
+            // Other rvalues are not unsafe operations
+            _ => {}
         }
-        // AddressOf: &raw const / &raw mut
-        Rvalue::AddressOf(mutable, place) => {
-            ops.push(DetectedUnsafeOp {
-                kind: UnsafeOpKind::RawAddressOf {
-                    mutable: *mutable,
-                    place_name: format_place(place),
-                },
-                span: span.clone(),
-            });
-        }
-        // Other rvalues are not unsafe operations
-        _ => {}
     }
-}
 
-/// Check if a place has a Deref projection (indicates raw pointer dereference).
-fn has_deref_projection(place: &Place) -> bool {
-    place.projections.iter().any(|p| matches!(p, Projection::Deref))
-}
+    /// Check if a place has a Deref projection (indicates raw pointer dereference).
+    fn has_deref_projection(place: &Place) -> bool {
+        place.projections.iter().any(|p| matches!(p, Projection::Deref))
+    }
 
-/// Format a place for human-readable output.
-fn format_place(place: &Place) -> String {
-    let mut s = format!("_{}", place.local);
-    for proj in &place.projections {
-        match proj {
-            Projection::Deref => s.push_str(".*"),
-            Projection::Field(f) => {
-                s.push('.');
-                s.push_str(&f.to_string());
-            }
-            Projection::Index(i) => {
-                s.push('[');
-                s.push_str(&i.to_string());
-                s.push(']');
-            }
-            Projection::Downcast(v) => {
-                let _ = write!(s, "@variant({v})");
-            }
-            Projection::ConstantIndex { offset, from_end } => {
-                if *from_end {
-                    let _ = write!(s, "[-{offset}]");
-                } else {
-                    let _ = write!(s, "[{offset}]");
+    /// Format a place for human-readable output.
+    fn format_place(place: &Place) -> String {
+        let mut s = format!("_{}", place.local);
+        for proj in &place.projections {
+            match proj {
+                Projection::Deref => s.push_str(".*"),
+                Projection::Field(f) => {
+                    s.push('.');
+                    s.push_str(&f.to_string());
                 }
-            }
-            Projection::Subslice { from, to, from_end } => {
-                if *from_end {
-                    let _ = write!(s, "[{from}..-{to}]");
-                } else {
-                    let _ = write!(s, "[{from}..{to}]");
+                Projection::Index(i) => {
+                    s.push('[');
+                    s.push_str(&i.to_string());
+                    s.push(']');
                 }
+                Projection::Downcast(v) => {
+                    let _ = write!(s, "@variant({v})");
+                }
+                Projection::ConstantIndex { offset, from_end } => {
+                    if *from_end {
+                        let _ = write!(s, "[-{offset}]");
+                    } else {
+                        let _ = write!(s, "[{offset}]");
+                    }
+                }
+                Projection::Subslice { from, to, from_end } => {
+                    if *from_end {
+                        let _ = write!(s, "[{from}..-{to}]");
+                    } else {
+                        let _ = write!(s, "[{from}..{to}]");
+                    }
+                }
+                // tRust #394: Projection is #[non_exhaustive]; unknown variants
+                // get a generic representation.
+                _ => s.push_str(".?"),
             }
-            // tRust #394: Projection is #[non_exhaustive]; unknown variants
-            // get a generic representation.
-            _ => s.push_str(".?"),
         }
-    }
-    s
-}
-
-/// Classify a function call as an unsafe operation, if applicable.
-fn classify_call(callee: &str) -> Option<UnsafeOpKind> {
-    let lower = callee.to_lowercase();
-
-    // Transmute family
-    if lower.contains("mem::transmute") || lower.contains("mem::transmute_copy") {
-        return Some(UnsafeOpKind::Transmute { callee: callee.to_string() });
+        s
     }
 
-    // FFI / extern calls
-    if lower.contains("::ffi::")
-        || lower.contains("extern \"c\"")
-        || lower.contains("extern \"system\"")
-    {
-        return Some(UnsafeOpKind::FfiCall { callee: callee.to_string() });
+    /// Classify a function call as an unsafe operation, if applicable.
+    fn classify_call(callee: &str) -> Option<UnsafeOpKind> {
+        let lower = callee.to_lowercase();
+
+        // Transmute family
+        if lower.contains("mem::transmute") || lower.contains("mem::transmute_copy") {
+            return Some(UnsafeOpKind::Transmute { callee: callee.to_string() });
+        }
+
+        // FFI / extern calls
+        if lower.contains("::ffi::")
+            || lower.contains("extern \"c\"")
+            || lower.contains("extern \"system\"")
+        {
+            return Some(UnsafeOpKind::FfiCall { callee: callee.to_string() });
+        }
+
+        // Unsafe pointer operations
+        const UNSAFE_FN_PATTERNS: &[&str] = &[
+            "ptr::read",
+            "ptr::write",
+            "ptr::read_volatile",
+            "ptr::write_volatile",
+            "ptr::copy",
+            "ptr::copy_nonoverlapping",
+            "ptr::swap",
+            "ptr::replace",
+            "ptr::drop_in_place",
+            "ptr::read_unaligned",
+            "ptr::write_unaligned",
+            "slice::from_raw_parts",
+            "slice::from_raw_parts_mut",
+            "str::from_utf8_unchecked",
+            "string::from_raw_parts",
+            "mem::zeroed",
+            "mem::uninitialized",
+            "alloc::alloc",
+            "alloc::dealloc",
+            "alloc::realloc",
+            "intrinsics::",
+        ];
+
+        if UNSAFE_FN_PATTERNS.iter().any(|p| lower.contains(&p.to_lowercase())) {
+            return Some(UnsafeOpKind::UnsafeFnCall { callee: callee.to_string() });
+        }
+
+        None
     }
 
-    // Unsafe pointer operations
-    const UNSAFE_FN_PATTERNS: &[&str] = &[
-        "ptr::read",
-        "ptr::write",
-        "ptr::read_volatile",
-        "ptr::write_volatile",
-        "ptr::copy",
-        "ptr::copy_nonoverlapping",
-        "ptr::swap",
-        "ptr::replace",
-        "ptr::drop_in_place",
-        "ptr::read_unaligned",
-        "ptr::write_unaligned",
-        "slice::from_raw_parts",
-        "slice::from_raw_parts_mut",
-        "str::from_utf8_unchecked",
-        "string::from_raw_parts",
-        "mem::zeroed",
-        "mem::uninitialized",
-        "alloc::alloc",
-        "alloc::dealloc",
-        "alloc::realloc",
-        "intrinsics::",
-    ];
+    /// Generate conservative VCs for all unsafe operations in a function.
+    ///
+    /// Each detected unsafe operation produces a VC with:
+    /// - `kind`: `VcKind::UnsafeOperation { desc }` describing the operation
+    /// - `formula`: `Formula::Bool(true)` — always SAT, meaning this VC
+    ///   conservatively flags the operation without attempting verification.
+    ///   Solvers will report "counterexample found" which means "this unsafe
+    ///   operation exists and was not proved safe."
+    ///
+    /// This is the intended behavior: unsafe operations are flagged for human
+    /// review and audit tracking, not automatically proved.
+    #[must_use]
+    fn generate_unsafe_operation_vcs(func: &VerifiableFunction) -> Vec<VerificationCondition> {
+        let ops = detect_unsafe_ops(func);
 
-    if UNSAFE_FN_PATTERNS.iter().any(|p| lower.contains(&p.to_lowercase())) {
-        return Some(UnsafeOpKind::UnsafeFnCall { callee: callee.to_string() });
+        ops.into_iter()
+            .map(|op| VerificationCondition {
+                kind: VcKind::UnsafeOperation { desc: op.kind.description() },
+                function: func.name.as_str().into(),
+                location: op.span,
+                // Conservative: Formula::Bool(true) is always SAT, so this VC
+                // will always be reported as "unproved" — which is correct for
+                // unsafe operations that need manual review.
+                formula: Formula::Bool(true),
+                contract_metadata: None,
+            })
+            .collect()
     }
-
-    None
-}
-
-// ---------------------------------------------------------------------------
-// VC generation
-// ---------------------------------------------------------------------------
-
-/// Generate conservative VCs for all unsafe operations in a function.
-///
-/// Each detected unsafe operation produces a VC with:
-/// - `kind`: `VcKind::UnsafeOperation { desc }` describing the operation
-/// - `formula`: `Formula::Bool(true)` — always SAT, meaning this VC
-///   conservatively flags the operation without attempting verification.
-///   Solvers will report "counterexample found" which means "this unsafe
-///   operation exists and was not proved safe."
-///
-/// This is the intended behavior: unsafe operations are flagged for human
-/// review and audit tracking, not automatically proved.
-#[must_use]
-pub(crate) fn generate_unsafe_operation_vcs(
-    func: &VerifiableFunction,
-) -> Vec<VerificationCondition> {
-    let ops = detect_unsafe_ops(func);
-
-    ops.into_iter()
-        .map(|op| VerificationCondition {
-            kind: VcKind::UnsafeOperation {
-                desc: op.kind.description(),
-            },
-            function: func.name.clone(),
-            location: op.span,
-            // Conservative: Formula::Bool(true) is always SAT, so this VC
-            // will always be reported as "unproved" — which is correct for
-            // unsafe operations that need manual review.
-            formula: Formula::Bool(true),
-            contract_metadata: None,
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use trust_types::{
-        BasicBlock, BlockId, LocalDecl, Operand, Place, Projection,
-        Rvalue, SourceSpan, Statement, Terminator, Ty, VcKind,
-        VerifiableBody, VerifiableFunction, ProofLevel,
-    };
 
     fn empty_span() -> SourceSpan {
         SourceSpan::default()
@@ -463,11 +390,7 @@ mod tests {
                     atomic: None,
                 },
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
         ]);
 
         let vcs = generate_unsafe_operation_vcs(&func);
@@ -522,9 +445,8 @@ mod tests {
 
     #[test]
     fn test_vc_kind_description_format() {
-        let kind = VcKind::UnsafeOperation {
-            desc: "raw pointer dereference of `_2.*`".to_string(),
-        };
+        let kind =
+            VcKind::UnsafeOperation { desc: "raw pointer dereference of `_2.*`".to_string() };
         let description = kind.description();
         assert!(description.starts_with("unsafe operation:"), "desc: {description}");
         assert!(description.contains("raw pointer dereference"), "desc: {description}");
@@ -543,16 +465,10 @@ mod tests {
         ));
 
         // FFI
-        assert!(matches!(
-            classify_call("libc::ffi::printf"),
-            Some(UnsafeOpKind::FfiCall { .. })
-        ));
+        assert!(matches!(classify_call("libc::ffi::printf"), Some(UnsafeOpKind::FfiCall { .. })));
 
         // Unsafe fn
-        assert!(matches!(
-            classify_call("std::ptr::read"),
-            Some(UnsafeOpKind::UnsafeFnCall { .. })
-        ));
+        assert!(matches!(classify_call("std::ptr::read"), Some(UnsafeOpKind::UnsafeFnCall { .. })));
         assert!(matches!(
             classify_call("std::slice::from_raw_parts"),
             Some(UnsafeOpKind::UnsafeFnCall { .. })
@@ -569,10 +485,7 @@ mod tests {
 
     #[test]
     fn test_format_place() {
-        let place = Place {
-            local: 3,
-            projections: vec![Projection::Deref, Projection::Field(1)],
-        };
+        let place = Place { local: 3, projections: vec![Projection::Deref, Projection::Field(1)] };
         assert_eq!(format_place(&place), "_3.*.1");
 
         let simple = Place::local(5);

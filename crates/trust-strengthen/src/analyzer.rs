@@ -42,18 +42,15 @@ pub enum FailurePattern {
 ///
 /// Used by both the crate-level `run()` function and by compiler-side
 /// strengthening in `rustc_mir_transform::trust_verify` (#539).
-pub fn analyze_failure(
-    vc: &VerificationCondition,
-    result: &VerificationResult,
-) -> FailureAnalysis {
+pub fn analyze_failure(vc: &VerificationCondition, result: &VerificationResult) -> FailureAnalysis {
     let solver = match result {
-        VerificationResult::Failed { solver, .. } => Some(solver.clone()),
+        VerificationResult::Failed { solver, .. } => Some(solver.to_string()),
         _ => None,
     };
     let pattern = classify_vc_kind(&vc.kind);
     FailureAnalysis {
         vc_kind: vc.kind.clone(),
-        function: vc.function.clone(),
+        function: vc.function.as_str().to_string(),
         pattern,
         solver,
     }
@@ -61,9 +58,7 @@ pub fn analyze_failure(
 
 fn classify_vc_kind(kind: &VcKind) -> FailurePattern {
     match kind {
-        VcKind::ArithmeticOverflow { op, .. } => {
-            FailurePattern::ArithmeticOverflow { op: *op }
-        }
+        VcKind::ArithmeticOverflow { op, .. } => FailurePattern::ArithmeticOverflow { op: *op },
         VcKind::DivisionByZero | VcKind::RemainderByZero => FailurePattern::DivisionByZero,
         VcKind::IndexOutOfBounds | VcKind::SliceBoundsCheck => FailurePattern::IndexOutOfBounds,
         VcKind::CastOverflow { .. } => FailurePattern::CastOverflow,
@@ -88,8 +83,9 @@ fn classify_vc_kind(kind: &VcKind) -> FailurePattern {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{Formula, SourceSpan, Ty};
+
+    use super::*;
 
     fn failed_result() -> VerificationResult {
         VerificationResult::Failed { solver: "z4".into(), time_ms: 1, counterexample: None }
@@ -109,7 +105,10 @@ mod tests {
     fn test_classify_overflow() {
         let vc = make_vc(VcKind::ArithmeticOverflow {
             op: BinOp::Add,
-            operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+            operand_tys: (
+                Ty::Int { width: 64, signed: false },
+                Ty::Int { width: 64, signed: false },
+            ),
         });
         let analysis = analyze_failure(&vc, &failed_result());
         assert!(matches!(analysis.pattern, FailurePattern::ArithmeticOverflow { op: BinOp::Add }));

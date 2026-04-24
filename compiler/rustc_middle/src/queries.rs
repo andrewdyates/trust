@@ -101,7 +101,6 @@ use crate::mir::interpret::{
 use crate::mir::mono::{
     CodegenUnit, CollectionMode, MonoItem, MonoItemPartitions, NormalizationErrorInMono,
 };
-use crate::mir::trust_proof::{TrustProofResults, TrustProofTelemetry}; // tRust: proof-carrying MIR query types
 use crate::query::describe_as_module;
 use crate::query::plumbing::{define_callbacks, maybe_into_query_key};
 use crate::traits::query::{
@@ -743,7 +742,7 @@ rustc_queries! {
     /// intrinsics, and the expression tables to be embedded in the function's
     /// coverage metadata.
     ///
-    /// tRust: known issue (Zalathar) — This query's purpose has drifted a bit and should
+    /// FIXME(Zalathar): This query's purpose has drifted a bit and should
     /// probably be renamed, but that can wait until after the potential
     /// follow-ups to #136053 have settled down.
     ///
@@ -753,22 +752,15 @@ rustc_queries! {
         arena_cache
     }
 
-    // tRust: Per-function verification results (semantic, deterministic, HashStable).
-    // Keyed by InstanceKind to match coverage_ids_info pattern.
-    // Provider returns Option<TrustProofResults> (owned); arena_cache handles allocation.
-    // Gated: provider returns None unless -Z trust-verify is enabled.
-    // Design: designs/2026-03-27-proof-carrying-mir.md
-    query trust_proof_results(key: ty::InstanceKind<'tcx>) -> Option<&'tcx TrustProofResults> {
-        desc { "computing tRust proof results for `{}`", tcx.def_path_str(key.def_id()) }
+    /// Returns the semantic proof results produced by the tRust verification pass.
+    query trust_proof_results(key: ty::InstanceKind<'tcx>) -> Option<&'tcx mir::trust_proof::TrustProofResults> {
+        desc { "retrieving trust proof results from MIR for `{}`", tcx.def_path_str(key.def_id()) }
         arena_cache
     }
 
-    // tRust: Per-function verification telemetry (non-deterministic, NOT HashStable).
-    // Contains solver timings and counterexamples — must not affect incremental hashes.
-    // Keyed by InstanceKind to match trust_proof_results.
-    // Design: designs/2026-03-27-proof-carrying-mir.md
-    query trust_proof_telemetry(key: ty::InstanceKind<'tcx>) -> Option<&'tcx TrustProofTelemetry> {
-        desc { "computing tRust proof telemetry for `{}`", tcx.def_path_str(key.def_id()) }
+    /// Returns non-deterministic telemetry produced by the tRust verification pass.
+    query trust_proof_telemetry(key: ty::InstanceKind<'tcx>) -> Option<&'tcx mir::trust_proof::TrustProofTelemetry> {
+        desc { "retrieving trust proof telemetry from MIR for `{}`", tcx.def_path_str(key.def_id()) }
         arena_cache
         no_hash
     }
@@ -1403,7 +1395,7 @@ rustc_queries! {
         desc { "converting type-level constant value to MIR constant value"}
     }
 
-    // tRust: known issue — get rid of this with valtrees
+    // FIXME get rid of this with valtrees
     query lit_to_const(
         key: LitToConstInput<'tcx>
     ) -> Option<ty::Value<'tcx>> {
@@ -2340,7 +2332,7 @@ rustc_queries! {
     }
 
     // Crates that are loaded non-speculatively (not for diagnostics or doc links).
-    // tRust: known issue — This is currently only used for collecting lang items, but should be used instead of
+    // FIXME: This is currently only used for collecting lang items, but should be used instead of
     // `crates` in most other cases too.
     query used_crates(_: ()) -> &'tcx [CrateNum] {
         eval_always

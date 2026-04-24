@@ -345,7 +345,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         err.note(format!("cannot satisfy `{pred}`"));
                     }
                     let impl_candidates =
-                        self.find_similar_impl_candidates(predicate.as_trait_clause().expect("invariant: is a trait clause"));
+                        self.find_similar_impl_candidates(predicate.as_trait_clause().unwrap());
                     if impl_candidates.len() < 40 {
                         self.report_similar_impl_candidates(
                             impl_candidates.as_slice(),

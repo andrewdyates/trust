@@ -244,7 +244,6 @@ where
                     ..
                 })) => (*impl_def_id, *args),
                 impl_source => {
-                    // tRust: invariant: structural invariant — drop elaboration invariant constrains the MIR structure at this point
                     span_bug!(span, "invalid `AsyncDrop` impl_source: {:?}", impl_source);
                 }
             };
@@ -315,7 +314,7 @@ where
             tcx.require_lang_item(LangItem::PinNewUnchecked, span),
             [GenericArg::from(obj_ref_ty)],
         );
-        let pin_obj_ty = pin_obj_new_unchecked_fn.fn_sig(tcx).output().no_bound_vars().expect("invariant: Pin::new_unchecked has no bound vars") // tRust: unwrap elimination;
+        let pin_obj_ty = pin_obj_new_unchecked_fn.fn_sig(tcx).output().no_bound_vars().unwrap();
         let pin_obj_place = Place::from(self.new_temp(pin_obj_ty));
         let pin_obj_new_unchecked_fn = Operand::Constant(Box::new(ConstOperand {
             span,
@@ -353,7 +352,6 @@ where
             pin_obj_place
         } else {
             let ty::Adt(adt_def, adt_args) = pin_obj_ty.kind() else {
-                // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                 bug!();
             };
             let obj_ptr_ty = Ty::new_mut_ptr(tcx, drop_ty);
@@ -481,7 +479,6 @@ where
 
         // Async drop in libstd/libcore would become insta-stable — catch that mistake.
         if needs_async_drop && self.tcx().features().staged_api() {
-            // tRust: invariant: structural invariant — drop elaboration invariant constrains the MIR structure at this point
             span_bug!(
                 self.source_info.span,
                 "don't use async drop in libstd, it becomes insta-stable"
@@ -507,8 +504,8 @@ where
     /// by the primary drop flag, but only the last rest-field dropped
     /// should clear it (and it must also not clear anything else).
     //
-    // NOTE: Drop flags are computed internally; external flag control
-    // would simplify this but is not yet implemented.
+    // FIXME: I think we should just control the flags externally,
+    // and then we do not need this machinery.
     #[instrument(level = "debug")]
     fn elaborate_drop(&mut self, bb: BasicBlock) {
         match self.elaborator.drop_style(self.path, DropFlagMode::Deep) {
@@ -716,9 +713,9 @@ where
         let normal_ladder = self.drop_halfladder(&unwind_ladder, &dropline_ladder, succ, &fields);
 
         (
-            *normal_ladder.last().expect("invariant: normal_ladder is non-empty") // tRust: unwrap elimination,
-            *unwind_ladder.last().expect("invariant: unwind_ladder is non-empty") // tRust: unwrap elimination,
-            *dropline_ladder.last().expect("invariant: dropline_ladder is non-empty") // tRust: unwrap elimination,
+            *normal_ladder.last().unwrap(),
+            *unwind_ladder.last().unwrap(),
+            *dropline_ladder.last().unwrap(),
         )
     }
 
@@ -753,7 +750,7 @@ where
         // drop glue is sent straight to codegen
         // box cannot be directly dereferenced
         let unique_ty = adt.non_enum_variant().fields[FieldIdx::ZERO].ty(self.tcx(), args);
-        let unique_variant = unique_ty.ty_adt_def().expect("invariant: Box unique_ty must be an ADT").non_enum_variant() // tRust: unwrap elimination;
+        let unique_variant = unique_ty.ty_adt_def().unwrap().non_enum_variant();
         let nonnull_ty = unique_variant.fields[FieldIdx::ZERO].ty(self.tcx(), args);
         let ptr_ty = Ty::new_imm_ptr(self.tcx(), args[0].expect_ty());
 
@@ -806,7 +803,6 @@ where
                 // however, these types are only open dropped in `DropShimElaborator`
                 // which does not have drop flags
                 // a future box-like "DerefMove" trait would allow for this case to happen
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 span_bug!(self.source_info.span, "open dropping partially moved union");
             }
 
@@ -900,17 +896,17 @@ where
                     // I want to minimize the divergence between MSVC
                     // and non-MSVC.
 
-                    let unwind_blocks = unwind_blocks.as_mut().expect("invariant: unwind_blocks must be Some when unwinding"); // tRust: unwrap elimination
+                    let unwind_blocks = unwind_blocks.as_mut().unwrap();
                     let unwind_ladder = vec![Unwind::InCleanup; fields.len() + 1];
                     let dropline_ladder: Vec<Option<BasicBlock>> = vec![None; fields.len() + 1];
                     let halfladder =
                         self.drop_halfladder(&unwind_ladder, &dropline_ladder, unwind, &fields);
-                    unwind_blocks.push(halfladder.last().cloned().expect("invariant: halfladder is non-empty")); // tRust: unwrap elimination
+                    unwind_blocks.push(halfladder.last().cloned().unwrap());
                 }
                 let (normal, _, drop_bb) = self.drop_ladder(fields, succ, unwind, dropline);
                 normal_blocks.push(normal);
                 if dropline.is_some() {
-                    dropline_blocks.as_mut().expect("invariant: dropline_blocks must be Some when dropline is Some").push(drop_bb.expect("invariant: drop_bb must be Some when dropline is Some")); // tRust: unwrap elimination
+                    dropline_blocks.as_mut().unwrap().push(drop_bb.unwrap());
                 }
             } else {
                 have_otherwise = true;
@@ -931,12 +927,12 @@ where
         } else if !have_otherwise_with_drop_glue {
             normal_blocks.push(self.goto_block(succ, unwind));
             if let Unwind::To(unwind) = unwind {
-                unwind_blocks.as_mut().expect("invariant: unwind_blocks must be Some for Unwind::To").push(self.goto_block(unwind, Unwind::InCleanup)); // tRust: unwrap elimination
+                unwind_blocks.as_mut().unwrap().push(self.goto_block(unwind, Unwind::InCleanup));
             }
         } else {
             normal_blocks.push(self.drop_block(succ, unwind));
             if let Unwind::To(unwind) = unwind {
-                unwind_blocks.as_mut().expect("invariant: unwind_blocks must be Some for Unwind::To").push(self.drop_block(unwind, Unwind::InCleanup)); // tRust: unwrap elimination
+                unwind_blocks.as_mut().unwrap().push(self.drop_block(unwind, Unwind::InCleanup));
             }
         }
 
@@ -945,14 +941,14 @@ where
             unwind.map(|unwind| {
                 self.adt_switch_block(
                     adt,
-                    unwind_blocks.expect("invariant: unwind_blocks must be Some when unwind is Some"), // tRust: unwrap elimination
+                    unwind_blocks.unwrap(),
                     &values,
                     unwind,
                     Unwind::InCleanup,
                 )
             }),
             dropline.map(|dropline| {
-                self.adt_switch_block(adt, dropline_blocks.expect("invariant: dropline_blocks must be Some when dropline is Some"), &values, dropline, unwind) // tRust: unwrap elimination
+                self.adt_switch_block(adt, dropline_blocks.unwrap(), &values, dropline, unwind)
             }),
         )
     }
@@ -983,7 +979,7 @@ where
                     discr: Operand::Move(discr),
                     targets: SwitchTargets::new(
                         values.iter().copied().zip(blocks.iter().copied()),
-                        *blocks.last().expect("invariant: blocks is non-empty"), // tRust: unwrap elimination
+                        *blocks.last().unwrap(),
                     ),
                 },
             }),
@@ -1265,7 +1261,6 @@ where
         let loop_block = self.drop_loop(self.succ, cur, len, ety, unwind, dropline);
 
         let [PlaceElem::Deref] = self.place.projection.as_slice() else {
-            // tRust: invariant: structural invariant — drop elaboration invariant constrains the MIR structure at this point
             span_bug!(
                 self.source_info.span,
                 "Expected place for slice drop shim to be *_n, but it's {:?}",
@@ -1293,8 +1288,7 @@ where
         );
 
         let drop_block = self.elaborator.patch().new_block(block);
-        // NOTE(#34708): Partially-dropped array/slice elements not handled;
-        // uses deep drop flag reset as conservative approximation.
+        // FIXME(#34708): handle partially-dropped array/slice elements.
         let reset_block = self.drop_flag_reset_block(DropFlagMode::Deep, drop_block, unwind);
         self.drop_flag_test_block(reset_block, self.succ, unwind)
     }
@@ -1346,7 +1340,6 @@ where
                 ))
             }
 
-            // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
             _ => span_bug!(self.source_info.span, "open drop from non-ADT `{:?}`", ty),
         }
     }
@@ -1450,7 +1443,7 @@ where
             DropStyle::Dead => on_unset,
             DropStyle::Static => on_set,
             DropStyle::Conditional | DropStyle::Open => {
-                let flag = self.elaborator.get_drop_flag(self.path).expect("invariant: conditional/open drop style requires a drop flag"); // tRust: unwrap elimination
+                let flag = self.elaborator.get_drop_flag(self.path).unwrap();
                 let term = TerminatorKind::if_(flag, on_set, on_unset);
                 self.new_block(unwind, term)
             }

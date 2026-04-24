@@ -70,8 +70,8 @@ where
         }
 
         let t = cx.target_spec();
-        let align_4 = Align::from_bytes(4).expect("invariant: 4-byte alignment is a valid power of two"); // tRust: unwrap -> expect
-        let align_16 = Align::from_bytes(16).expect("invariant: 16-byte alignment is a valid power of two"); // tRust: unwrap -> expect
+        let align_4 = Align::from_bytes(4).unwrap();
+        let align_16 = Align::from_bytes(16).unwrap();
 
         if arg.layout.is_aggregate() {
             // We need to compute the alignment of the `byval` argument. The rules can be found in
@@ -153,7 +153,7 @@ pub(crate) fn fill_inregs<'a, Ty, C>(
     let mut free_regs = opts.regparm.unwrap_or(2).into();
 
     // For types generating PassMode::Cast, InRegs will not be set.
-    // tRust: known issue — Maybe, this should be fixed
+    // Maybe, this is a FIXME
     let has_casts = fn_abi.args.iter().any(|arg| matches!(arg.mode, PassMode::Cast { .. }));
     if has_casts && rust_abi {
         return;
@@ -173,7 +173,7 @@ pub(crate) fn fill_inregs<'a, Ty, C>(
         };
 
         // At this point we know this must be a primitive of sorts.
-        let unit = arg.layout.homogeneous_aggregate(cx).expect("invariant: primitive layout has a homogeneous aggregate").unit().expect("invariant: homogeneous aggregate has a unit"); // tRust: unwrap -> expect
+        let unit = arg.layout.homogeneous_aggregate(cx).unwrap().unit().unwrap();
         assert_eq!(unit.size, arg.layout.size);
         if matches!(unit.kind, RegKind::Float | RegKind::Vector) {
             continue;

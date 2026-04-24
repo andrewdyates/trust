@@ -111,7 +111,7 @@ impl Instance {
     pub fn intrinsic_name(&self) -> Option<Symbol> {
         match self.kind {
             InstanceKind::Intrinsic => {
-                Some(with(|context| context.intrinsic(self.def.def_id()).expect("invariant: Intrinsic instance always resolves to an intrinsic").fn_name())) // tRust: unwrap -> expect
+                Some(with(|context| context.intrinsic(self.def.def_id()).unwrap().fn_name()))
             }
             InstanceKind::Item | InstanceKind::Virtual { .. } | InstanceKind::Shim => None,
         }

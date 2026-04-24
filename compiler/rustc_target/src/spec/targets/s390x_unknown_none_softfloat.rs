@@ -14,7 +14,7 @@ pub(crate) fn target() -> Target {
         linker_flavor: LinkerFlavor::Gnu(Cc::No, Lld::Yes),
         linker: Some("rust-lld".into()),
         max_atomic_width: Some(128),
-        min_global_align: Some(Align::from_bits(16).expect("invariant: 16-bit alignment is a valid power of two")), // tRust: unwrap -> expect
+        min_global_align: Some(Align::from_bits(16).unwrap()),
         panic_strategy: PanicStrategy::Abort,
         relocation_model: RelocModel::Static,
         rustc_abi: Some(RustcAbi::Softfloat),

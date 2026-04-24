@@ -408,7 +408,7 @@ pub fn emit_lint_base<'a, D: Diagnostic<'a, ()> + 'a>(
         } else {
             Diag::new(sess.dcx(), err_level, "")
         };
-        // tRust: known issue — Find a nicer way to expose the `DiagLocation`
+        // FIXME: Find a nicer way to expose the `DiagLocation`
         err.emitted_at = DiagLocation::caller();
 
         if let Some(span) = span

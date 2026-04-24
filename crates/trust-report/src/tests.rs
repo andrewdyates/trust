@@ -3,21 +3,22 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use std::collections::BTreeMap; // tRust: BTreeMap for deterministic output (#827)
+
 use trust_types::*;
 
-use crate::report_builder::vc_kind_tag;
-use crate::{
-    build_json_report, build_json_report_from_annotations, build_json_report_with_policy,
-    format_json_summary, write_json_report, write_ndjson, write_ndjson_report,
-    SCHEMA_VERSION, TRUST_VERSION,
-};
-use crate::formatting::proof_evidence_label;
 use crate::crate_report::{
     build_crate_verification_report, build_crate_verification_report_with_policy,
     format_crate_verification_summary,
 };
+use crate::formatting::proof_evidence_label;
 use crate::legacy::{build_report, format_summary};
-use trust_types::fx::FxHashMap;
+use crate::report_builder::vc_kind_tag;
+use crate::{
+    SCHEMA_VERSION, TRUST_VERSION, build_json_report, build_json_report_from_annotations,
+    build_json_report_with_policy, format_json_summary, write_json_report, write_ndjson,
+    write_ndjson_report,
+};
 
 fn annotation_obligation(
     description: &str,
@@ -33,12 +34,11 @@ fn annotation_obligation(
         proof_level,
         status,
         strength: matches!(status, AnnotationStatus::Proved).then_some(ProofStrength::smt_unsat()),
-        solver: "z4".to_string(),
+        solver: "z4".into(),
         time_ms,
         location,
-        counterexample: matches!(status, AnnotationStatus::Failed).then(|| {
-            Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(-1))])
-        }),
+        counterexample: matches!(status, AnnotationStatus::Failed)
+            .then(|| Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(-1))])),
         fingerprint: [1, 2],
     }
 }
@@ -57,10 +57,7 @@ fn annotation_summary(obligations: &[ObligationAnnotation]) -> AnnotationSummary
         unknown: obligations
             .iter()
             .filter(|obligation| {
-                matches!(
-                    obligation.status,
-                    AnnotationStatus::Unknown | AnnotationStatus::Timeout
-                )
+                matches!(obligation.status, AnnotationStatus::Unknown | AnnotationStatus::Timeout)
             })
             .count(),
         runtime_checked: obligations
@@ -98,7 +95,7 @@ fn midpoint_results() -> Vec<(VerificationCondition, VerificationResult)> {
                     op: BinOp::Add,
                     operand_tys: (Ty::usize(), Ty::usize()),
                 },
-                function: "get_midpoint".to_string(),
+                function: "get_midpoint".into(),
                 location: SourceSpan {
                     file: "src/midpoint.rs".to_string(),
                     line_start: 5,
@@ -110,7 +107,7 @@ fn midpoint_results() -> Vec<(VerificationCondition, VerificationResult)> {
                 contract_metadata: None,
             },
             VerificationResult::Failed {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 3,
                 counterexample: Some(Counterexample::new(vec![
                     ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -121,7 +118,7 @@ fn midpoint_results() -> Vec<(VerificationCondition, VerificationResult)> {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "get_midpoint".to_string(),
+                function: "get_midpoint".into(),
                 location: SourceSpan {
                     file: "src/midpoint.rs".to_string(),
                     line_start: 5,
@@ -133,10 +130,12 @@ fn midpoint_results() -> Vec<(VerificationCondition, VerificationResult)> {
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
     ]
 }
@@ -147,13 +146,13 @@ fn multi_function_results() -> Vec<(VerificationCondition, VerificationResult)> 
     results.push((
         VerificationCondition {
             kind: VcKind::IndexOutOfBounds,
-            function: "lookup".to_string(),
+            function: "lookup".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
         VerificationResult::Unknown {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 50,
             reason: "nonlinear arithmetic".to_string(),
         },
@@ -161,12 +160,12 @@ fn multi_function_results() -> Vec<(VerificationCondition, VerificationResult)> 
     results.push((
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "compute".to_string(),
+            function: "compute".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
-        VerificationResult::Timeout { solver: "z4".to_string(), timeout_ms: 5000 },
+        VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 },
     ));
     results.push((
         VerificationCondition {
@@ -174,16 +173,18 @@ fn multi_function_results() -> Vec<(VerificationCondition, VerificationResult)> 
                 op: BinOp::Mul,
                 operand_tys: (Ty::i32(), Ty::i32()),
             },
-            function: "compute".to_string(),
+            function: "compute".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 2,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-            solver_warnings: None, },
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        },
     ));
     results
 }
@@ -212,7 +213,7 @@ fn runtime_checked_report() -> JsonProofReport {
             verdict: CrateVerdict::RuntimeChecked,
         },
         functions: vec![FunctionProofReport {
-            function: "dynamic_check".to_string(),
+            function: "dynamic_check".into(),
             summary: FunctionSummary {
                 total_obligations: 1,
                 proved: 0,
@@ -237,7 +238,7 @@ fn runtime_checked_report() -> JsonProofReport {
                 outcome: ObligationOutcome::RuntimeChecked {
                     note: Some("validated by runtime instrumentation".to_string()),
                 },
-                solver: "runtime".to_string(),
+                solver: "runtime".into(),
                 time_ms: 11,
                 evidence: None,
             }],
@@ -381,16 +382,18 @@ fn test_json_report_empty_span_no_location() {
     let results = vec![(
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
         },
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 1,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        },
     )];
     let report = build_json_report("test", &results);
     assert!(report.functions[0].obligations[0].location.is_none());
@@ -430,16 +433,18 @@ fn test_json_report_all_proved_verdict() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_div".to_string(),
+                function: "safe_div".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
@@ -447,16 +452,18 @@ fn test_json_report_all_proved_verdict() {
                     op: BinOp::Add,
                     operand_tys: (Ty::u32(), Ty::u32()),
                 },
-                function: "safe_div".to_string(),
+                function: "safe_div".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 2,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
     ];
     let report = build_json_report("safe", &results);
@@ -646,13 +653,13 @@ fn test_build_json_report_auto_policy_reclassifies_unknown_to_runtime_checked() 
     let results = vec![(
         VerificationCondition {
             kind: VcKind::IndexOutOfBounds,
-            function: "lookup".to_string(),
+            function: "lookup".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
         VerificationResult::Unknown {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 50,
             reason: "nonlinear arithmetic".to_string(),
         },
@@ -680,13 +687,13 @@ fn test_build_json_report_force_static_produces_compile_error_verdict() {
                 op: BinOp::Add,
                 operand_tys: (Ty::u32(), Ty::u32()),
             },
-            function: "checked_add".to_string(),
+            function: "checked_add".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
         VerificationResult::Unknown {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 12,
             reason: "solver returned unknown".to_string(),
         },
@@ -822,8 +829,7 @@ fn test_json_report_runtime_checked_status() {
     assert_eq!(report.functions[0].summary.runtime_checked, 1);
 
     let json = serde_json::to_string_pretty(&report).expect("serialize runtime-checked");
-    let parsed: JsonProofReport =
-        serde_json::from_str(&json).expect("deserialize runtime-checked");
+    let parsed: JsonProofReport = serde_json::from_str(&json).expect("deserialize runtime-checked");
     assert_eq!(parsed.summary.total_runtime_checked, 1);
     assert_eq!(parsed.functions[0].summary.runtime_checked, 1);
 
@@ -909,8 +915,8 @@ fn test_ndjson_output_format() {
 
     // Each line must be valid JSON
     for (i, line) in lines.iter().enumerate() {
-        let parsed: serde_json::Value = serde_json::from_str(line)
-            .unwrap_or_else(|e| panic!("line {i} not valid JSON: {e}"));
+        let parsed: serde_json::Value =
+            serde_json::from_str(line).unwrap_or_else(|e| panic!("line {i} not valid JSON: {e}"));
         assert!(parsed.get("record_type").is_some(), "line {i} missing record_type");
     }
 
@@ -993,16 +999,18 @@ fn test_json_summary_all_proved() {
     let results = vec![(
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "safe_fn".to_string(),
+            function: "safe_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
         },
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 1,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        },
     )];
     let report = build_json_report("safe", &results);
     let text = format_json_summary(&report);
@@ -1017,12 +1025,12 @@ fn test_json_summary_timeout() {
     let results = vec![(
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "slow_fn".to_string(),
+            function: "slow_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
-        VerificationResult::Timeout { solver: "z4".to_string(), timeout_ms: 10000 },
+        VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 10000 },
     )];
     let report = build_json_report("slow", &results);
     let text = format_json_summary(&report);
@@ -1086,44 +1094,50 @@ fn test_obligation_proof_levels() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::Postcondition,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "sunder".to_string(),
+                solver: "sunder".into(),
                 time_ms: 10,
-                strength: ProofStrength::deductive(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::deductive(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::Deadlock,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 100,
-                strength: ProofStrength::inductive(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::inductive(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
     ];
 
@@ -1152,8 +1166,7 @@ fn test_all_proof_strengths_serialize() {
 
     for strength in &strengths {
         let json = serde_json::to_string(strength).expect("serialize strength");
-        let roundtrip: ProofStrength =
-            serde_json::from_str(&json).expect("deserialize strength");
+        let roundtrip: ProofStrength = serde_json::from_str(&json).expect("deserialize strength");
         assert_eq!(&roundtrip, strength);
     }
 }
@@ -1180,12 +1193,10 @@ fn crate_verification_result_fixture() -> CrateVerificationResult {
     let results = multi_function_results();
 
     // Split results by function to build per-function entries.
-    let mut func_map: FxHashMap<
-        String,
-        Vec<(VerificationCondition, VerificationResult)>,
-    > = FxHashMap::default();
+    let mut func_map: BTreeMap<String, Vec<(VerificationCondition, VerificationResult)>> =
+        BTreeMap::new();
     for (vc, result) in results {
-        func_map.entry(vc.function.clone()).or_default().push((vc, result));
+        func_map.entry(vc.function.as_str().to_string()).or_default().push((vc, result));
     }
 
     let mut crate_result = CrateVerificationResult::new("multi_crate");
@@ -1259,16 +1270,18 @@ fn test_format_crate_verification_summary_with_specs() {
         results: vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )],
         from_notes: 3,
         with_assumptions: 2,

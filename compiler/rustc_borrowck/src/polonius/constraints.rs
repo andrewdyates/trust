@@ -267,7 +267,7 @@ fn compute_forward_successor(
     // adding a bidirectional edge here. This will not limit traversal whatsoever, and thus
     // propagate liveness when needed.
     //
-    // // NOTE: add missing variance information and remove this fallback bidirectional edge.
+    // FIXME: add the missing variance information and remove this fallback bidirectional edge.
     let direction =
         live_region_variances.get(&region).unwrap_or(&ConstraintDirection::Bidirectional);
 
@@ -302,7 +302,7 @@ fn compute_backward_successor(
         return None;
     }
 
-    // // NOTE: add missing variance information and remove this fallback bidirectional edge. See
+    // FIXME: add the missing variance information and remove this fallback bidirectional edge. See
     // the same comment in `compute_forward_successor`.
     let direction =
         live_region_variances.get(&region).unwrap_or(&ConstraintDirection::Bidirectional);

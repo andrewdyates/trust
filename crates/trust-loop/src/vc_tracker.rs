@@ -1,8 +1,8 @@
 // trust-loop/vc_tracker.rs: Per-VC status tracking with regression detection (#470)
 //
 // Tracks each verification condition's status history across iterations.
-// Detects regressions (proved -> non-proved), progress trends, and provides
-// per-VC delta information for the iteration metrics.
+// Detects regressions (proved -> non-proved) and provides per-VC delta
+// information for the iteration metrics.
 //
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
@@ -52,21 +52,6 @@ pub struct RegressionEvent {
     pub current_status: VcStatus,
 }
 
-/// Trend classification for a single VC's progress across iterations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProgressTrend {
-    /// Improving: moving toward Proved (e.g., Unknown -> Failed -> Proved).
-    Improving,
-    /// Stuck: same status for multiple consecutive iterations.
-    Stuck { consecutive: usize },
-    /// Oscillating: alternating between statuses.
-    Oscillating,
-    /// Regressing: moving away from Proved.
-    Regressing,
-    /// Newly tracked or insufficient data.
-    Insufficient,
-}
-
 /// Per-iteration delta summary computed from the VcTracker.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VcDelta {
@@ -98,10 +83,7 @@ impl VcTracker {
 
     /// Record the status of a VC for a given iteration.
     pub fn record(&mut self, iteration: u32, vc_key: &str, status: VcStatus) {
-        self.statuses
-            .entry(vc_key.to_string())
-            .or_default()
-            .push((iteration, status));
+        self.statuses.entry(vc_key.to_string()).or_default().push((iteration, status));
     }
 
     /// Record all results from a verification pass.
@@ -133,19 +115,18 @@ impl VcTracker {
             let current = history.last();
             let previous = history.iter().rev().nth(1);
 
-            if let (Some(&(curr_iter, curr_status)), Some(&(_, prev_status))) =
-                (current, previous)
+            if let (Some(&(curr_iter, curr_status)), Some(&(_, prev_status))) = (current, previous)
                 && curr_iter == iteration
-                    && prev_status.is_proved()
-                    && !curr_status.is_proved()
-                {
-                    regressions.push(RegressionEvent {
-                        vc_key: key.clone(),
-                        iteration,
-                        previous_status: prev_status,
-                        current_status: curr_status,
-                    });
-                }
+                && prev_status.is_proved()
+                && !curr_status.is_proved()
+            {
+                regressions.push(RegressionEvent {
+                    vc_key: key.clone(),
+                    iteration,
+                    previous_status: prev_status,
+                    current_status: curr_status,
+                });
+            }
         }
 
         regressions
@@ -200,70 +181,9 @@ impl VcTracker {
 
         delta
     }
-
-    /// Analyze the progress trend for a specific VC.
-    #[must_use]
-    pub fn vc_progress_trend(&self, vc_key: &str) -> ProgressTrend {
-        let history = match self.statuses.get(vc_key) {
-            Some(h) if h.len() >= 2 => h,
-            _ => return ProgressTrend::Insufficient,
-        };
-
-        let statuses: Vec<VcStatus> = history.iter().map(|&(_, s)| s).collect();
-
-        // Check for stuck: last N statuses are the same.
-        let last = *statuses.last().expect("invariant: len >= 2");
-        let consecutive = statuses.iter().rev().take_while(|&&s| s == last).count();
-        if consecutive >= 3 {
-            return ProgressTrend::Stuck { consecutive };
-        }
-
-        // Check for oscillation: alternating statuses.
-        if statuses.len() >= 4 {
-            let sign_changes = statuses
-                .windows(2)
-                .map(|w| status_ordinal(w[1]) as i32 - status_ordinal(w[0]) as i32)
-                .collect::<Vec<_>>();
-            let oscillations = sign_changes
-                .windows(2)
-                .filter(|w| (w[0] > 0 && w[1] < 0) || (w[0] < 0 && w[1] > 0))
-                .count();
-            if oscillations > sign_changes.len() / 2 {
-                return ProgressTrend::Oscillating;
-            }
-        }
-
-        // Check direction of last two transitions.
-        let prev = statuses[statuses.len() - 2];
-        if status_ordinal(last) > status_ordinal(prev) {
-            ProgressTrend::Improving
-        } else if status_ordinal(last) < status_ordinal(prev) {
-            ProgressTrend::Regressing
-        } else {
-            ProgressTrend::Stuck { consecutive }
-        }
-    }
-
-    /// Number of unique VCs being tracked.
-    #[must_use]
-    pub fn tracked_count(&self) -> usize {
-        self.statuses.len()
-    }
-
-    /// Access the full status history for a VC.
-    #[must_use]
-    pub fn history_for(&self, vc_key: &str) -> Option<&[(u32, VcStatus)]> {
-        self.statuses.get(vc_key).map(Vec::as_slice)
-    }
-
-    /// Get all VC keys currently tracked.
-    #[must_use]
-    pub fn tracked_keys(&self) -> Vec<&str> {
-        self.statuses.keys().map(String::as_str).collect()
-    }
 }
-
 /// Ordinal ranking: higher = better. Used for trend analysis.
+/// Ordinal ranking: higher = better. Used for per-VC delta classification.
 /// Proved > Failed > Unknown > Timeout.
 fn status_ordinal(status: VcStatus) -> u8 {
     match status {
@@ -276,12 +196,7 @@ fn status_ordinal(status: VcStatus) -> u8 {
 
 /// Compute the slot key for a VC (matches the key format in lib.rs).
 pub(crate) fn vc_slot_key(vc: &VerificationCondition) -> String {
-    format!(
-        "{}|{}|{}",
-        vc.function,
-        span_key(&vc.location),
-        vc.kind.description()
-    )
+    format!("{}|{}|{}", vc.function, span_key(&vc.location), vc.kind.description())
 }
 
 fn span_key(span: &SourceSpan) -> String {
@@ -298,7 +213,7 @@ mod tests {
 
     fn make_vc(function: &str, kind: VcKind) -> VerificationCondition {
         VerificationCondition {
-            function: function.to_string(),
+            function: function.into(),
             kind,
             location: SourceSpan::default(),
             formula: Formula::Var("x".to_string(), Sort::Bool),
@@ -308,35 +223,28 @@ mod tests {
 
     fn proved_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             strength: ProofStrength::smt_unsat(),
             time_ms: 1,
-        proof_certificate: None,
-                solver_warnings: None,
+            proof_certificate: None,
+            solver_warnings: None,
         }
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed {
-            solver: "z4".to_string(),
-            counterexample: None,
-            time_ms: 1,
-        }
+        VerificationResult::Failed { solver: "z4".into(), counterexample: None, time_ms: 1 }
     }
 
     fn unknown_result() -> VerificationResult {
         VerificationResult::Unknown {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             reason: "incomplete".to_string(),
             time_ms: 1,
         }
     }
 
     fn timeout_result() -> VerificationResult {
-        VerificationResult::Timeout {
-            solver: "z4".to_string(),
-            timeout_ms: 5000,
-        }
+        VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 }
     }
 
     // --- VcStatus ---
@@ -362,44 +270,19 @@ mod tests {
     #[test]
     fn test_tracker_new_empty() {
         let tracker = VcTracker::new();
-        assert_eq!(tracker.tracked_count(), 0);
-    }
-
-    #[test]
-    fn test_tracker_record_and_count() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Failed);
-        tracker.record(1, "vc_b", VcStatus::Proved);
-        assert_eq!(tracker.tracked_count(), 2);
+        assert!(tracker.statuses.is_empty());
     }
 
     #[test]
     fn test_tracker_record_results() {
         let mut tracker = VcTracker::new();
         let vc_a = make_vc("crate::f", VcKind::DivisionByZero);
-        let results = vec![
-            (vc_a.clone(), proved_result()),
-        ];
+        let key = vc_slot_key(&vc_a);
+        let results = vec![(vc_a, proved_result())];
         tracker.record_results(1, &results);
-        assert_eq!(tracker.tracked_count(), 1);
-    }
 
-    #[test]
-    fn test_tracker_history_for() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Failed);
-        tracker.record(2, "vc_a", VcStatus::Proved);
-
-        let history = tracker.history_for("vc_a").expect("should exist");
-        assert_eq!(history.len(), 2);
-        assert_eq!(history[0], (1, VcStatus::Failed));
-        assert_eq!(history[1], (2, VcStatus::Proved));
-    }
-
-    #[test]
-    fn test_tracker_history_for_missing() {
-        let tracker = VcTracker::new();
-        assert!(tracker.history_for("nonexistent").is_none());
+        assert_eq!(tracker.statuses.len(), 1);
+        assert_eq!(tracker.statuses.get(&key), Some(&vec![(1, VcStatus::Proved)]));
     }
 
     // --- Regression detection ---
@@ -533,92 +416,5 @@ mod tests {
         let delta = tracker.compute_delta(1);
         assert_eq!(delta.newly_proved, 1);
         assert_eq!(delta.newly_failed, 1);
-    }
-
-    // --- Progress trends ---
-
-    #[test]
-    fn test_progress_trend_improving() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Unknown);
-        tracker.record(2, "vc_a", VcStatus::Failed);
-        tracker.record(3, "vc_a", VcStatus::Proved);
-
-        assert_eq!(tracker.vc_progress_trend("vc_a"), ProgressTrend::Improving);
-    }
-
-    #[test]
-    fn test_progress_trend_stuck() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Failed);
-        tracker.record(2, "vc_a", VcStatus::Failed);
-        tracker.record(3, "vc_a", VcStatus::Failed);
-
-        assert_eq!(
-            tracker.vc_progress_trend("vc_a"),
-            ProgressTrend::Stuck { consecutive: 3 }
-        );
-    }
-
-    #[test]
-    fn test_progress_trend_regressing() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Proved);
-        tracker.record(2, "vc_a", VcStatus::Failed);
-
-        assert_eq!(
-            tracker.vc_progress_trend("vc_a"),
-            ProgressTrend::Regressing
-        );
-    }
-
-    #[test]
-    fn test_progress_trend_insufficient() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Failed);
-
-        assert_eq!(
-            tracker.vc_progress_trend("vc_a"),
-            ProgressTrend::Insufficient
-        );
-    }
-
-    #[test]
-    fn test_progress_trend_missing_key() {
-        let tracker = VcTracker::new();
-        assert_eq!(
-            tracker.vc_progress_trend("nonexistent"),
-            ProgressTrend::Insufficient
-        );
-    }
-
-    #[test]
-    fn test_progress_trend_oscillating() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_a", VcStatus::Failed);
-        tracker.record(2, "vc_a", VcStatus::Proved);
-        tracker.record(3, "vc_a", VcStatus::Failed);
-        tracker.record(4, "vc_a", VcStatus::Proved);
-        tracker.record(5, "vc_a", VcStatus::Failed);
-
-        assert_eq!(
-            tracker.vc_progress_trend("vc_a"),
-            ProgressTrend::Oscillating
-        );
-    }
-
-    // --- tracked_keys ---
-
-    #[test]
-    fn test_tracked_keys() {
-        let mut tracker = VcTracker::new();
-        tracker.record(1, "vc_b", VcStatus::Failed);
-        tracker.record(1, "vc_a", VcStatus::Proved);
-
-        let keys = tracker.tracked_keys();
-        assert_eq!(keys.len(), 2);
-        // BTreeMap gives sorted order
-        assert_eq!(keys[0], "vc_a");
-        assert_eq!(keys[1], "vc_b");
     }
 }

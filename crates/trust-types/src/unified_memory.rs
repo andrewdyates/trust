@@ -21,8 +21,8 @@ use crate::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::provenance::{AllocationKind, BorrowKind, ProvenanceTag};
 use crate::SourceSpan;
+use crate::provenance::{AllocationKind, BorrowKind, ProvenanceTag};
 
 // ────────────────────────────────────────────────────────────────────────────
 // MemoryRegionKind — storage class with provenance
@@ -420,11 +420,7 @@ impl UnifiedMemoryModel {
     }
 
     /// Record a move: source region becomes Moved, returns a new handle for dest.
-    pub fn record_move(
-        &mut self,
-        src: RegionHandle,
-        span: SourceSpan,
-    ) -> Option<RegionHandle> {
+    pub fn record_move(&mut self, src: RegionHandle, span: SourceSpan) -> Option<RegionHandle> {
         let src_region = self.regions.get(&src)?;
         let kind = src_region.kind.clone();
         let provenance = src_region.provenance;
@@ -544,11 +540,7 @@ impl UnifiedMemoryModel {
             }
         }
 
-        if a == b {
-            AliasRelation::MustAlias
-        } else {
-            AliasRelation::MayAlias
-        }
+        if a == b { AliasRelation::MustAlias } else { AliasRelation::MayAlias }
     }
 
     /// Get the set of region handles that appear at a function boundary.
@@ -565,8 +557,7 @@ impl UnifiedMemoryModel {
                 matches!(
                     r.kind,
                     MemoryRegionKind::Stack { local_index: Some(idx) } if idx == 0 // return slot
-                ) || r.is_live()
-                    && r.borrowed_from.is_some()
+                ) || r.is_live() && r.borrowed_from.is_some()
             })
             .map(|r| r.handle)
             .collect()
@@ -713,10 +704,7 @@ impl ProofCompositionContext {
                 property: CompositionProperty::RegionKindConsistency,
                 passed: kind_ok,
                 message: if kind_ok {
-                    format!(
-                        "{caller_handle} -> {callee_handle}: kinds match ({})",
-                        cr.kind.label()
-                    )
+                    format!("{caller_handle} -> {callee_handle}: kinds match ({})", cr.kind.label())
                 } else {
                     let msg = format!(
                         "{caller_handle} -> {callee_handle}: kind mismatch ({} vs {})",
@@ -986,10 +974,7 @@ mod tests {
             OwnershipState::from_borrow_kind(BorrowKind::SharedRef),
             OwnershipState::SharedBorrowed
         );
-        assert_eq!(
-            OwnershipState::from_borrow_kind(BorrowKind::RawMut),
-            OwnershipState::RawAccess
-        );
+        assert_eq!(OwnershipState::from_borrow_kind(BorrowKind::RawMut), OwnershipState::RawAccess);
         assert_eq!(
             OwnershipState::from_borrow_kind(BorrowKind::RawShared),
             OwnershipState::RawAccess
@@ -1014,11 +999,7 @@ mod tests {
         assert_eq!(MemoryRegionKind::Heap.label(), "heap");
         assert_eq!(MemoryRegionKind::Static.label(), "static");
         assert_eq!(
-            MemoryRegionKind::Projection {
-                parent: RegionHandle(1),
-                offset: None
-            }
-            .label(),
+            MemoryRegionKind::Projection { parent: RegionHandle(1), offset: None }.label(),
             "projection"
         );
         assert_eq!(MemoryRegionKind::Unknown.label(), "unknown");
@@ -1511,11 +1492,7 @@ mod tests {
             source: AliasSource::Annotation,
         });
 
-        let ctx = ProofCompositionContext::compose(
-            &caller,
-            &callee,
-            vec![(c1, e1), (c2, e2)],
-        );
+        let ctx = ProofCompositionContext::compose(&caller, &callee, vec![(c1, e1), (c2, e2)]);
         assert!(
             !ctx.verdict.is_sound(),
             "NoAlias in caller vs MustAlias in callee should be unsound"
@@ -1560,11 +1537,7 @@ mod tests {
 
         let callee = make_model("callee");
         // Callee has no regions, but mapping references a callee handle.
-        let ctx = ProofCompositionContext::compose(
-            &caller,
-            &callee,
-            vec![(c1, RegionHandle(99))],
-        );
+        let ctx = ProofCompositionContext::compose(&caller, &callee, vec![(c1, RegionHandle(99))]);
         assert!(!ctx.verdict.is_sound(), "missing callee region should be unsound");
     }
 
@@ -1602,11 +1575,8 @@ mod tests {
             .add_borrow(ex, BorrowKind::SharedRef, ProvenanceTag(3), test_span())
             .expect("shared borrow");
 
-        let ctx = ProofCompositionContext::compose(
-            &caller,
-            &callee,
-            vec![(cx, ex), (cy, ey), (cz, ez)],
-        );
+        let ctx =
+            ProofCompositionContext::compose(&caller, &callee, vec![(cx, ex), (cy, ey), (cz, ez)]);
         assert!(ctx.verdict.is_sound(), "matching borrow chains should compose soundly");
         // Should have checks for all 3 region pairs.
         assert!(!ctx.checks.is_empty());
@@ -1622,10 +1592,7 @@ mod tests {
             OwnershipState::Owned,
             OwnershipState::UniquelyBorrowed
         ));
-        assert!(is_valid_ownership_transfer(
-            OwnershipState::Owned,
-            OwnershipState::SharedBorrowed
-        ));
+        assert!(is_valid_ownership_transfer(OwnershipState::Owned, OwnershipState::SharedBorrowed));
         assert!(is_valid_ownership_transfer(OwnershipState::Owned, OwnershipState::RawAccess));
 
         // UniquelyBorrowed reborrows
@@ -1676,18 +1643,12 @@ mod tests {
 
     #[test]
     fn test_alias_relations_compatible() {
-        assert!(are_alias_relations_compatible(
-            &AliasRelation::NoAlias,
-            &AliasRelation::NoAlias
-        ));
+        assert!(are_alias_relations_compatible(&AliasRelation::NoAlias, &AliasRelation::NoAlias));
         assert!(are_alias_relations_compatible(
             &AliasRelation::MustAlias,
             &AliasRelation::MustAlias
         ));
-        assert!(are_alias_relations_compatible(
-            &AliasRelation::MayAlias,
-            &AliasRelation::NoAlias
-        ));
+        assert!(are_alias_relations_compatible(&AliasRelation::MayAlias, &AliasRelation::NoAlias));
         assert!(are_alias_relations_compatible(
             &AliasRelation::MayAlias,
             &AliasRelation::MustAlias
@@ -1761,9 +1722,7 @@ mod tests {
         let round: CompositionVerdict = serde_json::from_str(&json).expect("deserialize");
         assert!(round.is_sound());
 
-        let v2 = CompositionVerdict::Unsound {
-            reasons: vec!["kind mismatch".to_string()],
-        };
+        let v2 = CompositionVerdict::Unsound { reasons: vec!["kind mismatch".to_string()] };
         let json = serde_json::to_string(&v2).expect("serialize");
         let round: CompositionVerdict = serde_json::from_str(&json).expect("deserialize");
         assert!(!round.is_sound());

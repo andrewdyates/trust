@@ -208,7 +208,7 @@ impl<'tcx> TyCtxt<'tcx> {
         TyCtxtAt { tcx: self, span }
     }
 
-    /// tRust: known issue — `ensure_ok`'s effects are subtle. Is this comment fully accurate?
+    /// FIXME: `ensure_ok`'s effects are subtle. Is this comment fully accurate?
     ///
     /// Wrapper that calls queries in a special "ensure OK" mode, for callers
     /// that don't need the return value and just want to invoke a query for
@@ -654,7 +654,6 @@ pub(crate) use maybe_into_query_key;
 
 #[cold]
 pub(crate) fn default_query(name: &str, key: &dyn std::fmt::Debug) -> ! {
-    // tRust: invariant: unexpected state in default_query
     bug!(
         "`tcx.{name}({key:?})` is not supported for this key;\n\
         hint: Queries can be either made to the local crate, or the external crate. \
@@ -665,7 +664,6 @@ pub(crate) fn default_query(name: &str, key: &dyn std::fmt::Debug) -> ! {
 
 #[cold]
 pub(crate) fn default_extern_query(name: &str, key: &dyn std::fmt::Debug) -> ! {
-    // tRust: invariant: unexpected state in default_extern_query
     bug!(
         "`tcx.{name}({key:?})` unsupported by its crate; \
          perhaps the `{name}` query was never assigned a provider function",

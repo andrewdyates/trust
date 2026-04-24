@@ -12,7 +12,7 @@ where
         let size = arg.layout.size;
 
         // Ensure we have at most four uniquely addressable members.
-        if size > unit.size.checked_mul(4, cx).expect("invariant: unit size * 4 does not overflow") { // tRust: unwrap -> expect
+        if size > unit.size.checked_mul(4, cx).unwrap() {
             return None;
         }
 

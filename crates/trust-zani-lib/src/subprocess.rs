@@ -33,17 +33,19 @@ static ZANI_PATH: OnceLock<Option<String>> = OnceLock::new();
 /// Priority: `ZANI_PATH` env var > `zani` on PATH.
 fn probe_zani_path() -> Option<String> {
     if let Ok(path) = std::env::var("ZANI_PATH")
-        && std::path::Path::new(&path).exists() {
-            return Some(path);
-        }
+        && std::path::Path::new(&path).exists()
+    {
+        return Some(path);
+    }
 
     if let Ok(output) = Command::new("which").arg("zani").output()
-        && output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Some(path);
-            }
+        && output.status.success()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Some(path);
         }
+    }
 
     None
 }
@@ -91,10 +93,8 @@ impl SubprocessBackend {
         if let Some(ref path) = self.solver_path {
             Ok(path.as_str())
         } else {
-            cached_zani_path().map(|s| s.as_str()).ok_or_else(|| {
-                ZaniLibError::BinaryNotFound {
-                    reason: "set ZANI_PATH env or install zani on PATH".to_string(),
-                }
+            cached_zani_path().map(|s| s.as_str()).ok_or_else(|| ZaniLibError::BinaryNotFound {
+                reason: "set ZANI_PATH env or install zani on PATH".to_string(),
             })
         }
     }
@@ -111,11 +111,9 @@ impl SubprocessBackend {
             .spawn()?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(script.as_bytes()).map_err(|e| {
-                ZaniLibError::InputError {
-                    reason: e.to_string(),
-                }
-            })?;
+            stdin
+                .write_all(script.as_bytes())
+                .map_err(|e| ZaniLibError::InputError { reason: e.to_string() })?;
         }
 
         let output = child.wait_with_output()?;
@@ -208,9 +206,8 @@ fn parse_solver_output(
     }
 
     if trimmed.starts_with("unknown") {
-        let is_bound_exhausted = trimmed.contains("bound")
-            || trimmed.contains("depth")
-            || trimmed.contains("resource");
+        let is_bound_exhausted =
+            trimmed.contains("bound") || trimmed.contains("depth") || trimmed.contains("resource");
 
         let reason = if is_bound_exhausted {
             format!("BMC bound exhausted at depth {bmc_depth}")
@@ -223,10 +220,7 @@ fn parse_solver_output(
 
     (
         Verdict::Unknown {
-            reason: format!(
-                "unexpected solver output: {}",
-                &trimmed[..trimmed.len().min(200)]
-            ),
+            reason: format!("unexpected solver output: {}", &trimmed[..trimmed.len().min(200)]),
         },
         None,
         Vec::new(),
@@ -269,11 +263,7 @@ fn parse_counterexample(output: &str) -> Option<TypedCounterexample> {
         Some(
             trace_steps
                 .into_iter()
-                .map(|(step, assignments)| TraceStep {
-                    step,
-                    assignments,
-                    program_point: None,
-                })
+                .map(|(step, assignments)| TraceStep { step, assignments, program_point: None })
                 .collect(),
         )
     } else {
@@ -365,11 +355,7 @@ fn parse_model_value(sort_str: &str, value_str: &str) -> Option<TypedValue> {
 fn parse_int_value(s: &str) -> Option<TypedValue> {
     let s = s.trim();
     if s.starts_with("(-") || s.starts_with("(- ") {
-        let inner = s
-            .trim_start_matches('(')
-            .trim_start_matches('-')
-            .trim()
-            .trim_end_matches(')');
+        let inner = s.trim_start_matches('(').trim_start_matches('-').trim().trim_end_matches(')');
         let n: i128 = inner.parse().ok()?;
         Some(TypedValue::Int(-n))
     } else if let Ok(n) = s.parse::<u128>() {
@@ -428,11 +414,7 @@ fn parse_diagnostics(stderr: &str) -> Vec<DiagnosticMessage> {
             } else {
                 (DiagLevel::Note, line.to_string())
             };
-            DiagnosticMessage {
-                level,
-                message,
-                location: None,
-            }
+            DiagnosticMessage { level, message, location: None }
         })
         .collect()
 }
@@ -515,15 +497,11 @@ mod tests {
 
     #[test]
     fn test_parse_counterexample_bitvector() {
-        let output =
-            "sat\n(model\n  (define-fun ptr () (_ BitVec 64) #xdeadbeef00000000)\n)\n";
+        let output = "sat\n(model\n  (define-fun ptr () (_ BitVec 64) #xdeadbeef00000000)\n)\n";
         let cex = parse_counterexample(output).expect("should parse");
         assert_eq!(
             cex.variables["ptr"],
-            TypedValue::BitVec {
-                value: 0xdeadbeef00000000,
-                width: 64,
-            }
+            TypedValue::BitVec { value: 0xdeadbeef00000000, width: 64 }
         );
     }
 
@@ -531,13 +509,7 @@ mod tests {
     fn test_parse_counterexample_binary_bitvector() {
         let output = "sat\n(model\n  (define-fun bits () (_ BitVec 8) #b11111111)\n)\n";
         let cex = parse_counterexample(output).expect("should parse");
-        assert_eq!(
-            cex.variables["bits"],
-            TypedValue::BitVec {
-                value: 255,
-                width: 8,
-            }
-        );
+        assert_eq!(cex.variables["bits"], TypedValue::BitVec { value: 255, width: 8 });
     }
 
     #[test]
@@ -624,9 +596,7 @@ mod tests {
         assert!(failed.is_failed());
 
         let unknown = ZaniResult {
-            verdict: Verdict::Unknown {
-                reason: "test".to_string(),
-            },
+            verdict: Verdict::Unknown { reason: "test".to_string() },
             counterexample: None,
             proof_certificate: None,
             violations: Vec::new(),

@@ -180,7 +180,6 @@ fn to_upvars_resolved_place_builder<'tcx>(
     else {
         let closure_span = cx.tcx.def_span(closure_def_id);
         if !enable_precise_capture(closure_span) {
-            // tRust: invariant — without precise capture, every referenced upvar projection must match an existing closure capture exactly.
             bug!(
                 "No associated capture found for {:?}[{:#?}] even though \
                     capture_disjoint_fields isn't enabled",
@@ -245,7 +244,6 @@ fn strip_prefix<'tcx>(
                 assert_matches!(iter.next(), Some(ProjectionElem::UnwrapUnsafeBinder(..)));
             }
             HirProjectionKind::Index | HirProjectionKind::Subslice => {
-                // tRust: invariant — closure capture prefixes never contain `Index` or `Subslice` projections because those paths are not capture roots.
                 bug!("unexpected projection kind: {:?}", projection);
             }
         }
@@ -257,13 +255,11 @@ fn strip_prefix<'tcx>(
 impl<'tcx> PlaceBuilder<'tcx> {
     pub(in crate::builder) fn to_place(&self, cx: &Builder<'_, 'tcx>) -> Place<'tcx> {
         self.try_to_place(cx).unwrap_or_else(|| match self.base {
-            // tRust: invariant — a `PlaceBuilder` rooted at a local must always resolve to a concrete MIR place.
             PlaceBase::Local(local) => span_bug!(
                 cx.local_decls[local].source_info.span,
                 "could not resolve local: {local:#?} + {:?}",
                 self.projection
             ),
-            // tRust: invariant — callers use `try_to_place` for optional captures, so `to_place` should only see upvars that resolve to captured locals.
             PlaceBase::Upvar { var_hir_id, closure_def_id: _ } => span_bug!(
                 cx.tcx.hir_span(var_hir_id.0),
                 "could not resolve upvar: {var_hir_id:?} + {:?}",
@@ -678,7 +674,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // We know how long an array is, so just use that as a constant
                 // directly -- no locals needed. We do need one statement so
                 // that borrow- and initialization-checking consider it used,
-                // though. tRust: known issue — Do we really *need* to count this as a use?
+                // though. FIXME: Do we really *need* to count this as a use?
                 // Could partial array tracking work off something else instead?
                 self.cfg.push_fake_read(block, source_info, FakeReadCause::ForIndex, place);
                 let const_ = Const::Ty(self.tcx.types.usize, *len_const);
@@ -718,7 +714,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 Operand::Move(len)
             }
             _ => {
-                // tRust: invariant — `len_of_slice_or_array` is only called after type checking selects the builtin `len` on an array or slice place.
                 span_bug!(span, "len called on place of type {place_ty:?}")
             }
         }
@@ -799,7 +794,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             // done any index expressions needed here.
                             ty::Slice(_) => break,
                             ty::Array(..) => (),
-                            // tRust: invariant — every `ProjectionElem::Index` encountered while walking a place must index into an array or slice base.
                             _ => bug!("unexpected index base"),
                         }
                     }

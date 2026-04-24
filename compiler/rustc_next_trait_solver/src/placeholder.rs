@@ -68,7 +68,7 @@ where
             for i in self.universe_indices.iter_mut().take(index + 1) {
                 *i = i.or_else(|| Some(infcx.create_next_universe()))
             }
-            self.universe_indices[index].expect("invariant: universe index was just populated in loop above") // tRust: unwrap -> expect
+            self.universe_indices[index].unwrap()
         });
         universe
     }

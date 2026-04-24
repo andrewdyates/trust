@@ -26,8 +26,8 @@ fn alloc_caller_location<'tcx>(
         let filename_with_nul = filename.to_owned() + "\0";
         // This can fail if rustc runs out of memory right here. Trying to emit an error would be
         // pointless, since that would require allocating more memory than these short strings.
-        let file_ptr = ecx.allocate_bytes_dedup(filename_with_nul.as_bytes()).expect("invariant: allocate_bytes_dedup succeeds for filename bytes");
-        let file_len = u64::try_from(filename.len()).expect("invariant: filename length fits in u64");
+        let file_ptr = ecx.allocate_bytes_dedup(filename_with_nul.as_bytes()).unwrap();
+        let file_len = u64::try_from(filename.len()).unwrap();
         Immediate::new_slice(file_ptr.into(), file_len, ecx)
     };
     let line = if loc_details.line { Scalar::from_u32(line) } else { Scalar::from_u32(0) };
@@ -38,12 +38,12 @@ fn alloc_caller_location<'tcx>(
         .tcx
         .type_of(ecx.tcx.require_lang_item(LangItem::PanicLocation, ecx.tcx.span))
         .instantiate(*ecx.tcx, ecx.tcx.mk_args(&[ecx.tcx.lifetimes.re_erased.into()]));
-    let loc_layout = ecx.layout_of(loc_ty).expect("invariant: layout_of succeeds for Location type");
-    let location = ecx.allocate(loc_layout, MemoryKind::CallerLocation).expect("invariant: allocate succeeds for CallerLocation memory kind");
+    let loc_layout = ecx.layout_of(loc_ty).unwrap();
+    let location = ecx.allocate(loc_layout, MemoryKind::CallerLocation).unwrap();
 
     // Initialize fields.
     let [filename_field, line_field, col_field] =
-        ecx.project_fields(&location, [0, 1, 2].map(FieldIdx::from_u32)).expect("invariant: project_fields succeeds for Location struct fields [0,1,2]");
+        ecx.project_fields(&location, [0, 1, 2].map(FieldIdx::from_u32)).unwrap();
     ecx.write_immediate(filename, &filename_field)
         .expect("writing to memory we just allocated cannot fail");
     ecx.write_scalar(line, &line_field).expect("writing to memory we just allocated cannot fail");
@@ -68,7 +68,6 @@ pub(crate) fn const_caller_location_provider(
 
     let loc_place = alloc_caller_location(&mut ecx, file, line, col);
     if intern_const_alloc_recursive(&mut ecx, InternKind::Constant, &loc_place).is_err() {
-        // tRust: invariant — interning caller_location allocation cannot fail (no dangling pointers)
         bug!("intern_const_alloc_recursive should not error in this case")
     }
     mir::ConstValue::Scalar(Scalar::from_maybe_pointer(loc_place.ptr(), &tcx))

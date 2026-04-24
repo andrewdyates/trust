@@ -56,12 +56,7 @@ pub struct VerificationObligation {
 impl VerificationObligation {
     /// Create a new obligation without a result (defaults to Unknown).
     #[must_use]
-    pub fn new(
-        def_path: String,
-        function_name: String,
-        span: SourceSpan,
-        kind: VcKind,
-    ) -> Self {
+    pub fn new(def_path: String, function_name: String, span: SourceSpan, kind: VcKind) -> Self {
         Self {
             def_path,
             function_name,
@@ -69,7 +64,7 @@ impl VerificationObligation {
             kind,
             strategy: None,
             result: VerificationResult::Unknown {
-                solver: "pending".to_string(),
+                solver: "pending".into(),
                 time_ms: 0,
                 reason: "not yet dispatched".to_string(),
             },
@@ -155,8 +150,8 @@ impl VerificationObligation {
         results
             .into_iter()
             .map(|(vc, result)| Self {
-                def_path: vc.function.clone(),
-                function_name: short_name(&vc.function),
+                def_path: vc.function.to_string(),
+                function_name: short_name(vc.function.as_str()),
                 span: vc.location.clone(),
                 kind: vc.kind.clone(),
                 strategy: None,
@@ -179,16 +174,16 @@ pub(crate) fn vc_kind_for_mir_strategy(strategy: &MirStrategy) -> VcKind {
 /// level, we map each strategy to the broadest applicable VcKind.
 fn vc_kind_for_strategy(strategy: &MirStrategy) -> VcKind {
     match strategy {
-        MirStrategy::BoundedModelCheck => VcKind::Assertion {
-            message: "bounded model check (zani-lib)".to_string(),
-        },
+        MirStrategy::BoundedModelCheck => {
+            VcKind::Assertion { message: "bounded model check (zani-lib)".to_string() }
+        }
         MirStrategy::ContractVerification => VcKind::Postcondition,
-        MirStrategy::UnsafeAudit => VcKind::UnsafeOperation {
-            desc: "unsafe audit (zani-lib + sunder-lib)".to_string(),
-        },
-        MirStrategy::SeparationLogic => VcKind::Assertion {
-            message: "separation logic safety".to_string(),
-        },
+        MirStrategy::UnsafeAudit => {
+            VcKind::UnsafeOperation { desc: "unsafe audit (zani-lib + sunder-lib)".to_string() }
+        }
+        MirStrategy::SeparationLogic => {
+            VcKind::Assertion { message: "separation logic safety".to_string() }
+        }
         MirStrategy::DataRace => VcKind::DataRace {
             variable: String::new(),
             thread_a: String::new(),
@@ -198,22 +193,22 @@ fn vc_kind_for_strategy(strategy: &MirStrategy) -> VcKind {
             callee: String::new(),
             desc: "FFI boundary verification".to_string(),
         },
-        MirStrategy::Portfolio(_) => VcKind::Assertion {
-            message: "portfolio strategy".to_string(),
-        },
-        MirStrategy::V1Fallback => VcKind::Assertion {
-            message: "v1 pipeline fallback".to_string(),
-        },
+        MirStrategy::Portfolio(_) => {
+            VcKind::Assertion { message: "portfolio strategy".to_string() }
+        }
+        #[cfg(feature = "llvm2-backend")]
+        MirStrategy::Llvm2Codegen => {
+            VcKind::Assertion { message: "LLVM2 verified codegen".to_string() }
+        }
+        MirStrategy::V1Fallback => {
+            VcKind::Assertion { message: "v1 pipeline fallback".to_string() }
+        }
     }
 }
 
 /// Extract a short function name from a fully qualified path.
 fn short_name(def_path: &str) -> String {
-    def_path
-        .rsplit("::")
-        .next()
-        .unwrap_or(def_path)
-        .to_string()
+    def_path.rsplit("::").next().unwrap_or(def_path).to_string()
 }
 
 #[cfg(test)]
@@ -244,7 +239,7 @@ mod tests {
             VcKind::DivisionByZero,
         )
         .with_result(VerificationResult::Proved {
-            solver: "zani-lib".to_string(),
+            solver: "zani-lib".into(),
             time_ms: 42,
             strength: ProofStrength::bounded(100),
             proof_certificate: None,
@@ -267,7 +262,7 @@ mod tests {
             VcKind::Postcondition,
         )
         .with_result(VerificationResult::Failed {
-            solver: "sunder-lib".to_string(),
+            solver: "sunder-lib".into(),
             time_ms: 10,
             counterexample: None,
         });
@@ -281,13 +276,13 @@ mod tests {
     fn test_from_v1_results() {
         let vc = trust_types::VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "v1::div_check".to_string(),
+            function: "v1::div_check".into(),
             location: SourceSpan::default(),
             formula: trust_types::Formula::Bool(false),
             contract_metadata: None,
         };
         let result = VerificationResult::Proved {
-            solver: "mock".to_string(),
+            solver: "mock".into(),
             time_ms: 1,
             strength: ProofStrength::smt_unsat(),
             proof_certificate: None,
@@ -308,7 +303,7 @@ mod tests {
                 "test::loopy".to_string(),
                 MirStrategy::BoundedModelCheck,
                 VerificationResult::Proved {
-                    solver: "zani-lib".to_string(),
+                    solver: "zani-lib".into(),
                     time_ms: 50,
                     strength: ProofStrength::bounded(100),
                     proof_certificate: None,
@@ -319,7 +314,7 @@ mod tests {
                 "test::contracted".to_string(),
                 MirStrategy::ContractVerification,
                 VerificationResult::Failed {
-                    solver: "sunder-lib".to_string(),
+                    solver: "sunder-lib".into(),
                     time_ms: 30,
                     counterexample: None,
                 },
@@ -356,10 +351,7 @@ mod tests {
             vc_kind_for_strategy(&MirStrategy::UnsafeAudit),
             VcKind::UnsafeOperation { .. }
         ));
-        assert!(matches!(
-            vc_kind_for_strategy(&MirStrategy::DataRace),
-            VcKind::DataRace { .. }
-        ));
+        assert!(matches!(vc_kind_for_strategy(&MirStrategy::DataRace), VcKind::DataRace { .. }));
         assert!(matches!(
             vc_kind_for_strategy(&MirStrategy::FFIBoundary),
             VcKind::FfiBoundaryViolation { .. }

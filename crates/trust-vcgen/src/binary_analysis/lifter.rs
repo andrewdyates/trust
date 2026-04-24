@@ -178,113 +178,6 @@ pub fn lift_to_mir(program: &LiftedProgram) -> Result<VerifiableFunction, LiftEr
     })
 }
 
-/// Convert a lifted binary program into a verifiable MIR body, attaching
-/// FFI summary contracts for recognized library calls.
-///
-/// When a `Call` instruction targets a function with a known FFI summary
-/// (e.g., `malloc`, `memcpy`, `strlen`), the summary's parameter contracts
-/// are translated into preconditions and the return contract becomes a
-/// postcondition on the lifted function.
-///
-/// This is the primary entry point for binary lifting with library models
-/// (SimProcedure-style, from angr).
-pub fn lift_with_summaries(
-    program: &LiftedProgram,
-    summary_db: &crate::ffi_summary::FfiSummaryDb,
-) -> Result<VerifiableFunction, LiftError> {
-    let mut function = lift_to_mir(program)?;
-
-    // Collect call targets that have FFI summaries
-    let mut preconditions = Vec::new();
-    let mut postconditions = Vec::new();
-
-    for insn in &program.instructions {
-        if let AbstractOp::Call { func, args, .. } = &insn.op {
-            // Try exact match first, then strip common prefixes
-            let lookup_name = normalize_ffi_name(func);
-            if let Some(summary) = summary_db.lookup(&lookup_name) {
-                // Generate VCs from the summary
-                let call_site = format!("binary::0x{:x}::call_{}", program.entry_point, func);
-                let arg_formulas: Vec<Formula> = args
-                    .iter()
-                    .map(|arg| abstract_value_to_formula(arg, &program.registers))
-                    .collect();
-
-                let vcs =
-                    crate::ffi_summary::generate_ffi_vcs(&call_site, summary, &arg_formulas);
-
-                // Non-null and range checks become preconditions
-                for vc in &vcs {
-                    preconditions.push(vc.formula.clone());
-                }
-
-                // Return contract becomes a postcondition
-                if let Some(ret_contract) = &summary.return_contract {
-                    postconditions.push(ret_contract.clone());
-                }
-            }
-        }
-    }
-
-    function.preconditions = preconditions;
-    function.postconditions = postconditions;
-
-    Ok(function)
-}
-
-/// Normalize a function name for FFI summary lookup.
-///
-/// Strips common prefixes like `sub_`, path separators, and library prefixes
-/// to match against the summary database.
-fn normalize_ffi_name(name: &str) -> String {
-    // Try the raw name first
-    let candidates = [
-        name.to_string(),
-        // Strip path prefix: "libc::malloc" -> "malloc"
-        name.rsplit("::").next().unwrap_or(name).to_string(),
-        // Strip sub_ prefix: "sub_1234" -> try the rest as hex
-        name.strip_prefix("sub_").unwrap_or(name).to_string(),
-    ];
-
-    // Known FFI names to match against
-    let known = [
-        "malloc", "free", "memcpy", "strlen", "printf", "read", "write",
-        "calloc", "realloc", "memmove", "memset", "strcmp", "strncpy",
-        "strcpy", "strcat", "strncat", "puts", "fputs", "fgets",
-        "fopen", "fclose", "fread", "fwrite",
-    ];
-
-    for candidate in &candidates {
-        let lower = candidate.to_lowercase();
-        for &name in &known {
-            if lower == name || lower.ends_with(&format!("::{name}")) {
-                return name.to_string();
-            }
-        }
-    }
-
-    candidates[0].clone()
-}
-
-/// Convert an abstract value to a formula for FFI VC generation.
-fn abstract_value_to_formula(value: &AbstractValue, registers: &[AbstractRegister]) -> Formula {
-    match value {
-        AbstractValue::Register(id) => {
-            let name = registers
-                .iter()
-                .find(|r| r.id == *id)
-                .map(|r| r.name.clone())
-                .unwrap_or_else(|| format!("r{id}"));
-            let width = registers
-                .iter()
-                .find(|r| r.id == *id)
-                .map_or(64, |r| r.width);
-            Formula::Var(name, Sort::BitVec(width))
-        }
-        AbstractValue::Formula(f) => f.clone(),
-    }
-}
-
 fn normalize_cfg_entry(cfg: &mut super::cfg_reconstruct::ReconstructedCfg, entry_point: u64) {
     cfg.entry = entry_point;
     cfg.nodes.sort_by_key(|node| (node.address != entry_point, node.address));
@@ -419,8 +312,7 @@ fn instruction_mentions_register(insn: &AbstractInsn, register: u16) -> bool {
     match &insn.op {
         AbstractOp::Load { dst, .. } => *dst == register,
         AbstractOp::Store { .. } | AbstractOp::Branch { .. } | AbstractOp::Nop => false,
-        AbstractOp::BinArith { dst, lhs, rhs, .. }
-        | AbstractOp::Compare { dst, lhs, rhs, .. } => {
+        AbstractOp::BinArith { dst, lhs, rhs, .. } | AbstractOp::Compare { dst, lhs, rhs, .. } => {
             *dst == register
                 || abstract_value_mentions_register(lhs, register)
                 || abstract_value_mentions_register(rhs, register)
@@ -432,9 +324,7 @@ fn instruction_mentions_register(insn: &AbstractInsn, register: u16) -> bool {
             *dst == register || abstract_value_mentions_register(src, register)
         }
         AbstractOp::CondBranch { cond, .. } => abstract_value_mentions_register(cond, register),
-        AbstractOp::IndirectBranch { target } => {
-            abstract_value_mentions_register(target, register)
-        }
+        AbstractOp::IndirectBranch { target } => abstract_value_mentions_register(target, register),
         AbstractOp::Call { args, dest, .. } => {
             dest.is_some_and(|dest| dest == register)
                 || args.iter().any(|arg| abstract_value_mentions_register(arg, register))
@@ -563,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_lift_load_store_program() {
-        let pointer = Formula::Var("ptr".to_string(), Sort::Int);
+        let pointer = Formula::Var("ptr".into(), Sort::Int);
         let program = LiftedProgram {
             instructions: vec![
                 insn(

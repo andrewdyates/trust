@@ -407,7 +407,7 @@ impl<'tcx> PoloniusOutOfScopePrecomputer<'_, 'tcx> {
             // - the loan goes out of scope at `location` if it's not contained within any regions
             // live at this point.
             //
-            // // NOTE: if the issuing region `i` can reach a live region `r` at point `p`, and `r` is a live region `r` at point `p`, and `r` is
+            // FIXME: if the issuing region `i` can reach a live region `r` at point `p`, and `r` is
             // live at point `q`, then it's guaranteed that `i` would reach `r` at point `q`.
             // Reachability is location-insensitive, and we could take advantage of that, by jumping
             // to a further point than just the next statement: we can jump to the furthest point

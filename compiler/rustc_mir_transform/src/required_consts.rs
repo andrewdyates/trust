@@ -1,6 +1,3 @@
-//! tRust: MIR visitor that collects required constants from a body for eager
-//! tRust: evaluation.
-
 use rustc_middle::mir::visit::Visitor;
 use rustc_middle::mir::{Body, ConstOperand, Location, traversal};
 

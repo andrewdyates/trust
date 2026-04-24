@@ -12,8 +12,8 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::VecDeque;
-use trust_types::fx::{FxHashMap, FxHashSet};
 use std::fmt;
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 use crate::{StateId, StateMachine, Trace};
 
@@ -112,7 +112,10 @@ impl fmt::Display for CtlParseError {
             }
             CtlParseError::EmptyFormula => write!(f, "empty formula"),
             CtlParseError::MissingTemporalOp { pos, quantifier } => {
-                write!(f, "path quantifier '{quantifier}' at position {pos} must be followed by X, F, G, or U-bracket")
+                write!(
+                    f,
+                    "path quantifier '{quantifier}' at position {pos} must be followed by X, F, G, or U-bracket"
+                )
             }
         }
     }
@@ -235,11 +238,8 @@ impl<'a> CtlModelChecker<'a> {
         let mut result = FxHashSet::default();
 
         for &state in &self.all_states {
-            let has_phi_successor = self
-                .machine
-                .successors(state)
-                .iter()
-                .any(|s| phi_states.contains(s));
+            let has_phi_successor =
+                self.machine.successors(state).iter().any(|s| phi_states.contains(s));
             if has_phi_successor {
                 result.insert(state);
             }
@@ -284,9 +284,7 @@ impl<'a> CtlModelChecker<'a> {
             let next: FxHashSet<StateId> = current
                 .iter()
                 .copied()
-                .filter(|&state| {
-                    self.machine.successors(state).iter().any(|s| current.contains(s))
-                })
+                .filter(|&state| self.machine.successors(state).iter().any(|s| current.contains(s)))
                 .collect();
 
             if next == current {
@@ -463,11 +461,7 @@ impl<'a> CtlModelChecker<'a> {
     }
 
     /// BFS to find a path from `start` to any state in `targets`.
-    fn find_path_to_set(
-        &self,
-        start: StateId,
-        targets: &FxHashSet<StateId>,
-    ) -> Option<Trace> {
+    fn find_path_to_set(&self, start: StateId, targets: &FxHashSet<StateId>) -> Option<Trace> {
         if targets.contains(&start) {
             return Some(Trace::new(vec![start]));
         }
@@ -615,10 +609,7 @@ fn ctl_tokenize(input: &str) -> Result<Vec<(CtlToken, usize)>, CtlParseError> {
                 tokens.push((tok, start));
             }
             _ => {
-                return Err(CtlParseError::UnexpectedToken {
-                    pos: i,
-                    found: chars[i].to_string(),
-                });
+                return Err(CtlParseError::UnexpectedToken { pos: i, found: chars[i].to_string() });
             }
         }
     }
@@ -1278,9 +1269,8 @@ mod tests {
 
     #[test]
     fn test_empty_model() {
-        let model = StateMachineBuilder::new(StateId(0))
-            .add_state(State::new(StateId(0), "lone"))
-            .build();
+        let model =
+            StateMachineBuilder::new(StateId(0)).add_state(State::new(StateId(0), "lone")).build();
         let checker = CtlModelChecker::new(&model);
 
         // AX(false) should hold vacuously (no successors)

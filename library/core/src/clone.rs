@@ -377,6 +377,7 @@ pub struct AssertParamIsCopy<T: Copy + PointeeSized> {
 /// cloning a [trait object].
 ///
 /// This trait is normally used via operations on container types which support DSTs,
+
 /// implementing such a container or otherwise performing explicit management of an allocation,
 /// or when implementing `CloneToUninit` itself.
 ///

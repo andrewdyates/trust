@@ -73,7 +73,10 @@ pub(crate) fn read_message(reader: &mut impl BufRead) -> Result<Request, Transpo
 ///
 /// Serializes the value as JSON, prepends the `Content-Length` header,
 /// and flushes.
-pub(crate) fn write_message(writer: &mut impl Write, value: &impl serde::Serialize) -> Result<(), TransportError> {
+pub(crate) fn write_message(
+    writer: &mut impl Write,
+    value: &impl serde::Serialize,
+) -> Result<(), TransportError> {
     let body = serde_json::to_string(value)?;
     let header = format!("Content-Length: {}\r\n\r\n", body.len());
     writer.write_all(header.as_bytes())?;

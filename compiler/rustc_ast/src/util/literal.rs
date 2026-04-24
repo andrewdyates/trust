@@ -170,8 +170,8 @@ impl fmt::Display for LitKind {
                 write!(f, "b\"{}\"", escape_byte_str_symbol(byte_sym.as_byte_str()))?
             }
             LitKind::ByteStr(ref byte_sym, StrStyle::Raw(n)) => {
-                // Raw byte string literals can only contain ASCII, so UTF-8 conversion is safe.
-                let symbol = str::from_utf8(byte_sym.as_byte_str()).expect("invariant: raw byte string literals contain only ASCII"); // tRust: unwrap -> expect
+                // Unwrap because raw byte string literals can only contain ASCII.
+                let symbol = str::from_utf8(byte_sym.as_byte_str()).unwrap();
                 write!(
                     f,
                     "br{delim}\"{string}\"{delim}",
@@ -183,8 +183,8 @@ impl fmt::Display for LitKind {
                 write!(f, "c\"{}\"", escape_byte_str_symbol(bytes.as_byte_str()))?
             }
             LitKind::CStr(ref bytes, StrStyle::Raw(n)) => {
-                // Raw C string literals can only be valid UTF-8.
-                let symbol = str::from_utf8(bytes.as_byte_str()).expect("invariant: raw C string literals contain only valid UTF-8"); // tRust: unwrap -> expect
+                // This can only be valid UTF-8.
+                let symbol = str::from_utf8(bytes.as_byte_str()).unwrap();
                 write!(f, "cr{delim}\"{symbol}\"{delim}", delim = "#".repeat(n as usize),)?;
             }
             LitKind::Int(n, ty) => {

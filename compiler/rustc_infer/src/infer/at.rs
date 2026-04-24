@@ -342,7 +342,6 @@ impl<'tcx> ToTrace<'tcx> for ty::GenericArg<'tcx> {
                 (GenericArgKind::Const(a), GenericArgKind::Const(b)) => {
                     ValuePairs::Terms(ExpectedFound::new(a.into(), b.into()))
                 }
-                // tRust: invariant — generic args being related must be of the same kind (type/region/const)
                 _ => bug!("relating different kinds: {a:?} {b:?}"),
             },
         }

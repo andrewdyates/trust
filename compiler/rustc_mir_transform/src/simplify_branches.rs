@@ -1,6 +1,3 @@
-//! tRust: MIR pass that replaces conditional branches with gotos when
-//! tRust: conditions are known constants.
-
 use rustc_middle::mir::*;
 use rustc_middle::ty::TyCtxt;
 use tracing::trace;

@@ -206,7 +206,7 @@ pub struct FrameInfo<'tcx> {
     pub span: Span,
 }
 
-// tRust: known issue — only used by miri, should be removed once translatable.
+// FIXME: only used by miri, should be removed once translatable.
 impl<'tcx> fmt::Display for FrameInfo<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         ty::tls::with(|tcx| {
@@ -337,7 +337,7 @@ impl<'tcx, Prov: Provenance, Extra> Frame<'tcx, Prov, Extra> {
                     while let Some((instance, call_span)) = scope_data.inlined {
                         frames.push(FrameInfo { span, instance });
                         span = call_span;
-                        scope_data = &frame.body.source_scopes[scope_data.parent_scope.expect("invariant: source scope traversal terminates at a scope with inlined_parent or root")];
+                        scope_data = &frame.body.source_scopes[scope_data.parent_scope.unwrap()];
                     }
                     span
                 }
@@ -531,7 +531,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
                 ty::Bound(..)
                 | ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                    // tRust: invariant — is_very_trivially_sized only handles known-sized types and specific unsized tails
                     bug!("`is_very_trivially_sized` applied to unexpected type: {}", ty)
                 }
             }
@@ -598,7 +597,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 "deallocating local {:?}: {:?}",
                 local,
                 // Locals always have a `alloc_id` (they are never the result of a int2ptr).
-                self.dump_alloc(ptr.provenance.expect("invariant: local with provenance must have alloc_id for dump").get_alloc_id().expect("invariant: provenance must resolve to an alloc_id"))
+                self.dump_alloc(ptr.provenance.unwrap().get_alloc_id().unwrap())
             );
             self.deallocate_ptr(ptr, None, MemoryKind::Stack)?;
         };
@@ -649,9 +648,9 @@ impl<'a, 'tcx: 'a, M: Machine<'tcx>> InterpCx<'tcx, M> {
         for (fn_arg, caller_abi) in caller_args {
             // The callee ABI is entirely computed based on which arguments the caller has
             // provided so it should not be possible to get a mismatch here.
-            let (_idx, callee_abi) = callee_abis.next().expect("invariant: callee_abis iterator has enough entries for each argument");
+            let (_idx, callee_abi) = callee_abis.next().unwrap();
             assert!(self.check_argument_compat(caller_abi, callee_abi)?);
-            // tRust: known issue — do we have to worry about in-place argument passing?
+            // FIXME: do we have to worry about in-place argument passing?
             let op = fn_arg.copy_fn_arg();
             let mplace = self.allocate(op.layout, MemoryKind::Stack)?;
             self.copy_op(&op, &mplace)?;
@@ -675,7 +674,7 @@ impl<'a, 'tcx: 'a, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 "deallocating vararg {:?}: {:?}",
                 vararg,
                 // Locals always have a `alloc_id` (they are never the result of a int2ptr).
-                self.dump_alloc(ptr.provenance.expect("invariant: argument ptr with provenance must have alloc_id for dump").get_alloc_id().expect("invariant: provenance must resolve to an alloc_id"))
+                self.dump_alloc(ptr.provenance.unwrap().get_alloc_id().unwrap())
             );
             self.deallocate_ptr(ptr, None, MemoryKind::Stack)?;
         }

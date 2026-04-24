@@ -9,8 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::{Formula, Sort, VcKind, VerificationCondition};
 use std::fmt::Write;
+use trust_types::{Formula, Sort, VcKind, VerificationCondition};
 
 // ---------------------------------------------------------------------------
 // Tactic enum
@@ -157,11 +157,7 @@ impl Tactic {
     pub fn is_arithmetic(&self) -> bool {
         matches!(
             self,
-            Tactic::Omega
-                | Tactic::Linarith
-                | Tactic::NormNum
-                | Tactic::Ring
-                | Tactic::RingNf
+            Tactic::Omega | Tactic::Linarith | Tactic::NormNum | Tactic::Ring | Tactic::RingNf
         )
     }
 
@@ -178,9 +174,7 @@ impl Tactic {
         match self {
             Tactic::Exact(_) | Tactic::Decide | Tactic::Contradiction => 1,
             Tactic::Intro(_) | Tactic::Constructor => 2,
-            Tactic::Omega | Tactic::Linarith | Tactic::NormNum | Tactic::Ring | Tactic::RingNf => {
-                3
-            }
+            Tactic::Omega | Tactic::Linarith | Tactic::NormNum | Tactic::Ring | Tactic::RingNf => 3,
             Tactic::Simp(_) | Tactic::Rewrite(_) | Tactic::Apply(_) => 4,
             Tactic::Cases(_) | Tactic::Rcases { .. } | Tactic::Obtain { .. } => 5,
             Tactic::Induction { .. } => 6,
@@ -295,11 +289,7 @@ pub fn arithmetic_strategy(theorem_name: &str) -> TacticScript {
 /// Introduces the variable, sets up the induction, then tries arithmetic
 /// to close the base case and inductive step.
 #[must_use]
-pub fn induction_strategy(
-    theorem_name: &str,
-    var: &str,
-    ih_pattern: Option<&str>,
-) -> TacticScript {
+pub fn induction_strategy(theorem_name: &str, var: &str, ih_pattern: Option<&str>) -> TacticScript {
     let mut script = TacticScript::new(theorem_name);
     script.push(Tactic::Intro(var.to_string()));
     script.push(Tactic::Induction {
@@ -349,7 +339,7 @@ pub fn case_split_strategy(theorem_name: &str, expr: &str) -> TacticScript {
 /// 4. Fall back to `omega`/`decide` for arithmetic/decidable goals
 #[must_use]
 pub fn generate_tactic_script(vc: &VerificationCondition) -> TacticScript {
-    let theorem_name = format!("tRust.vc.{}", sanitize_name(&vc.function));
+    let theorem_name = format!("tRust.vc.{}", sanitize_name(vc.function.as_str()));
     let mut script = TacticScript::new(&theorem_name);
 
     // Phase 1: Introduce hypotheses based on formula structure
@@ -425,11 +415,9 @@ fn generate_formula_tactics(formula: &Formula, script: &mut TacticScript) {
             // For disjunction, try cases
             script.push(Tactic::Cases("h".to_string()));
         }
-        Formula::Eq(_, _) => {
-            // Equality: try ring for algebraic, simp otherwise
-            if formula_is_arithmetic(formula) {
-                script.push(Tactic::Ring);
-            }
+        Formula::Eq(_, _) if formula_is_arithmetic(formula) => {
+            // Equality: try ring for algebraic
+            script.push(Tactic::Ring);
         }
         Formula::Le(_, _) | Formula::Lt(_, _) | Formula::Ge(_, _) | Formula::Gt(_, _) => {
             // Inequalities: linarith is the go-to
@@ -483,9 +471,7 @@ fn formula_is_decidable(formula: &Formula) -> bool {
         Formula::Bool(_) => true,
         Formula::Eq(lhs, rhs) => is_ground_term(lhs) && is_ground_term(rhs),
         Formula::Not(inner) => formula_is_decidable(inner),
-        Formula::And(children) | Formula::Or(children) => {
-            children.iter().all(formula_is_decidable)
-        }
+        Formula::And(children) | Formula::Or(children) => children.iter().all(formula_is_decidable),
         _ => false,
     }
 }
@@ -549,9 +535,7 @@ fn is_ground_term(formula: &Formula) -> bool {
 
 /// Sanitize a function name for use as a Lean5 identifier.
 fn sanitize_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
-        .collect()
+    name.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -567,7 +551,7 @@ mod tests {
     fn div_by_zero_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "safe_div".to_string(),
+            function: "safe_div".into(),
             location: SourceSpan::default(),
             formula: Formula::Not(Box::new(Formula::Eq(
                 Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -583,7 +567,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "get_midpoint".to_string(),
+            function: "get_midpoint".into(),
             location: SourceSpan::default(),
             formula: Formula::Le(
                 Box::new(Formula::Add(
@@ -599,7 +583,7 @@ mod tests {
     fn assertion_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Assertion { message: "x > 0".to_string() },
-            function: "check_positive".to_string(),
+            function: "check_positive".into(),
             location: SourceSpan::default(),
             formula: Formula::Gt(
                 Box::new(Formula::Var("x".into(), Sort::Int)),
@@ -612,7 +596,7 @@ mod tests {
     fn forall_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "sorted_insert".to_string(),
+            function: "sorted_insert".into(),
             location: SourceSpan::default(),
             formula: Formula::Forall(
                 vec![("i".into(), Sort::Int)],
@@ -753,10 +737,7 @@ mod tests {
         let code = script.to_lean_code();
         assert!(code.contains("theorem tRust.vc.safe_div := by"));
         // Should contain simp for div definition
-        assert!(
-            code.contains("simp"),
-            "div-by-zero should use simp, got:\n{code}"
-        );
+        assert!(code.contains("simp"), "div-by-zero should use simp, got:\n{code}");
     }
 
     // -----------------------------------------------------------------------
@@ -809,10 +790,7 @@ mod tests {
         assert!(!script.is_empty());
         let code = script.to_lean_code();
         // Should introduce the quantified variable
-        assert!(
-            code.contains("intro i"),
-            "forall VC should introduce variable, got:\n{code}"
-        );
+        assert!(code.contains("intro i"), "forall VC should introduce variable, got:\n{code}");
     }
 
     // -----------------------------------------------------------------------
@@ -833,10 +811,8 @@ mod tests {
 
     #[test]
     fn test_formula_is_decidable_with_var() {
-        let formula = Formula::Eq(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let formula =
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         assert!(!formula_is_decidable(&formula), "formula with variable should not be decidable");
     }
 
@@ -900,12 +876,9 @@ mod tests {
     fn test_generate_tactic_script_implies() {
         let vc = VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "ensure_post".to_string(),
+            function: "ensure_post".into(),
             location: SourceSpan::default(),
-            formula: Formula::Implies(
-                Box::new(Formula::Bool(true)),
-                Box::new(Formula::Bool(true)),
-            ),
+            formula: Formula::Implies(Box::new(Formula::Bool(true)), Box::new(Formula::Bool(true))),
             contract_metadata: None,
         };
         let script = generate_tactic_script(&vc);
@@ -922,7 +895,7 @@ mod tests {
     fn test_generate_tactic_script_decidable_ground() {
         let vc = VerificationCondition {
             kind: VcKind::Assertion { message: "trivial".to_string() },
-            function: "trivial_check".to_string(),
+            function: "trivial_check".into(),
             location: SourceSpan::default(),
             formula: Formula::Eq(Box::new(Formula::Int(1)), Box::new(Formula::Int(1))),
             contract_metadata: None,
@@ -970,11 +943,7 @@ mod tests {
 
     #[test]
     fn test_tactic_have_to_lean_code() {
-        let t = Tactic::Have {
-            name: "h1".into(),
-            ty: "x > 0".into(),
-            proof: "by omega".into(),
-        };
+        let t = Tactic::Have { name: "h1".into(), ty: "x > 0".into(), proof: "by omega".into() };
         assert_eq!(t.to_lean_code(), "have h1 : x > 0 := by omega");
     }
 
@@ -1099,7 +1068,10 @@ mod tests {
         assert!(code.contains("induction n"));
         // Should have focused blocks for base and inductive cases
         let tactic_count = script.len();
-        assert!(tactic_count >= 4, "induction strategy should have >= 4 tactics, got {tactic_count}");
+        assert!(
+            tactic_count >= 4,
+            "induction strategy should have >= 4 tactics, got {tactic_count}"
+        );
     }
 
     #[test]
@@ -1125,7 +1097,7 @@ mod tests {
     fn test_tactic_script_total_cost() {
         let mut script = TacticScript::new("test");
         script.push(Tactic::Intro("x".into())); // cost 2
-        script.push(Tactic::Omega);              // cost 3
+        script.push(Tactic::Omega); // cost 3
         assert_eq!(script.total_cost(), 5);
     }
 

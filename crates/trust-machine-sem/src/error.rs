@@ -15,11 +15,7 @@ pub enum SemError {
 
     /// An operand was missing or had unexpected form.
     #[error("invalid operand at index {index} for {opcode}: {detail}")]
-    InvalidOperand {
-        opcode: Opcode,
-        index: usize,
-        detail: String,
-    },
+    InvalidOperand { opcode: Opcode, index: usize, detail: String },
 
     /// Register width mismatch in an operation.
     #[error("width mismatch: expected {expected}-bit, got {actual}-bit")]

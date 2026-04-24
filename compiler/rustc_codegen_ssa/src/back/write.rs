@@ -1,6 +1,3 @@
-//! tRust: Codegen backend work coordination for scheduling codegen units across
-//! tRust: threads and driving the LTO pipeline.
-
 use std::marker::PhantomData;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
@@ -893,7 +890,7 @@ fn execute_copy_from_cache_work_item(
     let dcx = DiagCtxt::new(Box::new(shared_emitter));
     let dcx = dcx.handle();
 
-    let incr_comp_session_dir = cgcx.incr_comp_session_dir.as_ref().expect("invariant: incremental compilation session dir must be set");
+    let incr_comp_session_dir = cgcx.incr_comp_session_dir.as_ref().unwrap();
 
     let mut links_from_incr_cache = Vec::new();
 
@@ -1108,7 +1105,7 @@ fn do_thin_lto<B: WriteBackendMethods>(
         // Relinquish accidentally acquired extra tokens. Subtract 1 for the implicit token.
         tokens.truncate(used_token_count.saturating_sub(1));
 
-        match coordinator_receive.recv().expect("invariant: codegen coordinator channel must not be disconnected") {
+        match coordinator_receive.recv().unwrap() {
             // Save the token locally and the next turn of the loop will use
             // this to spawn a new unit of work, or it may get dropped
             // immediately if we have no more work to spawn.
@@ -1140,7 +1137,6 @@ fn do_thin_lto<B: WriteBackendMethods>(
                     Err(None) => {
                         // If the thread failed that means it panicked, so
                         // we abort immediately.
-                        // tRust: invariant: structural invariant — codegen module state machine constrains valid transitions
                         bug!("worker thread panicked");
                     }
                 }
@@ -1538,7 +1534,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
                     // from fluctuating just because a worker finished up and we decreased the
                     // `running_with_own_token` count, even though we're just going to increase it
                     // right after this when we put a new worker to work.
-                    let extra_tokens = tokens.len().checked_sub(running_with_own_token).expect("invariant: extra tokens must not exceed total tokens");
+                    let extra_tokens = tokens.len().checked_sub(running_with_own_token).unwrap();
                     let additional_running = std::cmp::min(extra_tokens, work_items.len());
                     let anticipated_running = running_with_own_token + additional_running + 1;
 
@@ -1600,7 +1596,6 @@ fn start_executing_work<B: ExtraBackendMethods>(
                             main_thread_state = MainThreadState::Lending;
                         }
                     }
-                    // tRust: invariant: structural invariant — codegen module state machine constrains valid transitions
                     MainThreadState::Codegenning => bug!(
                         "codegen worker should not be codegenning after \
                               codegen was already completed"
@@ -1639,7 +1634,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
             // Relinquish accidentally acquired extra tokens.
             tokens.truncate(running_with_own_token);
 
-            match coordinator_receive.recv().expect("invariant: codegen coordinator channel must not be disconnected") {
+            match coordinator_receive.recv().unwrap() {
                 // Save the token locally and the next turn of the loop will use
                 // this to spawn a new unit of work, or it may get dropped
                 // immediately if we have no more work to spawn.
@@ -1737,7 +1732,6 @@ fn start_executing_work<B: ExtraBackendMethods>(
                         Err(None) => {
                             // If the thread failed that means it panicked, so
                             // we abort immediately.
-                            // tRust: invariant: structural invariant — codegen module state machine constrains valid transitions
                             bug!("worker thread panicked");
                         }
                     }
@@ -2123,7 +2117,7 @@ pub struct Coordinator<B: WriteBackendMethods> {
 
 impl<B: WriteBackendMethods> Coordinator<B> {
     fn join(mut self) -> std::thread::Result<Result<MaybeLtoModules<B>, ()>> {
-        self.future.take().expect("invariant: worker future must be present to join").join()
+        self.future.take().unwrap().join()
     }
 }
 
@@ -2160,7 +2154,6 @@ impl<B: WriteBackendMethods> OngoingCodegen<B> {
                 panic!("expected abort due to worker thread errors")
             }
             Err(_) => {
-                // tRust: invariant: structural invariant — codegen module state machine constrains valid transitions
                 bug!("panic during codegen/LLVM phase");
             }
         });
@@ -2300,12 +2293,6 @@ pub(crate) fn submit_pre_lto_module_to_llvm<B: WriteBackendMethods>(
     let file = fs::File::open(&bc_path)
         .unwrap_or_else(|e| panic!("failed to open bitcode file `{}`: {}", bc_path.display(), e));
 
-    // SAFETY: `file` is a valid, open `File` obtained from `fs::File::open` above. // tRust:
-    // The resulting `Mmap` is moved into `SerializedModule::FromUncompressedFile`,
-    // which keeps it alive for the duration of the LTO import. The file is not
-    // truncated or modified between open and mmap.
-    // SAFETY: The opened bitcode file is only read, and the resulting `Mmap`
-    // is moved into the queued import module before any use.
     let mmap = unsafe {
         Mmap::map(file).unwrap_or_else(|e| {
             panic!("failed to mmap bitcode file `{}`: {}", bc_path.display(), e)

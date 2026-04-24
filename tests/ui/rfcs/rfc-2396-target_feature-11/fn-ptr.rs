@@ -8,7 +8,9 @@ fn foo() {}
 
 #[target_feature(enable = "sse2")]
 fn bar() {
-    let foo: fn() = foo; // this is OK, as we have the necessary target features.
+    // tRust: #861 — coercion to safe fn ptr is now ALWAYS rejected, even when
+    // the caller has the necessary features, because the pointer can escape.
+    let foo: fn() = foo; //~ ERROR mismatched types
     let foo: fn() = foo_avx; //~ ERROR mismatched types
 }
 

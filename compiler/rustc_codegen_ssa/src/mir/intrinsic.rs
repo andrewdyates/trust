@@ -1,6 +1,3 @@
-//! tRust: MIR intrinsic lowering that translates compiler intrinsics into backend
-//! tRust: operations and target-specific codegen hooks.
-
 use rustc_abi::{Align, WrappingRange};
 use rustc_middle::mir::SourceInfo;
 use rustc_middle::ty::{self, Ty, TyCtxt};
@@ -125,7 +122,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 | sym::atomic_singlethreadfence
                 | sym::caller_location => {}
                 _ => {
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     span_bug!(
                         span,
                         "Nullary intrinsic {name} must be called in a const block. \
@@ -170,7 +166,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 let idx = match name {
                     sym::vtable_size => ty::COMMON_VTABLE_ENTRIES_SIZE,
                     sym::vtable_align => ty::COMMON_VTABLE_ENTRIES_ALIGN,
-                    // tRust: invariant: structural invariant — virtual call dispatch requires a trait object operand
                     _ => bug!(),
                 };
                 let value = meth::VirtualIndex::from_index(idx).get_usize(
@@ -303,7 +298,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         sym::fmul_fast => bx.fmul_fast(args[0].immediate(), args[1].immediate()),
                         sym::fdiv_fast => bx.fdiv_fast(args[0].immediate(), args[1].immediate()),
                         sym::frem_fast => bx.frem_fast(args[0].immediate(), args[1].immediate()),
-                        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                         _ => bug!(),
                     },
                     None => {
@@ -337,7 +331,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     sym::frem_algebraic => {
                         bx.frem_algebraic(args[0].immediate(), args[1].immediate())
                     }
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     _ => bug!(),
                 },
                 None => {
@@ -609,7 +602,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
 // Returns the width of an int Ty, and if it's signed or not
 // Returns None if the type is not an integer
-// NOTE: Multiple similar int_type_width functions exist; consolidation would reduce duplication.
+// FIXME: there’s multiple of this functions, investigate using some of the already existing
+// stuffs.
 fn int_type_width_signed(ty: Ty<'_>, tcx: TyCtxt<'_>) -> Option<(u64, bool)> {
     match ty.kind() {
         ty::Int(t) => {

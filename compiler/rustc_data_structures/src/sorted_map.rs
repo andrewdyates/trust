@@ -57,9 +57,6 @@ impl<K: Ord, V> SortedMap<K, V> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         match self.lookup_index_for(&key) {
             Ok(index) => {
-                // SAFETY: The invariants required by this unsafe operation are
-                // satisfied because `lookup_index_for` returned `Ok(index)`, so
-                // `index` is in bounds for `self.data`.
                 let slot = unsafe { self.data.get_unchecked_mut(index) };
                 Some(mem::replace(&mut slot.1, value))
             }
@@ -85,9 +82,6 @@ impl<K: Ord, V> SortedMap<K, V> {
         Q: Ord + ?Sized,
     {
         match self.lookup_index_for(key) {
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because `lookup_index_for` returned `Ok(index)`, so
-            // `index` is in bounds for `self.data`.
             Ok(index) => unsafe { Some(&self.data.get_unchecked(index).1) },
             Err(_) => None,
         }
@@ -100,9 +94,6 @@ impl<K: Ord, V> SortedMap<K, V> {
         Q: Ord + ?Sized,
     {
         match self.lookup_index_for(key) {
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because `lookup_index_for` returned `Ok(index)`, so
-            // `index` is in bounds for `self.data`.
             Ok(index) => unsafe { Some(&mut self.data.get_unchecked_mut(index).1) },
             Err(_) => None,
         }
@@ -122,9 +113,6 @@ impl<K: Ord, V> SortedMap<K, V> {
                 index
             }
         };
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `index` either came from `lookup_index_for` or
-        // from the insertion above, so it names an element now in `self.data`.
         unsafe { &mut self.data.get_unchecked_mut(index).1 }
     }
 

@@ -219,7 +219,7 @@ where
         // here; that occurs in `apply_call_return_effect`.
 
         // We ignore borrow on drop because custom drop impls are not allowed in consts.
-        // tRust: known issue — Reconsider if accounting for borrows in drops is necessary for const drop.
+        // FIXME: Reconsider if accounting for borrows in drops is necessary for const drop.
         self.super_terminator(terminator, location);
     }
 }

@@ -55,9 +55,6 @@ impl<'a, T: 'a> Drop for LockGuard<'a, T> {
         // with the `lock.mode` state. This means we access the right union fields.
         match self.mode {
             Mode::NoSync => {
-                // SAFETY: The invariants required by this unsafe operation are
-                // satisfied because this guard was created with `Mode::NoSync`,
-                // so `mode_union.no_sync` is the active union field here.
                 let cell = unsafe { &self.lock.mode_union.no_sync };
                 debug_assert!(cell.get());
                 cell.set(false);
@@ -121,9 +118,6 @@ impl<T> Lock<T> {
         // SAFETY: This is safe since the union fields are used in accordance with `self.mode`.
         match mode {
             Mode::NoSync => {
-                // SAFETY: The invariants required by this unsafe operation are
-                // satisfied because `mode` was read from `self.mode`, which
-                // never changes, so `no_sync` is the active union field here.
                 let cell = unsafe { &self.mode_union.no_sync };
                 let was_unlocked = cell.get() != LOCKED;
                 if was_unlocked {
@@ -131,8 +125,6 @@ impl<T> Lock<T> {
                 }
                 was_unlocked
             }
-            // SAFETY: The type is safe to send/share across threads because
-            // all its fields are properly synchronized.
             Mode::Sync => unsafe { self.mode_union.sync.try_lock() },
         }
         .then(|| LockGuard { lock: self, marker: PhantomData, mode })
@@ -172,9 +164,6 @@ impl<T> Lock<T> {
     #[inline(always)]
     #[track_caller]
     pub fn lock(&self) -> LockGuard<'_, T> {
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `self.mode` is fixed at construction, so passing
-        // it to `lock_assume` meets that method's safety precondition.
         unsafe { self.lock_assume(self.mode) }
     }
 }

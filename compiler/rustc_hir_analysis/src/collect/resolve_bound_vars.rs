@@ -250,6 +250,7 @@ pub(crate) fn provide(providers: &mut Providers) {
 }
 
 /// Computes the `ResolveBoundVars` map that contains data for an entire `Item`.
+
 /// `named_variable_map`, `late_bound_vars_map`, etc.
 #[instrument(level = "debug", skip(tcx))]
 fn resolve_bound_vars(tcx: TyCtxt<'_>, local_def_id: hir::OwnerId) -> ResolveBoundVars<'_> {
@@ -579,7 +580,6 @@ impl<'a, 'tcx> Visitor<'tcx> for BoundVarContext<'a, 'tcx> {
                     }
 
                     Scope::Body { .. } => {
-                        // tRust: invariant — all scope kinds handled above; this scope kind should not appear here
                         bug!("{:?}", scope)
                     }
 
@@ -1050,15 +1050,14 @@ impl<'a, 'tcx> Visitor<'tcx> for BoundVarContext<'a, 'tcx> {
 fn object_lifetime_default(tcx: TyCtxt<'_>, param_def_id: LocalDefId) -> ObjectLifetimeDefault {
     debug_assert_eq!(tcx.def_kind(param_def_id), DefKind::TyParam);
     let hir::Node::GenericParam(param) = tcx.hir_node_by_def_id(param_def_id) else {
-        // tRust: invariant — object_lifetime_default is only called on GenericParam nodes
         bug!("expected GenericParam for object_lifetime_default");
     };
     match param.source {
         hir::GenericParamSource::Generics => {
             let parent_def_id = tcx.local_parent(param_def_id);
-            let generics = tcx.hir_get_generics(parent_def_id).expect("invariant: item has generics");
+            let generics = tcx.hir_get_generics(parent_def_id).unwrap();
             let param_hir_id = tcx.local_def_id_to_hir_id(param_def_id);
-            let param = generics.params.iter().find(|p| p.hir_id == param_hir_id).expect("invariant: element exists in collection");
+            let param = generics.params.iter().find(|p| p.hir_id == param_hir_id).unwrap();
 
             // Scan the bounds and where-clauses on parameters to extract bounds
             // of the form `T:'a` so as to determine the `ObjectLifetimeDefault`
@@ -1092,7 +1091,6 @@ fn object_lifetime_default(tcx: TyCtxt<'_>, param_def_id: LocalDefId) -> ObjectL
                     }
                 }
                 _ => {
-                    // tRust: invariant — object_lifetime_default_raw is only applicable to type parameters
                     bug!("object_lifetime_default_raw must only be called on a type parameter")
                 }
             }
@@ -1125,7 +1123,6 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
 
     fn record_late_bound_vars(&mut self, hir_id: HirId, binder: Vec<ty::BoundVariableKind<'tcx>>) {
         if let Some(old) = self.rbv.late_bound_vars.insert(hir_id.local_id, binder) {
-            // tRust: invariant — early-bound lifetime index must be within the range of generic params
             bug!(
                 "overwrote bound vars for {hir_id:?}:\nold={old:?}\nnew={:?}",
                 self.rbv.late_bound_vars[&hir_id.local_id]
@@ -1349,7 +1346,6 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
                             what,
                         })
                     }
-                    // tRust: invariant — all valid GenericParamKind variants for lifetime resolution handled above
                     kind => span_bug!(
                         use_span,
                         "did not expect to resolve lifetime to {}",
@@ -1371,10 +1367,10 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
                         kind: hir::ImplItemKind::Fn(..),
                         ..
                     }) => {
-                        def = ResolvedArg::Free(owner_id.def_id, def.id().expect("invariant: resolved arg has id"));
+                        def = ResolvedArg::Free(owner_id.def_id, def.id().unwrap());
                     }
                     Node::Expr(hir::Expr { kind: hir::ExprKind::Closure(closure), .. }) => {
-                        def = ResolvedArg::Free(closure.def_id, def.id().expect("invariant: resolved arg has id"));
+                        def = ResolvedArg::Free(closure.def_id, def.id().unwrap());
                     }
                     _ => {}
                 }
@@ -1611,7 +1607,6 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
                             what,
                         })
                     }
-                    // tRust: invariant — all valid GenericParamKind variants for lifetime resolution handled above
                     kind => span_bug!(
                         use_span,
                         "did not expect to resolve non-lifetime param to {}",
@@ -1650,7 +1645,6 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
                             param_span: self.tcx.def_span(param_def_id),
                         },
                         kind => {
-                            // tRust: invariant — only type and const parameters expected in bound var resolution
                             bug!("unexpected def-kind: {}", kind.descr(param_def_id.to_def_id()))
                         }
                     });
@@ -1787,7 +1781,6 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
                         // We may also get a `Trait` or `TraitAlias` because of how generics `Self` parameter
                         // works. Ignore it because it can't have a meaningful lifetime default.
                         DefKind::LifetimeParam | DefKind::Trait | DefKind::TraitAlias => None,
-                        // tRust: invariant — only lifetime, type, and const def kinds expected in generic params
                         dk => bug!("unexpected def_kind {:?}", dk),
                     }
                 })
@@ -2113,7 +2106,6 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
                 match path.res {
                     Res::Err => return,
                     Res::Def(DefKind::AssocFn, item_def_id) => (vec![], item_def_id, item_segment),
-                    // tRust: invariant — fully qualified RTN paths only resolve to methods
                     _ => bug!("only expected method resolution for fully qualified RTN"),
                 }
             }
@@ -2222,7 +2214,7 @@ impl<'a, 'tcx> BoundVarContext<'a, 'tcx> {
         // See where these vars are used in `HirTyLowerer::lower_ty_maybe_return_type_notation`.
         // And this is exercised in:
         // `tests/ui/associated-type-bounds/return-type-notation/higher-ranked-bound-works.rs`.
-        let existing_bound_vars = self.rbv.late_bound_vars.get_mut(&hir_id.local_id).expect("invariant: index/key is valid");
+        let existing_bound_vars = self.rbv.late_bound_vars.get_mut(&hir_id.local_id).unwrap();
         let existing_bound_vars_saved = existing_bound_vars.clone();
         existing_bound_vars.extend(bound_vars);
         self.record_late_bound_vars(item_segment.hir_id, existing_bound_vars_saved);
@@ -2484,7 +2476,6 @@ fn is_late_bound_map(
                             }
                         }
                         Some(_) => (),
-                        // tRust: invariant — paths always have at least one segment or a self type
                         None => bug!("Path with no segments or self type"),
                     }
                 }
@@ -2543,7 +2534,6 @@ fn deny_non_region_late_bound(
 
     for (var, arg) in bound_vars {
         let Node::GenericParam(param) = tcx.hir_node_by_def_id(*var) else {
-            // tRust: invariant — bound-var def-ids always resolve to generic parameters
             span_bug!(tcx.def_span(*var), "expected bound-var def-id to resolve to param");
         };
 

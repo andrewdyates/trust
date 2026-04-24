@@ -214,7 +214,7 @@ impl<'a, 'tcx> LeakCheck<'a, 'tcx> {
                 let SccUniverse { universe: scc2_universe, region: scc2_region } =
                     self.scc_universes[scc2];
 
-                scc1_universe.take_min(scc2_universe, scc2_region.expect("invariant: SCC successor must have a region when propagating universe constraints")); // tRust:
+                scc1_universe.take_min(scc2_universe, scc2_region.unwrap());
 
                 if let Some(b) = self.scc_placeholders[scc2] {
                     succ_bound = Some(b);
@@ -235,7 +235,7 @@ impl<'a, 'tcx> LeakCheck<'a, 'tcx> {
                 // Check if `P1: R` for some `R` in a universe that cannot name
                 // P1. That's an error.
                 if scc1_universe.universe.cannot_name(scc1_placeholder.universe) {
-                    return Err(self.error(scc1_placeholder, scc1_universe.region.expect("invariant: SCC with placeholder must have a region for error reporting"))); // tRust:
+                    return Err(self.error(scc1_placeholder, scc1_universe.region.unwrap()));
                 }
 
                 // Check if we have some placeholder where `S: P2`
@@ -395,7 +395,6 @@ impl<'tcx> MiniGraph<'tcx> {
                         let c = region_constraints.data().constraints[i].0;
                         each_edge(c.sub, c.sup);
                     }
-                    // tRust: invariant — verification entries must not appear during higher-ranked leak checks
                     &AddVerify(i) => span_bug!(
                         region_constraints.data().verifys[i].origin.span(),
                         "we never add verifications while doing higher-ranked things",

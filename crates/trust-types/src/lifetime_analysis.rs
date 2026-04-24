@@ -14,12 +14,14 @@ use crate::fx::{FxHashMap, FxHashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::formula::{Formula, VerificationCondition, VcKind};
+use crate::formula::{Formula, VcKind, VerificationCondition};
 use crate::lifetime::{
     BorrowChecker, BorrowError, BorrowInfo, Lifetime, LifetimeRelation, Mutability,
     check_lifetime_constraints,
 };
-use crate::model::{BasicBlock, BlockId, Operand, Place, Rvalue, SourceSpan, Statement, Terminator, VerifiableBody};
+use crate::model::{
+    BasicBlock, BlockId, Operand, Place, Rvalue, SourceSpan, Statement, Terminator, VerifiableBody,
+};
 
 // ---------------------------------------------------------------------------
 // Region variables (NLL-style)
@@ -271,9 +273,7 @@ pub fn check_borrow_safety(body: &VerifiableBody) -> LifetimeAnalysis {
 
     for block in &body.blocks {
         // Record borrow set at block entry.
-        analysis
-            .borrow_sets
-            .insert(block.id.0, current_borrow_set.clone());
+        analysis.borrow_sets.insert(block.id.0, current_borrow_set.clone());
 
         // Process each statement in the block.
         analyze_block_borrows(block, &mut checker, &mut current_borrow_set, &mut analysis);
@@ -307,11 +307,7 @@ fn analyze_block_borrows(
                 let region_idx = analysis.regions.len();
                 let lifetime = Lifetime::new(format!("'_r{region_idx}"), block.id);
 
-                let mutability = if *mutable {
-                    Mutability::Mutable
-                } else {
-                    Mutability::Shared
-                };
+                let mutability = if *mutable { Mutability::Mutable } else { Mutability::Shared };
 
                 let borrow_info = BorrowInfo {
                     borrowed_place: borrowed.clone(),
@@ -374,9 +370,8 @@ fn check_rvalue_borrows(
 ) {
     // Check move/copy operands for use-after-move.
     for place in extract_operand_places(rvalue) {
-        if let crate::lifetime::OwnershipState::Moved {
-            span: move_span, ..
-        } = checker.ownership_state(place.local)
+        if let crate::lifetime::OwnershipState::Moved { span: move_span, .. } =
+            checker.ownership_state(place.local)
         {
             analysis.errors.push(BorrowError::MovedValue {
                 place: place.clone(),
@@ -388,11 +383,7 @@ fn check_rvalue_borrows(
 
     // For reference creation, the checker.check_borrow handles conflicts.
     if let Rvalue::Ref { mutable, place: borrowed } = rvalue {
-        let mutability = if *mutable {
-            Mutability::Mutable
-        } else {
-            Mutability::Shared
-        };
+        let mutability = if *mutable { Mutability::Mutable } else { Mutability::Shared };
         if let Err(err) = checker.check_borrow(borrowed, mutability, span) {
             // Only add if it's a MovedValue error (AlreadyBorrowed is handled via BorrowSet).
             if matches!(err, BorrowError::MovedValue { .. }) {
@@ -477,7 +468,12 @@ pub fn compute_borrow_sets(body: &VerifiableBody) -> FxHashMap<usize, BorrowSet>
         sets.insert(block.id.0, current.clone());
 
         for stmt in &block.stmts {
-            if let Statement::Assign { rvalue: Rvalue::Ref { mutable, place: borrowed }, span, .. } = stmt {
+            if let Statement::Assign {
+                rvalue: Rvalue::Ref { mutable, place: borrowed },
+                span,
+                ..
+            } = stmt
+            {
                 let mutability = if *mutable { Mutability::Mutable } else { Mutability::Shared };
                 current.add(BorrowInfo {
                     borrowed_place: borrowed.clone(),
@@ -521,10 +517,8 @@ pub fn generate_lifetime_vcs(
         };
 
         vcs.push(VerificationCondition {
-            kind: VcKind::Assertion {
-                message: format!("borrow safety: {error}"),
-            },
-            function: function_name.to_string(),
+            kind: VcKind::Assertion { message: format!("borrow safety: {error}") },
+            function: function_name.into(),
             location: span,
             formula: Formula::Bool(false), // error = unsatisfiable
             contract_metadata: None,
@@ -541,7 +535,7 @@ pub fn generate_lifetime_vcs(
                         constraint.reason
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: constraint.span.clone(),
                 formula: Formula::Bool(true), // constraint, not violation
                 contract_metadata: None,
@@ -722,10 +716,7 @@ mod tests {
             span: span(),
             reason: "borrow use".to_string(),
         };
-        assert!(matches!(
-            constraint.kind,
-            ConstraintKind::LiveAt { region: 0, .. }
-        ));
+        assert!(matches!(constraint.kind, ConstraintKind::LiveAt { region: 0, .. }));
     }
 
     // --- RegionVariable tests ---
@@ -888,10 +879,7 @@ mod tests {
 
         let analysis = check_borrow_safety(&body);
         assert!(analysis.has_errors());
-        assert!(analysis
-            .errors
-            .iter()
-            .any(|e| matches!(e, BorrowError::AlreadyBorrowed { .. })));
+        assert!(analysis.errors.iter().any(|e| matches!(e, BorrowError::AlreadyBorrowed { .. })));
     }
 
     #[test]
@@ -980,7 +968,11 @@ mod tests {
         let body = VerifiableBody {
             locals: vec![
                 LocalDecl { index: 0, ty: Ty::i32(), name: None },
-                LocalDecl { index: 1, ty: Ty::Ref { mutable: false, inner: Box::new(Ty::i32()) }, name: None },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Ref { mutable: false, inner: Box::new(Ty::i32()) },
+                    name: None,
+                },
             ],
             blocks: vec![
                 BasicBlock {
@@ -992,11 +984,7 @@ mod tests {
                     }],
                     terminator: Terminator::Goto(BlockId(1)),
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::Unit,
@@ -1015,7 +1003,11 @@ mod tests {
         let body = VerifiableBody {
             locals: vec![
                 LocalDecl { index: 0, ty: Ty::i32(), name: None },
-                LocalDecl { index: 1, ty: Ty::Ref { mutable: false, inner: Box::new(Ty::i32()) }, name: None },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Ref { mutable: false, inner: Box::new(Ty::i32()) },
+                    name: None,
+                },
             ],
             blocks: vec![
                 BasicBlock {
@@ -1031,11 +1023,7 @@ mod tests {
                         span: span(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::Unit,
@@ -1163,10 +1151,7 @@ mod tests {
             index: 42,
             name: Some("'a".to_string()),
             kind: RegionKind::Named("'a".to_string()),
-            live_points: vec![
-                ProgramPoint::new(BlockId(0), 0),
-                ProgramPoint::new(BlockId(1), 2),
-            ],
+            live_points: vec![ProgramPoint::new(BlockId(0), 0), ProgramPoint::new(BlockId(1), 2)],
         };
 
         let json = serde_json::to_string(&region).expect("serialize");

@@ -428,8 +428,6 @@ pub(crate) fn do_in_place_scope<'scope, OP, R>(registry: Option<&Arc<Registry>>,
 where
     OP: FnOnce(&Scope<'scope>) -> R,
 {
-    // SAFETY: `WorkerThread::current` returns the TLS worker pointer for this thread, which is
-    // valid for the thread's lifetime; `as_ref` also handles the non-worker null case.
     let thread = unsafe { WorkerThread::current().as_ref() };
     let scope = Scope::<'scope>::new(thread, registry);
     scope.base.complete(thread, || op(&scope))
@@ -467,8 +465,6 @@ pub(crate) fn do_in_place_scope_fifo<'scope, OP, R>(registry: Option<&Arc<Regist
 where
     OP: FnOnce(&ScopeFifo<'scope>) -> R,
 {
-    // SAFETY: `WorkerThread::current` returns the TLS worker pointer for this thread, which is
-    // valid for the thread's lifetime; `as_ref` also handles the non-worker null case.
     let thread = unsafe { WorkerThread::current().as_ref() };
     let scope = ScopeFifo::<'scope>::new(thread, registry);
     scope.base.complete(thread, || op(&scope))
@@ -537,8 +533,6 @@ impl<'scope> Scope<'scope> {
         BODY: FnOnce(&Scope<'scope>) + Send + 'scope,
     {
         let scope_ptr = ScopePtr(self);
-        // SAFETY: `scope_ptr` points to `self`, and the scope's completion protocol keeps every
-        // spawned job running to completion before the scope can be dropped.
         let job = HeapJob::new(self.base.tlv, move |id| unsafe {
             // SAFETY: this job will execute before the scope ends.
             let scope = scope_ptr.as_ref();
@@ -567,8 +561,6 @@ impl<'scope> Scope<'scope> {
         BODY: Fn(&Scope<'scope>, BroadcastContext<'_>) + Send + Sync + 'scope,
     {
         let scope_ptr = ScopePtr(self);
-        // SAFETY: `scope_ptr` points to `self`, and broadcast jobs are all joined before the scope
-        // can end, so the scope and TLS worker pointer stay valid for this closure.
         let job = ArcJob::new(move |id| unsafe {
             // SAFETY: this job will execute before the scope ends.
             let scope = scope_ptr.as_ref();
@@ -614,8 +606,6 @@ impl<'scope> ScopeFifo<'scope> {
         BODY: FnOnce(&ScopeFifo<'scope>) + Send + 'scope,
     {
         let scope_ptr = ScopePtr(self);
-        // SAFETY: `scope_ptr` points to `self`, and the scope's completion protocol keeps every
-        // spawned job running to completion before the scope can be dropped.
         let job = HeapJob::new(self.base.tlv, move |id| unsafe {
             // SAFETY: this job will execute before the scope ends.
             let scope = scope_ptr.as_ref();
@@ -645,8 +635,6 @@ impl<'scope> ScopeFifo<'scope> {
         BODY: Fn(&ScopeFifo<'scope>, BroadcastContext<'_>) + Send + Sync + 'scope,
     {
         let scope_ptr = ScopePtr(self);
-        // SAFETY: `scope_ptr` points to `self`, and broadcast jobs are all joined before the scope
-        // can end, so the scope and TLS worker pointer stay valid for this closure.
         let job = ArcJob::new(move |id| unsafe {
             // SAFETY: this job will execute before the scope ends.
             let scope = scope_ptr.as_ref();
@@ -688,8 +676,6 @@ impl<'scope> ScopeBase<'scope> {
     where
         FUNC: FnOnce(JobRefId) + Send + 'scope,
     {
-        // SAFETY: We increment the completion latch before erasing the job's lifetime, so the
-        // scope cannot finish and drop captured `'scope` data before this heap job executes.
         unsafe {
             self.job_completed_latch.increment();
             job.into_job_ref()
@@ -701,14 +687,10 @@ impl<'scope> ScopeBase<'scope> {
         FUNC: Fn(JobRefId) + Send + Sync + 'scope,
     {
         if self.worker.is_some() {
-            // SAFETY: `as_job_ref` creates a raw ref backed by a cloned `Arc`, so reading its
-            // stable pointer id is sound while that extra strong reference keeps the allocation alive.
             let id = unsafe { ArcJob::as_job_ref(&job).id() };
             self.pending_jobs.lock().unwrap().insert(id);
         }
         let n_threads = self.registry.num_threads();
-        // SAFETY: Each call clones the shared `ArcJob` and increments the completion latch first,
-        // so every published `JobRef` has its own strong ref and is accounted for before the scope ends.
         let job_refs = (0..n_threads).map(|_| unsafe {
             self.job_completed_latch.increment();
             ArcJob::as_job_ref(&job)
@@ -723,8 +705,6 @@ impl<'scope> ScopeBase<'scope> {
     where
         FUNC: FnOnce() -> R,
     {
-        // SAFETY: `self` is borrowed for the entire call to `complete`, so its raw pointer stays
-        // valid while we run the scope body and update completion bookkeeping.
         let result = unsafe { Self::execute_job_closure(self, func) };
         self.job_completed_latch.wait(
             owner,
@@ -745,8 +725,6 @@ impl<'scope> ScopeBase<'scope> {
     where
         FUNC: FnOnce(),
     {
-        // SAFETY: The caller of `execute_job` guarantees that `this` points to a live `ScopeBase`
-        // for the duration of the job; this just forwards that invariant.
         let _: Option<()> = unsafe { Self::execute_job_closure(this, func) };
     }
 
@@ -760,14 +738,10 @@ impl<'scope> ScopeBase<'scope> {
         let result = match unwind::halt_unwinding(func) {
             Ok(r) => Some(r),
             Err(err) => {
-                // SAFETY: `this` is the live scope state for the currently executing job, so it is
-                // valid to record the panic through the shared `ScopeBase`.
                 unsafe { (*this).job_panicked(err) };
                 None
             }
         };
-        // SAFETY: The completion latch is a field of this live scope state, and this is the last
-        // access to `this` because waking waiters may allow the scope to be dropped.
         unsafe { Latch::set(&(*this).job_completed_latch) };
         result
     }
@@ -797,8 +771,6 @@ impl<'scope> ScopeBase<'scope> {
         // ordering:
         let panic = self.panic.swap(ptr::null_mut(), Ordering::Relaxed);
         if !panic.is_null() {
-            // SAFETY: `job_panicked` stored this pointer by boxing the panic payload and publishing
-            // it in `self.panic`; swapping in null gives us unique ownership to rebuild the box.
             let value = unsafe { Box::from_raw(panic) };
 
             // Restore the TLV if we ran some jobs while waiting
@@ -845,8 +817,6 @@ unsafe impl<T: Sync> Sync for ScopePtr<T> {}
 impl<T> ScopePtr<T> {
     // Helper to avoid disjoint captures of `scope_ptr.0`
     unsafe fn as_ref(&self) -> &T {
-        // SAFETY: `ScopePtr` is only created from a live scope reference, and scope jobs are
-        // guaranteed to finish before that scope is dropped.
         unsafe { &*self.0 }
     }
 }

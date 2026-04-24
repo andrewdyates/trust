@@ -64,8 +64,6 @@ impl JobRef {
 
     #[inline]
     pub(super) unsafe fn execute(self) {
-        // SAFETY: `JobRef::new` paired this erased data pointer with the matching `execute_fn`,
-        // and callers only invoke it while the underlying job storage is still alive.
         unsafe { (self.execute_fn)(self.pointer) }
     }
 }
@@ -102,15 +100,10 @@ where
     }
 
     pub(super) unsafe fn as_job_ref(&self) -> JobRef {
-        // SAFETY: The returned `JobRef` only borrows this stack job, and callers must ensure the
-        // job is executed before this stack frame can be dropped.
         unsafe { JobRef::new(self) }
     }
 
     pub(super) unsafe fn run_inline(&self, stolen: bool) {
-        // SAFETY: `run_inline` is only called for a live job that is executed exactly once, so we
-        // have exclusive access to `func` and `result` through their `UnsafeCell`s until the latch
-        // is set.
         unsafe {
             let func = (*self.func.get()).take().unwrap();
             *(self.result.get()) = match unwind::halt_unwinding(|| func(stolen)) {
@@ -133,21 +126,13 @@ where
     R: Send,
 {
     unsafe fn execute(this: *const ()) {
-        // SAFETY: `this` came from `JobRef::new` for a live `StackJob`, and the job remains alive
-        // until its completion latch is signaled.
         let this = unsafe { &*(this as *const Self) };
         tlv::set(this.tlv);
         let abort = unwind::AbortIfPanic;
-        // SAFETY: A `StackJob` is executed at most once, so taking the closure out of this cell is
-        // exclusive.
         let func = unsafe { (*this.func.get()).take().unwrap() };
-        // SAFETY: Only the executing thread writes the result, and readers wait on the latch
-        // before observing `result`.
         unsafe {
             (*this.result.get()) = JobResult::call(func);
         }
-        // SAFETY: The latch is part of this live job, and we do not touch `this` afterward because
-        // waking the waiter may allow the stack storage to be reclaimed.
         unsafe {
             Latch::set(&this.latch);
         }
@@ -181,8 +166,6 @@ where
     /// lifetimes, so it is up to you to ensure that this JobRef
     /// doesn't outlive any data that it closes over.
     pub(super) unsafe fn into_job_ref(self: Box<Self>) -> JobRef {
-        // SAFETY: `Box::into_raw` yields a stable pointer that stays valid until `execute`
-        // reconstructs the same box with `Box::from_raw`.
         unsafe { JobRef::new(Box::into_raw(self)) }
     }
 
@@ -191,7 +174,6 @@ where
     where
         BODY: 'static,
     {
-        // SAFETY: `BODY: 'static` guarantees the erased job cannot outlive any captured data.
         unsafe { self.into_job_ref() }
     }
 }
@@ -202,8 +184,6 @@ where
 {
     unsafe fn execute(this: *const ()) {
         let pointer = this.expose_provenance();
-        // SAFETY: This pointer was produced by `Box::into_raw` in `into_job_ref`, and each
-        // `HeapJob` job ref is executed exactly once, so we rebuild exactly one owning box here.
         let this = unsafe { Box::from_raw(this as *mut Self) };
         tlv::set(this.tlv);
         (this.job)(JobRefId { pointer });
@@ -231,8 +211,6 @@ where
     /// lifetimes, so it is up to you to ensure that this JobRef
     /// doesn't outlive any data that it closes over.
     pub(super) unsafe fn as_job_ref(this: &Arc<Self>) -> JobRef {
-        // SAFETY: Cloning the `Arc` gives this `JobRef` its own strong reference, and the raw
-        // pointer stays valid until `execute` rebuilds that clone with `Arc::from_raw`.
         unsafe { JobRef::new(Arc::into_raw(Arc::clone(this))) }
     }
 
@@ -241,7 +219,6 @@ where
     where
         BODY: 'static,
     {
-        // SAFETY: `BODY: 'static` guarantees the erased `ArcJob` ref cannot outlive captured data.
         unsafe { Self::as_job_ref(this) }
     }
 }
@@ -252,8 +229,6 @@ where
 {
     unsafe fn execute(this: *const ()) {
         let pointer = this.expose_provenance();
-        // SAFETY: This raw pointer came from `Arc::into_raw` on a cloned `Arc`, and each `JobRef`
-        // consumes exactly one strong reference by rebuilding it once here.
         let this = unsafe { Arc::from_raw(this as *mut Self) };
         (this.job)(JobRefId { pointer });
     }
@@ -295,8 +270,6 @@ impl JobFifo {
         // jobs in a thread's deque may be popped from the back (LIFO) or stolen from the front
         // (FIFO), but either way they will end up popping from the front of this queue.
         self.inner.push(job_ref);
-        // SAFETY: The returned `JobRef` only borrows this FIFO wrapper, and callers must keep the
-        // queue alive until that wrapper job is eventually executed.
         unsafe { JobRef::new(self) }
     }
 }
@@ -304,13 +277,9 @@ impl JobFifo {
 impl Job for JobFifo {
     unsafe fn execute(this: *const ()) {
         // We "execute" a queue by executing its first job, FIFO.
-        // SAFETY: `push` created this `JobRef` from a live `JobFifo`, and the caller kept the FIFO
-        // alive until this wrapper job ran.
         let this = unsafe { &*(this as *const Self) };
         loop {
             match this.inner.steal() {
-                // SAFETY: Stealing a `JobRef` transfers the right to execute that still-live job
-                // exactly once.
                 Steal::Success(job_ref) => break unsafe { job_ref.execute() },
                 Steal::Empty => panic!("FIFO is empty"),
                 Steal::Retry => {}

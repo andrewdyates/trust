@@ -395,7 +395,7 @@ pub(crate) fn llfn_attrs_from_instance<'ll, 'tcx>(
         to_add.push(llvm::CreateAttrString(cx.llcx, "use-sample-profile"));
     }
 
-    // tRust: known issue — none of these functions interact with source level attributes.
+    // FIXME: none of these functions interact with source level attributes.
     to_add.extend(frame_pointer_type_attr(cx, sess));
     to_add.extend(function_return_attr(cx, sess));
     to_add.extend(instrument_function_attr(cx, sess));

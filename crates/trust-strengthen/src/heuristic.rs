@@ -8,13 +8,13 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use trust_types::fx::FxHashSet;
 use trust_types::{BinOp, Counterexample, VcKind, VerificationResult};
 
 use crate::analyzer::FailurePattern;
 use crate::counterexample::{extract_hints, hints_to_preconditions, hints_to_spec_body};
 use crate::patterns::{pattern_matches_to_proposals, recognize_patterns};
 use crate::proposer::{Proposal, ProposalKind};
-use trust_types::fx::FxHashSet;
 
 /// A verification failure with enough context for heuristic strengthening.
 #[derive(Debug, Clone)]
@@ -77,7 +77,8 @@ impl HeuristicStrengthener {
         let mut proposals = Vec::new();
 
         // Strategy 1: Pattern-based inference from function name + VC kind
-        let pattern_proposals = recognize_patterns(&failure.function_name, std::slice::from_ref(&failure.vc_kind));
+        let pattern_proposals =
+            recognize_patterns(&failure.function_name, std::slice::from_ref(&failure.vc_kind));
         proposals.extend(pattern_matches_to_proposals(
             &failure.function_path,
             &failure.function_name,
@@ -92,17 +93,12 @@ impl HeuristicStrengthener {
             // Build preconditions from hints
             let preconditions = hints_to_preconditions(&hints);
             for pre in &preconditions {
-                let confidence_boost: f64 = hints
-                    .iter()
-                    .map(|h| h.confidence_boost)
-                    .sum::<f64>()
-                    .min(0.2);
+                let confidence_boost: f64 =
+                    hints.iter().map(|h| h.confidence_boost).sum::<f64>().min(0.2);
                 proposals.push(Proposal {
                     function_path: failure.function_path.clone(),
                     function_name: failure.function_name.clone(),
-                    kind: ProposalKind::AddPrecondition {
-                        spec_body: pre.clone(),
-                    },
+                    kind: ProposalKind::AddPrecondition { spec_body: pre.clone() },
                     confidence: (0.8 + confidence_boost).min(1.0),
                     rationale: format!(
                         "Counterexample-guided: concrete violation suggests {}",
@@ -118,9 +114,7 @@ impl HeuristicStrengthener {
                     function_name: failure.function_name.clone(),
                     kind: ProposalKind::AddPrecondition { spec_body: spec_body.clone() },
                     confidence: 0.85,
-                    rationale: format!(
-                        "Counterexample-guided combined guard: {spec_body}"
-                    ),
+                    rationale: format!("Counterexample-guided combined guard: {spec_body}"),
                 });
             }
         }
@@ -138,9 +132,7 @@ impl HeuristicStrengthener {
         // Filter and sort
         proposals.retain(|p| p.confidence >= self.min_confidence);
         proposals.sort_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
         proposals.truncate(self.max_proposals);
 
@@ -157,38 +149,23 @@ impl HeuristicStrengthener {
 
         // Pattern recognition from function name alone
         let pattern_matches = recognize_patterns(&sig.name, &[]);
-        proposals.extend(pattern_matches_to_proposals(
-            &sig.path,
-            &sig.name,
-            &pattern_matches,
-        ));
+        proposals.extend(pattern_matches_to_proposals(&sig.path, &sig.name, &pattern_matches));
 
         // Type-based precondition inference
         for (param_name, param_type) in &sig.params {
-            proposals.extend(infer_from_param_type(
-                &sig.path,
-                &sig.name,
-                param_name,
-                param_type,
-            ));
+            proposals.extend(infer_from_param_type(&sig.path, &sig.name, param_name, param_type));
         }
 
         // Return-type-based postcondition inference
         if let Some(ref ret_ty) = sig.return_type {
-            proposals.extend(infer_from_return_type(
-                &sig.path,
-                &sig.name,
-                ret_ty,
-            ));
+            proposals.extend(infer_from_return_type(&sig.path, &sig.name, ret_ty));
         }
 
         // Deduplicate, filter, sort
         dedup_proposals(&mut proposals);
         proposals.retain(|p| p.confidence >= self.min_confidence);
         proposals.sort_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
         proposals.truncate(self.max_proposals);
 
@@ -251,9 +228,7 @@ fn failure_pattern_proposals(
             vec![Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "divisor != 0".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "divisor != 0".into() },
                 confidence: 0.95,
                 rationale: "Division by zero possible".into(),
             }]
@@ -262,9 +237,7 @@ fn failure_pattern_proposals(
             vec![Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "index < slice.len()".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "index < slice.len()".into() },
                 confidence: 0.9,
                 rationale: "Index out of bounds possible".into(),
             }]
@@ -284,9 +257,7 @@ fn failure_pattern_proposals(
             vec![Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "value != MIN".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "value != MIN".into() },
                 confidence: 0.9,
                 rationale: "Negation of MIN overflows".into(),
             }]
@@ -295,9 +266,7 @@ fn failure_pattern_proposals(
             vec![Proposal {
                 function_path: function_path.into(),
                 function_name: function_name.into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "shift < bit_width".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "shift < bit_width".into() },
                 confidence: 0.9,
                 rationale: "Shift amount must be less than bit width".into(),
             }]
@@ -321,13 +290,9 @@ fn infer_from_param_type(
         proposals.push(Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: format!("{param_name}.len() > 0"),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: format!("{param_name}.len() > 0") },
             confidence: 0.5,
-            rationale: format!(
-                "Slice parameter `{param_name}` may need non-empty precondition"
-            ),
+            rationale: format!("Slice parameter `{param_name}` may need non-empty precondition"),
         });
     }
 
@@ -340,9 +305,7 @@ fn infer_from_param_type(
                 spec_body: format!("{param_name} < collection.len()"),
             },
             confidence: 0.6,
-            rationale: format!(
-                "Parameter `{param_name}: usize` likely used as index"
-            ),
+            rationale: format!("Parameter `{param_name}: usize` likely used as index"),
         });
     }
 
@@ -351,13 +314,9 @@ fn infer_from_param_type(
         proposals.push(Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: format!("{param_name} != 0"),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: format!("{param_name} != 0") },
             confidence: 0.8,
-            rationale: format!(
-                "Parameter `{param_name}` likely used as divisor"
-            ),
+            rationale: format!("Parameter `{param_name}` likely used as divisor"),
         });
     }
 
@@ -366,13 +325,9 @@ fn infer_from_param_type(
         proposals.push(Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: format!("{param_name}.is_some()"),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: format!("{param_name}.is_some()") },
             confidence: 0.5,
-            rationale: format!(
-                "Option parameter `{param_name}` may be unwrapped"
-            ),
+            rationale: format!("Option parameter `{param_name}` may be unwrapped"),
         });
     }
 
@@ -445,9 +400,7 @@ fn infer_from_return_type(
         proposals.push(Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPostcondition {
-                spec_body: format!("result fits in {trimmed}"),
-            },
+            kind: ProposalKind::AddPostcondition { spec_body: format!("result fits in {trimmed}") },
             confidence: 0.6,
             rationale: format!("Numeric return `{trimmed}`: result within type bounds"),
         });
@@ -529,8 +482,9 @@ fn is_numeric_type(ty: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{CounterexampleValue, Ty};
+
+    use super::*;
 
     fn make_failure(
         vc_kind: VcKind,
@@ -558,10 +512,7 @@ mod tests {
         FunctionSignature {
             path: format!("test::{name}"),
             name: name.into(),
-            params: params
-                .into_iter()
-                .map(|(n, t)| (n.into(), t.into()))
-                .collect(),
+            params: params.into_iter().map(|(n, t)| (n.into(), t.into())).collect(),
             return_type: return_type.map(Into::into),
         }
     }
@@ -574,7 +525,10 @@ mod tests {
         let failure = make_failure(
             VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             "get_midpoint",
             None,
@@ -583,9 +537,8 @@ mod tests {
         let proposals = strengthener.strengthen_from_failure(&failure);
         assert!(!proposals.is_empty(), "should produce proposals for overflow");
 
-        let has_precondition = proposals
-            .iter()
-            .any(|p| matches!(p.kind, ProposalKind::AddPrecondition { .. }));
+        let has_precondition =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPrecondition { .. }));
         assert!(has_precondition, "should have at least one precondition proposal");
     }
 
@@ -640,7 +593,10 @@ mod tests {
         let failure = make_failure(
             VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             "get_midpoint",
             Some(cex),
@@ -679,7 +635,10 @@ mod tests {
         let failure = make_failure(
             VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             "midpoint",
             Some(cex),
@@ -699,7 +658,10 @@ mod tests {
         let failure = make_failure(
             VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             "midpoint",
             Some(cex),
@@ -776,11 +738,8 @@ mod tests {
     #[test]
     fn test_signature_divisor_param() {
         let strengthener = HeuristicStrengthener::default();
-        let sig = make_signature(
-            "safe_divide",
-            vec![("x", "u64"), ("divisor", "u64")],
-            Some("u64"),
-        );
+        let sig =
+            make_signature("safe_divide", vec![("x", "u64"), ("divisor", "u64")], Some("u64"));
 
         let proposals = strengthener.strengthen_from_signature(&sig);
         let has_nonzero = proposals.iter().any(|p| {
@@ -796,16 +755,12 @@ mod tests {
     #[test]
     fn test_signature_result_return() {
         let strengthener = HeuristicStrengthener::default();
-        let sig = make_signature(
-            "parse_config",
-            vec![("input", "&str")],
-            Some("Result<Config, Error>"),
-        );
+        let sig =
+            make_signature("parse_config", vec![("input", "&str")], Some("Result<Config, Error>"));
 
         let proposals = strengthener.strengthen_from_signature(&sig);
-        let has_result_post = proposals.iter().any(|p| {
-            matches!(p.kind, ProposalKind::AddPostcondition { .. })
-        });
+        let has_result_post =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }));
         assert!(has_result_post, "should propose postcondition for Result return");
     }
 
@@ -836,9 +791,8 @@ mod tests {
 
         let proposals = strengthener.strengthen_from_signature(&sig);
         // Should still produce a numeric postcondition
-        let has_numeric_post = proposals.iter().any(|p| {
-            matches!(p.kind, ProposalKind::AddPostcondition { .. })
-        });
+        let has_numeric_post =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }));
         assert!(has_numeric_post, "numeric return should produce postcondition");
     }
 
@@ -849,9 +803,8 @@ mod tests {
 
         let proposals = strengthener.strengthen_from_signature(&sig);
         // Should still produce basic type-based proposals
-        let has_proposals = proposals
-            .iter()
-            .any(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }));
+        let has_proposals =
+            proposals.iter().any(|p| matches!(p.kind, ProposalKind::AddPostcondition { .. }));
         assert!(has_proposals, "even unknown functions should get type-based proposals");
     }
 
@@ -895,18 +848,14 @@ mod tests {
             Proposal {
                 function_path: "test::f".into(),
                 function_name: "f".into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "x != 0".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "x != 0".into() },
                 confidence: 0.9,
                 rationale: "first".into(),
             },
             Proposal {
                 function_path: "test::f".into(),
                 function_name: "f".into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "x != 0".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "x != 0".into() },
                 confidence: 0.8,
                 rationale: "second".into(),
             },
@@ -921,18 +870,14 @@ mod tests {
             Proposal {
                 function_path: "test::f".into(),
                 function_name: "f".into(),
-                kind: ProposalKind::AddPrecondition {
-                    spec_body: "x != 0".into(),
-                },
+                kind: ProposalKind::AddPrecondition { spec_body: "x != 0".into() },
                 confidence: 0.9,
                 rationale: "pre".into(),
             },
             Proposal {
                 function_path: "test::f".into(),
                 function_name: "f".into(),
-                kind: ProposalKind::AddPostcondition {
-                    spec_body: "x != 0".into(),
-                },
+                kind: ProposalKind::AddPostcondition { spec_body: "x != 0".into() },
                 confidence: 0.8,
                 rationale: "post".into(),
             },
@@ -944,11 +889,7 @@ mod tests {
     #[test]
     fn test_option_param_precondition() {
         let strengthener = HeuristicStrengthener::default();
-        let sig = make_signature(
-            "process",
-            vec![("config", "Option<Config>")],
-            Some("()"),
-        );
+        let sig = make_signature("process", vec![("config", "Option<Config>")], Some("()"));
 
         let proposals = strengthener.strengthen_from_signature(&sig);
         let has_some = proposals.iter().any(|p| {
@@ -981,9 +922,7 @@ mod tests {
     fn test_strengthen_negation_overflow() {
         let strengthener = HeuristicStrengthener::default();
         let failure = make_failure(
-            VcKind::NegationOverflow {
-                ty: Ty::Int { width: 64, signed: true },
-            },
+            VcKind::NegationOverflow { ty: Ty::Int { width: 64, signed: true } },
             "negate",
             None,
         );

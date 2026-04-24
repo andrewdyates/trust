@@ -27,11 +27,7 @@ use crate::substitution::{self, SubstitutionError, SubstitutionMap};
 pub enum PropagationError {
     /// Failed to substitute formula variables.
     #[error("substitution failed for callee `{callee}` at call site in `{caller}`: {source}")]
-    SubstitutionFailed {
-        caller: String,
-        callee: String,
-        source: SubstitutionError,
-    },
+    SubstitutionFailed { caller: String, callee: String, source: SubstitutionError },
 
     /// Propagation depth limit exceeded.
     #[error("propagation depth limit {limit} exceeded at function `{function}`")]
@@ -171,14 +167,10 @@ pub struct CallerPropagator {
 /// Metadata about a function relevant to propagation.
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionInfo {
-    #[allow(dead_code)] // Stored for debugging; HashMap key serves as the primary lookup.
-    pub(crate) name: String,
     pub(crate) def_path: String,
     pub(crate) visibility: FunctionVisibility,
     pub(crate) preconditions: Vec<Formula>,
     pub(crate) params: Vec<(String, Sort)>,
-    #[allow(dead_code)] // Stored for diagnostic context; not read during propagation itself.
-    pub(crate) span: SourceSpan,
 }
 
 impl CallerPropagator {
@@ -196,21 +188,15 @@ impl CallerPropagator {
             func_map.insert(
                 func.name.clone(),
                 FunctionInfo {
-                    name: func.name.clone(),
                     def_path: func.def_path.clone(),
                     visibility,
                     preconditions: func.preconditions.clone(),
                     params,
-                    span: func.span.clone(),
                 },
             );
         }
 
-        Self {
-            config,
-            functions: func_map,
-            call_graph,
-        }
+        Self { config, functions: func_map, call_graph }
     }
 
     /// Propagate preconditions for a single callee function to all its callers.
@@ -222,11 +208,10 @@ impl CallerPropagator {
         &self,
         callee_name: &str,
     ) -> Result<PropagationResult, PropagationError> {
-        let callee_info = self.functions.get(callee_name).ok_or_else(|| {
-            PropagationError::NoCallers {
-                function: callee_name.to_string(),
-            }
-        })?;
+        let callee_info = self
+            .functions
+            .get(callee_name)
+            .ok_or_else(|| PropagationError::NoCallers { function: callee_name.into() })?;
 
         if callee_info.preconditions.is_empty() {
             return Ok(PropagationResult {
@@ -262,9 +247,9 @@ impl CallerPropagator {
                         ));
                     }
                     Err(e) => {
-                        result.warnings.push(format!(
-                            "Failed to propagate to `{caller_name}`: {e}"
-                        ));
+                        result
+                            .warnings
+                            .push(format!("Failed to propagate to `{caller_name}`: {e}"));
                     }
                 }
             }
@@ -384,17 +369,9 @@ impl CallerPropagator {
     fn find_callers(&self, callee_name: &str) -> Vec<(String, SourceSpan)> {
         let mut callers = Vec::new();
         for edge in &self.call_graph.edges {
-            let edge_callee_short = edge
-                .callee
-                .rsplit("::")
-                .next()
-                .unwrap_or(&edge.callee);
+            let edge_callee_short = edge.callee.rsplit("::").next().unwrap_or(&edge.callee);
             if edge_callee_short == callee_name || edge.callee == callee_name {
-                let caller_short = edge
-                    .caller
-                    .rsplit("::")
-                    .next()
-                    .unwrap_or(&edge.caller);
+                let caller_short = edge.caller.rsplit("::").next().unwrap_or(&edge.caller);
                 callers.push((caller_short.to_string(), edge.call_site.clone()));
             }
         }
@@ -412,23 +389,20 @@ impl CallerPropagator {
         visited: &mut FxHashSet<String>,
     ) -> Result<Vec<PropagationSuggestion>, PropagationError> {
         if !visited.insert(caller_name.to_string()) {
-            return Err(PropagationError::CycleDetected {
-                function: caller_name.to_string(),
-            });
+            return Err(PropagationError::CycleDetected { function: caller_name.into() });
         }
 
         if depth > self.config.max_depth {
             return Err(PropagationError::DepthExceeded {
-                function: caller_name.to_string(),
+                function: caller_name.into(),
                 limit: self.config.max_depth,
             });
         }
 
-        let callee_info = self.functions.get(callee_name).ok_or_else(|| {
-            PropagationError::NoCallers {
-                function: callee_name.to_string(),
-            }
-        })?;
+        let callee_info = self
+            .functions
+            .get(callee_name)
+            .ok_or_else(|| PropagationError::NoCallers { function: callee_name.into() })?;
 
         // Build the substitution map: callee params -> caller args.
         // For now we use a positional mapping (param_0 -> arg_0, etc.)
@@ -458,7 +432,7 @@ impl CallerPropagator {
         };
 
         let provenance = Provenance {
-            origin_function: callee_name.to_string(),
+            origin_function: callee_name.into(),
             origin_precondition: precondition.clone(),
             depth,
             propagation_chain: {
@@ -474,9 +448,7 @@ impl CallerPropagator {
         if already_implied {
             return Ok(vec![PropagationSuggestion {
                 caller_name: caller_name.to_string(),
-                caller_def_path: caller_info
-                    .map(|i| i.def_path.clone())
-                    .unwrap_or_default(),
+                caller_def_path: caller_info.map(|i| i.def_path.clone()).unwrap_or_default(),
                 callee_name: callee_name.to_string(),
                 original_precondition: precondition.clone(),
                 substituted_precondition: simplified,
@@ -488,9 +460,8 @@ impl CallerPropagator {
         }
 
         // Determine action based on caller visibility.
-        let caller_visibility = caller_info
-            .map(|i| i.visibility)
-            .unwrap_or(FunctionVisibility::Private);
+        let caller_visibility =
+            caller_info.map(|i| i.visibility).unwrap_or(FunctionVisibility::Private);
 
         let action = match caller_visibility {
             FunctionVisibility::Private => PropagationAction::AddCallSiteVc,
@@ -511,9 +482,7 @@ impl CallerPropagator {
 
         Ok(vec![PropagationSuggestion {
             caller_name: caller_name.to_string(),
-            caller_def_path: caller_info
-                .map(|i| i.def_path.clone())
-                .unwrap_or_default(),
+            caller_def_path: caller_info.map(|i| i.def_path.clone()).unwrap_or_default(),
             callee_name: callee_name.to_string(),
             original_precondition: precondition.clone(),
             substituted_precondition: simplified,
@@ -542,12 +511,7 @@ impl CallerPropagator {
             .params
             .iter()
             .enumerate()
-            .map(|(i, (_, sort))| {
-                Formula::Var(
-                    format!("{caller_name}_arg_{i}"),
-                    sort.clone(),
-                )
-            })
+            .map(|(i, (_, sort))| Formula::Var(format!("{caller_name}_arg_{i}"), sort.clone()))
             .collect()
     }
 
@@ -575,11 +539,7 @@ impl CallerPropagator {
 }
 
 /// Infer function visibility from the call graph node metadata.
-fn infer_visibility(
-    call_graph: &TypesCallGraph,
-    name: &str,
-    def_path: &str,
-) -> FunctionVisibility {
+fn infer_visibility(call_graph: &TypesCallGraph, name: &str, def_path: &str) -> FunctionVisibility {
     for node in &call_graph.nodes {
         if node.name == name || node.def_path == def_path {
             if node.is_public {
@@ -612,10 +572,7 @@ fn extract_params(func: &VerifiableFunction) -> Vec<(String, Sort)> {
 }
 
 /// Build a substitution map from formal parameters and actual arguments.
-fn build_substitution_map(
-    params: &[(String, Sort)],
-    args: &[Formula],
-) -> SubstitutionMap {
+fn build_substitution_map(params: &[(String, Sort)], args: &[Formula]) -> SubstitutionMap {
     SubstitutionMap::from_params_and_args(params, args).unwrap_or_default()
 }
 
@@ -647,56 +604,36 @@ fn formula_to_spec_string(formula: &Formula) -> String {
             let parts: Vec<String> = fs.iter().map(formula_to_spec_string).collect();
             format!("({})", parts.join(" || "))
         }
-        Formula::Implies(l, r) => format!(
-            "({} ==> {})",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Eq(l, r) => format!(
-            "{} == {}",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Lt(l, r) => format!(
-            "{} < {}",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Le(l, r) => format!(
-            "{} <= {}",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Gt(l, r) => format!(
-            "{} > {}",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Ge(l, r) => format!(
-            "{} >= {}",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Add(l, r) => format!(
-            "({} + {})",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Sub(l, r) => format!(
-            "({} - {})",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Mul(l, r) => format!(
-            "({} * {})",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
-        Formula::Div(l, r) => format!(
-            "({} / {})",
-            formula_to_spec_string(l),
-            formula_to_spec_string(r)
-        ),
+        Formula::Implies(l, r) => {
+            format!("({} ==> {})", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Eq(l, r) => {
+            format!("{} == {}", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Lt(l, r) => {
+            format!("{} < {}", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Le(l, r) => {
+            format!("{} <= {}", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Gt(l, r) => {
+            format!("{} > {}", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Ge(l, r) => {
+            format!("{} >= {}", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Add(l, r) => {
+            format!("({} + {})", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Sub(l, r) => {
+            format!("({} - {})", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Mul(l, r) => {
+            format!("({} * {})", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
+        Formula::Div(l, r) => {
+            format!("({} / {})", formula_to_spec_string(l), formula_to_spec_string(r))
+        }
         Formula::Neg(inner) => format!("-{}", formula_to_spec_string(inner)),
         _ => format!("{formula:?}"),
     }
@@ -732,7 +669,9 @@ pub fn build_types_call_graph(functions: &[VerifiableFunction]) -> TypesCallGrap
         });
 
         for block in &func.body.blocks {
-            if let Terminator::Call { func: callee, args: _, dest: _, target: _, span, .. } = &block.terminator {
+            if let Terminator::Call { func: callee, args: _, dest: _, target: _, span, .. } =
+                &block.terminator
+            {
                 graph.add_edge(CallGraphEdge {
                     caller: func.def_path.clone(),
                     callee: callee.clone(),
@@ -761,11 +700,7 @@ mod tests {
     }
 
     fn make_local(idx: usize, name: &str, ty: Ty) -> LocalDecl {
-        LocalDecl {
-            index: idx,
-            ty,
-            name: Some(name.to_string()),
-        }
+        LocalDecl { index: idx, ty, name: Some(name.to_string()) }
     }
 
     fn make_function_with_preconditions(
@@ -774,11 +709,8 @@ mod tests {
         callees: &[&str],
         preconditions: Vec<Formula>,
     ) -> VerifiableFunction {
-        let locals: Vec<LocalDecl> = params
-            .iter()
-            .enumerate()
-            .map(|(i, (n, ty))| make_local(i, n, ty.clone()))
-            .collect();
+        let locals: Vec<LocalDecl> =
+            params.iter().enumerate().map(|(i, (n, ty))| make_local(i, n, ty.clone())).collect();
         let arg_count = locals.len();
 
         let mut blocks = Vec::new();
@@ -806,12 +738,7 @@ mod tests {
             name: name.to_string(),
             def_path: format!("crate::{name}"),
             span: span("src/lib.rs", 1),
-            body: VerifiableBody {
-                locals,
-                blocks,
-                arg_count,
-                return_ty: Ty::Unit,
-            },
+            body: VerifiableBody { locals, blocks, arg_count, return_ty: Ty::Unit },
             contracts: vec![],
             preconditions,
             postconditions: vec![],
@@ -866,26 +793,14 @@ mod tests {
 
     #[test]
     fn test_infer_visibility_public() {
-        let graph = make_test_call_graph(
-            &[("crate::foo", "foo", true)],
-            &[],
-        );
-        assert_eq!(
-            infer_visibility(&graph, "foo", "crate::foo"),
-            FunctionVisibility::Public
-        );
+        let graph = make_test_call_graph(&[("crate::foo", "foo", true)], &[]);
+        assert_eq!(infer_visibility(&graph, "foo", "crate::foo"), FunctionVisibility::Public);
     }
 
     #[test]
     fn test_infer_visibility_not_public() {
-        let graph = make_test_call_graph(
-            &[("crate::foo", "foo", false)],
-            &[],
-        );
-        assert_eq!(
-            infer_visibility(&graph, "foo", "crate::foo"),
-            FunctionVisibility::PubCrate
-        );
+        let graph = make_test_call_graph(&[("crate::foo", "foo", false)], &[]);
+        assert_eq!(infer_visibility(&graph, "foo", "crate::foo"), FunctionVisibility::PubCrate);
     }
 
     #[test]
@@ -915,17 +830,9 @@ mod tests {
             &[],
             vec![simple_precondition()],
         );
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee"],
-            vec![],
-        );
+        let caller = make_function_with_preconditions("caller", &[], &["callee"], vec![]);
         let graph = make_test_call_graph(
-            &[
-                ("crate::callee", "callee", false),
-                ("crate::caller", "caller", false),
-            ],
+            &[("crate::callee", "callee", false), ("crate::caller", "caller", false)],
             &[("crate::caller", "callee")],
         );
 
@@ -942,12 +849,8 @@ mod tests {
     #[test]
     fn test_propagate_no_preconditions() {
         let func = make_function_with_preconditions("f", &[], &[], vec![]);
-        let graph = make_test_call_graph(
-            &[("crate::f", "f", false)],
-            &[],
-        );
-        let propagator =
-            CallerPropagator::new(&[func], graph, PropagationConfig::default());
+        let graph = make_test_call_graph(&[("crate::f", "f", false)], &[]);
+        let propagator = CallerPropagator::new(&[func], graph, PropagationConfig::default());
         let result = propagator.propagate_for_callee("f").expect("should succeed");
         assert!(result.suggestions.is_empty());
     }
@@ -960,25 +863,15 @@ mod tests {
             &[],
             vec![simple_precondition()],
         );
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee"],
-            vec![],
-        );
+        let caller = make_function_with_preconditions("caller", &[], &["callee"], vec![]);
         let graph = make_test_call_graph(
-            &[
-                ("crate::callee", "callee", false),
-                ("crate::caller", "caller", false),
-            ],
+            &[("crate::callee", "callee", false), ("crate::caller", "caller", false)],
             &[("crate::caller", "callee")],
         );
 
         let propagator =
             CallerPropagator::new(&[callee, caller], graph, PropagationConfig::default());
-        let result = propagator
-            .propagate_for_callee("callee")
-            .expect("should succeed");
+        let result = propagator.propagate_for_callee("callee").expect("should succeed");
         assert_eq!(result.suggestions.len(), 1);
         assert_eq!(result.suggestions[0].caller_name, "caller");
         assert_eq!(result.suggestions[0].callee_name, "callee");
@@ -992,28 +885,15 @@ mod tests {
             &[],
             vec![simple_precondition()],
         );
-        let caller_a = make_function_with_preconditions(
-            "caller_a",
-            &[],
-            &["callee"],
-            vec![],
-        );
-        let caller_b = make_function_with_preconditions(
-            "caller_b",
-            &[],
-            &["callee"],
-            vec![],
-        );
+        let caller_a = make_function_with_preconditions("caller_a", &[], &["callee"], vec![]);
+        let caller_b = make_function_with_preconditions("caller_b", &[], &["callee"], vec![]);
         let graph = make_test_call_graph(
             &[
                 ("crate::callee", "callee", false),
                 ("crate::caller_a", "caller_a", false),
                 ("crate::caller_b", "caller_b", false),
             ],
-            &[
-                ("crate::caller_a", "callee"),
-                ("crate::caller_b", "callee"),
-            ],
+            &[("crate::caller_a", "callee"), ("crate::caller_b", "callee")],
         );
 
         let propagator = CallerPropagator::new(
@@ -1021,16 +901,11 @@ mod tests {
             graph,
             PropagationConfig::default(),
         );
-        let result = propagator
-            .propagate_for_callee("callee")
-            .expect("should succeed");
+        let result = propagator.propagate_for_callee("callee").expect("should succeed");
         assert_eq!(result.suggestions.len(), 2);
 
-        let caller_names: FxHashSet<&str> = result
-            .suggestions
-            .iter()
-            .map(|s| s.caller_name.as_str())
-            .collect();
+        let caller_names: FxHashSet<&str> =
+            result.suggestions.iter().map(|s| s.caller_name.as_str()).collect();
         assert!(caller_names.contains("caller_a"));
         assert!(caller_names.contains("caller_b"));
     }
@@ -1052,18 +927,13 @@ mod tests {
             vec![precond],
         );
         let graph = make_test_call_graph(
-            &[
-                ("crate::callee", "callee", false),
-                ("crate::caller", "caller", false),
-            ],
+            &[("crate::callee", "callee", false), ("crate::caller", "caller", false)],
             &[("crate::caller", "callee")],
         );
 
         let propagator =
             CallerPropagator::new(&[callee, caller], graph, PropagationConfig::default());
-        let result = propagator
-            .propagate_for_callee("callee")
-            .expect("should succeed");
+        let result = propagator.propagate_for_callee("callee").expect("should succeed");
 
         // The substituted formula uses caller_arg_0 instead of a, so it won't
         // match syntactically. We get a non-implied suggestion.
@@ -1079,12 +949,7 @@ mod tests {
             &[],
             vec![simple_precondition()],
         );
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee"],
-            vec![],
-        );
+        let caller = make_function_with_preconditions("caller", &[], &["callee"], vec![]);
         let graph = make_test_call_graph(
             &[
                 ("crate::callee", "callee", false),
@@ -1095,9 +960,7 @@ mod tests {
 
         let propagator =
             CallerPropagator::new(&[callee, caller], graph, PropagationConfig::default());
-        let result = propagator
-            .propagate_for_callee("callee")
-            .expect("should succeed");
+        let result = propagator.propagate_for_callee("callee").expect("should succeed");
         assert_eq!(result.suggestions.len(), 1);
         assert!(matches!(
             &result.suggestions[0].action,
@@ -1113,12 +976,7 @@ mod tests {
             &[],
             vec![simple_precondition()],
         );
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee"],
-            vec![],
-        );
+        let caller = make_function_with_preconditions("caller", &[], &["callee"], vec![]);
         // Caller not in call graph nodes -> Private
         let graph = make_test_call_graph(
             &[("crate::callee", "callee", false)],
@@ -1127,14 +985,9 @@ mod tests {
 
         let propagator =
             CallerPropagator::new(&[callee, caller], graph, PropagationConfig::default());
-        let result = propagator
-            .propagate_for_callee("callee")
-            .expect("should succeed");
+        let result = propagator.propagate_for_callee("callee").expect("should succeed");
         assert_eq!(result.suggestions.len(), 1);
-        assert_eq!(
-            result.suggestions[0].action,
-            PropagationAction::AddCallSiteVc
-        );
+        assert_eq!(result.suggestions[0].action, PropagationAction::AddCallSiteVc);
     }
 
     // --- propagate_all tests ---
@@ -1167,22 +1020,15 @@ mod tests {
                 Box::new(Formula::Int(100)),
             )],
         );
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee_a", "callee_b"],
-            vec![],
-        );
+        let caller =
+            make_function_with_preconditions("caller", &[], &["callee_a", "callee_b"], vec![]);
         let graph = make_test_call_graph(
             &[
                 ("crate::callee_a", "callee_a", false),
                 ("crate::callee_b", "callee_b", false),
                 ("crate::caller", "caller", false),
             ],
-            &[
-                ("crate::caller", "callee_a"),
-                ("crate::caller", "callee_b"),
-            ],
+            &[("crate::caller", "callee_a"), ("crate::caller", "callee_b")],
         );
 
         let propagator = CallerPropagator::new(
@@ -1206,25 +1052,15 @@ mod tests {
             &[],
             vec![simple_precondition()],
         );
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee"],
-            vec![],
-        );
+        let caller = make_function_with_preconditions("caller", &[], &["callee"], vec![]);
         let graph = make_test_call_graph(
-            &[
-                ("crate::callee", "callee", false),
-                ("crate::caller", "caller", false),
-            ],
+            &[("crate::callee", "callee", false), ("crate::caller", "caller", false)],
             &[("crate::caller", "callee")],
         );
 
         let propagator =
             CallerPropagator::new(&[callee, caller], graph, PropagationConfig::default());
-        let suggestions = propagator
-            .propagate_transitive("callee")
-            .expect("should succeed");
+        let suggestions = propagator.propagate_transitive("callee").expect("should succeed");
         assert!(!suggestions.is_empty());
     }
 
@@ -1241,22 +1077,12 @@ mod tests {
         let c = make_function_with_preconditions("c", &[], &["b"], vec![]);
 
         let graph = make_test_call_graph(
-            &[
-                ("crate::a", "a", false),
-                ("crate::b", "b", true),
-                ("crate::c", "c", false),
-            ],
+            &[("crate::a", "a", false), ("crate::b", "b", true), ("crate::c", "c", false)],
             &[("crate::b", "a"), ("crate::c", "b")],
         );
 
-        let propagator = CallerPropagator::new(
-            &[a, b, c],
-            graph,
-            PropagationConfig::default(),
-        );
-        let suggestions = propagator
-            .propagate_transitive("a")
-            .expect("should succeed");
+        let propagator = CallerPropagator::new(&[a, b, c], graph, PropagationConfig::default());
+        let suggestions = propagator.propagate_transitive("a").expect("should succeed");
         // Should get at least one suggestion for b (direct caller of a).
         assert!(!suggestions.is_empty());
         assert!(suggestions.iter().any(|s| s.caller_name == "b"));
@@ -1281,25 +1107,12 @@ mod tests {
                 ("crate::c", "c", true),
                 ("crate::d", "d", true),
             ],
-            &[
-                ("crate::b", "a"),
-                ("crate::c", "b"),
-                ("crate::d", "c"),
-            ],
+            &[("crate::b", "a"), ("crate::c", "b"), ("crate::d", "c")],
         );
 
-        let config = PropagationConfig {
-            max_depth: 1,
-            ..Default::default()
-        };
-        let propagator = CallerPropagator::new(
-            &[a, b, c, d],
-            graph,
-            config,
-        );
-        let suggestions = propagator
-            .propagate_transitive("a")
-            .expect("should succeed");
+        let config = PropagationConfig { max_depth: 1, ..Default::default() };
+        let propagator = CallerPropagator::new(&[a, b, c, d], graph, config);
+        let suggestions = propagator.propagate_transitive("a").expect("should succeed");
         // With depth limit 1, should only reach direct caller b.
         assert!(suggestions.iter().all(|s| s.provenance.depth <= 1));
     }
@@ -1332,10 +1145,7 @@ mod tests {
 
     #[test]
     fn test_formula_to_spec_string_or() {
-        let f = Formula::Or(vec![
-            Formula::Bool(true),
-            Formula::Bool(false),
-        ]);
+        let f = Formula::Or(vec![Formula::Bool(true), Formula::Bool(false)]);
         assert_eq!(formula_to_spec_string(&f), "(true || false)");
     }
 
@@ -1390,7 +1200,7 @@ mod tests {
                     substituted_precondition: Formula::Bool(true),
                     action: PropagationAction::AddCallSiteVc,
                     provenance: Provenance {
-                        origin_function: "f".to_string(),
+                        origin_function: "f".into(),
                         origin_precondition: Formula::Bool(true),
                         depth: 0,
                         propagation_chain: vec!["f".to_string()],
@@ -1406,7 +1216,7 @@ mod tests {
                     substituted_precondition: Formula::Bool(true),
                     action: PropagationAction::AlreadyImplied,
                     provenance: Provenance {
-                        origin_function: "f".to_string(),
+                        origin_function: "f".into(),
                         origin_precondition: Formula::Bool(true),
                         depth: 0,
                         propagation_chain: vec!["f".to_string()],
@@ -1425,18 +1235,8 @@ mod tests {
 
     #[test]
     fn test_build_types_call_graph_from_functions() {
-        let caller = make_function_with_preconditions(
-            "caller",
-            &[],
-            &["callee"],
-            vec![],
-        );
-        let callee = make_function_with_preconditions(
-            "callee",
-            &[("a", Ty::usize())],
-            &[],
-            vec![],
-        );
+        let caller = make_function_with_preconditions("caller", &[], &["callee"], vec![]);
+        let callee = make_function_with_preconditions("callee", &[("a", Ty::usize())], &[], vec![]);
         let graph = build_types_call_graph(&[caller, callee]);
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.edges.len(), 1);
@@ -1476,11 +1276,7 @@ mod tests {
             def_path: "crate::f".to_string(),
             span: SourceSpan::default(),
             body: VerifiableBody {
-                locals: vec![LocalDecl {
-                    index: 0,
-                    name: None,
-                    ty: Ty::i32(),
-                }],
+                locals: vec![LocalDecl { index: 0, name: None, ty: Ty::i32() }],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![],
@@ -1527,14 +1323,10 @@ mod tests {
     #[test]
     fn test_provenance_chain() {
         let provenance = Provenance {
-            origin_function: "callee".to_string(),
+            origin_function: "callee".into(),
             origin_precondition: Formula::Bool(true),
             depth: 2,
-            propagation_chain: vec![
-                "callee".to_string(),
-                "mid".to_string(),
-                "caller".to_string(),
-            ],
+            propagation_chain: vec!["callee".to_string(), "mid".to_string(), "caller".to_string()],
         };
         assert_eq!(provenance.depth, 2);
         assert_eq!(provenance.propagation_chain.len(), 3);
@@ -1548,10 +1340,7 @@ mod tests {
         let propagator = CallerPropagator::new(&[], graph, PropagationConfig::default());
         let result = propagator.propagate_for_callee("nonexistent");
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            PropagationError::NoCallers { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), PropagationError::NoCallers { .. }));
     }
 
     // --- Serialization test ---
@@ -1566,7 +1355,7 @@ mod tests {
             substituted_precondition: simple_precondition(),
             action: PropagationAction::AddCallSiteVc,
             provenance: Provenance {
-                origin_function: "callee".to_string(),
+                origin_function: "callee".into(),
                 origin_precondition: simple_precondition(),
                 depth: 0,
                 propagation_chain: vec!["callee".to_string()],
@@ -1576,8 +1365,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&suggestion).expect("serialize");
-        let roundtrip: PropagationSuggestion =
-            serde_json::from_str(&json).expect("deserialize");
+        let roundtrip: PropagationSuggestion = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(roundtrip.caller_name, "caller");
         assert_eq!(roundtrip.callee_name, "callee");
         assert_eq!(roundtrip.confidence, 0.95);
@@ -1597,30 +1385,18 @@ mod tests {
                 Box::new(Formula::Int(0)),
             )],
         );
-        let caller = make_function_with_preconditions(
-            "process",
-            &[("n", Ty::usize())],
-            &["divide"],
-            vec![],
-        );
+        let caller =
+            make_function_with_preconditions("process", &[("n", Ty::usize())], &["divide"], vec![]);
         let graph = make_test_call_graph(
-            &[
-                ("crate::divide", "divide", false),
-                ("crate::process", "process", true),
-            ],
+            &[("crate::divide", "divide", false), ("crate::process", "process", true)],
             &[("crate::process", "divide")],
         );
 
-        let propagator = CallerPropagator::new(
-            &[callee, caller],
-            graph,
-            PropagationConfig::default(),
-        );
+        let propagator =
+            CallerPropagator::new(&[callee, caller], graph, PropagationConfig::default());
 
         // Check propagation
-        let result = propagator
-            .propagate_for_callee("divide")
-            .expect("should succeed");
+        let result = propagator.propagate_for_callee("divide").expect("should succeed");
         assert_eq!(result.callee_name, "divide");
         assert_eq!(result.suggestions.len(), 1);
 

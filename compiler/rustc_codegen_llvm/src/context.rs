@@ -183,7 +183,6 @@ pub(crate) unsafe fn create_module<'ll>(
 ) -> &'ll llvm::Module {
     let sess = tcx.sess;
     let mod_name = SmallCStr::new(mod_name);
-    // SAFETY: The LLVM context is valid, and the module name is a valid C string.
     let llmod = unsafe { llvm::LLVMModuleCreateWithNameInContext(mod_name.as_ptr(), llcx) };
 
     let cx = SimpleCx::new(llmod, llcx, tcx.data_layout.pointer_size());
@@ -220,16 +219,12 @@ pub(crate) unsafe fn create_module<'ll>(
     // Ensure the data-layout values hardcoded remain the defaults.
     {
         let tm = crate::back::write::create_informational_target_machine(sess, false);
-        // SAFETY: The module is a valid LLVM module reference. The returned string pointer is valid for the module lifetime.
         unsafe {
             llvm::LLVMRustSetDataLayoutFromTargetMachine(llmod, tm.raw());
         }
 
-        // SAFETY: The module is a valid LLVM module reference. The returned string pointer is valid for the module lifetime.
         let llvm_data_layout = unsafe { llvm::LLVMGetDataLayoutStr(llmod) };
         let llvm_data_layout =
-            // SAFETY: The byte slice is valid, non-null, and contains a
-            // nul terminator with no interior nul bytes.
             str::from_utf8(unsafe { CStr::from_ptr(llvm_data_layout) }.to_bytes())
                 .expect("got a non-UTF8 data-layout from LLVM");
 
@@ -244,20 +239,17 @@ pub(crate) unsafe fn create_module<'ll>(
     }
 
     let data_layout = SmallCStr::new(&target_data_layout);
-    // SAFETY: The module is valid, and the data layout string is a valid C string.
     unsafe {
         llvm::LLVMSetDataLayout(llmod, data_layout.as_ptr());
     }
 
     let llvm_target = SmallCStr::new(&versioned_llvm_target(sess));
-    // SAFETY: The module is valid, and the target triple is a valid C string.
     unsafe {
         llvm::LLVMRustSetNormalizedTarget(llmod, llvm_target.as_ptr());
     }
 
     let reloc_model = sess.relocation_model();
     if matches!(reloc_model, RelocModel::Pic | RelocModel::Pie) {
-        // SAFETY: The module is a valid LLVM module reference, and the PIE level is a valid value.
         unsafe {
             llvm::LLVMRustSetModulePICLevel(llmod);
         }
@@ -266,7 +258,6 @@ pub(crate) unsafe fn create_module<'ll>(
         if reloc_model == RelocModel::Pie
             || tcx.crate_types().iter().all(|ty| *ty == CrateType::Executable)
         {
-            // SAFETY: The module is a valid LLVM module reference, and the PIE level is a valid value.
             unsafe {
                 llvm::LLVMRustSetModulePIELevel(llmod);
             }
@@ -278,7 +269,6 @@ pub(crate) unsafe fn create_module<'ll>(
     // longer jumps) if a larger code model is used with a smaller one.
     //
     // See https://reviews.llvm.org/D52322 and https://reviews.llvm.org/D52323.
-    // SAFETY: The module is a valid LLVM module reference, and the code model is a valid value.
     unsafe {
         llvm::LLVMRustSetModuleCodeModel(llmod, to_llvm_code_model(sess.code_model()));
     }
@@ -429,7 +419,6 @@ pub(crate) unsafe fn create_module<'ll>(
                 gcs.into(),
             );
         } else {
-            // tRust: invariant — branch-protection module flags are only emitted for AArch64 targets
             bug!(
                 "branch-protection used on non-AArch64 target; \
                   this should be checked in rustc_session."
@@ -519,7 +508,7 @@ pub(crate) unsafe fn create_module<'ll>(
     // Emit RISC-V specific target-abi metadata
     // to workaround lld as the LTO plugin not
     // correctly setting target-abi for the LTO object
-    // tRust: known issue — https://github.com/llvm/llvm-project/issues/50591
+    // FIXME: https://github.com/llvm/llvm-project/issues/50591
     let llvm_abiname = &sess.target.options.llvm_abiname;
     if matches!(sess.target.arch, Arch::RiscV32 | Arch::RiscV64) {
         llvm::add_module_flag_str(
@@ -749,7 +738,6 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
 }
 impl<'ll> SimpleCx<'ll> {
     pub(crate) fn get_type_of_global(&self, val: &'ll Value) -> &'ll Type {
-        // SAFETY: The global is a valid LLVM global value reference.
         unsafe { llvm::LLVMGlobalGetValueType(val) }
     }
     pub(crate) fn val_ty(&self, v: &'ll Value) -> &'ll Type {
@@ -773,7 +761,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     }
 
     pub(crate) fn get_const_int(&self, ty: &'ll Type, val: u64) -> &'ll Value {
-        // SAFETY: `t` is a valid LLVM integer type (verified by the assertion above), and the integer value is within representable range.
         unsafe { llvm::LLVMConstInt(ty, val, llvm::FALSE) }
     }
 
@@ -795,12 +782,10 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
 
     pub(crate) fn get_function(&self, name: &str) -> Option<&'ll Value> {
         let name = SmallCStr::new(name);
-        // SAFETY: The module is valid, and the name is a valid C string.
         unsafe { llvm::LLVMGetNamedFunction((**self).borrow().llmod, name.as_ptr()) }
     }
 
     pub(crate) fn get_md_kind_id(&self, name: &str) -> llvm::MetadataKindId {
-        // SAFETY: The context is valid, and the metadata kind name buffer and length are valid.
         unsafe {
             llvm::LLVMGetMDKindIDInContext(
                 self.llcx(),
@@ -811,7 +796,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     }
 
     pub(crate) fn create_metadata(&self, name: &[u8]) -> &'ll Metadata {
-        // SAFETY: The LLVM context is valid, and the string buffer and length are valid.
         unsafe {
             llvm::LLVMMDStringInContext2(self.llcx(), name.as_ptr() as *const c_char, name.len())
         }
@@ -819,11 +803,9 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
 
     pub(crate) fn get_functions(&self) -> Vec<&'ll Value> {
         let mut functions = vec![];
-        // SAFETY: The module is a valid LLVM module reference.
         let mut func = unsafe { llvm::LLVMGetFirstFunction(self.llmod()) };
         while let Some(f) = func {
             functions.push(f);
-            // SAFETY: The function is a valid LLVM value reference within its module.
             func = unsafe { llvm::LLVMGetNextFunction(f) }
         }
         functions
@@ -989,7 +971,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         }
 
         let intrinsic = llvm::Intrinsic::lookup(base_name.as_bytes())
-            // tRust: invariant — every non-special-cased intrinsic requested from codegen must exist in LLVM's intrinsic table
             .unwrap_or_else(|| bug!("Unknown intrinsic: `{base_name}`"));
         let f = intrinsic.get_declaration(self.llmod, &type_params);
 
@@ -1033,7 +1014,6 @@ impl CodegenCx<'_, '_> {
 impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     /// Wrapper for `LLVMMDNodeInContext2`, i.e. `llvm::MDNode::get`.
     pub(crate) fn md_node_in_context(&self, md_list: &[&'ll Metadata]) -> &'ll Metadata {
-        // SAFETY: The LLVM context is valid, and all metadata references in the slice are valid.
         unsafe { llvm::LLVMMDNodeInContext2(self.llcx(), md_list.as_ptr(), md_list.len()) }
     }
 
@@ -1074,7 +1054,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     ) {
         let md = self.md_node_in_context(md_list);
         let md_as_val = self.get_metadata_value(md);
-        // SAFETY: The value/global, metadata kind ID, and metadata node are all valid LLVM references.
         unsafe { llvm::LLVMAddNamedMetadataOperand(module, kind_name.as_ptr(), md_as_val) };
     }
 
@@ -1088,7 +1067,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
         md_list: &[&'ll Metadata],
     ) {
         let md = self.md_node_in_context(md_list);
-        // SAFETY: The global value, kind ID, and metadata node are valid LLVM references.
         unsafe { llvm::LLVMRustGlobalAddMetadata(global, kind_id, md) };
     }
 
@@ -1102,7 +1080,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
         md_list: &[&'ll Metadata],
     ) {
         let md = self.md_node_in_context(md_list);
-        // SAFETY: The global value, kind ID, and metadata are valid LLVM references.
         unsafe { llvm::LLVMGlobalSetMetadata(global, kind_id, md) };
     }
 }
@@ -1166,11 +1143,9 @@ impl<'tcx> FnAbiOfHelpers<'tcx> for CodegenCx<'_, 'tcx> {
             }
             _ => match fn_abi_request {
                 FnAbiRequest::OfFnPtr { sig, extra_args } => {
-                    // tRust: invariant — `fn_abi_of_fn_ptr` must succeed for function pointer signatures that reach LLVM codegen
                     span_bug!(span, "`fn_abi_of_fn_ptr({sig}, {extra_args:?})` failed: {err:?}",);
                 }
                 FnAbiRequest::OfInstance { instance, extra_args } => {
-                    // tRust: invariant — `fn_abi_of_instance` must succeed for monomorphized instances that reach LLVM codegen
                     span_bug!(
                         span,
                         "`fn_abi_of_instance({instance}, {extra_args:?})` failed: {err:?}",

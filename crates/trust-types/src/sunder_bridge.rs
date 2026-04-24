@@ -97,11 +97,7 @@ pub fn formula_to_pure_expr(formula: &Formula) -> Option<PureExpr> {
         Formula::Implies(a, b) => {
             let lhs = formula_to_pure_expr(a)?;
             let rhs = formula_to_pure_expr(b)?;
-            Some(PureExpr::BinOp(
-                Arc::new(lhs),
-                SBinOp::Implies,
-                Arc::new(rhs),
-            ))
+            Some(PureExpr::BinOp(Arc::new(lhs), SBinOp::Implies, Arc::new(rhs)))
         }
 
         // --- Comparisons ---
@@ -274,74 +270,47 @@ mod tests {
 
     #[test]
     fn test_sort_to_expr_sort_array_rejected() {
-        assert_eq!(
-            sort_to_expr_sort(&Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int))),
-            None,
-        );
+        assert_eq!(sort_to_expr_sort(&Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int))), None,);
     }
 
     #[test]
     fn test_formula_bool_true() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Bool(true)),
-            Some(PureExpr::Bool(true)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Bool(true)), Some(PureExpr::Bool(true)),);
     }
 
     #[test]
     fn test_formula_bool_false() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Bool(false)),
-            Some(PureExpr::Bool(false)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Bool(false)), Some(PureExpr::Bool(false)),);
     }
 
     #[test]
     fn test_formula_int_within_i64() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Int(42)),
-            Some(PureExpr::Int(42)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Int(42)), Some(PureExpr::Int(42)),);
     }
 
     #[test]
     fn test_formula_int_negative() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Int(-100)),
-            Some(PureExpr::Int(-100)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Int(-100)), Some(PureExpr::Int(-100)),);
     }
 
     #[test]
     fn test_formula_int_exceeds_i64_rejected() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Int(i128::from(i64::MAX) + 1)),
-            None,
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Int(i128::from(i64::MAX) + 1)), None,);
     }
 
     #[test]
     fn test_formula_uint_within_i64() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::UInt(100)),
-            Some(PureExpr::Int(100)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::UInt(100)), Some(PureExpr::Int(100)),);
     }
 
     #[test]
     fn test_formula_uint_exceeds_i64_rejected() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::UInt(u128::from(i64::MAX as u64) + 1)),
-            None,
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::UInt(u128::from(i64::MAX as u64) + 1)), None,);
     }
 
     #[test]
     fn test_formula_bitvec_rejected() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::BitVec { value: 0, width: 32 }),
-            None,
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::BitVec { value: 0, width: 32 }), None,);
     }
 
     #[test]
@@ -354,20 +323,14 @@ mod tests {
 
     #[test]
     fn test_formula_var_bitvec_rejected() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Var("x".into(), Sort::BitVec(64))),
-            None,
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Var("x".into(), Sort::BitVec(64))), None,);
     }
 
     #[test]
     fn test_formula_not() {
         let f = Formula::Not(Box::new(Formula::Bool(true)));
         let result = formula_to_pure_expr(&f).unwrap();
-        assert_eq!(
-            result,
-            PureExpr::UnOp(SUnOp::Not, Arc::new(PureExpr::Bool(true))),
-        );
+        assert_eq!(result, PureExpr::UnOp(SUnOp::Not, Arc::new(PureExpr::Bool(true))),);
     }
 
     #[test]
@@ -386,26 +349,17 @@ mod tests {
 
     #[test]
     fn test_formula_and_empty() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::And(vec![])),
-            Some(PureExpr::Bool(true)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::And(vec![])), Some(PureExpr::Bool(true)),);
     }
 
     #[test]
     fn test_formula_or_empty() {
-        assert_eq!(
-            formula_to_pure_expr(&Formula::Or(vec![])),
-            Some(PureExpr::Bool(false)),
-        );
+        assert_eq!(formula_to_pure_expr(&Formula::Or(vec![])), Some(PureExpr::Bool(false)),);
     }
 
     #[test]
     fn test_formula_implies() {
-        let f = Formula::Implies(
-            Box::new(Formula::Bool(true)),
-            Box::new(Formula::Bool(false)),
-        );
+        let f = Formula::Implies(Box::new(Formula::Bool(true)), Box::new(Formula::Bool(false)));
         let result = formula_to_pure_expr(&f).unwrap();
         assert_eq!(
             result,
@@ -419,10 +373,8 @@ mod tests {
 
     #[test]
     fn test_formula_comparison_lt() {
-        let f = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let f =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         let result = formula_to_pure_expr(&f).unwrap();
         assert_eq!(
             result,
@@ -436,10 +388,8 @@ mod tests {
 
     #[test]
     fn test_formula_arithmetic_add() {
-        let f = Formula::Add(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let f =
+            Formula::Add(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(1)));
         let result = formula_to_pure_expr(&f).unwrap();
         assert_eq!(
             result,
@@ -455,10 +405,7 @@ mod tests {
     fn test_formula_neg() {
         let f = Formula::Neg(Box::new(Formula::Int(5)));
         let result = formula_to_pure_expr(&f).unwrap();
-        assert_eq!(
-            result,
-            PureExpr::UnOp(SUnOp::Neg, Arc::new(PureExpr::Int(5))),
-        );
+        assert_eq!(result, PureExpr::UnOp(SUnOp::Neg, Arc::new(PureExpr::Int(5))),);
     }
 
     #[test]
@@ -516,19 +463,14 @@ mod tests {
 
     #[test]
     fn test_formula_forall_bitvec_binding_rejected() {
-        let f = Formula::Forall(
-            vec![("x".into(), Sort::BitVec(32))],
-            Box::new(Formula::Bool(true)),
-        );
+        let f =
+            Formula::Forall(vec![("x".into(), Sort::BitVec(32))], Box::new(Formula::Bool(true)));
         assert_eq!(formula_to_pure_expr(&f), None);
     }
 
     #[test]
     fn test_formula_exists() {
-        let f = Formula::Exists(
-            vec![("x".into(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         let result = formula_to_pure_expr(&f).unwrap();
         assert!(matches!(result, PureExpr::Exists { var, .. } if var == "x"));
     }
@@ -536,10 +478,10 @@ mod tests {
     #[test]
     fn test_formula_select_rejected() {
         let f = Formula::Select(
-            Box::new(Formula::Var("arr".into(), Sort::Array(
-                Box::new(Sort::Int),
-                Box::new(Sort::Int),
-            ))),
+            Box::new(Formula::Var(
+                "arr".into(),
+                Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
+            )),
             Box::new(Formula::Int(0)),
         );
         assert_eq!(formula_to_pure_expr(&f), None);
@@ -582,10 +524,7 @@ mod tests {
     fn test_mixed_bv_and_int_rejected() {
         // And(x > 0, bvadd(y, z) == 0) should reject because of BV
         let f = Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Eq(
                 Box::new(Formula::BvAdd(
                     Box::new(Formula::Var("y".into(), Sort::BitVec(32))),
@@ -602,19 +541,14 @@ mod tests {
 
     #[test]
     fn test_has_bv_ops_pure_int() {
-        let f = Formula::Add(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let f =
+            Formula::Add(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(1)));
         assert!(!has_bv_ops(&f));
     }
 
     #[test]
     fn test_has_bv_ops_with_bv_literal() {
-        let f = Formula::And(vec![
-            Formula::Bool(true),
-            Formula::BitVec { value: 42, width: 32 },
-        ]);
+        let f = Formula::And(vec![Formula::Bool(true), Formula::BitVec { value: 42, width: 32 }]);
         assert!(has_bv_ops(&f));
     }
 
@@ -632,10 +566,8 @@ mod tests {
 
     #[test]
     fn test_has_array_ops_pure_int() {
-        let f = Formula::Add(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let f =
+            Formula::Add(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(1)));
         assert!(!has_array_ops(&f));
     }
 
@@ -666,10 +598,7 @@ mod tests {
 
     #[test]
     fn test_has_array_ops_with_array_var() {
-        let f = Formula::Var(
-            "arr".into(),
-            Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
-        );
+        let f = Formula::Var("arr".into(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)));
         assert!(has_array_ops(&f));
     }
 
@@ -708,14 +637,8 @@ mod tests {
     #[test]
     fn test_translate_formulas_multiple() {
         let formulas = vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ];
         let result = translate_formulas(&formulas);
         assert!(result.is_some());

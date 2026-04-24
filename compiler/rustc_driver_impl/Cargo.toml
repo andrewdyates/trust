@@ -59,6 +59,7 @@ ctrlc = "3.4.4"
 # tidy-alphabetical-start
 check_only = ['rustc_interface/check_only']
 llvm = ['rustc_interface/llvm']
+llvm2 = ['rustc_interface/llvm2']
 llvm_enzyme = ['rustc_interface/llvm_enzyme']
 llvm_offload = ['rustc_interface/llvm_offload']
 max_level_info = ['rustc_log/max_level_info']

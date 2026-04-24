@@ -17,15 +17,15 @@ mod types;
 mod tests;
 
 // Re-export public API.
-pub use semantic::{check_semantic_preservation, parse_simplified_ast};
-pub use types::{
-    AstNode, CheckResult, SemanticDiff, ValidationCheck, ValidationConfig, ValidationResult,
-};
 use cargo_exec::{run_cargo_check, run_cargo_test};
 use checks::{
     check_conservative_strengthening, check_formula_valid, check_no_new_warnings,
-    check_specs_strengthen, check_syntax_valid, check_tests_pass_heuristic,
-    check_type_consistency, check_types_preserved,
+    check_specs_strengthen, check_syntax_valid, check_tests_pass_heuristic, check_type_consistency,
+    check_types_preserved,
+};
+pub use semantic::{check_semantic_preservation, parse_simplified_ast};
+pub use types::{
+    AstNode, CheckResult, SemanticDiff, ValidationCheck, ValidationConfig, ValidationResult,
 };
 
 /// Validate a proposed rewrite against a set of checks.
@@ -68,11 +68,7 @@ pub fn validate_rewrite(
         }
     }
 
-    ValidationResult {
-        passed_checks: passed,
-        failed_checks: failed,
-        warnings,
-    }
+    ValidationResult { passed_checks: passed, failed_checks: failed, warnings }
 }
 
 /// Validate a proposed rewrite with configuration for test execution.
@@ -118,11 +114,7 @@ pub fn validate_rewrite_with_config(
         }
     }
 
-    ValidationResult {
-        passed_checks: passed,
-        failed_checks: failed,
-        warnings,
-    }
+    ValidationResult { passed_checks: passed, failed_checks: failed, warnings }
 }
 
 /// Run the `TestsPass` check with optional cargo test execution.
@@ -195,11 +187,7 @@ fn run_syntax_valid_check(
     warnings: &mut Vec<String>,
 ) -> CheckResult {
     // Step 1: syn-based parse check.
-    let syn_ok = if ast_already_parsed {
-        true
-    } else {
-        syn::parse_file(rewritten).is_ok()
-    };
+    let syn_ok = if ast_already_parsed { true } else { syn::parse_file(rewritten).is_ok() };
 
     if !syn_ok {
         return CheckResult {
@@ -242,7 +230,10 @@ fn run_syntax_valid_check(
                 CheckResult {
                     check: ValidationCheck::SyntaxValid,
                     passed: false,
-                    detail: format!("syn parsed OK but cargo check FAILED: {}", check_result.summary),
+                    detail: format!(
+                        "syn parsed OK but cargo check FAILED: {}",
+                        check_result.summary
+                    ),
                 }
             }
         }
@@ -252,7 +243,9 @@ fn run_syntax_valid_check(
             CheckResult {
                 check: ValidationCheck::SyntaxValid,
                 passed: false,
-                detail: format!("syn parsed OK but cargo check failed to execute (fail-closed): {e}"),
+                detail: format!(
+                    "syn parsed OK but cargo check failed to execute (fail-closed): {e}"
+                ),
             }
         }
     }
@@ -278,14 +271,19 @@ fn run_check_with_ast(
         }
         ValidationCheck::TypesPreserved => {
             // Use AST-based signature comparison.
-            let sig_errors: Vec<_> = ast_result.errors.iter().filter(|e| {
-                matches!(e,
-                    crate::ast_validation::AstValidationError::SignatureChanged { .. }
-                    | crate::ast_validation::AstValidationError::FunctionRemoved { .. }
-                    | crate::ast_validation::AstValidationError::FunctionAdded { .. }
-                    | crate::ast_validation::AstValidationError::NonBodyModification { .. }
-                )
-            }).collect();
+            let sig_errors: Vec<_> = ast_result
+                .errors
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e,
+                        crate::ast_validation::AstValidationError::SignatureChanged { .. }
+                            | crate::ast_validation::AstValidationError::FunctionRemoved { .. }
+                            | crate::ast_validation::AstValidationError::FunctionAdded { .. }
+                            | crate::ast_validation::AstValidationError::NonBodyModification { .. }
+                    )
+                })
+                .collect();
 
             if sig_errors.is_empty() {
                 CheckResult {

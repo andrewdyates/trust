@@ -23,7 +23,6 @@ use crate::predicate::{AbstractState, CmpOp, Predicate, abstract_block};
 #[non_exhaustive]
 pub enum CegarOutcome {
     /// Property holds under the current abstraction.
-    #[allow(dead_code)]
     Safe,
     /// Found a real (feasible) counterexample.
     Unsafe,
@@ -83,36 +82,31 @@ impl CegarLoop {
 
     /// Access the current predicate set.
     #[must_use]
-    #[allow(dead_code)]
     pub fn predicates(&self) -> &[Predicate] {
         &self.predicates
     }
 
     /// Access the counterexample history.
     #[must_use]
-    #[allow(dead_code)]
     pub fn counterexample_history(&self) -> &[Counterexample] {
         &self.counterexample_history
     }
 
     /// Access abstract states computed for blocks.
     #[must_use]
-    #[allow(dead_code)]
     pub fn abstract_states(&self) -> &[AbstractState] {
         &self.abstract_states
     }
 
     /// Current iteration count.
     #[must_use]
-    #[allow(dead_code)]
     pub fn iteration(&self) -> usize {
         self.iteration
     }
 
     /// Compute abstract states for all blocks using the current predicate set.
     pub fn compute_abstraction(&mut self, blocks: &[BasicBlock]) {
-        self.abstract_states =
-            blocks.iter().map(|b| abstract_block(b, &self.predicates)).collect();
+        self.abstract_states = blocks.iter().map(|b| abstract_block(b, &self.predicates)).collect();
     }
 
     /// Perform one iteration of the CEGAR loop.
@@ -297,17 +291,16 @@ impl CegarLoop {
                         new_preds.push(pred);
                     }
                 }
-                CounterexampleValue::Float(_) => {
+                CounterexampleValue::Float(_) if name.contains("ptr") || name.contains("ref") => {
                     // Float predicates are harder to interpolate; add a non-null
                     // as a placeholder if this is a pointer-like name.
-                    if name.contains("ptr") || name.contains("ref") {
-                        let nn = Predicate::non_null(name);
-                        if !existing.contains(&nn) {
-                            new_preds.push(nn);
-                        }
+                    let nn = Predicate::non_null(name);
+                    if !existing.contains(&nn) {
+                        new_preds.push(nn);
                     }
                 }
-                _ => {},
+                CounterexampleValue::Float(_) => {}
+                _ => {}
             }
         }
 
@@ -470,11 +463,8 @@ fn build_path_formula(cex: &Counterexample, blocks: &[BasicBlock]) -> Formula {
             // The assert requires `cond == expected`. Encode the condition
             // as a formula and conjoin it.
             if let Some(cond_formula) = operand_to_formula(cond) {
-                let constraint = if *expected {
-                    cond_formula
-                } else {
-                    Formula::Not(Box::new(cond_formula))
-                };
+                let constraint =
+                    if *expected { cond_formula } else { Formula::Not(Box::new(cond_formula)) };
                 conjuncts.push(constraint);
             }
         }
@@ -495,24 +485,17 @@ fn operand_to_formula(operand: &trust_types::Operand) -> Option<Formula> {
     match operand {
         trust_types::Operand::Copy(place) | trust_types::Operand::Move(place) => {
             if place.projections.is_empty() {
-                Some(Formula::Var(
-                    format!("_local{}", place.local),
-                    trust_types::Sort::Int,
-                ))
+                Some(Formula::Var(format!("_local{}", place.local), trust_types::Sort::Int))
             } else {
                 None // Complex projections not yet supported.
             }
         }
-        trust_types::Operand::Constant(cv) => {
-            match cv {
-                trust_types::ConstValue::Bool(b) => Some(Formula::Bool(*b)),
-                trust_types::ConstValue::Int(n) => Some(Formula::Int(*n)),
-                trust_types::ConstValue::Uint(n, _) => {
-                    i128::try_from(*n).ok().map(Formula::Int)
-                }
-                _ => None,
-            }
-        }
+        trust_types::Operand::Constant(cv) => match cv {
+            trust_types::ConstValue::Bool(b) => Some(Formula::Bool(*b)),
+            trust_types::ConstValue::Int(n) => Some(Formula::Int(*n)),
+            trust_types::ConstValue::Uint(n, _) => i128::try_from(*n).ok().map(Formula::Int),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -522,9 +505,7 @@ mod tests {
     use super::*;
 
     fn make_cex(assignments: Vec<(&str, CounterexampleValue)>) -> Counterexample {
-        Counterexample::new(
-            assignments.into_iter().map(|(n, v)| (n.to_string(), v)).collect(),
-        )
+        Counterexample::new(assignments.into_iter().map(|(n, v)| (n.to_string(), v)).collect())
     }
 
     #[test]
@@ -845,13 +826,7 @@ mod tests {
 
         // Empty unsat core -> should fall back to heuristic.
         let empty_core = UnsatCore::default();
-        let result = cegar.refine_iteration_with_core(
-            &cex,
-            &[block],
-            &[],
-            &[],
-            &empty_core,
-        );
+        let result = cegar.refine_iteration_with_core(&cex, &[block], &[], &[], &empty_core);
         assert!(result.is_ok());
         match result.unwrap() {
             CegarOutcome::Refined { new_predicates } => {

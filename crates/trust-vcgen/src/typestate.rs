@@ -178,7 +178,9 @@ impl TypeStateVerifier {
             states: self.states.clone(),
             transitions: self.transitions.clone(),
             // SAFETY: verify_transitions() above ensures initial_state is Some.
-            initial_state: self.initial_state.clone()
+            initial_state: self
+                .initial_state
+                .clone()
                 .unwrap_or_else(|| unreachable!("initial_state None after verify_transitions")),
             error_states: self.error_states.clone(),
         })
@@ -367,9 +369,11 @@ mod tests {
     fn test_typestate_check_protocol_wrong_start() {
         let v = file_handle_verifier();
         let err = v.check_protocol(&["Open", "Closed"]).unwrap_err();
-        assert!(matches!(&err, TransitionError::InvalidTransition { from, to }
-            if from == "Closed" && to == "Open"
-        ) || matches!(&err, TransitionError::InvalidTransition { .. }));
+        assert!(
+            matches!(&err, TransitionError::InvalidTransition { from, to }
+                if from == "Closed" && to == "Open"
+            ) || matches!(&err, TransitionError::InvalidTransition { .. })
+        );
     }
 
     #[test]
@@ -443,10 +447,8 @@ mod tests {
 
     #[test]
     fn test_typestate_state_property() {
-        let prop = StateProperty {
-            state_name: "Open".to_string(),
-            invariant: "fd >= 0".to_string(),
-        };
+        let prop =
+            StateProperty { state_name: "Open".to_string(), invariant: "fd >= 0".to_string() };
         assert_eq!(prop.state_name, "Open");
         assert_eq!(prop.invariant, "fd >= 0");
     }

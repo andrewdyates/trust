@@ -43,7 +43,7 @@ impl SwitchTargets {
     /// Returns the fallback target that is jumped to when none of the values match the operand.
     #[inline]
     pub fn otherwise(&self) -> BasicBlock {
-        *self.targets.last().expect("invariant: collection is non-empty")
+        *self.targets.last().unwrap()
     }
 
     /// Returns an iterator over the switch targets.
@@ -92,7 +92,6 @@ impl SwitchTargets {
     pub fn add_target(&mut self, value: u128, bb: BasicBlock) {
         let value = Pu128(value);
         if self.values.contains(&value) {
-            // tRust: invariant: target value <...> already present
             bug!("target value {:?} already present", value);
         }
         self.values.push(value);
@@ -185,7 +184,6 @@ impl<O> AssertKind<O> {
             OverflowNeg(_) => LangItem::PanicNegOverflow,
             Overflow(BinOp::Shr, _, _) => LangItem::PanicShrOverflow,
             Overflow(BinOp::Shl, _, _) => LangItem::PanicShlOverflow,
-            // tRust: invariant: <...> cannot overflow
             Overflow(op, _, _) => bug!("{:?} cannot overflow", op),
             DivisionByZero(_) => LangItem::PanicDivZero,
             RemainderByZero(_) => LangItem::PanicRemZero,
@@ -223,7 +221,6 @@ impl<O> AssertKind<O> {
             }
 
             BoundsCheck { .. } | MisalignedPointerDereference { .. } => {
-                // tRust: invariant: Unexpected AssertKind
                 bug!("Unexpected AssertKind")
             }
         }
@@ -280,7 +277,6 @@ impl<O> AssertKind<O> {
             Overflow(BinOp::Shl, _, r) => {
                 write!(f, "\"attempt to shift left by `{{}}`, which would overflow\", {r:?}")
             }
-            // tRust: invariant: <...> cannot overflow
             Overflow(op, _, _) => bug!("{:?} cannot overflow", op),
             MisalignedPointerDereference { required, found } => {
                 write!(
@@ -368,10 +364,9 @@ impl<O: fmt::Debug> fmt::Display for AssertKind<O> {
                 write!(f, "`async fn` resumed after completion")
             }
             ResumedAfterReturn(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
-                write!(f, "`async gen` fn or block resumed after completion")
+                todo!()
             }
             ResumedAfterReturn(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
-                // tRust: invariant: gen blocks can be resumed after they return and will keep returning None
                 bug!("gen blocks can be resumed after they return and will keep returning `None`")
             }
             ResumedAfterReturn(CoroutineKind::Coroutine(_)) => {
@@ -381,7 +376,7 @@ impl<O: fmt::Debug> fmt::Display for AssertKind<O> {
                 write!(f, "`async fn` resumed after panicking")
             }
             ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
-                write!(f, "`async gen` fn or block cannot be further iterated on after it panicked")
+                todo!()
             }
             ResumedAfterPanic(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
                 write!(f, "`gen` fn or block cannot be further iterated on after it panicked")
@@ -397,7 +392,7 @@ impl<O: fmt::Debug> fmt::Display for AssertKind<O> {
                 write!(f, "`async fn` resumed after async drop")
             }
             ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _)) => {
-                write!(f, "`async gen` fn or block cannot be further iterated on after it async dropped")
+                todo!()
             }
             ResumedAfterDrop(CoroutineKind::Desugared(CoroutineDesugaring::Gen, _)) => {
                 write!(f, "`gen` fn or block cannot be further iterated on after it async dropped")
@@ -745,7 +740,7 @@ impl<'tcx> TerminatorKind<'tcx> {
 
             Goto { target } => TerminatorEdges::Single(target),
 
-            // tRust: known issue — Maybe we need also TerminatorEdges::Trio for async drop
+            // FIXME: Maybe we need also TerminatorEdges::Trio for async drop
             // (target + unwind + dropline)
             Assert { target, unwind, expected: _, msg: _, cond: _ }
             | Drop { target, unwind, place: _, replace: _, drop: _, async_fut: _ }

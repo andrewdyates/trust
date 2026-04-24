@@ -114,7 +114,7 @@ const LABELS_IMPL: &[&[&str]] = &[BASE_HIR, BASE_IMPL];
 /// Abstract data type (struct, enum, union) `DepNode`s.
 const LABELS_ADT: &[&[&str]] = &[BASE_HIR, BASE_STRUCT];
 
-// tRust: known issue -- Struct/Enum/Unions Fields (there is currently no way to attach these)
+// FIXME: Struct/Enum/Unions Fields (there is currently no way to attach these)
 //
 // Fields are kind of separate from their containers, as they can change independently from
 // them. We should at least check
@@ -228,7 +228,7 @@ impl<'tcx> CleanVisitor<'tcx> {
             HirNode::Item(item) => {
                 match item.kind {
                     // note: these are in the same order as hir::Item_;
-                    // tRust: known issue (michaelwoerister) -- do commented out ones
+                    // FIXME(michaelwoerister): do commented out ones
 
                     // // An `extern crate` item, with optional original crate name,
                     // HirItem::ExternCrate(..),  // intentionally no assertions
@@ -362,11 +362,11 @@ impl<'tcx> CleanVisitor<'tcx> {
             };
             self.checked_attrs.insert(attr.span);
             for label in assertion.clean.items().into_sorted_stable_ord() {
-                let dep_node = DepNode::from_label_string(self.tcx, label, def_path_hash).expect("invariant: clean assertion label must resolve to a valid DepNode"); // tRust: unwrap -> expect
+                let dep_node = DepNode::from_label_string(self.tcx, label, def_path_hash).unwrap();
                 self.assert_clean(item_span, dep_node);
             }
             for label in assertion.dirty.items().into_sorted_stable_ord() {
-                let dep_node = DepNode::from_label_string(self.tcx, label, def_path_hash).expect("invariant: dirty assertion label must resolve to a valid DepNode"); // tRust: unwrap -> expect
+                let dep_node = DepNode::from_label_string(self.tcx, label, def_path_hash).unwrap();
                 self.assert_dirty(item_span, dep_node);
             }
             for label in assertion.loaded_from_disk.items().into_sorted_stable_ord() {

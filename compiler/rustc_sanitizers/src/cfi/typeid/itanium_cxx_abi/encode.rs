@@ -562,7 +562,7 @@ pub(crate) fn encode_ty<'tcx>(
         }
 
         ty::RawPtr(ptr_ty, _mutbl) => {
-            // tRust: known issue — This can definitely not be so spaghettified.
+            // FIXME: This can definitely not be so spaghettified.
             // P[K]<element-type>
             let mut s = String::new();
             s.push_str(&encode_ty(tcx, *ptr_ty, dict, options));
@@ -588,9 +588,9 @@ pub(crate) fn encode_ty<'tcx>(
             typeid.push_str(&s);
         }
 
-        // tRust: UnsafeBinder is an experimental feature not yet supported in CFI encoding
+        // FIXME(unsafe_binders): Implement this.
         ty::UnsafeBinder(_) => {
-            bug!("unimplemented: UnsafeBinder is not yet supported in CFI type encoding")
+            todo!()
         }
 
         // Trait types

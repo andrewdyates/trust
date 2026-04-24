@@ -142,10 +142,7 @@ impl KernelContext {
                 reason: format!("duplicate definition: {name}"),
             });
         }
-        self.entries.insert(
-            name.to_string(),
-            ContextEntry::Definition { ty, value },
-        );
+        self.entries.insert(name.to_string(), ContextEntry::Definition { ty, value });
         Ok(())
     }
 
@@ -154,11 +151,7 @@ impl KernelContext {
     /// # Errors
     ///
     /// Returns `CertificateError::InvalidProofTerm` if the name is already defined.
-    pub fn add_axiom(
-        &mut self,
-        name: &str,
-        ty: ProofTerm,
-    ) -> Result<(), CertificateError> {
+    pub fn add_axiom(&mut self, name: &str, ty: ProofTerm) -> Result<(), CertificateError> {
         if self.entries.contains_key(name) {
             return Err(CertificateError::InvalidProofTerm {
                 reason: format!("duplicate axiom: {name}"),
@@ -214,23 +207,19 @@ pub fn infer_type(
             let depth = locals.len();
             if *idx >= depth {
                 return Err(CertificateError::KernelRejected {
-                    reason: format!(
-                        "variable index {idx} out of scope (depth {depth})"
-                    ),
+                    reason: format!("variable index {idx} out of scope (depth {depth})"),
                 });
             }
             // de Bruijn: index 0 = most recently bound
             Ok(locals[depth - 1 - idx].clone())
         }
-        ProofTerm::Const(name) => {
-            match ctx.lookup(name) {
-                Some(ContextEntry::Definition { ty, .. }) => Ok(ty.clone()),
-                Some(ContextEntry::Axiom { ty }) => Ok(ty.clone()),
-                None => Err(CertificateError::KernelRejected {
-                    reason: format!("unknown constant: {name}"),
-                }),
-            }
-        }
+        ProofTerm::Const(name) => match ctx.lookup(name) {
+            Some(ContextEntry::Definition { ty, .. }) => Ok(ty.clone()),
+            Some(ContextEntry::Axiom { ty }) => Ok(ty.clone()),
+            None => Err(CertificateError::KernelRejected {
+                reason: format!("unknown constant: {name}"),
+            }),
+        },
         ProofTerm::Sort(u) => {
             // Sort u : Sort (u+1)
             Ok(ProofTerm::Sort(u.saturating_add(1)))
@@ -273,9 +262,7 @@ pub fn infer_type(
                     Ok(substitute(&codomain, 0, a))
                 }
                 _ => Err(CertificateError::KernelRejected {
-                    reason: format!(
-                        "application of non-function type: {f_type:?}"
-                    ),
+                    reason: format!("application of non-function type: {f_type:?}"),
                 }),
             }
         }
@@ -294,9 +281,7 @@ fn infer_sort_level(
         ProofTerm::Sort(u) => Ok(u),
         // tRust: F5 soundness fix — non-Sort types must not silently become Prop
         _ => Err(CertificateError::KernelRejected {
-            reason: format!(
-                "expected Sort(_) when inferring sort level, got {ty:?}"
-            ),
+            reason: format!("expected Sort(_) when inferring sort level, got {ty:?}"),
         }),
     }
 }
@@ -323,10 +308,9 @@ pub fn shift(term: &ProofTerm, cutoff: usize, amount: usize) -> ProofTerm {
                 ProofTerm::Var(*idx)
             }
         }
-        ProofTerm::App(f, a) => ProofTerm::App(
-            Box::new(shift(f, cutoff, amount)),
-            Box::new(shift(a, cutoff, amount)),
-        ),
+        ProofTerm::App(f, a) => {
+            ProofTerm::App(Box::new(shift(f, cutoff, amount)), Box::new(shift(a, cutoff, amount)))
+        }
         ProofTerm::Lambda { binder_name, binder_type, body } => ProofTerm::Lambda {
             binder_name: binder_name.clone(),
             binder_type: Box::new(shift(binder_type, cutoff, amount)),
@@ -350,11 +334,7 @@ pub fn shift(term: &ProofTerm, cutoff: usize, amount: usize) -> ProofTerm {
 ///
 /// Reference: Barendregt, "The Lambda Calculus", Chapter 2.
 #[must_use]
-pub fn substitute(
-    term: &ProofTerm,
-    target_idx: usize,
-    replacement: &ProofTerm,
-) -> ProofTerm {
+pub fn substitute(term: &ProofTerm, target_idx: usize, replacement: &ProofTerm) -> ProofTerm {
     match term {
         ProofTerm::Var(idx) => {
             if *idx == target_idx {
@@ -406,11 +386,7 @@ pub fn substitute(
 /// - Beta reduction (lambda application)
 /// - Eta equivalence (structural)
 #[must_use]
-pub fn is_definitionally_equal(
-    lhs: &ProofTerm,
-    rhs: &ProofTerm,
-    ctx: &KernelContext,
-) -> bool {
+pub fn is_definitionally_equal(lhs: &ProofTerm, rhs: &ProofTerm, ctx: &KernelContext) -> bool {
     // Fast path: syntactic equality
     if lhs == rhs {
         return true;
@@ -427,23 +403,16 @@ pub fn is_definitionally_equal(
     // Structural comparison after reduction
     match (lhs, rhs) {
         (ProofTerm::App(f1, a1), ProofTerm::App(f2, a2)) => {
-            is_definitionally_equal(f1, f2, ctx)
-                && is_definitionally_equal(a1, a2, ctx)
+            is_definitionally_equal(f1, f2, ctx) && is_definitionally_equal(a1, a2, ctx)
         }
         (
             ProofTerm::Lambda { binder_type: t1, body: b1, .. },
             ProofTerm::Lambda { binder_type: t2, body: b2, .. },
-        ) => {
-            is_definitionally_equal(t1, t2, ctx)
-                && is_definitionally_equal(b1, b2, ctx)
-        }
+        ) => is_definitionally_equal(t1, t2, ctx) && is_definitionally_equal(b1, b2, ctx),
         (
             ProofTerm::Pi { domain: d1, codomain: c1, .. },
             ProofTerm::Pi { domain: d2, codomain: c2, .. },
-        ) => {
-            is_definitionally_equal(d1, d2, ctx)
-                && is_definitionally_equal(c1, c2, ctx)
-        }
+        ) => is_definitionally_equal(d1, d2, ctx) && is_definitionally_equal(c1, c2, ctx),
         _ => false,
     }
 }
@@ -575,8 +544,7 @@ mod tests {
         let mut ctx = KernelContext::new();
         let id_ty = arrow(prop(), prop());
         let id_val = lam("x", prop(), ProofTerm::Var(0));
-        ctx.add_definition("id", id_ty.clone(), id_val.clone())
-            .expect("should add definition");
+        ctx.add_definition("id", id_ty.clone(), id_val.clone()).expect("should add definition");
         match ctx.lookup("id").unwrap() {
             ContextEntry::Definition { ty, value } => {
                 assert_eq!(*ty, id_ty);
@@ -727,8 +695,7 @@ mod tests {
     fn test_def_equal_delta_reduction() {
         let mut ctx = KernelContext::new();
         // def MyProp : Sort 1 := Sort 0
-        ctx.add_definition("MyProp", type_sort(), prop())
-            .expect("add def");
+        ctx.add_definition("MyProp", type_sort(), prop()).expect("add def");
         let const_ref = ProofTerm::Const("MyProp".to_string());
         assert!(is_definitionally_equal(&const_ref, &prop(), &ctx));
     }
@@ -796,8 +763,7 @@ mod tests {
     fn test_infer_type_application() {
         let mut ctx = KernelContext::new();
         ctx.add_axiom("A", prop()).expect("add A");
-        ctx.add_axiom("a", ProofTerm::Const("A".to_string()))
-            .expect("add a");
+        ctx.add_axiom("a", ProofTerm::Const("A".to_string())).expect("add a");
         let a = ProofTerm::Const("A".to_string());
         let proof_a = ProofTerm::Const("a".to_string());
         // (fun (x : A) => x) a  should have type A
@@ -875,8 +841,10 @@ mod tests {
         // But then Var(1) matches target_idx=1, so it gets replaced with Var(1).
         // Result: Lambda(Prop, Var(1))
         let expected = lam("x", prop(), ProofTerm::Var(1));
-        assert_eq!(result, expected,
-            "free variable in replacement must be shifted to avoid capture by lambda binder");
+        assert_eq!(
+            result, expected,
+            "free variable in replacement must be shifted to avoid capture by lambda binder"
+        );
     }
 
     #[test]
@@ -900,8 +868,7 @@ mod tests {
 
         let expected_inner = lam("y", prop(), ProofTerm::Var(2));
         let expected = lam("x", prop(), expected_inner);
-        assert_eq!(result, expected,
-            "replacement must be shifted by +1 for each binder crossed");
+        assert_eq!(result, expected, "replacement must be shifted by +1 for each binder crossed");
     }
 
     #[test]
@@ -915,8 +882,7 @@ mod tests {
         let replacement = ProofTerm::Const("c".to_string());
         let result = substitute(&term, 0, &replacement);
         let expected = lam("x", prop(), ProofTerm::Const("c".to_string()));
-        assert_eq!(result, expected,
-            "constant replacement should work correctly under binder");
+        assert_eq!(result, expected, "constant replacement should work correctly under binder");
     }
 
     #[test]
@@ -938,7 +904,9 @@ mod tests {
             domain: Box::new(prop()),
             codomain: Box::new(ProofTerm::Var(1)),
         };
-        assert_eq!(result, expected,
-            "free variable in replacement must be shifted to avoid capture by Pi binder");
+        assert_eq!(
+            result, expected,
+            "free variable in replacement must be shifted to avoid capture by Pi binder"
+        );
     }
 }

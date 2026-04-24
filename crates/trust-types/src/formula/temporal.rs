@@ -146,8 +146,9 @@ impl FairnessConstraint {
     /// Returns the action name.
     pub fn action(&self) -> &str {
         match self {
-            FairnessConstraint::Weak { action, .. }
-            | FairnessConstraint::Strong { action, .. } => action,
+            FairnessConstraint::Weak { action, .. } | FairnessConstraint::Strong { action, .. } => {
+                action
+            }
         }
     }
 }

@@ -238,7 +238,7 @@ pub fn fluent_value_from_str_list_sep_by_and(l: Vec<Cow<'_, str>>) -> FluentValu
                 .with_try_get::<MemoizableListFormatter, _, _>((), |list_formatter| {
                     list_formatter.format_to_string(self.0.iter())
                 })
-                .expect("invariant: list formatter memoization must succeed"); // tRust: unwrap -> expect
+                .unwrap();
             Cow::Owned(result)
         }
 
@@ -250,7 +250,7 @@ pub fn fluent_value_from_str_list_sep_by_and(l: Vec<Cow<'_, str>>) -> FluentValu
                 .with_try_get::<MemoizableListFormatter, _, _>((), |list_formatter| {
                     list_formatter.format_to_string(self.0.iter())
                 })
-                .expect("invariant: threadsafe list formatter memoization must succeed"); // tRust: unwrap -> expect
+                .unwrap();
             Cow::Owned(result)
         }
     }

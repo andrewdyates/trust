@@ -368,7 +368,7 @@ impl<I: Interner> fmt::Debug for TyKind<I> {
             Ref(r, t, m) => write!(f, "&{:?} {}{:?}", r, m.prefix_str(), t),
             FnDef(d, s) => f.debug_tuple("FnDef").field(d).field(&s).finish(),
             FnPtr(sig_tys, hdr) => write!(f, "{:?}", sig_tys.with(*hdr)),
-            // tRust: known issue (unsafe_binder) -- print this like `unsafe<'a> T<'a>`.
+            // FIXME(unsafe_binder): print this like `unsafe<'a> T<'a>`.
             UnsafeBinder(binder) => write!(f, "{:?}", binder),
             Dynamic(p, r) => write!(f, "dyn {p:?} + {r:?}"),
             Closure(d, s) => f.debug_tuple("Closure").field(d).field(&s).finish(),
@@ -784,7 +784,7 @@ impl<I: Interner> ty::Binder<I, FnSig<I>> {
     #[inline]
     #[track_caller]
     pub fn input(self, index: usize) -> ty::Binder<I, I::Ty> {
-        self.map_bound(|fn_sig| fn_sig.inputs().get(index).expect("invariant: index is valid for fn_sig inputs")) // tRust: unwrap -> expect
+        self.map_bound(|fn_sig| fn_sig.inputs().get(index).unwrap())
     }
 
     pub fn inputs_and_output(self) -> ty::Binder<I, I::Tys> {
@@ -855,7 +855,7 @@ impl<I: Interner> fmt::Debug for FnSig<I> {
     }
 }
 
-// tRust: known issue -- this is a distinct type because we need to define `Encode`/`Decode`
+// FIXME: this is a distinct type because we need to define `Encode`/`Decode`
 // impls in this crate for `Binder<I, I::Ty>`.
 #[derive_where(Clone, Copy, PartialEq, Hash; I: Interner)]
 #[cfg_attr(feature = "nightly", derive(HashStable_NoContext))]
@@ -961,7 +961,7 @@ impl<I: Interner> ty::Binder<I, FnSigTys<I>> {
     #[inline]
     #[track_caller]
     pub fn input(self, index: usize) -> ty::Binder<I, I::Ty> {
-        self.map_bound(|sig_tys| sig_tys.inputs().get(index).expect("invariant: index is valid for sig_tys inputs")) // tRust: unwrap -> expect
+        self.map_bound(|sig_tys| sig_tys.inputs().get(index).unwrap())
     }
 
     pub fn inputs_and_output(self) -> ty::Binder<I, I::Tys> {

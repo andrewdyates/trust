@@ -204,11 +204,7 @@ impl<'tcx> CValue<'tcx> {
                 let (field_ptr, field_layout) = codegen_field(fx, ptr, None, layout, field);
                 CValue::by_ref(field_ptr, field_layout)
             }
-            // tRust: ByRef with metadata - treat like ByRef without metadata for field access
-            CValueInner::ByRef(ptr, Some(meta)) => {
-                let (field_ptr, field_layout) = codegen_field(fx, ptr, Some(meta), layout, field);
-                CValue::by_ref(field_ptr, field_layout)
-            }
+            CValueInner::ByRef(_, Some(_)) => todo!(),
         }
     }
 
@@ -659,23 +655,7 @@ impl<'tcx> CPlace<'tcx> {
                             flags,
                         );
                     }
-                    // tRust: ByRef with metadata in write_cvalue - use same copy logic
-                    CValueInner::ByRef(from_addr, Some(_meta)) => {
-                        let from_addr = from_addr.get_addr(fx);
-                        let flags = MemFlags::new();
-                        let src_align = src_layout.align.bytes().try_into().unwrap_or(128);
-                        let dst_align = dst_layout.align.bytes().try_into().unwrap_or(128);
-                        fx.bcx.emit_small_memory_copy(
-                            fx.target_config,
-                            to_addr,
-                            from_addr,
-                            size,
-                            dst_align,
-                            src_align,
-                            true,
-                            flags,
-                        );
-                    }
+                    CValueInner::ByRef(_, Some(_)) => todo!(),
                 }
             }
         }

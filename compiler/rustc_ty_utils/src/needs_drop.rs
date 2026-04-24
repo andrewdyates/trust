@@ -50,7 +50,7 @@ fn needs_async_drop_raw<'tcx>(
     res
 }
 
-/// tRust: known issue — in order to not mistakenly assume that `[PhantomData<T>; N]` requires drop glue
+/// HACK: in order to not mistakenly assume that `[PhantomData<T>; N]` requires drop glue
 /// we check the element type for drop glue. The correct fix would be looking at the
 /// entirety of the code around `needs_drop_components` and this file and come up with
 /// logic that is easier to follow while not repeating any checks that may thus diverge.
@@ -112,11 +112,11 @@ struct NeedsDropTypes<'tcx, F> {
     adt_components: F,
     /// Set this to true if an exhaustive list of types involved in
     /// drop obligation is requested.
-    // tRust: known issue — Calling this bool `exhaustive` is confusing and possibly a footgun,
+    // FIXME: Calling this bool `exhaustive` is confusing and possibly a footgun,
     // since it does two things: It makes the iterator yield *all* of the types
     // that need drop, and it also affects the computation of the drop components
     // on `Coroutine`s. The latter is somewhat confusing, and probably should be
-    // a function of `typing_env`. See the known issue comment below for why this is
+    // a function of `typing_env`. See the HACK comment below for why this is
     // necessary. If this isn't possible, then we probably should turn this into
     // a `NeedsDropMode` so that we can have a variant like `CollectAllSignificantDrops`,
     // which will more accurately indicate that we want *all* of the *significant*
@@ -193,7 +193,7 @@ where
                     // computed on MIR, while this very method is used to build MIR.
                     // To avoid cycles, we consider that coroutines always require drop.
                     //
-                    // tRust: known issue — Because we erase regions contained in the coroutine witness, we
+                    // HACK: Because we erase regions contained in the coroutine witness, we
                     // have to conservatively assume that every region captured by the
                     // coroutine has to be live when dropped. This results in a lot of
                     // undesirable borrowck errors. During borrowck, we call `needs_drop`
@@ -201,7 +201,7 @@ where
                     // need to be dropped, and only require the captured types to be live
                     // if they do.
                     ty::Coroutine(def_id, args) => {
-                        // tRust: known issue — See known issue on `exhaustive` field above.
+                        // FIXME: See FIXME on `exhaustive` field above.
                         if self.exhaustive {
                             for upvar in args.as_coroutine().upvar_tys() {
                                 queue_type(self, upvar);

@@ -10,7 +10,7 @@
 //! return `ToolBuildResult` and should never prepare `cargo` invocations manually.
 
 use std::ffi::OsStr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use crate::core::build_steps::compile::is_lto_stage;
@@ -20,7 +20,7 @@ use crate::core::builder;
 use crate::core::builder::{
     Builder, Cargo as CargoCommand, RunConfig, ShouldRun, Step, StepMetadata, cargo_profile_var,
 };
-use crate::core::config::{DebuginfoLevel, RustcLto, TargetSelection};
+use crate::core::config::{Config, DebuginfoLevel, RustcLto, TargetSelection};
 use crate::utils::exec::{BootstrapCommand, command};
 use crate::utils::helpers::{add_dylib_path, exe, t};
 use crate::{Compiler, FileType, Kind, Mode};
@@ -41,6 +41,8 @@ pub enum ToolArtifactKind {
 struct ToolBuild {
     /// Compiler that will build this tool.
     build_compiler: Compiler,
+    /// Compiler/sysroot that will own the built tool.
+    output_compiler: Compiler,
     target: TargetSelection,
     tool: &'static str,
     path: &'static str,
@@ -164,9 +166,14 @@ impl Step for ToolBuild {
                 tool = "rust-tidy";
             }
             let tool_path = match self.artifact_kind {
-                ToolArtifactKind::Binary => {
-                    copy_link_tool_bin(builder, self.build_compiler, self.target, self.mode, tool)
-                }
+                ToolArtifactKind::Binary => copy_link_tool_bin(
+                    builder,
+                    self.output_compiler,
+                    self.target,
+                    self.mode,
+                    self.build_compiler,
+                    tool,
+                ),
                 ToolArtifactKind::Library => builder
                     .cargo_out(self.build_compiler, self.mode, self.target)
                     .join(format!("lib{tool}.rlib")),
@@ -360,19 +367,378 @@ pub(crate) fn get_tool_target_compiler(
     compiler
 }
 
+fn output_compiler_for_tool(build_compiler: Compiler, target: TargetSelection) -> Compiler {
+    Compiler::new(build_compiler.stage + 1, target)
+}
+
 /// Links a built tool binary with the given `name` from the build directory to the
 /// tools directory.
 fn copy_link_tool_bin(
     builder: &Builder<'_>,
-    build_compiler: Compiler,
+    output_compiler: Compiler,
     target: TargetSelection,
     mode: Mode,
+    build_compiler: Compiler,
     name: &str,
 ) -> PathBuf {
     let cargo_out = builder.cargo_out(build_compiler, mode, target).join(exe(name, target));
-    let bin = builder.tools_dir(build_compiler).join(exe(name, target));
+    let bin = builder.tools_dir(output_compiler, target).join(exe(name, target));
     builder.copy_link(&cargo_out, &bin, FileType::Executable);
     bin
+}
+
+fn copy_bin_to_sysroot(
+    builder: &Builder<'_>,
+    target_compiler: Compiler,
+    tool_path: &Path,
+    bin_name: &str,
+) -> PathBuf {
+    let bindir = builder.sysroot(target_compiler).join("bin");
+    t!(fs::create_dir_all(&bindir));
+    let dst = bindir.join(exe(bin_name, target_compiler.host));
+    builder.copy_link(tool_path, &dst, FileType::Executable);
+    dst
+}
+
+pub(crate) fn restored_sysroot_bins(builder: &Builder<'_>) -> Vec<(&'static str, &'static str)> {
+    restored_sysroot_bins_for_config(&builder.config, builder.build.unstable_features())
+}
+
+fn restored_sysroot_bins_for_config(
+    config: &Config,
+    unstable_features: bool,
+) -> Vec<(&'static str, &'static str)> {
+    restored_sysroot_bins_for_tool_settings(
+        config.extended,
+        config.tools.as_ref(),
+        unstable_features,
+    )
+}
+
+fn restored_sysroot_bins_for_tool_settings(
+    extended: bool,
+    tools: Option<&std::collections::HashSet<String>>,
+    unstable_features: bool,
+) -> Vec<(&'static str, &'static str)> {
+    let mut bins = vec![("rustdoc_tool_binary", "rustdoc")];
+
+    if tool_enabled_for_tool_settings(extended, tools, "cargo") {
+        bins.push(("cargo", "cargo"));
+    }
+    if tool_enabled_for_tool_settings(extended, tools, "cargo-trust") {
+        bins.push(("cargo-trust", "cargo-trust"));
+    }
+    if extended_rustc_tool_is_default_step_for_tool_settings(
+        extended,
+        tools,
+        unstable_features,
+        "cargo-clippy",
+        true,
+    ) {
+        bins.push(("cargo-clippy", "cargo-clippy"));
+    }
+    if extended_rustc_tool_is_default_step_for_tool_settings(
+        extended,
+        tools,
+        unstable_features,
+        "clippy-driver",
+        true,
+    ) {
+        bins.push(("clippy-driver", "clippy-driver"));
+    }
+    if extended_rustc_tool_is_default_step_for_tool_settings(
+        extended,
+        tools,
+        unstable_features,
+        "cargo-fmt",
+        true,
+    ) {
+        bins.push(("cargo-fmt", "cargo-fmt"));
+    }
+    if extended_rustc_tool_is_default_step_for_tool_settings(
+        extended,
+        tools,
+        unstable_features,
+        "rustfmt",
+        true,
+    ) {
+        bins.push(("rustfmt", "rustfmt"));
+    }
+    if tool_enabled_for_tool_settings(extended, tools, "rust-analyzer") {
+        bins.push(("rust-analyzer", "rust-analyzer"));
+    }
+    if extended_rustc_tool_is_default_step_for_tool_settings(
+        extended,
+        tools,
+        unstable_features,
+        "cargo-miri",
+        false,
+    ) {
+        bins.push(("cargo-miri", "cargo-miri"));
+    }
+    if extended_rustc_tool_is_default_step_for_tool_settings(
+        extended,
+        tools,
+        unstable_features,
+        "miri",
+        false,
+    ) {
+        bins.push(("miri", "miri"));
+    }
+
+    bins
+}
+
+pub(crate) fn restore_rust_analyzer_proc_macro_srv(builder: &Builder<'_>) -> bool {
+    restore_rust_analyzer_proc_macro_srv_for_config(&builder.config)
+}
+
+pub(crate) fn ensure_user_facing_tools(
+    builder: &Builder<'_>,
+    target_compiler: Compiler,
+    sysroot: &Path,
+) {
+    if target_compiler.stage == 0 {
+        return;
+    }
+
+    let target = target_compiler.host;
+    let compilers = RustcPrivateCompilers::from_target_compiler(builder, target_compiler);
+    let bindir = sysroot.join("bin");
+    t!(fs::create_dir_all(&bindir));
+
+    let install_bin = |builder: &Builder<'_>, tool_path: &Path, bin_name: &str| {
+        builder.copy_link(
+            tool_path,
+            &bindir.join(exe(bin_name, target_compiler.host)),
+            FileType::Executable,
+        );
+    };
+
+    let mut rustdoc_features = Vec::new();
+    if builder.config.jemalloc(target) {
+        rustdoc_features.push("jemalloc".to_string());
+    }
+    let rustdoc = builder.ensure(ToolBuild {
+        build_compiler: compilers.build_compiler,
+        output_compiler: target_compiler,
+        target,
+        tool: "rustdoc_tool_binary",
+        mode: Mode::ToolRustcPrivate,
+        path: "src/tools/rustdoc",
+        source_type: SourceType::InTree,
+        extra_features: rustdoc_features,
+        allow_features: "",
+        cargo_args: Vec::new(),
+        artifact_kind: ToolArtifactKind::Binary,
+    });
+    if builder.config.rust_debuginfo_level_tools == DebuginfoLevel::None {
+        compile::strip_debug(builder, target, &rustdoc.tool_path);
+    }
+    install_bin(builder, &rustdoc.tool_path, "rustdoc");
+
+    if tool_enabled_for_tool_settings(
+        builder.config.extended,
+        builder.config.tools.as_ref(),
+        "cargo",
+    ) {
+        builder.build.require_submodule("src/tools/cargo", None);
+        let cargo = builder.ensure(ToolBuild {
+            build_compiler: get_tool_target_compiler(builder, ToolTargetBuildMode::Dist(target_compiler)),
+            output_compiler: target_compiler,
+            target,
+            tool: "cargo",
+            mode: Mode::ToolTarget,
+            path: "src/tools/cargo",
+            source_type: SourceType::Submodule,
+            extra_features: Vec::new(),
+            allow_features: "min_specialization,specialization",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &cargo.tool_path, "cargo");
+    }
+    if tool_enabled_for_tool_settings(
+        builder.config.extended,
+        builder.config.tools.as_ref(),
+        "cargo-trust",
+    ) {
+        let cargo_trust = builder.ensure(ToolBuild {
+            build_compiler: get_tool_target_compiler(
+                builder,
+                ToolTargetBuildMode::Dist(target_compiler),
+            ),
+            output_compiler: target_compiler,
+            target,
+            tool: "cargo-trust",
+            mode: Mode::ToolTarget,
+            path: "cargo-trust",
+            source_type: SourceType::InTree,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &cargo_trust.tool_path, "cargo-trust");
+    }
+    if extended_rustc_tool_is_default_step(builder, "cargo-fmt", true) {
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "cargo-fmt",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/rustfmt",
+            source_type: SourceType::InTree,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "cargo-fmt");
+    }
+    if extended_rustc_tool_is_default_step(builder, "cargo-clippy", true) {
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "cargo-clippy",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/clippy",
+            source_type: SourceType::InTree,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "cargo-clippy");
+    }
+    if extended_rustc_tool_is_default_step(builder, "clippy-driver", true) {
+        let mut extra_features = Vec::new();
+        if builder.config.jemalloc(target) {
+            extra_features.push("jemalloc".to_string());
+        }
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "clippy-driver",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/clippy",
+            source_type: SourceType::InTree,
+            extra_features,
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "clippy-driver");
+    }
+    if extended_rustc_tool_is_default_step(builder, "rustfmt", true) {
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "rustfmt",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/rustfmt",
+            source_type: SourceType::InTree,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "rustfmt");
+    }
+    if tool_enabled_for_tool_settings(
+        builder.config.extended,
+        builder.config.tools.as_ref(),
+        "rust-analyzer",
+    ) {
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "rust-analyzer",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/rust-analyzer",
+            source_type: SourceType::InTree,
+            extra_features: vec!["in-rust-tree".to_owned()],
+            allow_features: RustAnalyzer::ALLOW_FEATURES,
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "rust-analyzer");
+    }
+    if restore_rust_analyzer_proc_macro_srv(builder) {
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "rust-analyzer-proc-macro-srv",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/rust-analyzer/crates/proc-macro-srv-cli",
+            source_type: SourceType::InTree,
+            extra_features: vec!["in-rust-tree".to_owned()],
+            allow_features: RustAnalyzer::ALLOW_FEATURES,
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        let libexec = sysroot.join("libexec");
+        t!(fs::create_dir_all(&libexec));
+        builder.copy_link(
+            &tool.tool_path,
+            &libexec.join("rust-analyzer-proc-macro-srv"),
+            FileType::Executable,
+        );
+    }
+    if extended_rustc_tool_is_default_step(builder, "miri", false) {
+        let mut extra_features = Vec::new();
+        if builder.config.jemalloc(target) {
+            extra_features.push("jemalloc".to_string());
+        }
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "miri",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/miri",
+            source_type: SourceType::InTree,
+            extra_features,
+            allow_features: "",
+            cargo_args: vec!["--all-targets".to_string()],
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "miri");
+    }
+    if extended_rustc_tool_is_default_step(builder, "cargo-miri", false) {
+        let tool = builder.ensure(ToolBuild {
+            build_compiler: compilers.build_compiler,
+            output_compiler: target_compiler,
+            target,
+            tool: "cargo-miri",
+            mode: Mode::ToolRustcPrivate,
+            path: "src/tools/miri/cargo-miri",
+            source_type: SourceType::InTree,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+        install_bin(builder, &tool.tool_path, "cargo-miri");
+    }
+}
+
+fn restore_rust_analyzer_proc_macro_srv_for_config(config: &Config) -> bool {
+    restore_rust_analyzer_proc_macro_srv_for_tool_settings(config.extended, config.tools.as_ref())
+}
+
+fn restore_rust_analyzer_proc_macro_srv_for_tool_settings(
+    extended: bool,
+    tools: Option<&std::collections::HashSet<String>>,
+) -> bool {
+    tool_enabled_for_tool_settings(extended, tools, "rust-analyzer")
+        || tool_enabled_for_tool_settings(extended, tools, "rust-analyzer-proc-macro-srv")
 }
 
 macro_rules! bootstrap_tool {
@@ -438,6 +804,7 @@ macro_rules! bootstrap_tool {
 
                 builder.ensure(ToolBuild {
                     build_compiler: self.compiler,
+                    output_compiler: output_compiler_for_tool(self.compiler, self.target),
                     target: self.target,
                     tool: $tool_name,
                     mode: Mode::ToolBootstrap,
@@ -537,6 +904,7 @@ impl Step for RustcPerf {
 
         let tool = ToolBuild {
             build_compiler: self.compiler,
+            output_compiler: output_compiler_for_tool(self.compiler, self.target),
             target: self.target,
             tool: "collector",
             mode: Mode::ToolBootstrap,
@@ -552,7 +920,14 @@ impl Step for RustcPerf {
         let res = builder.ensure(tool.clone());
         // We also need to symlink the `rustc-fake` binary to the corresponding directory,
         // because `collector` expects it in the same directory.
-        copy_link_tool_bin(builder, tool.build_compiler, tool.target, tool.mode, "rustc-fake");
+        copy_link_tool_bin(
+            builder,
+            tool.output_compiler,
+            tool.target,
+            tool.mode,
+            tool.build_compiler,
+            "rustc-fake",
+        );
 
         res
     }
@@ -608,6 +983,7 @@ impl Step for ErrorIndex {
             .require_submodule("src/doc/book", Some("error_index_generator requires mdbook-trpl"));
         builder.ensure(ToolBuild {
             build_compiler: self.compilers.build_compiler,
+            output_compiler: self.compilers.target_compiler,
             target: self.compilers.target(),
             tool: "error_index_generator",
             mode: Mode::ToolRustcPrivate,
@@ -654,6 +1030,7 @@ impl Step for RemoteTestServer {
     fn run(self, builder: &Builder<'_>) -> ToolBuildResult {
         builder.ensure(ToolBuild {
             build_compiler: self.build_compiler,
+            output_compiler: output_compiler_for_tool(self.build_compiler, self.target),
             target: self.target,
             tool: "remote-test-server",
             mode: Mode::ToolTarget,
@@ -760,6 +1137,7 @@ impl Step for Rustdoc {
         let tool_path = builder
             .ensure(ToolBuild {
                 build_compiler: compilers.build_compiler,
+                output_compiler: target_compiler,
                 target,
                 // Cargo adds a number of paths to the dylib search path on windows, which results in
                 // the wrong rustdoc being executed. To avoid the conflicting rustdocs, we name the "tool"
@@ -837,8 +1215,10 @@ impl Step for Cargo {
         builder.std(self.build_compiler, builder.host_target);
         builder.std(self.build_compiler, self.target);
 
-        builder.ensure(ToolBuild {
+        let target_compiler = builder.compiler(self.build_compiler.stage + 1, self.target);
+        let tool_result = builder.ensure(ToolBuild {
             build_compiler: self.build_compiler,
+            output_compiler: target_compiler,
             target: self.target,
             tool: "cargo",
             mode: Mode::ToolTarget,
@@ -852,11 +1232,94 @@ impl Step for Cargo {
             allow_features: "min_specialization,specialization",
             cargo_args: Vec::new(),
             artifact_kind: ToolArtifactKind::Binary,
-        })
+        });
+
+        let tool_path =
+            copy_bin_to_sysroot(builder, target_compiler, &tool_result.tool_path, "cargo");
+
+        ToolBuildResult { tool_path, build_compiler: tool_result.build_compiler }
     }
 
     fn metadata(&self) -> Option<StepMetadata> {
         Some(StepMetadata::build("cargo", self.target).built_by(self.build_compiler))
+    }
+}
+
+/// Builds the cargo-trust tool.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct CargoTrust {
+    build_compiler: Compiler,
+    target: TargetSelection,
+}
+
+impl CargoTrust {
+    /// Returns `CargoTrust` that will be **compiled** by the passed compiler, for the given
+    /// `target`.
+    pub fn from_build_compiler(build_compiler: Compiler, target: TargetSelection) -> Self {
+        Self { build_compiler, target }
+    }
+
+    /// Returns `CargoTrust` that should be **used** by the passed compiler.
+    pub fn from_target_compiler(builder: &Builder<'_>, target_compiler: Compiler) -> Self {
+        Self {
+            build_compiler: get_tool_target_compiler(
+                builder,
+                ToolTargetBuildMode::Dist(target_compiler),
+            ),
+            target: target_compiler.host,
+        }
+    }
+}
+
+impl Step for CargoTrust {
+    type Output = ToolBuildResult;
+    const IS_HOST: bool = true;
+
+    fn should_run(run: ShouldRun<'_>) -> ShouldRun<'_> {
+        run.path("cargo-trust")
+    }
+
+    fn is_default_step(builder: &Builder<'_>) -> bool {
+        builder.tool_enabled("cargo-trust")
+    }
+
+    fn make_run(run: RunConfig<'_>) {
+        run.builder.ensure(CargoTrust {
+            build_compiler: get_tool_target_compiler(
+                run.builder,
+                ToolTargetBuildMode::Build(run.target),
+            ),
+            target: run.target,
+        });
+    }
+
+    fn run(self, builder: &Builder<'_>) -> ToolBuildResult {
+        builder.std(self.build_compiler, builder.host_target);
+        builder.std(self.build_compiler, self.target);
+
+        let target_compiler = builder.compiler(self.build_compiler.stage + 1, self.target);
+        let tool_result = builder.ensure(ToolBuild {
+            build_compiler: self.build_compiler,
+            output_compiler: target_compiler,
+            target: self.target,
+            tool: "cargo-trust",
+            mode: Mode::ToolTarget,
+            path: "cargo-trust",
+            source_type: SourceType::InTree,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        });
+
+        let tool_path =
+            copy_bin_to_sysroot(builder, target_compiler, &tool_result.tool_path, "cargo-trust");
+
+        ToolBuildResult { tool_path, build_compiler: tool_result.build_compiler }
+    }
+
+    fn metadata(&self) -> Option<StepMetadata> {
+        Some(StepMetadata::build("cargo-trust", self.target).built_by(self.build_compiler))
     }
 }
 
@@ -910,6 +1373,7 @@ impl Step for LldWrapper {
         let lld_dir = builder.ensure(llvm::Lld { target: self.target });
         let tool = builder.ensure(ToolBuild {
             build_compiler: self.build_compiler,
+            output_compiler: output_compiler_for_tool(self.build_compiler, self.target),
             target: self.target,
             tool: "lld-wrapper",
             mode: Mode::ToolTarget,
@@ -1001,6 +1465,7 @@ impl Step for WasmComponentLd {
     fn run(self, builder: &Builder<'_>) -> ToolBuildResult {
         builder.ensure(ToolBuild {
             build_compiler: self.build_compiler,
+            output_compiler: output_compiler_for_tool(self.build_compiler, self.target),
             target: self.target,
             tool: "wasm-component-ld",
             mode: Mode::ToolTarget,
@@ -1054,8 +1519,9 @@ impl Step for RustAnalyzer {
     fn run(self, builder: &Builder<'_>) -> ToolBuildResult {
         let build_compiler = self.compilers.build_compiler;
         let target = self.compilers.target();
-        builder.ensure(ToolBuild {
+        let tool_result = builder.ensure(ToolBuild {
             build_compiler,
+            output_compiler: self.compilers.target_compiler,
             target,
             tool: "rust-analyzer",
             mode: Mode::ToolRustcPrivate,
@@ -1065,7 +1531,16 @@ impl Step for RustAnalyzer {
             allow_features: RustAnalyzer::ALLOW_FEATURES,
             cargo_args: Vec::new(),
             artifact_kind: ToolArtifactKind::Binary,
-        })
+        });
+
+        let tool_path = copy_bin_to_sysroot(
+            builder,
+            self.compilers.target_compiler,
+            &tool_result.tool_path,
+            "rust-analyzer",
+        );
+
+        ToolBuildResult { tool_path, build_compiler: tool_result.build_compiler }
     }
 
     fn metadata(&self) -> Option<StepMetadata> {
@@ -1111,6 +1586,7 @@ impl Step for RustAnalyzerProcMacroSrv {
     fn run(self, builder: &Builder<'_>) -> Self::Output {
         let tool_result = builder.ensure(ToolBuild {
             build_compiler: self.compilers.build_compiler,
+            output_compiler: self.compilers.target_compiler,
             target: self.compilers.target(),
             tool: "rust-analyzer-proc-macro-srv",
             mode: Mode::ToolRustcPrivate,
@@ -1198,6 +1674,7 @@ impl Step for LlvmBitcodeLinker {
     fn run(self, builder: &Builder<'_>) -> ToolBuildResult {
         builder.ensure(ToolBuild {
             build_compiler: self.build_compiler,
+            output_compiler: output_compiler_for_tool(self.build_compiler, self.target),
             target: self.target,
             tool: "llvm-bitcode-linker",
             mode: Mode::ToolTarget,
@@ -1310,6 +1787,7 @@ impl Step for BuildManifest {
         assert!(self.compiler.stage != 0);
         builder.ensure(ToolBuild {
             build_compiler: self.compiler,
+            output_compiler: output_compiler_for_tool(self.compiler, self.target),
             target: self.target,
             tool: "build-manifest",
             mode: Mode::ToolStd,
@@ -1489,24 +1967,71 @@ fn should_run_extended_rustc_tool<'a>(run: ShouldRun<'a>, path: &'static str) ->
     run.path(path)
 }
 
-fn extended_rustc_tool_is_default_step(
+pub(crate) fn extended_rustc_tool_is_default_step(
     builder: &Builder<'_>,
     tool_name: &'static str,
     stable: bool,
 ) -> bool {
-    builder.config.extended
-        && builder.config.tools.as_ref().map_or(
-            // By default, on nightly/dev enable all tools, else only
-            // build stable tools.
-            stable || builder.build.unstable_features(),
+    extended_rustc_tool_is_default_step_for_config(
+        &builder.config,
+        builder.build.unstable_features(),
+        tool_name,
+        stable,
+    )
+}
+
+fn extended_rustc_tool_is_default_step_for_config(
+    config: &Config,
+    unstable_features: bool,
+    tool_name: &'static str,
+    stable: bool,
+) -> bool {
+    extended_rustc_tool_is_default_step_for_tool_settings(
+        config.extended,
+        config.tools.as_ref(),
+        unstable_features,
+        tool_name,
+        stable,
+    )
+}
+
+fn extended_rustc_tool_is_default_step_for_tool_settings(
+    extended: bool,
+    tools: Option<&std::collections::HashSet<String>>,
+    unstable_features: bool,
+    tool_name: &'static str,
+    stable: bool,
+) -> bool {
+    extended
+        && tools.map_or(
+            // By default, on nightly/dev enable all tools, else only build stable tools.
+            stable || unstable_features,
             // If `tools` is set, search list for this tool.
-            |tools| {
-                tools.iter().any(|tool| match tool.as_ref() {
-                    "clippy" => tool_name == "clippy-driver",
-                    x => tool_name == x,
-                })
-            },
+            |tools| tools.iter().any(|tool| tool_matches_config_entry(tool, tool_name)),
         )
+}
+
+fn tool_enabled_for_tool_settings(
+    extended: bool,
+    tools: Option<&std::collections::HashSet<String>>,
+    tool: &str,
+) -> bool {
+    if !extended {
+        return false;
+    }
+    match tools {
+        Some(set) => set.contains(tool),
+        None => true,
+    }
+}
+
+fn tool_matches_config_entry(config_tool: &str, tool_name: &str) -> bool {
+    match config_tool {
+        "clippy" => matches!(tool_name, "clippy-driver" | "cargo-clippy"),
+        "miri" => matches!(tool_name, "miri" | "cargo-miri"),
+        "rustfmt" => matches!(tool_name, "rustfmt" | "cargo-fmt"),
+        x => tool_name == x,
+    }
 }
 
 fn build_extended_rustc_tool(
@@ -1527,6 +2052,7 @@ fn build_extended_rustc_tool(
     let build_compiler = compilers.build_compiler;
     let ToolBuildResult { tool_path, .. } = builder.ensure(ToolBuild {
         build_compiler,
+        output_compiler: compilers.target_compiler,
         target,
         tool: tool_name,
         mode: Mode::ToolRustcPrivate,
@@ -1608,6 +2134,198 @@ tool_rustc_extended!(Rustfmt {
 });
 
 pub const TEST_FLOAT_PARSE_ALLOW_FEATURES: &str = "f16,cfg_target_has_reliable_f16_f128";
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::collections::hash_map::DefaultHasher;
+    use std::fs;
+    use std::hash::{Hash, Hasher};
+
+    use super::*;
+
+    fn tools_profile_default_tools() -> HashSet<String> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/defaults/bootstrap.tools.toml");
+        let contents = fs::read_to_string(path).unwrap();
+        let toml: toml::Value = toml::from_str(&contents).unwrap();
+
+        toml.get("build")
+            .and_then(|build| build.get("tools"))
+            .and_then(toml::Value::as_array)
+            .unwrap()
+            .iter()
+            .map(|tool| tool.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn tool_aliases_enable_associated_cargo_frontends() {
+        let tools =
+            HashSet::from_iter(["clippy", "rustfmt", "miri"].into_iter().map(ToString::to_string));
+
+        assert!(extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "clippy-driver",
+            true,
+        ));
+        assert!(extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "cargo-clippy",
+            true,
+        ));
+        assert!(extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "rustfmt",
+            true,
+        ));
+        assert!(extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "cargo-fmt",
+            true,
+        ));
+        assert!(extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "miri",
+            false,
+        ));
+        assert!(extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "cargo-miri",
+            false,
+        ));
+    }
+
+    #[test]
+    fn tool_aliases_do_not_enable_unrelated_tools() {
+        let tools = HashSet::from_iter(["clippy".to_string()]);
+
+        assert!(!extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "cargo-fmt",
+            true,
+        ));
+        assert!(!extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "cargo-miri",
+            false,
+        ));
+        assert!(!extended_rustc_tool_is_default_step_for_tool_settings(
+            true,
+            Some(&tools),
+            false,
+            "rust-analyzer",
+            false,
+        ));
+    }
+
+    #[test]
+    fn restored_sysroot_bins_follow_enabled_tool_surface() {
+        let tools = HashSet::from_iter(
+            ["cargo", "cargo-trust", "clippy", "rustfmt", "rust-analyzer", "miri"]
+                .into_iter()
+                .map(ToString::to_string),
+        );
+        let bins = restored_sysroot_bins_for_tool_settings(true, Some(&tools), false);
+        assert!(bins.contains(&("cargo", "cargo")));
+        assert!(bins.contains(&("cargo-trust", "cargo-trust")));
+        assert!(bins.contains(&("cargo-clippy", "cargo-clippy")));
+        assert!(bins.contains(&("clippy-driver", "clippy-driver")));
+        assert!(bins.contains(&("cargo-fmt", "cargo-fmt")));
+        assert!(bins.contains(&("rustfmt", "rustfmt")));
+        assert!(bins.contains(&("rust-analyzer", "rust-analyzer")));
+        assert!(bins.contains(&("cargo-miri", "cargo-miri")));
+        assert!(bins.contains(&("miri", "miri")));
+        assert!(bins.contains(&("rustdoc_tool_binary", "rustdoc")));
+        assert!(restore_rust_analyzer_proc_macro_srv_for_tool_settings(true, Some(&tools)));
+    }
+
+    #[test]
+    fn tools_profile_default_tools_restore_daily_driver_bins() {
+        let tools = tools_profile_default_tools();
+
+        for tool in [
+            "cargo",
+            "cargo-trust",
+            "rustdoc",
+            "clippy",
+            "rustfmt",
+            "rust-analyzer",
+            "miri",
+            "src",
+            "llvm-tools",
+        ] {
+            assert!(tools.contains(tool), "tools profile should include `{tool}`");
+        }
+
+        let bins = restored_sysroot_bins_for_tool_settings(true, Some(&tools), false);
+        for bin in [
+            ("rustdoc_tool_binary", "rustdoc"),
+            ("cargo", "cargo"),
+            ("cargo-trust", "cargo-trust"),
+            ("cargo-clippy", "cargo-clippy"),
+            ("clippy-driver", "clippy-driver"),
+            ("cargo-fmt", "cargo-fmt"),
+            ("rustfmt", "rustfmt"),
+            ("rust-analyzer", "rust-analyzer"),
+            ("cargo-miri", "cargo-miri"),
+            ("miri", "miri"),
+        ] {
+            assert!(bins.contains(&bin), "tools profile should restore `{}`", bin.1);
+        }
+        assert!(restore_rust_analyzer_proc_macro_srv_for_tool_settings(true, Some(&tools)));
+    }
+
+    #[test]
+    fn restored_sysroot_bins_skip_disabled_tools() {
+        let tools = HashSet::from_iter(["cargo".to_string()]);
+        let bins = restored_sysroot_bins_for_tool_settings(true, Some(&tools), false);
+        assert_eq!(bins, vec![("rustdoc_tool_binary", "rustdoc"), ("cargo", "cargo")]);
+        assert!(!restore_rust_analyzer_proc_macro_srv_for_tool_settings(true, Some(&tools)));
+    }
+
+    #[test]
+    fn tool_build_cache_distinguishes_output_compiler() {
+        let target = TargetSelection::from_user("aarch64-apple-darwin");
+        let base = ToolBuild {
+            build_compiler: Compiler::new(0, target),
+            output_compiler: Compiler::new(1, target),
+            target,
+            tool: "cargo",
+            path: "src/tools/cargo",
+            mode: Mode::ToolTarget,
+            source_type: SourceType::Submodule,
+            extra_features: Vec::new(),
+            allow_features: "",
+            cargo_args: Vec::new(),
+            artifact_kind: ToolArtifactKind::Binary,
+        };
+        let other = ToolBuild { output_compiler: Compiler::new(2, target), ..base.clone() };
+
+        assert_ne!(base, other);
+
+        let mut left = DefaultHasher::new();
+        base.hash(&mut left);
+        let mut right = DefaultHasher::new();
+        other.hash(&mut right);
+        assert_ne!(left.finish(), right.finish());
+    }
+}
 
 impl Builder<'_> {
     /// Gets a `BootstrapCommand` which is ready to run `tool` in `stage` built for

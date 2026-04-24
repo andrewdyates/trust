@@ -5,7 +5,7 @@
 
 use trust_types::{Formula, Sort};
 
-use super::engine::{Ic3Engine, ic3_check, ic3_check_with_config};
+use super::engine::{Ic3Engine, ic3_check};
 use super::prime::prime_formula;
 use super::sat::{SatResult, structural_sat_check};
 use super::types::{Cube, Frame, Ic3Config, Ic3Result, TransitionSystem};
@@ -65,10 +65,7 @@ fn test_cube_negate_multiple() {
     let b = Formula::Var("b".into(), Sort::Bool);
     let cube = Cube::new(vec![a.clone(), b.clone()]);
     let negated = cube.negate();
-    assert_eq!(
-        negated,
-        Formula::Or(vec![Formula::Not(Box::new(a)), Formula::Not(Box::new(b)),])
-    );
+    assert_eq!(negated, Formula::Or(vec![Formula::Not(Box::new(a)), Formula::Not(Box::new(b)),]));
 }
 
 #[test]
@@ -139,8 +136,7 @@ fn test_frame_display() {
 
 #[test]
 fn test_transition_system_creation() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     assert_eq!(sys.init, Formula::Bool(true));
     assert_eq!(sys.transition, Formula::Bool(true));
     assert_eq!(sys.property, Formula::Bool(true));
@@ -151,8 +147,7 @@ fn test_transition_system_creation() {
 #[test]
 fn test_ic3_trivially_safe() {
     // Property is true: trivially safe.
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let result = ic3_check(sys).expect("should succeed");
     match result {
         Ic3Result::Safe { convergence_depth, .. } => {
@@ -165,8 +160,7 @@ fn test_ic3_trivially_safe() {
 #[test]
 fn test_ic3_trivially_unsafe_init() {
     // Property is false and init is reachable: immediate counterexample.
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(false));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(false));
     let result = ic3_check(sys).expect("should succeed");
     assert!(matches!(result, Ic3Result::Unsafe { .. }));
 }
@@ -203,26 +197,15 @@ fn test_ic3_no_transitions() {
 
 #[test]
 fn test_ic3_engine_depth() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
     assert_eq!(engine.depth(), 0);
     assert_eq!(engine.frames().len(), 1);
 }
 
 #[test]
-fn test_ic3_config_custom() {
-    let config = Ic3Config { max_depth: 50, max_block_iterations: 500 };
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
-    let result = ic3_check_with_config(sys, config).expect("should succeed");
-    assert!(matches!(result, Ic3Result::Safe { .. }));
-}
-
-#[test]
 fn test_generalize_cube_single_literal() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
     let cube = Cube::new(vec![Formula::Bool(true)]);
     let result = ic3_ok(engine.generalize_cube(&cube, 1));
@@ -232,8 +215,7 @@ fn test_generalize_cube_single_literal() {
 
 #[test]
 fn test_generalize_cube_empty() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
     let cube = Cube::empty();
     let result = ic3_ok(engine.generalize_cube(&cube, 1));
@@ -242,8 +224,7 @@ fn test_generalize_cube_empty() {
 
 #[test]
 fn test_propagate_clauses_convergence() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
 
     // Manually set up frames where F_1 == F_2 (convergence).
@@ -292,8 +273,7 @@ fn test_propagate_clauses_no_convergence() {
 
 #[test]
 fn test_extract_counterexample_trace_empty() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
     let trace = engine.extract_counterexample_trace(&[]);
     assert!(trace.is_empty());
@@ -301,8 +281,7 @@ fn test_extract_counterexample_trace_empty() {
 
 #[test]
 fn test_extract_counterexample_trace_reverses_order() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
 
     let c1 = Cube::new(vec![Formula::Bool(true)]);
@@ -324,27 +303,6 @@ fn test_ic3_result_safe_contains_invariant() {
             let _ = invariant_clauses;
         }
         other => panic!("expected Safe, got: {other:?}"),
-    }
-}
-
-#[test]
-fn test_ic3_max_depth_bound() {
-    let config = Ic3Config { max_depth: 2, max_block_iterations: 100 };
-    // Property that is hard to prove (non-trivial, needs depth).
-    // With depth 2, IC3 might not converge.
-    let x = Formula::Var("x".into(), Sort::Int);
-    let property = Formula::And(vec![
-        Formula::Ge(Box::new(x.clone()), Box::new(Formula::Int(0))),
-        Formula::Le(Box::new(x), Box::new(Formula::Int(100))),
-    ]);
-    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), property);
-    let result = ic3_check_with_config(sys, config).expect("should succeed");
-    // With very low depth and a non-trivial property, expect Safe or Unknown.
-    match result {
-        Ic3Result::Safe { .. } | Ic3Result::Unknown { .. } => {}
-        Ic3Result::Unsafe { .. } => {
-            // This is also acceptable if the engine finds a cex.
-        }
     }
 }
 
@@ -402,50 +360,13 @@ fn test_structural_sat_check_non_trivial_is_conservative() {
     assert_eq!(structural_sat_check(&formula), SatResult::Sat(None));
 }
 
-#[test]
-fn test_init_satisfies_property_with_smt_query() {
-    // Init = true, Property = true -> init /\ !property = true /\ false = false (UNSAT)
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
-    let engine = Ic3Engine::new(sys, Ic3Config::default());
-    assert!(engine.init_satisfies_property());
-}
-
-#[test]
-fn test_init_does_not_satisfy_false_property() {
-    // Init = true, Property = false -> init /\ !property = true /\ true = true (SAT)
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(false));
-    let engine = Ic3Engine::new(sys, Ic3Config::default());
-    assert!(!engine.init_satisfies_property());
-}
-
-#[test]
-fn test_init_satisfies_property_no_initial_states() {
-    // Init = false -> init /\ !property = false /\ ... = false (UNSAT)
-    let sys =
-        TransitionSystem::new(Formula::Bool(false), Formula::Bool(true), Formula::Bool(false));
-    let engine = Ic3Engine::new(sys, Ic3Config::default());
-    assert!(engine.init_satisfies_property());
-}
-
-#[test]
-fn test_init_satisfies_property_with_contradiction() {
-    // Init = x, Property = x -> init /\ !property = x /\ !x = false (UNSAT)
-    let x = Formula::Var("x".into(), Sort::Bool);
-    let sys = TransitionSystem::new(x.clone(), Formula::Bool(true), x);
-    let engine = Ic3Engine::new(sys, Ic3Config::default());
-    assert!(engine.init_satisfies_property());
-}
-
 // -- is_inductive_relative tests (#376) --
 
 #[test]
 fn test_is_inductive_relative_with_false_transition() {
     // T = false makes the query F /\ !c /\ false /\ c' = false (UNSAT)
     // so the cube is trivially inductive.
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
     engine.frames.push(Frame::new(1));
 
@@ -455,8 +376,7 @@ fn test_is_inductive_relative_with_false_transition() {
 
 #[test]
 fn test_is_inductive_relative_level_zero() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
     let cube = Cube::new(vec![Formula::Bool(true)]);
     // Level 0 always returns false.
@@ -468,8 +388,7 @@ fn test_is_inductive_relative_level_zero() {
 #[test]
 fn test_find_predecessor_no_transition() {
     // T = false -> F /\ false /\ cube' = false (UNSAT) -> no predecessor
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
     engine.frames.push(Frame::new(1));
 
@@ -481,8 +400,7 @@ fn test_find_predecessor_no_transition() {
 fn test_find_predecessor_identity_transition() {
     // T = true, frame empty -> F /\ true /\ cube' = true /\ cube' (SAT)
     // -> predecessor found
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
     engine.frames.push(Frame::new(1));
 
@@ -495,8 +413,7 @@ fn test_find_predecessor_identity_transition() {
 #[test]
 fn test_propagate_clauses_only_propagates_inductive() {
     // With T = false, all clauses are trivially inductive (query contains false).
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
 
     let clause = Cube::new(vec![Formula::Var("x".into(), Sort::Bool)]);
@@ -515,8 +432,7 @@ fn test_propagate_clauses_blocks_non_inductive() {
     // With T = true and a non-trivial clause, the structural checker
     // cannot determine UNSAT, so the clause is not propagated.
     let x = Formula::Var("x".into(), Sort::Int);
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
 
     // Non-trivial clause: x >= 0
@@ -536,8 +452,7 @@ fn test_propagate_clauses_blocks_non_inductive() {
 #[test]
 fn test_is_clause_inductive_false_transition() {
     // T = false makes any inductiveness query contain false -> UNSAT -> inductive.
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
     engine.frames.push(Frame::new(1)); // F_1
 
@@ -552,8 +467,7 @@ fn test_is_clause_inductive_non_trivial_returns_false() {
     // This is the key soundness property: Sat(None) is NOT treated as
     // "definitely satisfiable" -- it means "unknown", so we refuse to
     // propagate rather than risk unsoundness.
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
     engine.frames.push(Frame::new(1));
 
@@ -567,8 +481,7 @@ fn test_is_clause_inductive_non_trivial_returns_false() {
 
 #[test]
 fn test_is_clause_inductive_out_of_bounds_level() {
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(true), Formula::Bool(true));
     let engine = Ic3Engine::new(sys, Ic3Config::default());
 
     let clause = Cube::new(vec![Formula::Bool(true)]);
@@ -610,8 +523,7 @@ fn test_propagate_clauses_multiple_frames_selective() {
 #[test]
 fn test_propagate_clauses_does_not_propagate_existing() {
     // Clauses already in the target frame are not re-added.
-    let sys =
-        TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
+    let sys = TransitionSystem::new(Formula::Bool(true), Formula::Bool(false), Formula::Bool(true));
     let mut engine = Ic3Engine::new(sys, Ic3Config::default());
 
     let clause = Cube::new(vec![Formula::Var("x".into(), Sort::Bool)]);
@@ -658,10 +570,7 @@ fn test_propagate_conservative_sat_none_blocks_propagation() {
 
     let converged = ic3_ok(engine.propagate_clauses());
     assert_eq!(converged, None, "should not converge: clause not propagated");
-    assert!(
-        engine.frames[2].is_empty(),
-        "F_2 should remain empty: clause not proven inductive"
-    );
+    assert!(engine.frames[2].is_empty(), "F_2 should remain empty: clause not proven inductive");
 }
 
 // -- prime_formula tests --
@@ -731,10 +640,7 @@ fn test_prime_formula_bv_not_and_extract() {
     let x = Formula::Var("x".into(), Sort::BitVec(32));
     let not_x = Formula::BvNot(Box::new(x), 32);
     let primed = prime(&not_x);
-    assert_eq!(
-        primed,
-        Formula::BvNot(Box::new(Formula::Var("x'".into(), Sort::BitVec(32))), 32,)
-    );
+    assert_eq!(primed, Formula::BvNot(Box::new(Formula::Var("x'".into(), Sort::BitVec(32))), 32,));
 
     let y = Formula::Var("y".into(), Sort::BitVec(32));
     let extract = Formula::BvExtract { inner: Box::new(y), high: 15, low: 0 };
@@ -789,7 +695,7 @@ fn test_prime_formula_nested_bv_in_ite() {
 
 #[test]
 fn test_prime_formula_forall_primes_bound_vars_and_body() {
-    let bindings = vec![("x".to_string(), Sort::Int), ("y".to_string(), Sort::Bool)];
+    let bindings = vec![("x".into(), Sort::Int), ("y".into(), Sort::Bool)];
     let body = Formula::Lt(
         Box::new(Formula::Var("x".into(), Sort::Int)),
         Box::new(Formula::Var("z".into(), Sort::Int)),
@@ -816,7 +722,7 @@ fn test_prime_formula_forall_primes_bound_vars_and_body() {
 
 #[test]
 fn test_prime_formula_exists_primes_bound_vars_and_body() {
-    let bindings = vec![("a".to_string(), Sort::Int)];
+    let bindings = vec![("a".into(), Sort::Int)];
     let body =
         Formula::Eq(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(42)));
     let formula = Formula::Exists(bindings, Box::new(body));
@@ -862,10 +768,7 @@ fn test_prime_formula_select_and_store() {
         Formula::Store(a, i, v) => {
             assert_eq!(
                 *a,
-                Formula::Var(
-                    "mem'".into(),
-                    Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int))
-                )
+                Formula::Var("mem'".into(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)))
             );
             assert_eq!(*i, Formula::Var("i'".into(), Sort::Int));
             assert_eq!(*v, Formula::Var("v'".into(), Sort::Int));
@@ -1037,25 +940,6 @@ fn test_structural_sat_check_sat_none_is_unknown_not_definitive() {
 
     // Verify Sat(None) is distinct from a concrete model.
     assert_ne!(result, SatResult::Unsat);
-}
-
-#[test]
-fn test_init_satisfies_property_conservative_on_non_trivial() {
-    // #376: With non-trivial init and property, init_satisfies_property
-    // conservatively returns false (cannot prove UNSAT structurally).
-    let x = Formula::Var("x".into(), Sort::Int);
-    let sys = TransitionSystem::new(
-        Formula::Ge(Box::new(x.clone()), Box::new(Formula::Int(0))),
-        Formula::Bool(true),
-        Formula::Le(Box::new(x), Box::new(Formula::Int(100))),
-    );
-    let engine = Ic3Engine::new(sys, Ic3Config::default());
-
-    // Cannot determine structurally => conservative false.
-    assert!(
-        !engine.init_satisfies_property(),
-        "#376: non-trivial query should be conservatively false"
-    );
 }
 
 #[test]

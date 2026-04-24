@@ -15,21 +15,21 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-mod happens_before;
-mod race_condition;
 mod atomic_access;
-mod detector;
 mod checker;
+mod detector;
+mod happens_before;
 mod hb_graph;
+mod race_condition;
 
 #[cfg(test)]
 mod tests;
 
-pub use happens_before::HappensBefore;
-pub use race_condition::RaceCondition;
 pub use atomic_access::{AtomicAccessEntry, AtomicAccessLog};
-pub use detector::DataRaceDetector;
 pub use checker::{
-    MemoryModelChecker, MemoryModelCheckResult, OrderingRequirement, OrderingViolation,
+    MemoryModelCheckResult, MemoryModelChecker, OrderingRequirement, OrderingViolation,
 };
+pub use detector::DataRaceDetector;
+pub use happens_before::HappensBefore;
 pub use hb_graph::HappensBeforeGraph;
+pub use race_condition::RaceCondition;

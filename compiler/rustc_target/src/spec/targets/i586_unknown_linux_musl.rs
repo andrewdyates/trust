@@ -5,7 +5,7 @@ pub(crate) fn target() -> Target {
     base.rustc_abi = None; // overwrite the SSE2 ABI set by the base target
     base.cpu = "pentium".into();
     base.llvm_target = "i586-unknown-linux-musl".into();
-    // tRust: known issue (compiler-team#422) — musl targets should be dynamically linked by default.
+    // FIXME(compiler-team#422): musl targets should be dynamically linked by default.
     base.crt_static_default = true;
     base
 }

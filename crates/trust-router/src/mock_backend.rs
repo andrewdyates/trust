@@ -33,19 +33,19 @@ impl VerificationBackend for MockBackend {
 
         match result {
             FormulaResult::False => VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: elapsed,
                 strength: ProofStrength::smt_unsat(),
                 proof_certificate: None,
                 solver_warnings: None,
             },
             FormulaResult::True => VerificationResult::Failed {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: elapsed,
                 counterexample: None,
             },
             FormulaResult::Unknown => VerificationResult::Unknown {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: elapsed,
                 reason: "mock backend cannot evaluate complex formulas".to_string(),
             },
@@ -117,7 +117,7 @@ mod tests {
         let backend = MockBackend;
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -131,7 +131,7 @@ mod tests {
         let backend = MockBackend;
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -145,7 +145,7 @@ mod tests {
         let backend = MockBackend;
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Var("x".into(), Sort::Int),
             contract_metadata: None,

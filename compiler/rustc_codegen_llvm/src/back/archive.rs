@@ -37,7 +37,6 @@ fn get_llvm_object_symbols(
 ) -> io::Result<bool> {
     let mut state = Box::new(f);
 
-    // SAFETY: The buffer pointer and length are valid, the callback function pointer is valid, and the state pointer will remain valid for the callback duration.
     let err = unsafe {
         llvm::LLVMRustGetSymbols(
             buf.as_ptr(),
@@ -51,7 +50,6 @@ fn get_llvm_object_symbols(
     if err.is_null() {
         return Ok(true);
     } else {
-        // SAFETY: The pointer was originally created via `Box::into_raw` and is being reclaimed exactly once.
         let error = unsafe { *Box::from_raw(err as *mut io::Error) };
         // These are the magic constants for LLVM bitcode files:
         // https://github.com/llvm/llvm-project/blob/7eadc1960d199676f04add402bb0aa6f65b7b234/llvm/lib/BinaryFormat/Magic.cpp#L90-L97
@@ -75,10 +73,7 @@ fn get_llvm_object_symbols(
     }
 
     unsafe extern "C" fn callback(state: *mut c_void, symbol_name: *const c_char) -> *mut c_void {
-        // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
         let f = unsafe { &mut *(state as *mut &mut dyn FnMut(&[u8]) -> io::Result<()>) };
-        // SAFETY: The pointer is non-null and properly aligned, derived
-        // from a valid reference or allocation that outlives this use.
         match f(unsafe { CStr::from_ptr(symbol_name) }.to_bytes()) {
             Ok(()) => std::ptr::null_mut(),
             Err(err) => Box::into_raw(Box::new(err) as Box<io::Error>) as *mut c_void,
@@ -86,7 +81,6 @@ fn get_llvm_object_symbols(
     }
 
     unsafe extern "C" fn error_callback(error: *const c_char) -> *mut c_void {
-        // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
         let error = unsafe { CStr::from_ptr(error) };
         Box::into_raw(Box::new(io::Error::new(
             io::ErrorKind::Other,
@@ -96,16 +90,13 @@ fn get_llvm_object_symbols(
 }
 
 fn llvm_is_64_bit_object_file(buf: &[u8]) -> bool {
-    // SAFETY: The buffer pointer and length describe valid readable memory containing object file data.
     unsafe { llvm::LLVMRustIs64BitSymbolicFile(buf.as_ptr(), buf.len()) }
 }
 
 fn llvm_is_ec_object_file(buf: &[u8]) -> bool {
-    // SAFETY: The buffer pointer and length describe valid readable memory containing object file data.
     unsafe { llvm::LLVMRustIsECObject(buf.as_ptr(), buf.len()) }
 }
 
 fn llvm_is_any_arm64_coff(buf: &[u8]) -> bool {
-    // SAFETY: The buffer pointer and length describe valid readable memory containing object file data.
     unsafe { llvm::LLVMRustIsAnyArm64Coff(buf.as_ptr(), buf.len()) }
 }

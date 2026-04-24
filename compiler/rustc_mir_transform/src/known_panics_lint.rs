@@ -44,7 +44,8 @@ impl<'tcx> crate::MirLint<'tcx> for KnownPanicsLint {
             return;
         }
 
-        // NOTE: Const propagation skips coroutines due to query cycles in layout computation.
+        // FIXME(welseywiser) const prop doesn't work on coroutines because of query cycles
+        // computing their layout.
         if tcx.is_coroutine(def_id.to_def_id()) {
             trace!("KnownPanicsLint skipped for coroutine {:?}", def_id);
             return;
@@ -178,8 +179,8 @@ impl<'tcx> ty::layout::HasTypingEnv<'tcx> for ConstPropagator<'_, 'tcx> {
 impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
     fn new(body: &'mir Body<'tcx>, tcx: TyCtxt<'tcx>) -> ConstPropagator<'mir, 'tcx> {
         let def_id = body.source.def_id();
-        // NOTE(#132279): Manual typing mode specification required during
-        // analysis-to-runtime phase transition.
+        // FIXME(#132279): This is used during the phase transition from analysis
+        // to runtime, so we have to manually specify the correct typing mode.
         let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
         let can_const_prop = CanConstProp::check(tcx, typing_env, body);
         let ecx = InterpCx::new(tcx, tcx.def_span(def_id), typing_env, DummyMachine);
@@ -249,7 +250,7 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
 
     /// Returns the value, if any, of evaluating `c`.
     fn eval_constant(&mut self, c: &ConstOperand<'tcx>) -> Option<ImmTy<'tcx>> {
-        // NOTE(#67176): Parametric values cannot be const-propagated.
+        // FIXME we need to revisit this for #67176
         if c.has_param() {
             return None;
         }
@@ -357,7 +358,7 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
                     op,
                     // Invent a dummy value, the diagnostic ignores it anyway
                     ConstInt::new(
-                        ScalarInt::try_from_uint(1_u8, left_size).expect("invariant: 1_u8 must fit in any integer size"), // tRust: unwrap elimination
+                        ScalarInt::try_from_uint(1_u8, left_size).unwrap(),
                         left_ty.is_signed(),
                         left_ty.is_ptr_sized_integral(),
                     ),
@@ -446,7 +447,7 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
             | Rvalue::WrapUnsafeBinder(..) => {}
         }
 
-        // NOTE(#67176): Parametric values cannot be const-propagated.
+        // FIXME we need to revisit this for #67176
         if rvalue.has_param() {
             return None;
         }
@@ -560,7 +561,8 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
 
                 let val = self.use_ecx(|this| this.ecx.binary_op(bin_op, &left, &right))?;
                 if matches!(val.layout.backend_repr, BackendRepr::ScalarPair(..)) {
-                    // NOTE: Value doesn't fully support pairs in Immediate; manual decomposition needed.
+                    // FIXME `Value` should properly support pairs in `Immediate`... but currently
+                    // it does not.
                     let (val, overflow) = val.to_pair(&self.ecx);
                     Value::Aggregate {
                         variant: VariantIdx::ZERO,
@@ -700,8 +702,8 @@ impl<'tcx> Visitor<'tcx> for ConstPropagator<'_, 'tcx> {
                     // x = SOME_MUTABLE_STATIC;
                     // // x must now be uninit
                     // ```
-                    // NOTE: Erases entire local on propagation failure; more granular approach
-                    // would only erase the affected projection.
+                    // FIXME: we overzealously erase the entire local, because that's easier to
+                    // implement.
                     trace!(
                         "propagation into {:?} failed.
                         Nuking the entire site from orbit, it's the only way to be sure",
@@ -950,7 +952,6 @@ impl<'tcx> Visitor<'tcx> for CanConstProp {
                 self.can_const_prop[local] = ConstPropMode::NoPropagation;
             }
             MutatingUse(MutatingUseContext::Projection)
-            // tRust: invariant: structural invariant — lint analysis assumes MIR has passed prior validation phases
             | NonMutatingUse(NonMutatingUseContext::Projection) => bug!("visit_place should not pass {context:?} for {local:?}"),
         }
     }

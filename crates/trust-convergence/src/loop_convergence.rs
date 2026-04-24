@@ -13,7 +13,7 @@ use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use crate::oscillation::{
-    apply_damping, detect_oscillation, DampingStrategy, OscillationConfig, OscillationPattern,
+    DampingStrategy, OscillationConfig, OscillationPattern, apply_damping, detect_oscillation,
 };
 use crate::{
     ConvergenceDecision, ConvergenceTracker, IterationSnapshot, ProofFrontier, StepVerdict,
@@ -36,10 +36,7 @@ pub enum LoopDecision {
         dimensions: ConvergenceDimensions,
     },
     /// Loop reached a terminal state.
-    Terminate {
-        outcome: TerminationOutcome,
-        dimensions: ConvergenceDimensions,
-    },
+    Terminate { outcome: TerminationOutcome, dimensions: ConvergenceDimensions },
 }
 
 impl LoopDecision {
@@ -69,20 +66,11 @@ pub enum TerminationOutcome {
     /// All VCs proved — frontier stable for the required rounds.
     FullyVerified { stable_rounds: usize },
     /// Some VCs proved, but frontier stabilized with failures remaining.
-    PartiallyVerified {
-        proved_ratio: f64,
-        stable_rounds: usize,
-    },
+    PartiallyVerified { proved_ratio: f64, stable_rounds: usize },
     /// Resource budget (wall-time or solver-calls) exhausted.
-    BudgetExhausted {
-        resource: BudgetResource,
-        proved_ratio: f64,
-    },
+    BudgetExhausted { resource: BudgetResource, proved_ratio: f64 },
     /// Oscillation or amplitude divergence detected — loop is not converging.
-    Diverging {
-        pattern: OscillationPattern,
-        proved_ratio: f64,
-    },
+    Diverging { pattern: OscillationPattern, proved_ratio: f64 },
 }
 
 /// Which budget resource was exhausted.
@@ -232,10 +220,7 @@ impl LoopConvergence {
     /// Create a new unified tracker with the given policy.
     #[must_use]
     pub fn new(policy: ConvergencePolicy) -> Self {
-        let tracker = ConvergenceTracker::new(
-            policy.stable_round_limit,
-            policy.max_iterations,
-        );
+        let tracker = ConvergenceTracker::new(policy.stable_round_limit, policy.max_iterations);
         Self {
             policy,
             tracker,
@@ -283,27 +268,16 @@ impl LoopConvergence {
 
         // Check budget exhaustion.
         if let Some(resource) = self.check_budget() {
-            let proved_ratio = observation
-                .snapshot
-                .frontier
-                .convergence_score()
-                .unwrap_or(0.0);
+            let proved_ratio = observation.snapshot.frontier.convergence_score().unwrap_or(0.0);
             return LoopDecision::Terminate {
-                outcome: TerminationOutcome::BudgetExhausted {
-                    resource,
-                    proved_ratio,
-                },
+                outcome: TerminationOutcome::BudgetExhausted { resource, proved_ratio },
                 dimensions,
             };
         }
 
         // Check for divergence via oscillation.
         if let Some(OscillationPattern::Divergent) = &oscillation {
-            let proved_ratio = observation
-                .snapshot
-                .frontier
-                .convergence_score()
-                .unwrap_or(0.0);
+            let proved_ratio = observation.snapshot.frontier.convergence_score().unwrap_or(0.0);
             return LoopDecision::Terminate {
                 outcome: TerminationOutcome::Diverging {
                     pattern: OscillationPattern::Divergent,
@@ -334,11 +308,7 @@ impl LoopConvergence {
                 }
             }
             ConvergenceDecision::IterationLimitReached { .. } => {
-                let proved_ratio = observation
-                    .snapshot
-                    .frontier
-                    .convergence_score()
-                    .unwrap_or(0.0);
+                let proved_ratio = observation.snapshot.frontier.convergence_score().unwrap_or(0.0);
                 LoopDecision::Terminate {
                     outcome: TerminationOutcome::BudgetExhausted {
                         resource: BudgetResource::Iterations,
@@ -349,17 +319,11 @@ impl LoopConvergence {
             }
             ConvergenceDecision::Regressed { .. } => {
                 // Regression is a Continue (we don't terminate on regression alone).
-                LoopDecision::Continue {
-                    verdict: StepVerdict::Regressed,
-                    oscillation,
-                    dimensions,
-                }
+                LoopDecision::Continue { verdict: StepVerdict::Regressed, oscillation, dimensions }
             }
-            ConvergenceDecision::Continue { verdict } => LoopDecision::Continue {
-                verdict,
-                oscillation,
-                dimensions,
-            },
+            ConvergenceDecision::Continue { verdict } => {
+                LoopDecision::Continue { verdict, oscillation, dimensions }
+            }
         }
     }
 
@@ -418,13 +382,15 @@ impl LoopConvergence {
 
     fn check_budget(&self) -> Option<BudgetResource> {
         if let Some(max_wall) = self.policy.max_wall_time
-            && self.wall_time_used >= max_wall {
-                return Some(BudgetResource::WallTime);
-            }
+            && self.wall_time_used >= max_wall
+        {
+            return Some(BudgetResource::WallTime);
+        }
         if let Some(max_calls) = self.policy.max_solver_calls
-            && self.solver_calls_used >= max_calls {
-                return Some(BudgetResource::SolverCalls);
-            }
+            && self.solver_calls_used >= max_calls
+        {
+            return Some(BudgetResource::SolverCalls);
+        }
         None
     }
 
@@ -434,12 +400,7 @@ impl LoopConvergence {
         let cex_stability = self.fingerprint_stability(&self.cex_fingerprints);
         let solver_confidence = self.mean_recent_confidence();
 
-        ConvergenceDimensions {
-            frontier_score,
-            spec_stability,
-            cex_stability,
-            solver_confidence,
-        }
+        ConvergenceDimensions { frontier_score, spec_stability, cex_stability, solver_confidence }
     }
 
     /// Compute stability from a fingerprint sequence: ratio of consecutive
@@ -611,11 +572,8 @@ mod tests {
 
     #[test]
     fn test_fully_verified_terminates() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 2,
-            max_iterations: 10,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 2, max_iterations: 10, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         let d1 = lc.observe(obs(0, frontier(5, 0, 0, 0, 0)));
@@ -634,11 +592,8 @@ mod tests {
 
     #[test]
     fn test_partially_verified_terminates() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 2,
-            max_iterations: 10,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 2, max_iterations: 10, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         lc.observe(obs(0, frontier(3, 0, 0, 2, 0)));
@@ -693,8 +648,8 @@ mod tests {
         };
         let mut lc = LoopConvergence::new(policy);
 
-        let o = LoopObservation::from_snapshot(snap(0, frontier(1, 0, 0, 4, 0)))
-            .with_solver_calls(101);
+        let o =
+            LoopObservation::from_snapshot(snap(0, frontier(1, 0, 0, 4, 0))).with_solver_calls(101);
         let d = lc.observe(o);
         assert!(d.should_stop());
         match d {
@@ -708,11 +663,8 @@ mod tests {
 
     #[test]
     fn test_iteration_limit_budget_exhausted() {
-        let policy = ConvergencePolicy {
-            max_iterations: 2,
-            stable_round_limit: 5,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { max_iterations: 2, stable_round_limit: 5, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         lc.observe(obs(0, frontier(1, 0, 0, 4, 0)));
@@ -731,11 +683,8 @@ mod tests {
 
     #[test]
     fn test_dimensions_computed_correctly() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 5,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 5, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         let o = LoopObservation::from_snapshot(snap(0, frontier(3, 0, 0, 2, 0)))
@@ -755,11 +704,8 @@ mod tests {
 
     #[test]
     fn test_dimensions_spec_stability_changes() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 5,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 5, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         // Different spec fingerprints each iteration => low stability.
@@ -813,10 +759,7 @@ mod tests {
         let policy = ConvergencePolicy {
             stable_round_limit: 10,
             max_iterations: 100,
-            oscillation_config: OscillationConfig {
-                min_history: 4,
-                ..Default::default()
-            },
+            oscillation_config: OscillationConfig { min_history: 4, ..Default::default() },
             ..Default::default()
         };
         let mut lc = LoopConvergence::new(policy);
@@ -831,10 +774,7 @@ mod tests {
             if i >= 4 {
                 // After 4+ observations, oscillation should be detected.
                 if let LoopDecision::Continue { oscillation, .. } = &d {
-                    assert!(
-                        oscillation.is_some(),
-                        "Expected oscillation at iteration {i}"
-                    );
+                    assert!(oscillation.is_some(), "Expected oscillation at iteration {i}");
                 }
             }
         }
@@ -869,8 +809,7 @@ mod tests {
         for (i, f) in scores_and_frontiers.into_iter().enumerate() {
             let d = lc.observe(obs(i as u32, f));
             if let LoopDecision::Terminate {
-                outcome: TerminationOutcome::Diverging { .. },
-                ..
+                outcome: TerminationOutcome::Diverging { .. }, ..
             } = &d
             {
                 terminated = true;
@@ -892,11 +831,7 @@ mod tests {
 
     #[test]
     fn test_damp_spec_binary_uses_averaging() {
-        let config = OscillationConfig {
-            min_history: 4,
-            tolerance: 1e-9,
-            ..Default::default()
-        };
+        let config = OscillationConfig { min_history: 4, tolerance: 1e-9, ..Default::default() };
         let history = vec![0.3, 0.7, 0.3, 0.7];
         let proposed = 0.3;
         let damped = damp_spec_for_oscillation(proposed, &history, &config);
@@ -927,10 +862,7 @@ mod tests {
             max_iterations: 100,
             auto_damp: true,
             damping_strategy: DampingStrategy::Averaging,
-            oscillation_config: OscillationConfig {
-                min_history: 4,
-                ..Default::default()
-            },
+            oscillation_config: OscillationConfig { min_history: 4, ..Default::default() },
             ..Default::default()
         };
         let mut lc = LoopConvergence::new(policy);
@@ -951,10 +883,7 @@ mod tests {
 
     #[test]
     fn test_loop_convergence_no_autodamp_passes_through() {
-        let policy = ConvergencePolicy {
-            auto_damp: false,
-            ..Default::default()
-        };
+        let policy = ConvergencePolicy { auto_damp: false, ..Default::default() };
         let lc = LoopConvergence::new(policy);
         assert!((lc.damp_spec_strength(0.42) - 0.42).abs() < 1e-9);
     }
@@ -998,19 +927,12 @@ mod tests {
 
         // All damped values should be between 0.2 and 0.8 (bounded by proposals).
         for (i, &v) in applied.iter().enumerate().skip(4) {
-            assert!(
-                (0.1..=0.9).contains(&v),
-                "Damped value at index {i} out of range: {v}"
-            );
+            assert!((0.1..=0.9).contains(&v), "Damped value at index {i} out of range: {v}");
         }
 
         // Mean of damped values should be near 0.5.
-        let damped_mean =
-            applied.iter().skip(4).sum::<f64>() / (applied.len() - 4) as f64;
-        assert!(
-            (damped_mean - 0.5).abs() < 0.15,
-            "Expected mean near 0.5, got {damped_mean}"
-        );
+        let damped_mean = applied.iter().skip(4).sum::<f64>() / (applied.len() - 4) as f64;
+        assert!((damped_mean - 0.5).abs() < 0.15, "Expected mean near 0.5, got {damped_mean}");
     }
 
     // -- Compute fingerprint utility --
@@ -1075,11 +997,8 @@ mod tests {
 
     #[test]
     fn test_resource_tracking() {
-        let policy = ConvergencePolicy {
-            max_iterations: 100,
-            stable_round_limit: 5,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { max_iterations: 100, stable_round_limit: 5, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         let o = LoopObservation::from_snapshot(snap(0, frontier(1, 0, 0, 4, 0)))
@@ -1132,11 +1051,8 @@ mod tests {
 
     #[test]
     fn test_empty_frontier_dimensions() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 5,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 5, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         let o = LoopObservation::from_snapshot(snap(0, frontier(0, 0, 0, 0, 0)));
@@ -1150,11 +1066,8 @@ mod tests {
 
     #[test]
     fn test_regression_continues_does_not_terminate() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 5,
-            max_iterations: 100,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 5, max_iterations: 100, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         lc.observe(obs(0, frontier(5, 0, 0, 0, 0)));
@@ -1173,11 +1086,8 @@ mod tests {
 
     #[test]
     fn test_cex_stability_alternating_fingerprints() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 10,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 10, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         // Alternate CEX fingerprints: 1, 2, 1, 2, 1, 2
@@ -1204,11 +1114,8 @@ mod tests {
 
     #[test]
     fn test_spec_stability_partial_matches() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 10,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 10, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         // Fingerprints: 10, 10, 20, 20, 20 => last 5 window has 3 matches out of 4 pairs
@@ -1259,11 +1166,8 @@ mod tests {
 
     #[test]
     fn test_improve_then_stabilize_converges() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 2,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 2, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         // Improve from 2/5 to 4/5, then stabilize at 4/5 for 2 rounds.
@@ -1321,11 +1225,8 @@ mod tests {
     fn test_proof_strength_monotonicity_via_convergence() {
         // Verify that LoopConvergence correctly detects when proofs get weaker
         // (fewer proved VCs) across iterations.
-        let policy = ConvergencePolicy {
-            stable_round_limit: 5,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 5, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         // Start with 8 proved, then drop to 5 (proof strength regression).
@@ -1346,11 +1247,8 @@ mod tests {
 
     #[test]
     fn test_solver_confidence_averaging_over_window() {
-        let policy = ConvergencePolicy {
-            stable_round_limit: 10,
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let policy =
+            ConvergencePolicy { stable_round_limit: 10, max_iterations: 20, ..Default::default() };
         let mut lc = LoopConvergence::new(policy);
 
         // Feed 6 iterations with decreasing confidence.
@@ -1380,10 +1278,7 @@ mod tests {
             max_wall_time: Some(Duration::from_secs(1)),
             max_iterations: 100,
             stable_round_limit: 10,
-            oscillation_config: OscillationConfig {
-                min_history: 4,
-                ..Default::default()
-            },
+            oscillation_config: OscillationConfig { min_history: 4, ..Default::default() },
             ..Default::default()
         };
         let mut lc = LoopConvergence::new(policy);

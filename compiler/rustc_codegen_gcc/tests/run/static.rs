@@ -31,13 +31,10 @@ static mut TEST: Test = Test { field: 12 };
 
 static mut TEST2: Test = Test { field: 14 };
 
-// SAFETY: creating a reference to the mutable static `TEST` during static initialization;
-// no other code accesses `TEST` before `WITH_REF` is fully initialized.
 static mut WITH_REF: WithRef = WithRef { refe: unsafe { &TEST } };
 
 #[no_mangle]
 extern "C" fn main(argc: isize, _argv: *const *const u8) -> i32 {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, CONSTANT);
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, TEST2.field);

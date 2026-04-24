@@ -17,7 +17,6 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use trust_types::fx::FxHashMap;
-
 use trust_types::{Formula, Sort};
 
 use crate::houdini::Counterexample;
@@ -135,10 +134,7 @@ pub trait IceVerifier: Send + Sync {
     /// - `Ok(None)` if the invariant is sufficient (inductive + safe).
     /// - `Ok(Some(IceCounterexample))` if the invariant is insufficient.
     /// - `Err(IceError)` on solver failure.
-    fn check_invariant(
-        &self,
-        candidate: &Formula,
-    ) -> Result<Option<IceCounterexample>, IceError>;
+    fn check_invariant(&self, candidate: &Formula) -> Result<Option<IceCounterexample>, IceError>;
 }
 
 /// A counterexample returned by the ICE verifier, classified by kind.
@@ -167,10 +163,7 @@ pub struct IceConfig {
 
 impl Default for IceConfig {
     fn default() -> Self {
-        Self {
-            max_iterations: 50,
-            max_tree_depth: 4,
-        }
+        Self { max_iterations: 50, max_tree_depth: 4 }
     }
 }
 
@@ -222,12 +215,7 @@ impl IceLearner {
     /// Create a new ICE learner with the given configuration.
     #[must_use]
     pub fn new(config: IceConfig) -> Self {
-        Self {
-            config,
-            positive: Vec::new(),
-            negative: Vec::new(),
-            implications: Vec::new(),
-        }
+        Self { config, positive: Vec::new(), negative: Vec::new(), implications: Vec::new() }
     }
 
     /// Create a learner with default configuration.
@@ -315,16 +303,9 @@ impl IceLearner {
     /// Returns `IceError::MaxIterations` if the learner does not converge
     /// within `config.max_iterations`. Callers that want the best-effort
     /// (non-converged) candidate should use [`learn_best_effort`] instead.
-    pub fn learn(
-        &mut self,
-        verifier: &dyn IceVerifier,
-    ) -> Result<IceResult, IceError> {
+    pub fn learn(&mut self, verifier: &dyn IceVerifier) -> Result<IceResult, IceError> {
         let result = self.learn_best_effort(verifier)?;
-        if result.converged {
-            Ok(result)
-        } else {
-            Err(IceError::MaxIterations(result.iterations))
-        }
+        if result.converged { Ok(result) } else { Err(IceError::MaxIterations(result.iterations)) }
     }
 
     /// Run the ICE learning loop, returning the best candidate even if
@@ -334,10 +315,7 @@ impl IceLearner {
     /// when max iterations are reached. Use this when you want to inspect
     /// or use the partial result (e.g., for diagnostics or as a seed for
     /// another round of learning).
-    pub fn learn_best_effort(
-        &mut self,
-        verifier: &dyn IceVerifier,
-    ) -> Result<IceResult, IceError> {
+    pub fn learn_best_effort(&mut self, verifier: &dyn IceVerifier) -> Result<IceResult, IceError> {
         let mut iterations = 0;
 
         for _ in 0..self.config.max_iterations {
@@ -461,11 +439,7 @@ impl IceLearner {
                 let left = self.build_tree(vars, &pos_true, &neg_true, depth + 1);
                 let right = self.build_tree(vars, &pos_false, &neg_false, depth + 1);
 
-                DecisionTree::Split {
-                    predicate,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }
+                DecisionTree::Split { predicate, left: Box::new(left), right: Box::new(right) }
             }
         }
     }
@@ -509,10 +483,7 @@ impl IceLearner {
             // Try midpoints between consecutive values.
             for window in values.windows(2) {
                 let threshold = window[0] + (window[1] - window[0]) / 2;
-                let predicate = SplitPredicate {
-                    var: var.clone(),
-                    threshold,
-                };
+                let predicate = SplitPredicate { var: var.clone(), threshold };
 
                 let (pos_true, pos_false) = partition(pos, &predicate);
                 let (neg_true, neg_false) = partition(neg, &predicate);
@@ -578,11 +549,7 @@ enum DecisionTree {
     /// Terminal: accept (true) or reject (false).
     Leaf(bool),
     /// Split on a predicate: left = predicate true, right = predicate false.
-    Split {
-        predicate: SplitPredicate,
-        left: Box<DecisionTree>,
-        right: Box<DecisionTree>,
-    },
+    Split { predicate: SplitPredicate, left: Box<DecisionTree>, right: Box<DecisionTree> },
 }
 
 // ---------------------------------------------------------------------------
@@ -598,14 +565,8 @@ fn tree_to_formula(tree: &DecisionTree) -> Formula {
             let right_formula = tree_to_formula(right);
 
             // (var <= threshold AND left) OR (var > threshold AND right)
-            let left_branch = Formula::And(vec![
-                predicate.to_le_formula(),
-                left_formula,
-            ]);
-            let right_branch = Formula::And(vec![
-                predicate.to_gt_formula(),
-                right_formula,
-            ]);
+            let left_branch = Formula::And(vec![predicate.to_le_formula(), left_formula]);
+            let right_branch = Formula::And(vec![predicate.to_gt_formula(), right_formula]);
             Formula::Or(vec![left_branch, right_branch])
         }
     }
@@ -617,7 +578,10 @@ fn tree_to_formula(tree: &DecisionTree) -> Formula {
 /// states where it evaluates to `false` go to `false_set`. States
 /// with unknown evaluation (missing variable) go to `true_set`
 /// (optimistic for positive examples).
-fn partition(states: &[ConcreteState], predicate: &SplitPredicate) -> (Vec<ConcreteState>, Vec<ConcreteState>) {
+fn partition(
+    states: &[ConcreteState],
+    predicate: &SplitPredicate,
+) -> (Vec<ConcreteState>, Vec<ConcreteState>) {
     let mut true_set = Vec::new();
     let mut false_set = Vec::new();
     for state in states {
@@ -806,11 +770,7 @@ mod tests {
                 _candidate: &Formula,
             ) -> Result<Option<IceCounterexample>, IceError> {
                 let mut responses = self.responses.lock().unwrap();
-                if responses.is_empty() {
-                    Ok(None)
-                } else {
-                    Ok(responses.remove(0))
-                }
+                if responses.is_empty() { Ok(None) } else { Ok(responses.remove(0)) }
             }
         }
 
@@ -859,10 +819,7 @@ mod tests {
             }
         }
 
-        let mut learner = IceLearner::new(IceConfig {
-            max_iterations: 3,
-            max_tree_depth: 4,
-        });
+        let mut learner = IceLearner::new(IceConfig { max_iterations: 3, max_tree_depth: 4 });
         learner.add_positive(state(&[("x", 0)]));
         learner.add_negative(state(&[("x", -1)]));
 
@@ -891,10 +848,7 @@ mod tests {
             }
         }
 
-        let mut learner = IceLearner::new(IceConfig {
-            max_iterations: 3,
-            max_tree_depth: 4,
-        });
+        let mut learner = IceLearner::new(IceConfig { max_iterations: 3, max_tree_depth: 4 });
         learner.add_positive(state(&[("x", 0)]));
         learner.add_negative(state(&[("x", -1)]));
 
@@ -912,9 +866,8 @@ mod tests {
 
     #[test]
     fn test_houdini_cex_bridge() {
-        let cex = Counterexample {
-            assignments: vec![("x".to_string(), 42), ("y".to_string(), -7)],
-        };
+        let cex =
+            Counterexample { assignments: vec![("x".to_string(), 42), ("y".to_string(), -7)] };
         let state = IceLearner::houdini_cex_to_positive(&cex);
         assert_eq!(state.get("x"), Some(42));
         assert_eq!(state.get("y"), Some(-7));
@@ -1043,9 +996,7 @@ mod tests {
     fn eval_int(formula: &Formula, assignments: &[(String, i128)]) -> Option<i128> {
         match formula {
             Formula::Int(v) => Some(*v),
-            Formula::Var(name, _) => {
-                assignments.iter().find(|(n, _)| n == name).map(|(_, v)| *v)
-            }
+            Formula::Var(name, _) => assignments.iter().find(|(n, _)| n == name).map(|(_, v)| *v),
             Formula::Add(a, b) => Some(eval_int(a, assignments)? + eval_int(b, assignments)?),
             Formula::Sub(a, b) => Some(eval_int(a, assignments)? - eval_int(b, assignments)?),
             _ => None,

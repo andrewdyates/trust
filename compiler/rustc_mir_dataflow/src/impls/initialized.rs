@@ -391,7 +391,7 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
         if self.tcx.sess.opts.unstable_opts.precise_enum_drop_elaboration
             && let Some((_, rvalue)) = statement.kind.as_assign()
             && let mir::Rvalue::Ref(_, mir::BorrowKind::Mut { .. }, place)
-                // tRust: known issue — Does `&raw const foo` allow mutation? See #90413.
+                // FIXME: Does `&raw const foo` allow mutation? See #90413.
                 | mir::Rvalue::RawPtr(_, place) = rvalue
             && let LookupResult::Exact(mpi) = self.move_data().rev_lookup.find(place.as_ref())
         {

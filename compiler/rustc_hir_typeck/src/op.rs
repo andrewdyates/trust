@@ -281,7 +281,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             kind: Adjust::Borrow(AutoBorrow::Ref(mutbl)),
                             target: method.sig.inputs()[1],
                         };
-                        // tRust: known issue — Bypass checks due to reborrows being in (upstream HACK by eddyb)
+                        // HACK(eddyb) Bypass checks due to reborrows being in
                         // some cases applied on the RHS, on top of which we need
                         // to autoref, which is not allowed by apply_adjustments.
                         // self.apply_adjustments(rhs_expr, vec![autoref]);
@@ -676,8 +676,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                     "consider using `offset_from` for pointer - pointer if the \
                                      pointers point to the same allocation",
                                     vec![
-                                        // SAFETY: The invariants required by this unsafe operation are
-                                        // upheld by the caller's contract and preceding checks.
                                         (lhs_expr.span.shrink_to_lo(), "unsafe { ".to_owned()),
                                         (
                                             lhs_expr.span.between(rhs_expr.span),
@@ -1080,7 +1078,6 @@ fn lang_item_for_binop(tcx: TyCtxt<'_>, op: Op) -> (Symbol, Option<hir::def_id::
             hir::BinOpKind::Eq => (sym::eq, lang.eq_trait()),
             hir::BinOpKind::Ne => (sym::ne, lang.eq_trait()),
             hir::BinOpKind::And | hir::BinOpKind::Or => {
-                // tRust: invariant — short-circuit boolean operators are handled specially in HIR type checking and never dispatched through operator overloading
                 bug!("&& and || are not overloadable")
             }
         },
@@ -1092,7 +1089,6 @@ fn lang_item_for_unop(tcx: TyCtxt<'_>, op: hir::UnOp) -> (Symbol, Option<hir::de
     match op {
         hir::UnOp::Not => (sym::not, lang.not_trait()),
         hir::UnOp::Neg => (sym::neg, lang.neg_trait()),
-        // tRust: invariant — this overload lookup table only covers overloadable unary operators, and deref is handled by separate autoderef logic
         hir::UnOp::Deref => bug!("Deref is not overloadable"),
     }
 }

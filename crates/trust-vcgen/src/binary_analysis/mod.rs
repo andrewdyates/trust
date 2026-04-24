@@ -12,19 +12,12 @@
 
 mod lowering;
 
-pub mod cfg_fast;
 pub mod cfg_reconstruct;
 pub mod lifter;
-pub mod pcode;
-pub mod type_recovery;
-pub mod patterns;
+// tRust #971: type_recovery.rs deleted — all items dead code (no callers).
+// tRust #971: patterns.rs deleted — all items dead code (only used by deleted security_vcs.rs).
 
-#[allow(unused_imports)]
-pub use cfg_fast::*;
 #[allow(unused_imports)]
 pub use cfg_reconstruct::*;
 #[allow(unused_imports)]
 pub use lifter::*;
-#[allow(unused_imports)]
-pub use pcode::*;
-pub use patterns::*;

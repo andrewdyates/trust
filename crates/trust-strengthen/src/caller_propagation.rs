@@ -12,12 +12,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
-
 use trust_types::call_graph::{CallGraph, CallGraphEdge};
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 use crate::proposer::{Proposal, ProposalKind};
-use trust_types::fx::FxHashSet;
 
 /// The visibility of a function for purposes of precondition propagation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,20 +104,14 @@ impl<'a> CallerPropagator<'a> {
             let resolved_callee = resolve_callee(&graph.nodes, &edge.callee);
             let caller_name = extract_name(&edge.caller);
 
-            reverse_edges
-                .entry(resolved_callee)
-                .or_default()
-                .push(CallerInfo {
-                    caller_path: edge.caller.clone(),
-                    caller_name,
-                    _edge: edge.clone(),
-                });
+            reverse_edges.entry(resolved_callee).or_default().push(CallerInfo {
+                caller_path: edge.caller.clone(),
+                caller_name,
+                _edge: edge.clone(),
+            });
         }
 
-        Self {
-            graph,
-            reverse_edges,
-        }
+        Self { graph, reverse_edges }
     }
 
     /// Find all callers of a given function by its def_path.
@@ -155,7 +147,11 @@ impl<'a> CallerPropagator<'a> {
     /// 3. If the function is public, also generate a signature-level `#[requires]` spec
     /// 4. Track which functions need re-verification
     #[must_use]
-    pub fn propagate(&self, proposals: &[Proposal], visibility: &dyn Fn(&str) -> FnVisibility) -> PropagationResult {
+    pub fn propagate(
+        &self,
+        proposals: &[Proposal],
+        visibility: &dyn Fn(&str) -> FnVisibility,
+    ) -> PropagationResult {
         let mut caller_proposals = Vec::new();
         let mut obligations = Vec::new();
         let mut reverify_functions = Vec::new();
@@ -263,7 +259,8 @@ impl<'a> CallerPropagator<'a> {
             // Collect new caller proposals for the next depth level
             let mut next_proposals = Vec::new();
             for proposal in &result.caller_proposals {
-                if seen_callers.insert(format!("{}:{}", proposal.function_path, proposal.rationale)) {
+                if seen_callers.insert(format!("{}:{}", proposal.function_path, proposal.rationale))
+                {
                     next_proposals.push(proposal.clone());
                 }
             }
@@ -328,18 +325,15 @@ fn resolve_callee(nodes: &[trust_types::call_graph::CallGraphNode], callee: &str
 /// Extract a short function name from a def_path.
 /// "crate::module::function" -> "function"
 fn extract_name(def_path: &str) -> String {
-    def_path
-        .rsplit("::")
-        .next()
-        .unwrap_or(def_path)
-        .to_string()
+    def_path.rsplit("::").next().unwrap_or(def_path).to_string()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use trust_types::call_graph::{CallGraph, CallGraphEdge, CallGraphNode};
     use trust_types::SourceSpan;
+    use trust_types::call_graph::{CallGraph, CallGraphEdge, CallGraphNode};
+
+    use super::*;
 
     fn span() -> SourceSpan {
         SourceSpan::default()
@@ -356,20 +350,14 @@ mod tests {
     }
 
     fn edge(caller: &str, callee: &str) -> CallGraphEdge {
-        CallGraphEdge {
-            caller: caller.to_string(),
-            callee: callee.to_string(),
-            call_site: span(),
-        }
+        CallGraphEdge { caller: caller.to_string(), callee: callee.to_string(), call_site: span() }
     }
 
     fn precondition_proposal(function_path: &str, spec: &str) -> Proposal {
         Proposal {
             function_path: function_path.to_string(),
             function_name: extract_name(function_path),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: spec.to_string(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: spec.to_string() },
             confidence: 0.9,
             rationale: "test".to_string(),
         }
@@ -464,10 +452,7 @@ mod tests {
                 node("crate::b", false),
                 node("crate::target", true),
             ],
-            edges: vec![
-                edge("crate::a", "crate::target"),
-                edge("crate::b", "crate::target"),
-            ],
+            edges: vec![edge("crate::a", "crate::target"), edge("crate::b", "crate::target")],
         };
         let prop = CallerPropagator::new(&graph);
 
@@ -547,9 +532,7 @@ mod tests {
         let proposals = vec![Proposal {
             function_path: "crate::handler".to_string(),
             function_name: "handler".to_string(),
-            kind: ProposalKind::AddPostcondition {
-                spec_body: "result > 0".to_string(),
-            },
+            kind: ProposalKind::AddPostcondition { spec_body: "result > 0".to_string() },
             confidence: 0.8,
             rationale: "test".to_string(),
         }];
@@ -638,15 +621,8 @@ mod tests {
     fn test_propagate_transitive_two_levels() {
         // a -> b -> c, precondition on c should reach a via b
         let graph = CallGraph {
-            nodes: vec![
-                node("crate::a", false),
-                node("crate::b", false),
-                node("crate::c", false),
-            ],
-            edges: vec![
-                edge("crate::a", "crate::b"),
-                edge("crate::b", "crate::c"),
-            ],
+            nodes: vec![node("crate::a", false), node("crate::b", false), node("crate::c", false)],
+            edges: vec![edge("crate::a", "crate::b"), edge("crate::b", "crate::c")],
         };
         let prop = CallerPropagator::new(&graph);
 
@@ -691,14 +667,8 @@ mod tests {
     fn test_propagate_transitive_handles_cycles() {
         // a -> b -> a (cycle)
         let graph = CallGraph {
-            nodes: vec![
-                node("crate::a", false),
-                node("crate::b", false),
-            ],
-            edges: vec![
-                edge("crate::a", "crate::b"),
-                edge("crate::b", "crate::a"),
-            ],
+            nodes: vec![node("crate::a", false), node("crate::b", false)],
+            edges: vec![edge("crate::a", "crate::b"), edge("crate::b", "crate::a")],
         };
         let prop = CallerPropagator::new(&graph);
 

@@ -142,14 +142,8 @@ mod tests {
 
     #[test]
     fn test_profile_from_name_case_insensitive() {
-        assert_eq!(
-            VerificationProfile::from_name("Quick"),
-            Some(VerificationProfile::Quick)
-        );
-        assert_eq!(
-            VerificationProfile::from_name("THOROUGH"),
-            Some(VerificationProfile::Thorough)
-        );
+        assert_eq!(VerificationProfile::from_name("Quick"), Some(VerificationProfile::Quick));
+        assert_eq!(VerificationProfile::from_name("THOROUGH"), Some(VerificationProfile::Thorough));
         assert_eq!(
             VerificationProfile::from_name("exhaustive"),
             Some(VerificationProfile::Exhaustive)
@@ -165,10 +159,7 @@ mod tests {
             VerificationProfile::Thorough,
             VerificationProfile::Exhaustive,
         ] {
-            assert_eq!(
-                VerificationProfile::from_name(profile.name()),
-                Some(profile)
-            );
+            assert_eq!(VerificationProfile::from_name(profile.name()), Some(profile));
         }
     }
 
@@ -194,11 +185,8 @@ mod tests {
 
     #[test]
     fn test_apply_profile_preserves_explicit_settings() {
-        let mut config = TrustConfig {
-            timeout_ms: 999,
-            solver: Some("zani".to_string()),
-            ..Default::default()
-        };
+        let mut config =
+            TrustConfig { timeout_ms: 999, solver: Some("zani".to_string()), ..Default::default() };
         apply_profile(&mut config, VerificationProfile::Exhaustive);
         // Explicit settings preserved
         assert_eq!(config.timeout_ms, 999);
@@ -210,7 +198,9 @@ mod tests {
 
     #[test]
     fn test_profile_timeout_ordering() {
-        assert!(VerificationProfile::Quick.timeout_ms() < VerificationProfile::Standard.timeout_ms());
+        assert!(
+            VerificationProfile::Quick.timeout_ms() < VerificationProfile::Standard.timeout_ms()
+        );
         assert!(
             VerificationProfile::Standard.timeout_ms() < VerificationProfile::Thorough.timeout_ms()
         );

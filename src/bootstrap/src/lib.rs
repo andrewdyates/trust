@@ -127,6 +127,8 @@ impl PartialEq for Compiler {
 pub enum CodegenBackendKind {
     #[default]
     Llvm,
+    // tRust: LLVM2 verified codegen backend (#829).
+    Llvm2,
     Cranelift,
     Gcc,
     Custom(String),
@@ -138,6 +140,8 @@ impl CodegenBackendKind {
     pub fn name(&self) -> &str {
         match self {
             CodegenBackendKind::Llvm => "llvm",
+            // tRust: LLVM2 verified codegen backend (#829).
+            CodegenBackendKind::Llvm2 => "llvm2",
             CodegenBackendKind::Cranelift => "cranelift",
             CodegenBackendKind::Gcc => "gcc",
             CodegenBackendKind::Custom(name) => name,
@@ -151,6 +155,11 @@ impl CodegenBackendKind {
 
     pub fn is_llvm(&self) -> bool {
         matches!(self, Self::Llvm)
+    }
+
+    // tRust: LLVM2 verified codegen backend (#829).
+    pub fn is_llvm2(&self) -> bool {
+        matches!(self, Self::Llvm2)
     }
 
     pub fn is_cranelift(&self) -> bool {
@@ -170,6 +179,8 @@ impl std::str::FromStr for CodegenBackendKind {
             "" => Err("Invalid empty backend name"),
             "gcc" => Ok(Self::Gcc),
             "llvm" => Ok(Self::Llvm),
+            // tRust: LLVM2 verified codegen backend (#829).
+            "llvm2" => Ok(Self::Llvm2),
             "cranelift" => Ok(Self::Cranelift),
             _ => Ok(Self::Custom(s.to_string())),
         }
@@ -869,6 +880,12 @@ impl Build {
         if (self.config.llvm_enabled(target) || kind == Kind::Check) && check("llvm") {
             features.push("llvm");
         }
+        // tRust: Activate llvm2 feature when LLVM2 backend is enabled (#956).
+        if self.config.enabled_codegen_backends(target).contains(&CodegenBackendKind::Llvm2)
+            && check("llvm2")
+        {
+            features.push("llvm2");
+        }
         if self.config.llvm_enzyme {
             features.push("llvm_enzyme");
         }
@@ -911,11 +928,12 @@ impl Build {
         }
     }
 
-    fn tools_dir(&self, build_compiler: Compiler) -> PathBuf {
+    fn tools_dir(&self, build_compiler: Compiler, target: TargetSelection) -> PathBuf {
         let out = self
             .out
             .join(build_compiler.host)
-            .join(format!("stage{}-tools-bin", build_compiler.stage + 1));
+            .join(format!("stage{}-tools-bin", build_compiler.stage + 1))
+            .join(target.triple);
         t!(fs::create_dir_all(&out));
         out
     }

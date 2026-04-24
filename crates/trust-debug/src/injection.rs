@@ -133,7 +133,7 @@ pub(crate) fn detect_injections(
                         ),
                         flow_path: vec![],
                         counterexample: None,
-                        solver: "injection-detector".to_string(),
+                        solver: "injection-detector".into(),
                         time_ms: 0,
                     });
                 }
@@ -156,7 +156,7 @@ pub(crate) fn detect_injections(
                     ),
                     flow_path: vec![],
                     counterexample: None,
-                    solver: "injection-detector".to_string(),
+                    solver: "injection-detector".into(),
                     time_ms: 0,
                 });
             }
@@ -237,7 +237,7 @@ fn classify_injection(
         ),
         flow_path: violation.path.clone(),
         counterexample: None,
-        solver: "injection-detector".to_string(),
+        solver: "injection-detector".into(),
         time_ms: 0,
     })
 }
@@ -250,6 +250,7 @@ fn matches_any(name: &str, patterns: &[String]) -> bool {
 // Fault injection framework for testing verification robustness
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 /// Where in a verification condition to inject a fault.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -266,6 +267,7 @@ pub(crate) enum InjectionPoint {
     BoundaryValue,
 }
 
+#[cfg(test)]
 /// What kind of fault to inject.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -284,6 +286,7 @@ pub(crate) enum FaultType {
     IntroduceOverflow,
 }
 
+#[cfg(test)]
 /// A record of a single injected fault.
 #[derive(Debug, Clone)]
 pub(crate) struct InjectedFault {
@@ -297,6 +300,7 @@ pub(crate) struct InjectedFault {
     pub fault: FaultType,
 }
 
+#[cfg(test)]
 /// Inject a fault into a verification condition's formula.
 ///
 /// Applies the given `fault` at the specified `point` within the VC's formula
@@ -311,13 +315,14 @@ pub(crate) fn inject_fault(
     let mutated_formula = apply_fault(&vc.formula, point, fault);
     VerificationCondition {
         kind: vc.kind.clone(),
-        function: vc.function.clone(),
+        function: vc.function,
         location: vc.location.clone(),
         formula: mutated_formula,
         contract_metadata: None,
     }
 }
 
+#[cfg(test)]
 /// Apply a fault transformation to a formula.
 fn apply_fault(formula: &Formula, point: InjectionPoint, fault: FaultType) -> Formula {
     match fault {
@@ -330,6 +335,7 @@ fn apply_fault(formula: &Formula, point: InjectionPoint, fault: FaultType) -> Fo
     }
 }
 
+#[cfg(test)]
 /// Negate the first boolean-like sub-formula found at the target point.
 fn flip_boolean(formula: &Formula, _point: InjectionPoint) -> Formula {
     match formula {
@@ -347,22 +353,16 @@ fn flip_boolean(formula: &Formula, _point: InjectionPoint) -> Formula {
     }
 }
 
+#[cfg(test)]
 /// Shift integer constants by +1.
 fn off_by_one(formula: &Formula, _point: InjectionPoint) -> Formula {
     match formula {
         Formula::Int(n) => Formula::Int(n.wrapping_add(1)),
-        Formula::BitVec { value, width } => Formula::BitVec {
-            value: value.wrapping_add(1),
-            width: *width,
-        },
-        Formula::Lt(lhs, rhs) => Formula::Lt(
-            Box::new(off_by_one(lhs, _point)),
-            rhs.clone(),
-        ),
-        Formula::Le(lhs, rhs) => Formula::Le(
-            Box::new(off_by_one(lhs, _point)),
-            rhs.clone(),
-        ),
+        Formula::BitVec { value, width } => {
+            Formula::BitVec { value: value.wrapping_add(1), width: *width }
+        }
+        Formula::Lt(lhs, rhs) => Formula::Lt(Box::new(off_by_one(lhs, _point)), rhs.clone()),
+        Formula::Le(lhs, rhs) => Formula::Le(Box::new(off_by_one(lhs, _point)), rhs.clone()),
         Formula::And(conjuncts) => {
             Formula::And(conjuncts.iter().map(|c| off_by_one(c, _point)).collect())
         }
@@ -370,17 +370,17 @@ fn off_by_one(formula: &Formula, _point: InjectionPoint) -> Formula {
     }
 }
 
+#[cfg(test)]
 /// Remove the first conjunct from an And formula.
 fn remove_constraint(formula: &Formula, _point: InjectionPoint) -> Formula {
     match formula {
-        Formula::And(conjuncts) if conjuncts.len() > 1 => {
-            Formula::And(conjuncts[1..].to_vec())
-        }
+        Formula::And(conjuncts) if conjuncts.len() > 1 => Formula::And(conjuncts[1..].to_vec()),
         Formula::Implies(_pre, post) => *post.clone(),
         other => other.clone(),
     }
 }
 
+#[cfg(test)]
 /// Weaken strict bounds: Lt -> Le, Gt -> Ge.
 fn weaken_bound(formula: &Formula, _point: InjectionPoint) -> Formula {
     match formula {
@@ -393,6 +393,7 @@ fn weaken_bound(formula: &Formula, _point: InjectionPoint) -> Formula {
     }
 }
 
+#[cfg(test)]
 /// Swap left/right operands of binary operators.
 fn swap_operands(formula: &Formula, _point: InjectionPoint) -> Formula {
     match formula {
@@ -409,6 +410,7 @@ fn swap_operands(formula: &Formula, _point: InjectionPoint) -> Formula {
     }
 }
 
+#[cfg(test)]
 /// Replace integer literals with a large value to simulate overflow.
 fn introduce_overflow(formula: &Formula, _point: InjectionPoint) -> Formula {
     match formula {
@@ -424,6 +426,7 @@ fn introduce_overflow(formula: &Formula, _point: InjectionPoint) -> Formula {
     }
 }
 
+#[cfg(test)]
 /// Systematic fault injection engine.
 ///
 /// Runs all combinations of fault types and injection points against a set of
@@ -437,6 +440,7 @@ pub(crate) struct FaultCampaign<'a> {
     injection_points: Vec<InjectionPoint>,
 }
 
+#[cfg(test)]
 /// Result of running a fault injection campaign.
 #[derive(Debug, Clone)]
 pub(crate) struct CampaignResult {
@@ -448,6 +452,7 @@ pub(crate) struct CampaignResult {
     pub detection_rate: f64,
 }
 
+#[cfg(test)]
 impl<'a> FaultCampaign<'a> {
     /// Create a campaign with all fault types and injection points.
     pub(crate) fn full(vcs: &'a [VerificationCondition]) -> Self {
@@ -477,11 +482,7 @@ impl<'a> FaultCampaign<'a> {
         fault_types: Vec<FaultType>,
         injection_points: Vec<InjectionPoint>,
     ) -> Self {
-        Self {
-            vcs,
-            fault_types,
-            injection_points,
-        }
+        Self { vcs, fault_types, injection_points }
     }
 
     /// Run the campaign against a verification backend.
@@ -516,17 +517,9 @@ impl<'a> FaultCampaign<'a> {
         }
 
         let total = detected.len() + missed.len();
-        let detection_rate = if total == 0 {
-            1.0
-        } else {
-            detected.len() as f64 / total as f64
-        };
+        let detection_rate = if total == 0 { 1.0 } else { detected.len() as f64 / total as f64 };
 
-        CampaignResult {
-            detected_faults: detected,
-            missed_faults: missed,
-            detection_rate,
-        }
+        CampaignResult { detected_faults: detected, missed_faults: missed, detection_rate }
     }
 }
 
@@ -599,17 +592,17 @@ mod tests {
         let violations = detect_injections(&func, &InjectionPolicy::default());
 
         assert!(!violations.is_empty());
-        assert!(violations.iter().any(|v| {
-            matches!(&v.kind, SecurityViolationKind::CommandInjection { .. })
-        }));
+        assert!(
+            violations
+                .iter()
+                .any(|v| { matches!(&v.kind, SecurityViolationKind::CommandInjection { .. }) })
+        );
     }
 
     #[test]
     fn test_detect_privilege_operation() {
         let body = VerifiableBody {
-            locals: vec![
-                LocalDecl { index: 0, ty: Ty::Unit, name: None },
-            ],
+            locals: vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -632,20 +625,22 @@ mod tests {
         let func = test_func("escalate", body);
         let violations = detect_injections(&func, &InjectionPolicy::default());
 
-        assert!(violations.iter().any(|v| {
-            matches!(&v.kind, SecurityViolationKind::PrivilegeEscalation { .. })
-        }));
+        assert!(
+            violations
+                .iter()
+                .any(|v| { matches!(&v.kind, SecurityViolationKind::PrivilegeEscalation { .. }) })
+        );
     }
 
     #[test]
     fn test_safe_code_no_injections() {
         let body = VerifiableBody {
-            locals: vec![
-                LocalDecl { index: 0, ty: Ty::Unit, name: None },
-            ],
-            blocks: vec![
-                BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return },
-            ],
+            locals: vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
+            blocks: vec![BasicBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: Terminator::Return,
+            }],
             arg_count: 0,
             return_ty: Ty::Unit,
         };
@@ -675,7 +670,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "test::add".to_string(),
+            function: "test::add".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -699,10 +694,7 @@ mod tests {
 
     #[test]
     fn test_flip_boolean_and_negates_first() {
-        let vc = sample_vc(Formula::And(vec![
-            Formula::Bool(true),
-            Formula::Bool(false),
-        ]));
+        let vc = sample_vc(Formula::And(vec![Formula::Bool(true), Formula::Bool(false)]));
         let mutated = inject_fault(&vc, InjectionPoint::PreCondition, FaultType::FlipBoolean);
         match &mutated.formula {
             Formula::And(conjuncts) => {
@@ -734,11 +726,7 @@ mod tests {
             Formula::Bool(false),
             Formula::Int(1),
         ]));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::LoopInvariant,
-            FaultType::RemoveConstraint,
-        );
+        let mutated = inject_fault(&vc, InjectionPoint::LoopInvariant, FaultType::RemoveConstraint);
         match &mutated.formula {
             Formula::And(conjuncts) => assert_eq!(conjuncts.len(), 2),
             other => panic!("expected And with 2 conjuncts, got {other:?}"),
@@ -747,15 +735,9 @@ mod tests {
 
     #[test]
     fn test_remove_constraint_implies() {
-        let vc = sample_vc(Formula::Implies(
-            Box::new(Formula::Bool(true)),
-            Box::new(Formula::Int(42)),
-        ));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::PreCondition,
-            FaultType::RemoveConstraint,
-        );
+        let vc =
+            sample_vc(Formula::Implies(Box::new(Formula::Bool(true)), Box::new(Formula::Int(42))));
+        let mutated = inject_fault(&vc, InjectionPoint::PreCondition, FaultType::RemoveConstraint);
         assert_eq!(mutated.formula, Formula::Int(42));
     }
 
@@ -764,11 +746,7 @@ mod tests {
         let lhs = Box::new(Formula::Var("x".into(), Sort::Int));
         let rhs = Box::new(Formula::Int(10));
         let vc = sample_vc(Formula::Lt(lhs.clone(), rhs.clone()));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::TypeConstraint,
-            FaultType::WeakenBound,
-        );
+        let mutated = inject_fault(&vc, InjectionPoint::TypeConstraint, FaultType::WeakenBound);
         assert!(matches!(mutated.formula, Formula::Le(_, _)));
     }
 
@@ -777,11 +755,7 @@ mod tests {
         let lhs = Box::new(Formula::Var("x".into(), Sort::Int));
         let rhs = Box::new(Formula::Int(0));
         let vc = sample_vc(Formula::Gt(lhs.clone(), rhs.clone()));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::TypeConstraint,
-            FaultType::WeakenBound,
-        );
+        let mutated = inject_fault(&vc, InjectionPoint::TypeConstraint, FaultType::WeakenBound);
         assert!(matches!(mutated.formula, Formula::Ge(_, _)));
     }
 
@@ -790,11 +764,7 @@ mod tests {
         let lhs = Box::new(Formula::Var("a".into(), Sort::Int));
         let rhs = Box::new(Formula::Var("b".into(), Sort::Int));
         let vc = sample_vc(Formula::Lt(lhs.clone(), rhs.clone()));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::PostCondition,
-            FaultType::SwapOperands,
-        );
+        let mutated = inject_fault(&vc, InjectionPoint::PostCondition, FaultType::SwapOperands);
         match &mutated.formula {
             Formula::Lt(new_lhs, new_rhs) => {
                 assert_eq!(**new_lhs, Formula::Var("b".into(), Sort::Int));
@@ -809,11 +779,7 @@ mod tests {
         let lhs = Box::new(Formula::Int(10));
         let rhs = Box::new(Formula::Int(3));
         let vc = sample_vc(Formula::Sub(lhs, rhs));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::PostCondition,
-            FaultType::SwapOperands,
-        );
+        let mutated = inject_fault(&vc, InjectionPoint::PostCondition, FaultType::SwapOperands);
         match &mutated.formula {
             Formula::Sub(new_lhs, new_rhs) => {
                 assert_eq!(**new_lhs, Formula::Int(3));
@@ -826,22 +792,16 @@ mod tests {
     #[test]
     fn test_introduce_overflow_int() {
         let vc = sample_vc(Formula::Int(42));
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::BoundaryValue,
-            FaultType::IntroduceOverflow,
-        );
+        let mutated =
+            inject_fault(&vc, InjectionPoint::BoundaryValue, FaultType::IntroduceOverflow);
         assert_eq!(mutated.formula, Formula::Int(i128::MAX));
     }
 
     #[test]
     fn test_introduce_overflow_bitvec() {
         let vc = sample_vc(Formula::BitVec { value: 5, width: 8 });
-        let mutated = inject_fault(
-            &vc,
-            InjectionPoint::BoundaryValue,
-            FaultType::IntroduceOverflow,
-        );
+        let mutated =
+            inject_fault(&vc, InjectionPoint::BoundaryValue, FaultType::IntroduceOverflow);
         match &mutated.formula {
             Formula::BitVec { value, width } => {
                 assert_eq!(*width, 8);
@@ -855,7 +815,7 @@ mod tests {
     fn test_inject_fault_preserves_vc_metadata() {
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test::div".to_string(),
+            function: "test::div".into(),
             location: SourceSpan {
                 file: "div.rs".into(),
                 line_start: 42,
@@ -887,10 +847,12 @@ mod tests {
 
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "always-proves".to_string(),
+                solver: "always-proves".into(),
                 time_ms: 0,
-                strength: trust_types::ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+                strength: trust_types::ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            }
         }
     }
 
@@ -908,7 +870,7 @@ mod tests {
 
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Failed {
-                solver: "always-fails".to_string(),
+                solver: "always-fails".into(),
                 time_ms: 0,
                 counterexample: None,
             }

@@ -7,15 +7,15 @@
 //
 // tRust #798: The SunderBackend struct (subprocess-based) is feature-gated
 // behind `not(pipeline-v2)` -- Pipeline v2 uses trust-sunder-lib for direct
-// library calls. Classification logic (classify_for_sunder, sunder_affinity,
-// is_deductive_vc_kind) is always available regardless of feature flags.
+// library calls. Classification logic (is_deductive_vc_kind) is always
+// available regardless of feature flags.
 //
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+#[cfg(any(not(feature = "pipeline-v2"), feature = "sunder-backend"))]
 use trust_types::*;
 
-use crate::classifier::{self, QueryClass};
 #[cfg(not(feature = "pipeline-v2"))]
 use crate::{BackendRole, VerificationBackend};
 
@@ -87,8 +87,7 @@ pub(crate) mod translate {
                 let mut result = formula_to_pure_expr(&terms[0])?;
                 for term in &terms[1..] {
                     let right = formula_to_pure_expr(term)?;
-                    result =
-                        PureExpr::BinOp(Arc::new(result), SBinOp::And, Arc::new(right));
+                    result = PureExpr::BinOp(Arc::new(result), SBinOp::And, Arc::new(right));
                 }
                 Some(result)
             }
@@ -100,8 +99,7 @@ pub(crate) mod translate {
                 let mut result = formula_to_pure_expr(&terms[0])?;
                 for term in &terms[1..] {
                     let right = formula_to_pure_expr(term)?;
-                    result =
-                        PureExpr::BinOp(Arc::new(result), SBinOp::Or, Arc::new(right));
+                    result = PureExpr::BinOp(Arc::new(result), SBinOp::Or, Arc::new(right));
                 }
                 Some(result)
             }
@@ -109,11 +107,7 @@ pub(crate) mod translate {
             Formula::Implies(a, b) => {
                 let left = formula_to_pure_expr(a)?;
                 let right = formula_to_pure_expr(b)?;
-                Some(PureExpr::BinOp(
-                    Arc::new(left),
-                    SBinOp::Implies,
-                    Arc::new(right),
-                ))
+                Some(PureExpr::BinOp(Arc::new(left), SBinOp::Implies, Arc::new(right)))
             }
 
             // Comparisons
@@ -314,7 +308,7 @@ mod smt_verify {
             Ok(c) => c,
             Err(e) => {
                 return VerificationResult::Unknown {
-                    solver: "sunder".to_string(),
+                    solver: "sunder".into(),
                     time_ms: start.elapsed().as_millis() as u64,
                     reason: format!("failed to spawn solver {solver_path}: {e}"),
                 };
@@ -329,7 +323,7 @@ mod smt_verify {
             Ok(o) => o,
             Err(e) => {
                 return VerificationResult::Unknown {
-                    solver: "sunder".to_string(),
+                    solver: "sunder".into(),
                     time_ms: start.elapsed().as_millis() as u64,
                     reason: format!("solver process error: {e}"),
                 };
@@ -343,7 +337,7 @@ mod smt_verify {
         if trimmed.starts_with("unsat") {
             // tRust #632: Genuine deductive proof via sunder encoding
             VerificationResult::Proved {
-                solver: "sunder".to_string(),
+                solver: "sunder".into(),
                 time_ms: elapsed,
                 strength: ProofStrength::deductive(),
                 proof_certificate: None,
@@ -351,18 +345,15 @@ mod smt_verify {
             }
         } else if trimmed.starts_with("sat") {
             VerificationResult::Failed {
-                solver: "sunder".to_string(),
+                solver: "sunder".into(),
                 time_ms: elapsed,
                 counterexample: None, // Counterexample parsing not yet implemented
             }
         } else if elapsed >= timeout_ms {
-            VerificationResult::Timeout {
-                solver: "sunder".to_string(),
-                timeout_ms,
-            }
+            VerificationResult::Timeout { solver: "sunder".into(), timeout_ms }
         } else {
             VerificationResult::Unknown {
-                solver: "sunder".to_string(),
+                solver: "sunder".into(),
                 time_ms: elapsed,
                 reason: format!("unexpected solver output: {}", &trimmed[..trimmed.len().min(200)]),
             }
@@ -371,59 +362,16 @@ mod smt_verify {
 }
 
 // ---------------------------------------------------------------------------
-// tRust #358: QueryClass-aware sunder dispatch
+// tRust #358: Deductive VC classification helpers
+// tRust #970: sunder_affinity, classify_for_sunder removed — dead code
+// (only called from deleted portfolio/classifier modules)
 // ---------------------------------------------------------------------------
-
-/// tRust #358: Sunder affinity score for a given `QueryClass`.
-///
-/// Returns a score in [0, 100] indicating how well-suited sunder is for
-/// formulas of the given class. The portfolio system uses this to decide
-/// whether to include sunder's SP engine as a lane.
-///
-/// - **Quantified (80):** sunder's SP calculus handles universally quantified
-///   postconditions directly without quantifier instantiation heuristics.
-/// - **HardNonlinear (60):** SP can reason deductively about nonlinear
-///   arithmetic, complementing z4's NIA solver.
-/// - **ArrayTheory (70):** SP tracks array contents through store/select
-///   operations as part of the strongest postcondition computation.
-/// - **EasyLinear (40):** sunder can handle it but z4/zani are faster.
-/// - **Mixed (50):** deductive reasoning is moderately useful.
-/// - **BitVector (10):** sunder has minimal BV theory support.
-/// - **Ownership (5):** certus handles ownership; sunder adds little value.
-#[must_use]
-pub fn sunder_affinity(class: QueryClass) -> u32 {
-    match class {
-        QueryClass::Quantified => 80,
-        QueryClass::ArrayTheory => 70,
-        QueryClass::HardNonlinear => 60,
-        QueryClass::Mixed => 50,
-        QueryClass::EasyLinear => 40,
-        QueryClass::BitVector => 10,
-        QueryClass::Ownership => 5,
-    }
-}
-
-/// tRust #358: Classify a VC for sunder dispatch suitability.
-///
-/// Combines the structural `QueryClass` with the VC kind to produce a
-/// dispatch recommendation. Returns `true` when sunder is a strong candidate
-/// for this VC, meaning the portfolio should include an SP lane.
-#[must_use]
-pub fn classify_for_sunder(vc: &VerificationCondition) -> bool {
-    // Sunder always handles its core VC kinds.
-    if is_deductive_vc_kind(&vc.kind) {
-        return true;
-    }
-
-    // For non-core kinds, check formula affinity.
-    let class = classifier::classify_vc(vc);
-    sunder_affinity(class) >= 50
-}
 
 /// tRust #358: Check if a VcKind is a core deductive verification target.
 ///
 /// These are the VC kinds that sunder handles natively via SP calculus,
 /// independent of formula structure.
+#[cfg(feature = "sunder-backend")]
 #[must_use]
 pub(crate) fn is_deductive_vc_kind(kind: &VcKind) -> bool {
     matches!(
@@ -432,32 +380,6 @@ pub(crate) fn is_deductive_vc_kind(kind: &VcKind) -> bool {
             | VcKind::Precondition { .. }
             | VcKind::NonTermination { .. }
             | VcKind::TranslationValidation { .. }
-    )
-}
-
-/// tRust #358: Check if an Assertion VC represents a loop invariant.
-///
-/// Loop invariant assertions use a `[loop:invariant]` prefix convention
-/// in their message. These are deductive proof targets suitable for sunder
-/// because loop invariants require reasoning about program state transformations.
-#[must_use]
-pub(crate) fn is_loop_invariant_assertion(kind: &VcKind) -> bool {
-    matches!(kind, VcKind::Assertion { message } if message.starts_with("[loop:invariant]"))
-}
-
-/// tRust #656: Check if a VcKind is a structured loop invariant verification target.
-///
-/// These are the typed loop invariant VcKinds (initiation, consecution,
-/// sufficiency) that sunder handles via its dedicated `verify_loop_invariant()`
-/// 5-phase pipeline. Unlike `is_loop_invariant_assertion` which matches
-/// string-prefixed assertions, these carry structured metadata.
-#[must_use]
-pub(crate) fn is_loop_invariant_vc_kind(kind: &VcKind) -> bool {
-    matches!(
-        kind,
-        VcKind::LoopInvariantInitiation { .. }
-            | VcKind::LoopInvariantConsecution { .. }
-            | VcKind::LoopInvariantSufficiency { .. }
     )
 }
 
@@ -587,11 +509,8 @@ impl SunderBackend {
         let ensures = translate_formulas(&ir.postconditions)?;
 
         // Generate structured SMT query with separate requires/ensures
-        let smt_query = smt_verify::generate_smt_query_structured(
-            &vc.function,
-            &requires,
-            &ensures,
-        );
+        let smt_query =
+            smt_verify::generate_smt_query_structured(&vc.function, &requires, &ensures);
 
         Some(smt_verify::run_smt_and_map(&smt_query, &vc.function, self.timeout_ms))
     }
@@ -642,7 +561,7 @@ impl VerificationBackend for SunderBackend {
                 Some(e) => e,
                 None => {
                     return VerificationResult::Unknown {
-                        solver: "sunder".to_string(),
+                        solver: "sunder".into(),
                         time_ms: start.elapsed().as_millis() as u64,
                         reason: "formula contains unsupported constructs \
                                  (bitvectors or arrays)"
@@ -661,7 +580,7 @@ impl VerificationBackend for SunderBackend {
         {
             let _ = vc;
             VerificationResult::Unknown {
-                solver: "sunder".to_string(),
+                solver: "sunder".into(),
                 time_ms: 0,
                 reason: "sunder-backend feature not enabled".to_string(),
             }
@@ -669,1051 +588,6 @@ impl VerificationBackend for SunderBackend {
     }
 }
 
-/// Re-attribute a verification result to the sunder solver.
-///
-/// tRust #556: Fixed proof strength — no longer misattributes SMT results
-/// as deductive proofs. The strength is preserved as-is since the actual
-/// proving was done by another backend. When native sunder integration
-/// exists, this will correctly use `ProofStrength::deductive()`.
-pub(crate) fn attribute_to_sunder(result: &mut VerificationResult) {
-    match result {
-        VerificationResult::Proved { solver, .. } => {
-            *solver = "sunder".to_string();
-            // tRust #556: Do NOT upgrade strength to deductive() — the proof
-            // was done by an SMT solver, not sunder's SP calculus.
-        }
-        VerificationResult::Failed { solver, .. } => {
-            *solver = "sunder".to_string();
-        }
-        VerificationResult::Unknown { solver, .. } => {
-            *solver = "sunder".to_string();
-        }
-        VerificationResult::Timeout { solver, .. } => {
-            *solver = "sunder".to_string();
-        }
-        // tRust #556: Handle future non-exhaustive variants gracefully
-        _ => {}
-    }
-}
-
-// tRust #798: Tests that depend on SunderBackend struct are gated behind
-// not(pipeline-v2). Classification function tests (sunder_affinity, etc.)
-// are included in the gate as well since they share the test module.
-#[cfg(all(test, not(feature = "pipeline-v2")))]
-mod tests {
-    use super::*;
-    use crate::mock_backend::MockBackend;
-    use crate::portfolio::{
-        DispatchMode, PortfolioLane, PortfolioRunner, PortfolioStrategy, SolverEntry,
-        SolverPool, PortfolioConfig, RaceStrategy, race,
-    };
-    use crate::Router;
-    use std::sync::Arc;
-
-    // -----------------------------------------------------------------------
-    // Helper to create VCs for testing
-    // -----------------------------------------------------------------------
-
-    fn make_vc(kind: VcKind, formula: Formula) -> VerificationCondition {
-        VerificationCondition {
-            kind,
-            function: "test_fn".into(),
-            location: SourceSpan::default(),
-            formula,
-            contract_metadata: None,
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Basic backend identity and configuration
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_sunder_backend_name_and_role() {
-        let backend = SunderBackend::new();
-        assert_eq!(backend.name(), "sunder");
-        assert_eq!(backend.role(), BackendRole::Deductive);
-    }
-
-    // -----------------------------------------------------------------------
-    // tRust #632: can_handle behavior (feature-gated tests)
-    // -----------------------------------------------------------------------
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_enabled_for_postconditions() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        assert!(backend.can_handle(&vc), "sunder should handle postconditions (#632)");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_enabled_for_preconditions() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Precondition { callee: "callee".into() },
-            Formula::Bool(true),
-        );
-        assert!(backend.can_handle(&vc), "sunder should handle preconditions (#632)");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_rejects_bitvector_formulas() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Postcondition,
-            Formula::BitVec { value: 42, width: 32 },
-        );
-        assert!(!backend.can_handle(&vc), "sunder should reject bitvector formulas");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_rejects_l0_safety() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::DivisionByZero, Formula::Bool(true));
-        assert!(!backend.can_handle(&vc), "sunder should not handle L0Safety VCs");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_enabled_for_loop_invariant() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Assertion {
-                message: "[loop:invariant] counter decreases".into(),
-            },
-            Formula::Bool(true),
-        );
-        assert!(backend.can_handle(&vc), "sunder should handle loop invariants (#632)");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_rejects_loop_invariant_when_disabled() {
-        let backend = SunderBackend::new().with_loop_invariants(false);
-        let vc = make_vc(
-            VcKind::Assertion {
-                message: "[loop:invariant] counter decreases".into(),
-            },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "loop invariants disabled");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_enabled_for_translation_validation() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::TranslationValidation {
-                pass: "constant_folding".into(),
-                check: "output_equivalence".into(),
-            },
-            Formula::Eq(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(42)),
-            ),
-        );
-        assert!(backend.can_handle(&vc), "sunder should handle translation validation (#632)");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_rejects_translation_validation_when_disabled() {
-        let backend = SunderBackend::new().with_translation_validation(false);
-        let vc = make_vc(
-            VcKind::TranslationValidation {
-                pass: "constant_folding".into(),
-                check: "output_equivalence".into(),
-            },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "translation validation disabled");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_handles_quantified_postcondition() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Postcondition,
-            Formula::Forall(
-                vec![("x".into(), Sort::Int)],
-                Box::new(Formula::Gt(
-                    Box::new(Formula::Var("x".into(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                )),
-            ),
-        );
-        assert!(backend.can_handle(&vc), "sunder should handle quantified postconditions");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_rejects_array_formulas() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Postcondition,
-            Formula::Select(
-                Box::new(Formula::Var(
-                    "arr".into(),
-                    Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
-                )),
-                Box::new(Formula::Int(0)),
-            ),
-        );
-        assert!(!backend.can_handle(&vc), "sunder should reject array formulas");
-    }
-
-    // Without sunder-backend feature: disabled behavior
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_postconditions() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_preconditions() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Precondition { callee: "callee".into() },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_l0_safety() {
-        let backend = SunderBackend::new();
-        let cases = vec![
-            VcKind::DivisionByZero,
-            VcKind::IndexOutOfBounds,
-            VcKind::ArithmeticOverflow {
-                op: BinOp::Add,
-                operand_tys: (Ty::usize(), Ty::usize()),
-            },
-        ];
-        for kind in cases {
-            let vc = make_vc(kind, Formula::Bool(true));
-            assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-        }
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_temporal() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Temporal { property: "live".into() },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_loop_invariant() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::Assertion {
-                message: "[loop:invariant] counter decreases".into(),
-            },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_translation_validation() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::TranslationValidation {
-                pass: "constant_folding".into(),
-                check: "output_equivalence".into(),
-            },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_disabled_for_non_termination() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(
-            VcKind::NonTermination {
-                context: "while loop".into(),
-                measure: "n".into(),
-            },
-            Formula::Bool(true),
-        );
-        assert!(!backend.can_handle(&vc), "sunder should be disabled without feature");
-    }
-
-    // -----------------------------------------------------------------------
-    // tRust #632: Formula translation tests (requires sunder-backend)
-    // -----------------------------------------------------------------------
-
-    #[cfg(feature = "sunder-backend")]
-    mod translation_tests {
-        use super::super::translate::*;
-        use sunder_core::formula::{BinOp as SBinOp, ExprSort, PureExpr, UnOp as SUnOp};
-        use trust_types::{Formula, Sort};
-        use std::sync::Arc;
-
-        #[test]
-        fn test_translate_bool_true() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Bool(true)),
-                Some(PureExpr::Bool(true))
-            );
-        }
-
-        #[test]
-        fn test_translate_bool_false() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Bool(false)),
-                Some(PureExpr::Bool(false))
-            );
-        }
-
-        #[test]
-        fn test_translate_int() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Int(42)),
-                Some(PureExpr::Int(42))
-            );
-        }
-
-        #[test]
-        fn test_translate_int_negative() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Int(-100)),
-                Some(PureExpr::Int(-100))
-            );
-        }
-
-        #[test]
-        fn test_translate_int_overflow() {
-            // i128 value that exceeds i64 range
-            let big = i128::from(i64::MAX) + 1;
-            assert_eq!(formula_to_pure_expr(&Formula::Int(big)), None);
-        }
-
-        #[test]
-        fn test_translate_uint() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::UInt(100)),
-                Some(PureExpr::Int(100))
-            );
-        }
-
-        #[test]
-        fn test_translate_var_int() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Var("x".into(), Sort::Int)),
-                Some(PureExpr::Var("x".into(), Some(ExprSort::Int)))
-            );
-        }
-
-        #[test]
-        fn test_translate_var_bool() {
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Var("p".into(), Sort::Bool)),
-                Some(PureExpr::Var("p".into(), Some(ExprSort::Bool)))
-            );
-        }
-
-        #[test]
-        fn test_translate_var_bitvec_sort() {
-            // BitVec sort translates to None (unsupported), but the Var itself
-            // still translates — just with no sort annotation
-            assert_eq!(
-                formula_to_pure_expr(&Formula::Var("bv".into(), Sort::BitVec(32))),
-                Some(PureExpr::Var("bv".into(), None))
-            );
-        }
-
-        #[test]
-        fn test_translate_not() {
-            let f = Formula::Not(Box::new(Formula::Bool(true)));
-            assert_eq!(
-                formula_to_pure_expr(&f),
-                Some(PureExpr::UnOp(SUnOp::Not, Arc::new(PureExpr::Bool(true))))
-            );
-        }
-
-        #[test]
-        fn test_translate_and() {
-            let f = Formula::And(vec![Formula::Bool(true), Formula::Bool(false)]);
-            let expected = PureExpr::BinOp(
-                Arc::new(PureExpr::Bool(true)),
-                SBinOp::And,
-                Arc::new(PureExpr::Bool(false)),
-            );
-            assert_eq!(formula_to_pure_expr(&f), Some(expected));
-        }
-
-        #[test]
-        fn test_translate_and_empty() {
-            let f = Formula::And(vec![]);
-            assert_eq!(formula_to_pure_expr(&f), Some(PureExpr::Bool(true)));
-        }
-
-        #[test]
-        fn test_translate_or_empty() {
-            let f = Formula::Or(vec![]);
-            assert_eq!(formula_to_pure_expr(&f), Some(PureExpr::Bool(false)));
-        }
-
-        #[test]
-        fn test_translate_eq() {
-            let f = Formula::Eq(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            );
-            let expected = PureExpr::BinOp(
-                Arc::new(PureExpr::Var("x".into(), Some(ExprSort::Int))),
-                SBinOp::Eq,
-                Arc::new(PureExpr::Int(0)),
-            );
-            assert_eq!(formula_to_pure_expr(&f), Some(expected));
-        }
-
-        #[test]
-        fn test_translate_arithmetic() {
-            let f = Formula::Add(
-                Box::new(Formula::Int(1)),
-                Box::new(Formula::Int(2)),
-            );
-            let expected = PureExpr::BinOp(
-                Arc::new(PureExpr::Int(1)),
-                SBinOp::Add,
-                Arc::new(PureExpr::Int(2)),
-            );
-            assert_eq!(formula_to_pure_expr(&f), Some(expected));
-        }
-
-        #[test]
-        fn test_translate_ite() {
-            let f = Formula::Ite(
-                Box::new(Formula::Bool(true)),
-                Box::new(Formula::Int(1)),
-                Box::new(Formula::Int(0)),
-            );
-            let expected = PureExpr::Ite(
-                Arc::new(PureExpr::Bool(true)),
-                Arc::new(PureExpr::Int(1)),
-                Arc::new(PureExpr::Int(0)),
-            );
-            assert_eq!(formula_to_pure_expr(&f), Some(expected));
-        }
-
-        #[test]
-        fn test_translate_forall() {
-            let f = Formula::Forall(
-                vec![("x".into(), Sort::Int)],
-                Box::new(Formula::Gt(
-                    Box::new(Formula::Var("x".into(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                )),
-            );
-            let result = formula_to_pure_expr(&f);
-            assert!(result.is_some());
-            if let Some(PureExpr::Forall { var, var_sort, .. }) = &result {
-                assert_eq!(var, "x");
-                assert_eq!(*var_sort, Some(ExprSort::Int));
-            } else {
-                panic!("expected Forall");
-            }
-        }
-
-        #[test]
-        fn test_translate_bitvec_literal_fails() {
-            let f = Formula::BitVec { value: 42, width: 32 };
-            assert_eq!(formula_to_pure_expr(&f), None);
-        }
-
-        #[test]
-        fn test_translate_bvadd_fails() {
-            let f = Formula::BvAdd(
-                Box::new(Formula::BitVec { value: 1, width: 32 }),
-                Box::new(Formula::BitVec { value: 2, width: 32 }),
-                32,
-            );
-            assert_eq!(formula_to_pure_expr(&f), None);
-        }
-
-        #[test]
-        fn test_translate_select_fails() {
-            let f = Formula::Select(
-                Box::new(Formula::Var(
-                    "arr".into(),
-                    Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
-                )),
-                Box::new(Formula::Int(0)),
-            );
-            assert_eq!(formula_to_pure_expr(&f), None);
-        }
-
-        #[test]
-        fn test_sort_translation() {
-            assert_eq!(sort_to_expr_sort(&Sort::Bool), Some(ExprSort::Bool));
-            assert_eq!(sort_to_expr_sort(&Sort::Int), Some(ExprSort::Int));
-            assert_eq!(sort_to_expr_sort(&Sort::BitVec(32)), None);
-            assert_eq!(
-                sort_to_expr_sort(&Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int))),
-                None
-            );
-        }
-
-        #[test]
-        fn test_is_translatable() {
-            assert!(is_translatable(&Formula::Bool(true)));
-            assert!(is_translatable(&Formula::Int(42)));
-            assert!(!is_translatable(&Formula::BitVec { value: 0, width: 8 }));
-        }
-
-        /// tRust #652: is_translatable rejects array formulas without full translation
-        #[test]
-        fn test_is_translatable_rejects_arrays() {
-            assert!(!is_translatable(&Formula::Select(
-                Box::new(Formula::Var(
-                    "arr".into(),
-                    Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)),
-                )),
-                Box::new(Formula::Int(0)),
-            )));
-        }
-
-        /// tRust #652: is_translatable rejects large integers without full translation
-        #[test]
-        fn test_is_translatable_rejects_large_integers() {
-            let big = i128::from(i64::MAX) + 1;
-            assert!(!is_translatable(&Formula::Int(big)));
-        }
-
-        /// tRust #652: is_translatable accepts pure integer formulas cheaply
-        #[test]
-        fn test_is_translatable_accepts_pure_int_formula() {
-            let f = Formula::Forall(
-                vec![("x".into(), Sort::Int)],
-                Box::new(Formula::Gt(
-                    Box::new(Formula::Var("x".into(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                )),
-            );
-            assert!(is_translatable(&f));
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // tRust #632: SMT generation tests (requires sunder-backend)
-    // -----------------------------------------------------------------------
-
-    #[cfg(feature = "sunder-backend")]
-    mod smt_tests {
-        use super::super::{smt_verify, translate};
-        use trust_types::Formula;
-
-        #[test]
-        fn test_smt_query_generation_bool_true() {
-            let expr = translate::formula_to_pure_expr(&Formula::Bool(true)).unwrap();
-            let query = smt_verify::generate_smt_query("test_fn", &[expr]);
-            // The query should contain check-sat and assert NOT(true)
-            assert!(query.contains("check-sat"), "query must contain check-sat");
-            assert!(query.contains("assert"), "query must contain assert");
-        }
-
-        #[test]
-        fn test_smt_query_generation_with_variables() {
-            let formula = Formula::Gt(
-                Box::new(Formula::Var("x".into(), trust_types::Sort::Int)),
-                Box::new(Formula::Int(0)),
-            );
-            let expr = translate::formula_to_pure_expr(&formula).unwrap();
-            let query = smt_verify::generate_smt_query("test_fn", &[expr]);
-            // Should declare the variable x
-            assert!(query.contains("declare-const"), "query must declare variables");
-            assert!(query.contains("x"), "query must reference variable x");
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // verify() tests
-    // -----------------------------------------------------------------------
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_verify_returns_unknown() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-
-        let result = backend.verify(&vc);
-        assert!(matches!(result, VerificationResult::Unknown { .. }));
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    #[test]
-    fn test_sunder_verify_with_solver_path_returns_backend() {
-        let backend = SunderBackend::with_solver_path("/nonexistent/path/sunder");
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-
-        let result = backend.verify(&vc);
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    // -----------------------------------------------------------------------
-    // Builder methods
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_sunder_builder_methods() {
-        let backend =
-            SunderBackend::with_solver_path("/usr/local/bin/sunder").with_timeout(60_000);
-        assert!(backend.accept_loop_invariants);
-        assert!(backend.accept_translation_validation);
-        assert_eq!(backend.timeout_ms, 60_000);
-    }
-
-    #[test]
-    fn test_sunder_default_construction() {
-        let backend = SunderBackend::default();
-        assert!(backend.accept_loop_invariants);
-        assert!(backend.accept_translation_validation);
-    }
-
-    #[test]
-    fn test_sunder_loop_invariant_config() {
-        let backend = SunderBackend::new().with_loop_invariants(false);
-        assert!(!backend.accept_loop_invariants);
-    }
-
-    #[test]
-    fn test_sunder_translation_validation_config() {
-        let backend = SunderBackend::new().with_translation_validation(false);
-        assert!(!backend.accept_translation_validation);
-    }
-
-    // -----------------------------------------------------------------------
-    // Result attribution — #556: no proof strength misattribution
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_attribute_to_sunder_proved_preserves_strength() {
-        use crate::smtlib_backend::parse_solver_output;
-
-        let mut result = VerificationResult::Proved {
-            solver: "z4-smtlib".to_string(),
-            time_ms: 42,
-            strength: ProofStrength::smt_unsat(),
-            proof_certificate: None,
-                solver_warnings: None,
-        };
-        attribute_to_sunder(&mut result);
-
-        assert_eq!(result.solver_name(), "sunder");
-        if let VerificationResult::Proved { strength, time_ms, .. } = &result {
-            // tRust #556: strength should NOT be upgraded to deductive
-            assert_eq!(*strength, ProofStrength::smt_unsat());
-            assert_eq!(*time_ms, 42);
-        } else {
-            panic!("expected Proved");
-        }
-    }
-
-    #[test]
-    fn test_attribute_to_sunder_failed() {
-        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Uint(42))]);
-        let mut result = VerificationResult::Failed {
-            solver: "z4-smtlib".to_string(),
-            time_ms: 10,
-            counterexample: Some(cex),
-        };
-        attribute_to_sunder(&mut result);
-
-        assert_eq!(result.solver_name(), "sunder");
-        if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
-            assert_eq!(cex.assignments.len(), 1);
-            assert_eq!(cex.assignments[0].0, "x");
-        } else {
-            panic!("expected Failed with counterexample");
-        }
-    }
-
-    #[test]
-    fn test_attribute_to_sunder_unknown() {
-        let mut result = VerificationResult::Unknown {
-            solver: "z4-smtlib".to_string(),
-            time_ms: 5,
-            reason: "solver returned unknown".to_string(),
-        };
-        attribute_to_sunder(&mut result);
-
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    #[test]
-    fn test_attribute_to_sunder_timeout() {
-        let mut result = VerificationResult::Timeout {
-            solver: "z4-smtlib".to_string(),
-            timeout_ms: 30_000,
-        };
-        attribute_to_sunder(&mut result);
-
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    // -----------------------------------------------------------------------
-    // tRust #358: QueryClass-aware dispatch classification
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_sunder_affinity_quantified_high() {
-        assert_eq!(sunder_affinity(QueryClass::Quantified), 80);
-    }
-
-    #[test]
-    fn test_sunder_affinity_bitvector_low() {
-        assert_eq!(sunder_affinity(QueryClass::BitVector), 10);
-    }
-
-    #[test]
-    fn test_classify_for_sunder_postcondition_always_true() {
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        assert!(
-            classify_for_sunder(&vc),
-            "Postcondition is a core deductive VC kind"
-        );
-    }
-
-    #[test]
-    fn test_classify_for_sunder_precondition_always_true() {
-        let vc = make_vc(
-            VcKind::Precondition { callee: "foo".into() },
-            Formula::Bool(true),
-        );
-        assert!(
-            classify_for_sunder(&vc),
-            "Precondition is a core deductive VC kind"
-        );
-    }
-
-    #[test]
-    fn test_classify_for_sunder_l0_safety_with_quantified_formula() {
-        let vc = make_vc(
-            VcKind::DivisionByZero,
-            Formula::Forall(
-                vec![("x".into(), Sort::Int)],
-                Box::new(Formula::Gt(
-                    Box::new(Formula::Var("x".into(), Sort::Int)),
-                    Box::new(Formula::Int(0)),
-                )),
-            ),
-        );
-        assert!(
-            classify_for_sunder(&vc),
-            "quantified L0 formula should trigger sunder (affinity 80 >= 50)"
-        );
-    }
-
-    #[test]
-    fn test_classify_for_sunder_l0_safety_with_simple_formula() {
-        let vc = make_vc(
-            VcKind::DivisionByZero,
-            Formula::Eq(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-        );
-        assert!(
-            !classify_for_sunder(&vc),
-            "simple linear L0 formula should not trigger sunder (affinity 40 < 50)"
-        );
-    }
-
-    #[test]
-    fn test_is_deductive_vc_kind_postcondition() {
-        assert!(is_deductive_vc_kind(&VcKind::Postcondition));
-    }
-
-    #[test]
-    fn test_is_deductive_vc_kind_precondition() {
-        assert!(is_deductive_vc_kind(&VcKind::Precondition { callee: "f".into() }));
-    }
-
-    #[test]
-    fn test_is_deductive_vc_kind_non_termination() {
-        assert!(is_deductive_vc_kind(&VcKind::NonTermination {
-            context: "loop".into(),
-            measure: "n".into(),
-        }));
-    }
-
-    #[test]
-    fn test_is_deductive_vc_kind_translation_validation() {
-        assert!(is_deductive_vc_kind(&VcKind::TranslationValidation {
-            pass: "dce".into(),
-            check: "equiv".into(),
-        }));
-    }
-
-    #[test]
-    fn test_is_deductive_vc_kind_division_by_zero_false() {
-        assert!(!is_deductive_vc_kind(&VcKind::DivisionByZero));
-    }
-
-    #[test]
-    fn test_is_loop_invariant_assertion_positive() {
-        assert!(is_loop_invariant_assertion(&VcKind::Assertion {
-            message: "[loop:invariant] x > 0".into(),
-        }));
-    }
-
-    #[test]
-    fn test_is_loop_invariant_assertion_negative() {
-        assert!(!is_loop_invariant_assertion(&VcKind::Assertion {
-            message: "x must be positive".into(),
-        }));
-        assert!(!is_loop_invariant_assertion(&VcKind::DivisionByZero));
-    }
-
-    // -----------------------------------------------------------------------
-    // Portfolio integration
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_sunder_portfolio_integration() {
-        let sunder: Arc<dyn VerificationBackend> =
-            Arc::new(SunderBackend::new());
-
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-
-        let lanes = vec![PortfolioLane {
-            strategy: PortfolioStrategy::StrongestPostcondition,
-            backend: sunder,
-        }];
-
-        let result = race(&vc, lanes).expect("should get a result");
-        assert_eq!(result.winning_strategy, PortfolioStrategy::StrongestPostcondition);
-        assert_eq!(result.result.solver_name(), "sunder");
-    }
-
-    #[test]
-    fn test_sunder_portfolio_multi_lane_race_with_mock() {
-        let sunder: Arc<dyn VerificationBackend> = Arc::new(SunderBackend::new());
-        let mock: Arc<dyn VerificationBackend> = Arc::new(MockBackend);
-
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(false));
-
-        let lanes = vec![
-            PortfolioLane {
-                strategy: PortfolioStrategy::StrongestPostcondition,
-                backend: sunder,
-            },
-            PortfolioLane {
-                strategy: PortfolioStrategy::Bmc,
-                backend: mock,
-            },
-        ];
-
-        let result = race(&vc, lanes).expect("should get a result");
-        assert!(result.result.is_proved(), "mock should prove the trivial VC");
-        assert_eq!(result.winning_strategy, PortfolioStrategy::Bmc);
-        assert_eq!(result.total_lanes, 2);
-    }
-
-    #[test]
-    fn test_sunder_portfolio_runner_cascade_mode() {
-        let sunder: Arc<dyn VerificationBackend> = Arc::new(SunderBackend::new());
-        let mock: Arc<dyn VerificationBackend> = Arc::new(MockBackend);
-
-        let runner = PortfolioRunner::new(vec![sunder, mock], DispatchMode::Cascade);
-
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(false));
-
-        let result = runner.verify(&vc);
-        assert!(result.is_proved(), "cascade should produce a proof");
-    }
-
-    #[test]
-    fn test_sunder_portfolio_runner_selective_mode() {
-        let sunder: Arc<dyn VerificationBackend> = Arc::new(SunderBackend::new());
-        let mock: Arc<dyn VerificationBackend> = Arc::new(MockBackend);
-
-        let runner = PortfolioRunner::new(vec![mock, sunder], DispatchMode::Selective);
-
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(false));
-
-        let result = runner.verify(&vc);
-        assert!(result.is_proved() || matches!(result, VerificationResult::Unknown { .. }));
-    }
-
-    #[test]
-    fn test_sunder_solver_pool_integration() {
-        let sunder: Arc<dyn VerificationBackend> = Arc::new(SunderBackend::new());
-        let mock: Arc<dyn VerificationBackend> = Arc::new(MockBackend);
-
-        let pool = SolverPool::with_defaults(vec![
-            SolverEntry { name: "sunder".into(), backend: sunder },
-            SolverEntry { name: "mock".into(), backend: mock },
-        ]);
-
-        assert_eq!(pool.solver_count(), 2);
-        let names = pool.solver_names();
-        assert!(names.contains(&"sunder"));
-        assert!(names.contains(&"mock"));
-
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(false));
-        let race_result = pool.race(&vc);
-        assert!(
-            race_result.is_definitive()
-                || matches!(race_result.winner_result, VerificationResult::Unknown { .. }),
-            "pool race should produce some result"
-        );
-    }
-
-    #[test]
-    fn test_sunder_sp_strategy_has_deductive_proof_strength() {
-        let strength = PortfolioStrategy::StrongestPostcondition.proof_strength();
-        assert_eq!(
-            strength,
-            ProofStrength::deductive(),
-            "SP strategy should produce deductive proof strength"
-        );
-    }
-
-    #[test]
-    fn test_sunder_sp_strategy_name() {
-        assert_eq!(
-            PortfolioStrategy::StrongestPostcondition.name(),
-            "sp",
-            "SP strategy should have name 'sp'"
-        );
-    }
-
-    #[test]
-    fn test_sunder_in_query_class_strategy_selection() {
-        use crate::portfolio::select_strategies_for_query;
-
-        let strategies = select_strategies_for_query(QueryClass::Quantified);
-        assert!(
-            strategies.contains(&PortfolioStrategy::StrongestPostcondition),
-            "Quantified class should include StrongestPostcondition strategy"
-        );
-    }
-
-    #[test]
-    fn test_sunder_not_in_bitvector_strategy_selection() {
-        use crate::portfolio::select_strategies_for_query;
-
-        let strategies = select_strategies_for_query(QueryClass::BitVector);
-        assert!(
-            !strategies.contains(&PortfolioStrategy::StrongestPostcondition),
-            "BitVector class should not include StrongestPostcondition strategy"
-        );
-    }
-
-    #[test]
-    fn test_sunder_solver_pool_best_strength_race() {
-        let sunder: Arc<dyn VerificationBackend> = Arc::new(SunderBackend::new());
-        let mock: Arc<dyn VerificationBackend> = Arc::new(MockBackend);
-
-        let config = PortfolioConfig {
-            strategy: RaceStrategy::BestStrength,
-            solver_timeout_ms: 5_000,
-            max_parallel: 4,
-        };
-        let pool = SolverPool::new(
-            vec![
-                SolverEntry { name: "sunder".into(), backend: sunder },
-                SolverEntry { name: "mock".into(), backend: mock },
-            ],
-            config,
-        );
-
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(false));
-        let race_result = pool.race(&vc);
-        assert!(race_result.is_definitive());
-    }
-
-    // -----------------------------------------------------------------------
-    // tRust #653: verify_with_contract_ir tests
-    // -----------------------------------------------------------------------
-
-    fn make_contract_ir(
-        preconditions: Vec<Formula>,
-        postconditions: Vec<Formula>,
-    ) -> SunderContractIr {
-        SunderContractIr {
-            preconditions,
-            postconditions,
-            loop_invariants: vec![],
-            type_refinements: vec![],
-            modifies_set: vec![],
-        }
-    }
-
-    #[test]
-    fn test_sunder_verify_with_contract_ir_none_falls_back() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        // None => fallback to monolithic
-        let result = backend.verify_with_contract_ir(&vc, None);
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    #[test]
-    fn test_sunder_verify_with_contract_ir_empty_falls_back() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        let ir = make_contract_ir(vec![], vec![]);
-        let result = backend.verify_with_contract_ir(&vc, Some(&ir));
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    #[cfg(feature = "sunder-backend")]
-    #[test]
-    fn test_sunder_verify_with_contract_ir_structured() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        let ir = make_contract_ir(
-            vec![Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            )],
-            vec![Formula::Gt(
-                Box::new(Formula::Var("result".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            )],
-        );
-        // Structured path: uses generate_smt_query_structured
-        let result = backend.verify_with_contract_ir(&vc, Some(&ir));
-        // May succeed or fail depending on solver availability, but should
-        // be attributed to "sunder"
-        assert_eq!(result.solver_name(), "sunder");
-    }
-
-    #[cfg(not(feature = "sunder-backend"))]
-    #[test]
-    fn test_sunder_verify_with_contract_ir_disabled_falls_back() {
-        let backend = SunderBackend::new();
-        let vc = make_vc(VcKind::Postcondition, Formula::Bool(true));
-        let ir = make_contract_ir(
-            vec![Formula::Bool(true)],
-            vec![Formula::Bool(true)],
-        );
-        // Without feature, structured path is unavailable => falls back
-        let result = backend.verify_with_contract_ir(&vc, Some(&ir));
-        assert_eq!(result.solver_name(), "sunder");
-        assert!(matches!(result, VerificationResult::Unknown { .. }));
-    }
-}
+// tRust #970: Tests removed — depended on deleted portfolio and classifier modules.
+// SunderBackend struct and its tests are dead under pipeline-v2 (default feature).
+// The entire test module is deleted to avoid stale references to removed modules.

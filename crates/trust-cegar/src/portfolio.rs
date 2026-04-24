@@ -104,25 +104,45 @@ fn formula_has_quantifiers(formula: &Formula) -> bool {
             Formula::Forall(..) | Formula::Exists(..) => return true,
             // Unary.
             Formula::Not(a) | Formula::Neg(a) => stack.push(a),
-            Formula::BvNot(a, _) | Formula::BvToInt(a, _, _) | Formula::IntToBv(a, _)
-            | Formula::BvZeroExt(a, _) | Formula::BvSignExt(a, _) => stack.push(a),
+            Formula::BvNot(a, _)
+            | Formula::BvToInt(a, _, _)
+            | Formula::IntToBv(a, _)
+            | Formula::BvZeroExt(a, _)
+            | Formula::BvSignExt(a, _) => stack.push(a),
             Formula::BvExtract { inner, .. } => stack.push(inner),
             // Binary.
-            Formula::Implies(a, b) | Formula::Eq(a, b) | Formula::Lt(a, b)
-            | Formula::Le(a, b) | Formula::Gt(a, b) | Formula::Ge(a, b)
-            | Formula::Add(a, b) | Formula::Sub(a, b) | Formula::Mul(a, b)
-            | Formula::Div(a, b) | Formula::Rem(a, b) | Formula::Select(a, b) => {
+            Formula::Implies(a, b)
+            | Formula::Eq(a, b)
+            | Formula::Lt(a, b)
+            | Formula::Le(a, b)
+            | Formula::Gt(a, b)
+            | Formula::Ge(a, b)
+            | Formula::Add(a, b)
+            | Formula::Sub(a, b)
+            | Formula::Mul(a, b)
+            | Formula::Div(a, b)
+            | Formula::Rem(a, b)
+            | Formula::Select(a, b) => {
                 stack.push(a);
                 stack.push(b);
             }
-            Formula::BvAdd(a, b, _) | Formula::BvSub(a, b, _) | Formula::BvMul(a, b, _)
-            | Formula::BvUDiv(a, b, _) | Formula::BvSDiv(a, b, _)
-            | Formula::BvURem(a, b, _) | Formula::BvSRem(a, b, _)
-            | Formula::BvAnd(a, b, _) | Formula::BvOr(a, b, _)
-            | Formula::BvXor(a, b, _) | Formula::BvShl(a, b, _)
-            | Formula::BvLShr(a, b, _) | Formula::BvAShr(a, b, _)
-            | Formula::BvULt(a, b, _) | Formula::BvULe(a, b, _)
-            | Formula::BvSLt(a, b, _) | Formula::BvSLe(a, b, _)
+            Formula::BvAdd(a, b, _)
+            | Formula::BvSub(a, b, _)
+            | Formula::BvMul(a, b, _)
+            | Formula::BvUDiv(a, b, _)
+            | Formula::BvSDiv(a, b, _)
+            | Formula::BvURem(a, b, _)
+            | Formula::BvSRem(a, b, _)
+            | Formula::BvAnd(a, b, _)
+            | Formula::BvOr(a, b, _)
+            | Formula::BvXor(a, b, _)
+            | Formula::BvShl(a, b, _)
+            | Formula::BvLShr(a, b, _)
+            | Formula::BvAShr(a, b, _)
+            | Formula::BvULt(a, b, _)
+            | Formula::BvULe(a, b, _)
+            | Formula::BvSLt(a, b, _)
+            | Formula::BvSLe(a, b, _)
             | Formula::BvConcat(a, b) => {
                 stack.push(a);
                 stack.push(b);
@@ -136,9 +156,12 @@ fn formula_has_quantifiers(formula: &Formula) -> bool {
                 stack.push(c);
             }
             // Leaves.
-            Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_)
-            | Formula::BitVec { .. } | Formula::Var(..) => {}
-            _ => {},
+            Formula::Bool(_)
+            | Formula::Int(_)
+            | Formula::UInt(_)
+            | Formula::BitVec { .. }
+            | Formula::Var(..) => {}
+            _ => {}
         }
     }
     false
@@ -338,11 +361,8 @@ impl AdaptivePortfolio {
         let mut attempts = Vec::with_capacity(chain.len());
 
         for engine in &chain {
-            let remaining = self
-                .config
-                .total_timeout
-                .checked_sub(start.elapsed())
-                .unwrap_or(Duration::ZERO);
+            let remaining =
+                self.config.total_timeout.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO);
 
             if remaining.is_zero() {
                 break;
@@ -355,16 +375,10 @@ impl AdaptivePortfolio {
 
             match &outcome {
                 AttemptOutcome::Safe => {
-                    return PortfolioOutcome::Safe {
-                        engine: *engine,
-                        elapsed: engine_elapsed,
-                    };
+                    return PortfolioOutcome::Safe { engine: *engine, elapsed: engine_elapsed };
                 }
                 AttemptOutcome::Unsafe => {
-                    return PortfolioOutcome::Unsafe {
-                        engine: *engine,
-                        elapsed: engine_elapsed,
-                    };
+                    return PortfolioOutcome::Unsafe { engine: *engine, elapsed: engine_elapsed };
                 }
                 _ => {
                     attempts.push(EngineAttempt {
@@ -376,10 +390,7 @@ impl AdaptivePortfolio {
             }
         }
 
-        PortfolioOutcome::Unknown {
-            attempts,
-            total_elapsed: start.elapsed(),
-        }
+        PortfolioOutcome::Unknown { attempts, total_elapsed: start.elapsed() }
     }
 
     /// Run a single engine with the given timeout budget.
@@ -457,10 +468,7 @@ impl AdaptivePortfolio {
 /// The chain determines which engines to try and in what order. The first
 /// engine to return Safe/Unsafe wins.
 #[must_use]
-pub(crate) fn select_engine_chain(
-    profile: &VcProfile,
-    config: &PortfolioConfig,
-) -> Vec<EngineId> {
+pub(crate) fn select_engine_chain(profile: &VcProfile, config: &PortfolioConfig) -> Vec<EngineId> {
     let mut chain = Vec::with_capacity(4);
 
     // 1. Always start with abstract interpretation (cheap pre-pass).
@@ -480,9 +488,7 @@ pub(crate) fn select_engine_chain(
         if profile.is_safety {
             chain.push(EngineId::Ic3Pdr);
         }
-    } else if profile.var_count <= config.simple_vc_threshold
-        && profile.nesting_depth <= 5
-    {
+    } else if profile.var_count <= config.simple_vc_threshold && profile.nesting_depth <= 5 {
         // Simple VCs: lazy refinement is fast and sufficient.
         chain.push(EngineId::Lazy);
         chain.push(EngineId::Cegar);
@@ -524,8 +530,7 @@ fn is_trivial_tautology(formula: &Formula) -> bool {
         Formula::And(children) => children.iter().all(is_trivial_tautology),
         // Implies(false, _) = true, Implies(_, true) = true.
         Formula::Implies(a, b) => {
-            matches!(a.as_ref(), Formula::Bool(false))
-                || matches!(b.as_ref(), Formula::Bool(true))
+            matches!(a.as_ref(), Formula::Bool(false)) || matches!(b.as_ref(), Formula::Bool(true))
         }
         _ => false,
     }
@@ -552,10 +557,7 @@ mod tests {
     }
 
     fn simple_formula() -> Formula {
-        Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     fn quantified_formula() -> Formula {
@@ -622,10 +624,7 @@ mod tests {
     #[test]
     fn test_classify_non_termination() {
         let vc = make_vc(
-            VcKind::NonTermination {
-                context: "loop".into(),
-                measure: "n".into(),
-            },
+            VcKind::NonTermination { context: "loop".into(), measure: "n".into() },
             simple_formula(),
         );
         let profile = classify_vc(&vc);
@@ -744,10 +743,8 @@ mod tests {
     fn test_portfolio_unknown_fallthrough() {
         // A non-trivial formula: all engine stubs return Unknown.
         let vc = make_vc(VcKind::DivisionByZero, simple_formula());
-        let config = PortfolioConfig {
-            total_timeout: Duration::from_secs(1),
-            ..PortfolioConfig::default()
-        };
+        let config =
+            PortfolioConfig { total_timeout: Duration::from_secs(1), ..PortfolioConfig::default() };
         let portfolio = AdaptivePortfolio::new(vc, config);
         let result = portfolio.run();
         match result {
@@ -858,10 +855,7 @@ mod tests {
     fn test_has_quantifiers_nested() {
         let f = Formula::And(vec![
             simple_formula(),
-            Formula::Exists(
-                vec![("y".into(), Sort::Int)],
-                Box::new(Formula::Bool(true)),
-            ),
+            Formula::Exists(vec![("y".into(), Sort::Int)], Box::new(Formula::Bool(true))),
         ]);
         assert!(formula_has_quantifiers(&f));
     }
@@ -883,8 +877,7 @@ mod tests {
     fn test_portfolio_config_serde_roundtrip() {
         let config = PortfolioConfig::default();
         let json = serde_json::to_string(&config).expect("serialize");
-        let deserialized: PortfolioConfig =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: PortfolioConfig = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(deserialized.total_timeout, config.total_timeout);
         assert_eq!(deserialized.max_cegar_iterations, config.max_cegar_iterations);
     }

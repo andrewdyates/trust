@@ -192,14 +192,14 @@ pub(super) fn transcribe<'a>(
     loop {
         // Look at the last frame on the stack.
         // If it still has a TokenTree we have not looked at yet, use that tree.
-        let Some(tree) = tscx.stack.last_mut().expect("invariant: transcribe stack is never empty during iteration").next() else { // tRust: unwrap -> expect
+        let Some(tree) = tscx.stack.last_mut().unwrap().next() else {
             // This else-case never produces a value for `tree` (it `continue`s or `return`s).
 
             // Otherwise, if we have just reached the end of a sequence and we can keep repeating,
             // go back to the beginning of the sequence.
-            let frame = tscx.stack.last_mut().expect("invariant: transcribe stack is never empty during iteration"); // tRust: unwrap -> expect
+            let frame = tscx.stack.last_mut().unwrap();
             if let FrameKind::Sequence { sep, .. } = &frame.kind {
-                let (repeat_idx, repeat_len) = tscx.repeats.last_mut().expect("invariant: repeats stack has entry for each active sequence"); // tRust: unwrap -> expect
+                let (repeat_idx, repeat_len) = tscx.repeats.last_mut().unwrap();
                 *repeat_idx += 1;
                 if repeat_idx < repeat_len {
                     frame.idx = 0;
@@ -213,7 +213,7 @@ pub(super) fn transcribe<'a>(
             // We are done with the top of the stack. Pop it. Depending on what it was, we do
             // different things. Note that the outermost item must be the delimited, wrapped RHS
             // that was passed in originally to `transcribe`.
-            match tscx.stack.pop().expect("invariant: stack is non-empty, just accessed last_mut above").kind { // tRust: unwrap -> expect
+            match tscx.stack.pop().unwrap().kind {
                 // Done with a sequence. Pop from repeats.
                 FrameKind::Sequence { .. } => {
                     tscx.repeats.pop();
@@ -236,7 +236,7 @@ pub(super) fn transcribe<'a>(
                     // Step back into the parent Delimited.
                     let tree =
                         TokenTree::Delimited(span, spacing, delim, TokenStream::new(tscx.result));
-                    tscx.result = tscx.result_stack.pop().expect("invariant: result_stack must be non-empty when stepping back into parent delimited"); // tRust: unwrap -> expect
+                    tscx.result = tscx.result_stack.pop().unwrap();
                     tscx.result.push(tree);
                 }
             }
@@ -368,7 +368,7 @@ fn transcribe_sequence<'tx, 'itp>(
         }
 
         LockstepIterSize::Contradiction(msg) => {
-            // tRust: known issue —: this really ought to be caught at macro definition time... It
+            // FIXME: this really ought to be caught at macro definition time... It
             // happens when two meta-variables are used in the same repetition in a
             // sequence, but they come from different sequence matchers and repeat
             // different amounts.
@@ -383,7 +383,7 @@ fn transcribe_sequence<'tx, 'itp>(
             // Is the repetition empty?
             if len == 0 {
                 if seq.kleene.op == KleeneOp::OneOrMore {
-                    // tRust: known issue —: this really ought to be caught at macro definition
+                    // FIXME: this really ought to be caught at macro definition
                     // time... It happens when the Kleene operator in the matcher and
                     // the body for the same meta-variable do not match.
                     return Err(dcx.create_err(MustRepeatOnce { span: sp.entire() }));
@@ -457,7 +457,7 @@ fn transcribe_pnr<'tx>(
     // `MetaVarKind`. This loses some span info, though it hopefully won't matter.
     let mut mk_delimited = |mk_span, mv_kind, mut stream: TokenStream| {
         if stream.len() == 1 {
-            let tree = stream.iter().next().expect("invariant: stream with len==1 must yield an element"); // tRust: unwrap -> expect
+            let tree = stream.iter().next().unwrap();
             if let TokenTree::Delimited(_, _, delim, inner) = tree
                 && let Delimiter::Invisible(InvisibleOrigin::MetaVar(mvk)) = delim
                 && mv_kind == *mvk
@@ -508,7 +508,7 @@ fn transcribe_pnr<'tx>(
         }
         ParseNtResult::Stmt(stmt) => {
             let stream = if let StmtKind::Empty = stmt.kind {
-                // tRust: known issue —: Properly collect tokens for empty statements.
+                // FIXME: Properly collect tokens for empty statements.
                 TokenStream::token_alone(token::Semi, stmt.span)
             } else {
                 TokenStream::from_ast(stmt)
@@ -558,7 +558,7 @@ fn transcribe_pnr<'tx>(
             mk_delimited(vis.span, MetaVarKind::Vis, TokenStream::from_ast(vis))
         }
         ParseNtResult::Guard(guard) => {
-            // tRust: known issue —(macro_guard_matcher):
+            // FIXME(macro_guard_matcher):
             // Perhaps it would be better to treat the leading `if` as part of `ast::Guard` during parsing?
             // Currently they are separate, but in macros we match and emit the leading `if` for `:guard` matchers, which creates some inconsistency.
 
@@ -673,7 +673,7 @@ fn metavar_expr_concat<'tx>(
 }
 
 /// Store the metavariable span for this original span into a side table.
-/// tRust: known issue —: Try to put the metavariable span into `SpanData` instead of a side table (#118517).
+/// FIXME: Try to put the metavariable span into `SpanData` instead of a side table (#118517).
 /// An optimal encoding for inlined spans will need to be selected to minimize regressions.
 /// The side table approach is relatively good, but not perfect due to collisions.
 /// In particular, collisions happen when token is passed as an argument through several macro
@@ -776,7 +776,7 @@ fn lookup_cur_matched<'a>(
         for &(idx, _) in repeats {
             match matched {
                 MatchedSingle(_) => break,
-                MatchedSeq(ads) => matched = ads.get(idx).expect("invariant: repeat index must be within matched sequence bounds"), // tRust: unwrap -> expect
+                MatchedSeq(ads) => matched = ads.get(idx).unwrap(),
             }
         }
 

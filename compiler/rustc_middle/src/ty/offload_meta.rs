@@ -64,7 +64,7 @@ impl OffloadMetadata {
     }
 }
 
-// tRust: known issue (Sa4dUs) — implement a solid logic to determine the payload size
+// FIXME(Sa4dUs): implement a solid logic to determine the payload size
 fn get_payload_size<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> OffloadSize {
     match ty.kind() {
         ty::RawPtr(inner, _) | ty::Ref(_, inner, _) => get_payload_size(tcx, *inner),
@@ -73,7 +73,7 @@ fn get_payload_size<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> OffloadSize {
                 typing_env: TypingEnv::fully_monomorphized(),
                 value: ty,
             })
-            .expect("invariant: offload metadata lookup succeeds")
+            .unwrap()
             .size
             .bytes(),
         ),

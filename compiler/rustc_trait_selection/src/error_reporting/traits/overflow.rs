@@ -68,7 +68,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 // in a separate note when we explain the obligation, so it will be available that way.
                 let mut p: FmtPrinter<'_, '_> =
                     FmtPrinter::new_with_limit(tcx, Namespace::TypeNS, Limit(6));
-                value.print(&mut p).expect("invariant: type printing succeeds");
+                value.print(&mut p).unwrap();
                 p.into_buffer()
             } else {
                 s
@@ -167,7 +167,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         // The 'deepest' obligation is most likely to have a useful
         // cause 'backtrace'
         self.report_overflow_obligation(
-            cycle.iter().max_by_key(|p| p.recursion_depth).expect("invariant: value is present"),
+            cycle.iter().max_by_key(|p| p.recursion_depth).unwrap(),
             false,
         );
     }

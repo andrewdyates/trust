@@ -25,7 +25,6 @@ pub(super) fn find_opaque_ty_constraints_for_impl_trait_in_assoc_type(
     let impl_def_id = tcx.local_parent(parent_def_id);
     match tcx.def_kind(impl_def_id) {
         DefKind::Impl { .. } => {}
-        // tRust: invariant — impl Trait in assoc type position must have a valid parent item
         other => bug!("invalid impl trait in assoc type parent: {other:?}"),
     }
 

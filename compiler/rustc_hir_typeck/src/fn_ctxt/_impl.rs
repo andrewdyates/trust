@@ -136,7 +136,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     /// version (resolve_vars_if_possible), this version will
     /// also select obligations if it seems useful, in an effort
     /// to get more type information.
-    // NOTE(-Znext-solver): a lot of the calls to this method should
+    // FIXME(-Znext-solver): A lot of the calls to this method should
     // probably be `try_structurally_resolve_type` or `structurally_resolve_type` instead.
     #[instrument(skip(self), level = "debug", ret)]
     pub(crate) fn resolve_vars_with_obligations<T: TypeFoldable<TyCtxt<'tcx>>>(
@@ -187,7 +187,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
     pub(crate) fn local_ty(&self, span: Span, nid: HirId) -> Ty<'tcx> {
         self.locals.borrow().get(&nid).cloned().unwrap_or_else(|| {
-            // tRust: invariant — every local HirId in the current body must have been recorded in self.locals before local_ty is queried
             span_bug!(span, "no type for local variable {}", self.tcx.hir_id_to_string(nid))
         })
     }
@@ -292,7 +291,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) {
         debug!("fcx {}", self.tag());
 
-        // NOTE: is_identity being on `UserType` and not `Canonical<UserType>` is awkward
+        // FIXME: is_identity being on `UserType` and not `Canonical<UserType>` is awkward
         if !canonical_user_type_annotation.is_identity() {
             self.typeck_results
                 .borrow_mut()
@@ -330,16 +329,16 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     );
                 }
                 Adjust::Deref(DerefAdjustKind::Builtin) => {
-                    // NOTE(const_trait_impl): We *could* enforce `&T: [const] Deref` here.
+                    // FIXME(const_trait_impl): We *could* enforce `&T: [const] Deref` here.
                 }
                 Adjust::Deref(DerefAdjustKind::Pin) => {
-                    // NOTE(const_trait_impl): We *could* enforce `Pin<&T>: [const] Deref` here.
+                    // FIXME(const_trait_impl): We *could* enforce `Pin<&T>: [const] Deref` here.
                 }
                 Adjust::Pointer(_pointer_coercion) => {
-                    // NOTE(const_trait_impl): We should probably enforce these.
+                    // FIXME(const_trait_impl): We should probably enforce these.
                 }
                 Adjust::ReborrowPin(_mutability) => {
-                    // NOTE(const_trait_impl): We could enforce these; they correspond to
+                    // FIXME(const_trait_impl): We could enforce these; they correspond to
                     // `&mut T: DerefMut` tho, so it's kinda moot.
                 }
                 Adjust::Borrow(_) => {
@@ -396,7 +395,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
 
                     _ => {
-                        // NOTE: currently we never try to compose autoderefs
+                        // FIXME: currently we never try to compose autoderefs
                         // and ReifyFnPointer/UnsafeFnPointer, but we could.
                         self.dcx().span_delayed_bug(
                             expr.span,
@@ -576,7 +575,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 args,
                 user_self_ty: Some(UserSelfTy { impl_def_id: adt.did(), self_ty: ty.raw }),
             },
-            // tRust: invariant — user_args_for_adt is only called for lowered struct, union, or enum types, so either the raw or normalized type must be an ADT
             _ => bug!("non-adt type {:?}", ty),
         }
     }
@@ -606,7 +604,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     where
         T: TypeVisitable<TyCtxt<'tcx>>,
     {
-        // NOTE(mgca): should this also count stuff with infer consts
+        // FIXME(mgca): should this also count stuff with infer consts
         t.has_free_regions() || t.has_aliases() || t.has_infer_types() || t.has_param()
     }
 
@@ -615,7 +613,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             Some(&t) => t,
             None if let Some(e) = self.tainted_by_errors() => Ty::new_error(self.tcx, e),
             None => {
-                // tRust: invariant — successful type checking records a node type for every queried HirId unless the body has already been tainted by an error
                 bug!("no type for node {} in fcx {}", self.tcx.hir_id_to_string(id), self.tag());
             }
         }
@@ -653,7 +650,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
     }
 
-    // NOTE(arielb1): use this instead of field.ty everywhere
+    // FIXME(arielb1): use this instead of field.ty everywhere
     // Only for fields! Returns <none> for methods>
     // Indifferent to privacy flags
     pub(crate) fn field_ty(
@@ -676,7 +673,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let ty::TypingMode::Analysis { defining_opaque_types_and_generators } = self.typing_mode()
         else {
-            // tRust: invariant — stalled coroutine obligations are only drained during analysis typing mode, where opaque types and generators are being defined
             bug!();
         };
 
@@ -726,7 +722,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let ret_ty = method.sig.output();
 
         // method returns &T, but the type as visible to user is T, so deref
-        ret_ty.builtin_deref(true).expect("invariant: type is a reference/pointer")
+        ret_ty.builtin_deref(true).unwrap()
     }
 
     pub(crate) fn type_var_is_sized(&self, self_ty: ty::TyVid) -> bool {
@@ -855,7 +851,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }) => {
                     match kind {
                         hir::ClosureKind::CoroutineClosure(_) => {
-                            // NOTE(async_closures): Implement this.
+                            // FIXME(async_closures): Implement this.
                             return None;
                         }
                         hir::ClosureKind::Closure => Some((def_id, fn_decl)),
@@ -998,7 +994,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     res,
                 );
             }
-            // tRust: invariant — instantiate_value_path only accepts resolved locals, self constructors, defs, or errors for value paths
             _ => bug!("instantiate_value_path on {:?}", res),
         };
 
@@ -1007,7 +1002,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let mut err_extend = GenericsArgsErrExtend::None;
         match res {
             Res::Def(DefKind::Ctor(CtorOf::Variant, _), _) if let Some(self_ty) = self_ty => {
-                let adt_def = self_ty.normalized.ty_adt_def().expect("invariant: type has ADT definition");
+                let adt_def = self_ty.normalized.ty_adt_def().unwrap();
                 user_self_ty =
                     Some(UserSelfTy { impl_def_id: adt_def.did(), self_ty: self_ty.raw });
                 is_alias_variant_ctor = true;
@@ -1188,7 +1183,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
             match ty.normalized.ty_adt_def() {
                 Some(adt_def) if adt_def.has_ctor() => {
-                    let (ctor_kind, ctor_def_id) = adt_def.non_enum_variant().ctor.expect("invariant: variant has constructor");
+                    let (ctor_kind, ctor_def_id) = adt_def.non_enum_variant().ctor.unwrap();
                     // Check the visibility of the ctor.
                     let vis = tcx.visibility(ctor_def_id);
                     if !vis.is_accessible_from(tcx.parent_module(hir_id).to_def_id(), tcx) {
@@ -1547,7 +1542,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     )
                     .emit()
             });
-            // NOTE: Infer `?ct = {const error}`?
+            // FIXME: Infer `?ct = {const error}`?
             ty::Const::new_error(self.tcx, e)
         }
     }
@@ -1569,7 +1564,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let ctxt = {
             let mut enclosing_breakables = self.enclosing_breakables.borrow_mut();
             debug_assert!(enclosing_breakables.stack.len() == index + 1);
-            // NOTE: swap_remove is correct here - ordering doesn't matter for this collection.
+            // FIXME(#120456) - is `swap_remove` correct?
             enclosing_breakables.by_id.swap_remove(&id).expect("missing breakable context");
             enclosing_breakables.stack.pop().expect("missing breakable context")
         };

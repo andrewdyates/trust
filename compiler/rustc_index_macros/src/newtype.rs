@@ -268,8 +268,6 @@ impl Parse for Newtype {
                 /// Prefer using `from_u32`.
                 #[inline]
                 #vis const unsafe fn from_u32_unchecked(value: u32) -> Self {
-                    // SAFETY: The source and target types have the same size and
-                    // compatible memory layouts, so the transmute is well-defined.
                     Self { private_use_as_methods_instead: unsafe { std::mem::transmute(value) } }
                 }
 
@@ -282,8 +280,6 @@ impl Parse for Newtype {
                 /// Extracts the value of this index as a `u32`.
                 #[inline]
                 #vis const fn as_u32(self) -> u32 {
-                    // SAFETY: The source and target types have the same size and
-                    // compatible memory layouts, so the transmute is well-defined.
                     unsafe { std::mem::transmute(self.private_use_as_methods_instead) }
                 }
 

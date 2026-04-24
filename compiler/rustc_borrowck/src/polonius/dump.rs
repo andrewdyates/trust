@@ -481,7 +481,7 @@ fn emit_mermaid_constraint_graph<'tcx>(
 
     // The constraint graph edges.
     for constraint in localized_outlives_constraints {
-        // // NOTE: killed loans and constraint kind could be added as edge labels for richer visualization. and constraint kind as edge labels.
+        // FIXME: add killed loans and constraint kind as edge labels.
         writeln!(
             out,
             "    {} --> {}",

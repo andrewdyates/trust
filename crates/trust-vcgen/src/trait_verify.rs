@@ -56,10 +56,7 @@ pub struct ImplContract {
 ///    VC formula: NOT(Q_impl_conj => Q_trait) — if SAT, the impl fails to
 ///    guarantee something the trait promises.
 #[must_use]
-pub fn verify_liskov(
-    trait_c: &TraitContract,
-    impl_c: &ImplContract,
-) -> Vec<VerificationCondition> {
+pub fn verify_liskov(trait_c: &TraitContract, impl_c: &ImplContract) -> Vec<VerificationCondition> {
     let mut vcs = Vec::new();
     let location = SourceSpan::default();
 
@@ -70,10 +67,8 @@ pub fn verify_liskov(
     // The impl must accept at least everything the trait accepts.
     // We negate the implication to find violations: NOT(trait_pre => impl_pre)
     for trait_pre in &trait_c.preconditions {
-        let implication = Formula::Implies(
-            Box::new(trait_pre.clone()),
-            Box::new(impl_pre_conj.clone()),
-        );
+        let implication =
+            Formula::Implies(Box::new(trait_pre.clone()), Box::new(impl_pre_conj.clone()));
         vcs.push(VerificationCondition {
             kind: VcKind::Precondition {
                 callee: format!(
@@ -84,7 +79,8 @@ pub fn verify_liskov(
             function: format!(
                 "<{} as {}>::{}",
                 impl_c.impl_type, trait_c.trait_name, impl_c.method
-            ),
+            )
+            .into(),
             location: location.clone(),
             formula: Formula::Not(Box::new(implication)),
             contract_metadata: None,
@@ -98,16 +94,15 @@ pub fn verify_liskov(
     // The impl must guarantee at least everything the trait promises.
     // We negate the implication to find violations: NOT(impl_post => trait_post)
     for trait_post in &trait_c.postconditions {
-        let implication = Formula::Implies(
-            Box::new(impl_post_conj.clone()),
-            Box::new(trait_post.clone()),
-        );
+        let implication =
+            Formula::Implies(Box::new(impl_post_conj.clone()), Box::new(trait_post.clone()));
         vcs.push(VerificationCondition {
             kind: VcKind::Postcondition,
             function: format!(
                 "<{} as {}>::{}",
                 impl_c.impl_type, trait_c.trait_name, impl_c.method
-            ),
+            )
+            .into(),
             location: location.clone(),
             formula: Formula::Not(Box::new(implication)),
             contract_metadata: None,
@@ -132,34 +127,22 @@ mod tests {
 
     /// Helper: x > 0
     fn x_gt_0() -> Formula {
-        Formula::Gt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     /// Helper: x >= 0
     fn x_ge_0() -> Formula {
-        Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     /// Helper: result > 0
     fn result_gt_0() -> Formula {
-        Formula::Gt(
-            Box::new(Formula::Var("result".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Gt(Box::new(Formula::Var("result".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     /// Helper: result >= 0
     fn result_ge_0() -> Formula {
-        Formula::Ge(
-            Box::new(Formula::Var("result".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Ge(Box::new(Formula::Var("result".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     fn sample_trait_contract() -> TraitContract {
@@ -185,7 +168,9 @@ mod tests {
 
         // 1 precondition check + 1 postcondition check
         assert_eq!(vcs.len(), 2);
-        assert!(matches!(&vcs[0].kind, VcKind::Precondition { callee } if callee.contains("Compute")));
+        assert!(
+            matches!(&vcs[0].kind, VcKind::Precondition { callee } if callee.contains("Compute"))
+        );
         assert!(matches!(vcs[1].kind, VcKind::Postcondition));
     }
 
@@ -206,7 +191,9 @@ mod tests {
         // The precondition VC is NOT(x>0 => x>=0), which should be UNSAT
         // (meaning the impl validly weakens the precondition)
         let pre_vc = &vcs[0];
-        assert!(matches!(&pre_vc.formula, Formula::Not(inner) if matches!(inner.as_ref(), Formula::Implies(_, _))));
+        assert!(
+            matches!(&pre_vc.formula, Formula::Not(inner) if matches!(inner.as_ref(), Formula::Implies(_, _)))
+        );
     }
 
     #[test]
@@ -226,7 +213,9 @@ mod tests {
         // The postcondition VC is NOT(result>0 => result>=0), which should be UNSAT
         // (meaning the stronger postcondition satisfies the weaker trait postcondition)
         let post_vc = &vcs[1];
-        assert!(matches!(&post_vc.formula, Formula::Not(inner) if matches!(inner.as_ref(), Formula::Implies(_, _))));
+        assert!(
+            matches!(&post_vc.formula, Formula::Not(inner) if matches!(inner.as_ref(), Formula::Implies(_, _)))
+        );
     }
 
     #[test]
@@ -318,14 +307,8 @@ mod tests {
         let vcs = verify_liskov(&trait_c, &impl_c);
         // 2 trait preconditions + 1 trait postcondition = 3 VCs
         assert_eq!(vcs.len(), 3);
-        assert_eq!(
-            vcs.iter().filter(|v| matches!(v.kind, VcKind::Precondition { .. })).count(),
-            2
-        );
-        assert_eq!(
-            vcs.iter().filter(|v| matches!(v.kind, VcKind::Postcondition)).count(),
-            1
-        );
+        assert_eq!(vcs.iter().filter(|v| matches!(v.kind, VcKind::Precondition { .. })).count(), 2);
+        assert_eq!(vcs.iter().filter(|v| matches!(v.kind, VcKind::Postcondition)).count(), 1);
     }
 
     #[test]

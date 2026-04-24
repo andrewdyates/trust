@@ -316,7 +316,7 @@ impl<'tcx> HirTyLowerer<'tcx> for ItemCtxt<'tcx> {
 
     fn re_infer(&self, span: Span, reason: RegionInferReason<'_>) -> ty::Region<'tcx> {
         if let RegionInferReason::ObjectLifetimeDefault(sugg_sp) = reason {
-            // tRust: known issue — Account for trailing plus `dyn Trait+`, the need of parens in
+            // FIXME: Account for trailing plus `dyn Trait+`, the need of parens in
             //        `*const dyn Trait` and `Fn() -> *const dyn Trait`.
             let guar = self
                 .dcx()
@@ -507,7 +507,7 @@ impl<'tcx> HirTyLowerer<'tcx> for ItemCtxt<'tcx> {
     }
 
     fn probe_adt(&self, _span: Span, ty: Ty<'tcx>) -> Option<ty::AdtDef<'tcx>> {
-        // tRust: known issue — (#103640): Should we handle the case where `ty` is a projection?
+        // FIXME(#103640): Should we handle the case where `ty` is a projection?
         ty.ty_adt_def()
     }
 
@@ -601,7 +601,7 @@ fn get_new_lifetime_name<'tcx>(
     };
 
     // If all single char lifetime names are present, we wrap around and double the chars.
-    (1..).flat_map(a_to_z_repeat_n).find(|lt| !existing_lifetimes.contains(lt.as_str())).expect("invariant: value is present")
+    (1..).flat_map(a_to_z_repeat_n).find(|lt| !existing_lifetimes.contains(lt.as_str())).unwrap()
 }
 
 pub(super) fn lower_variant_ctor(tcx: TyCtxt<'_>, def_id: LocalDefId) {
@@ -644,7 +644,7 @@ pub(super) fn lower_enum_variant_types(tcx: TyCtxt<'_>, def_id: LocalDefId) {
             let span = tcx.def_span(variant.def_id);
             tcx.dcx().emit_err(errors::EnumDiscriminantOverflowed {
                 span,
-                discr: prev_discr.expect("invariant: value is present").to_string(),
+                discr: prev_discr.unwrap().to_string(),
                 item_name: tcx.item_ident(variant.def_id),
                 wrapped_discr: wrapped_discr.to_string(),
             });
@@ -654,7 +654,7 @@ pub(super) fn lower_enum_variant_types(tcx: TyCtxt<'_>, def_id: LocalDefId) {
 
         if def.repr().c() {
             let c_int = Size::from_bits(tcx.sess.target.c_int_width);
-            let c_uint_max = i128::try_from(c_int.unsigned_int_max()).expect("invariant: value is present");
+            let c_uint_max = i128::try_from(c_int.unsigned_int_max()).unwrap();
             // c_int is a signed type, so get a proper signed version of the discriminant
             let discr_size = cur_discr.ty.int_size_and_signed(tcx).0;
             let discr_val = discr_size.sign_extend(cur_discr.val);
@@ -834,7 +834,6 @@ fn adt_def(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::AdtDef<'_> {
     use rustc_hir::*;
 
     let Node::Item(item) = tcx.hir_node_by_def_id(def_id) else {
-        // tRust: invariant — ADT def_id must correspond to an item node in HIR
         bug!("expected ADT to be an item");
     };
 
@@ -886,7 +885,6 @@ fn adt_def(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::AdtDef<'_> {
 
             (adt_kind, variants)
         }
-        // tRust: invariant — ADT item must be a struct, union, or enum
         _ => bug!("{:?} is not an ADT", item.owner_id.def_id),
     };
     tcx.mk_adt_def(def_id.to_def_id(), kind, variants, repr)
@@ -900,7 +898,6 @@ fn trait_def(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::TraitDef {
             (constness, false, is_auto == hir::IsAuto::Yes, safety)
         }
         hir::ItemKind::TraitAlias(constness, ..) => (constness, true, false, hir::Safety::Safe),
-        // tRust: invariant — trait_def_of_item is only called on trait items
         _ => span_bug!(item.span, "trait_def_of_item invoked on non-trait"),
     };
 
@@ -1042,12 +1039,10 @@ fn fn_sig(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_, ty::PolyFn
             // `sig` method on the `ClosureArgs`:
             //
             //    args.as_closure().sig(def_id, tcx)
-            // tRust: invariant — closures use args.as_closure().sig(), not fn_sig()
             bug!("to get the signature of a closure, use `args.as_closure().sig()` not `fn_sig()`",);
         }
 
         x => {
-            // tRust: invariant — all valid node kinds for fn_sig() handled above
             bug!("unexpected sort of node in fn_sig(): {:?}", x);
         }
     };
@@ -1098,7 +1093,6 @@ where
 
                     let Some(ty::BoundVariableKind::Region(kind)) = bound_vars.get(idx).copied()
                     else {
-                        // tRust: invariant — only lifetime bound vars expected in fn signature late-bound regions
                         bug!("unexpected late-bound region {kind:?} for bound vars {bound_vars:?}");
                     };
 
@@ -1117,7 +1111,7 @@ where
                         }
                         _ => None,
                     })
-                    .expect("invariant: value is present"),
+                    .unwrap(),
 
                 ty::LateParamRegionKind::ClosureEnv => bound_vars
                     .iter()
@@ -1128,7 +1122,7 @@ where
                         }
                         _ => None,
                     })
-                    .expect("invariant: value is present"),
+                    .unwrap(),
             };
 
             ty::Region::new_bound(tcx, debruijn, br)
@@ -1334,7 +1328,7 @@ pub fn suggest_impl_trait<'tcx>(
                 param_env,
                 Ty::new_projection_from_args(infcx.tcx, assoc_item_def_id, args),
             );
-            // tRust: known issue — (compiler-errors): We may benefit from resolving regions here.
+            // FIXME(compiler-errors): We may benefit from resolving regions here.
             if ocx.try_evaluate_obligations().is_empty()
                 && let item_ty = infcx.resolve_vars_if_possible(item_ty)
                 && let Some(item_ty) = item_ty.make_suggestable(infcx.tcx, false, None)
@@ -1514,7 +1508,6 @@ fn coroutine_for_closure(tcx: TyCtxt<'_>, def_id: LocalDefId) -> DefId {
     let &rustc_hir::Closure { kind: hir::ClosureKind::CoroutineClosure(_), body, .. } =
         tcx.hir_node_by_def_id(def_id).expect_closure()
     else {
-        // tRust: invariant — coroutine_for_closure is only called on valid closure def_ids
         bug!()
     };
 
@@ -1528,7 +1521,6 @@ fn coroutine_for_closure(tcx: TyCtxt<'_>, def_id: LocalDefId) -> DefId {
         ..
     } = tcx.hir_body(body).value
     else {
-        // tRust: invariant — coroutine_by_move_body_def_id is only called on valid closures
         bug!()
     };
 
@@ -1581,7 +1573,6 @@ fn const_param_default<'tcx>(
         ..
     }) = tcx.hir_node_by_def_id(local_def_id)
     else {
-        // tRust: invariant — static mut items are lowered from valid HIR static items
         span_bug!(
             tcx.def_span(local_def_id),
             "`const_param_default` expected a generic parameter with a constant"
@@ -1694,7 +1685,6 @@ fn const_of_item<'tcx>(
         }) => ct.expect("no default value for trait assoc const"),
         hir::Node::ImplItem(hir::ImplItem { kind: hir::ImplItemKind::Const(.., ct), .. }) => *ct,
         _ => {
-            // tRust: invariant — const_of_item is only called on const or assoc const items
             span_bug!(tcx.def_span(def_id), "`const_of_item` expected a const or assoc const item")
         }
     };

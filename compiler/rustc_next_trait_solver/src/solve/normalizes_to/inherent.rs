@@ -37,7 +37,7 @@ where
 
         // Check both where clauses on the impl and IAT
         //
-        // tRust: known issue (-Znext-solver=coinductive) — I think this should be split
+        // FIXME(-Znext-solver=coinductive): I think this should be split
         // and we tag the impl bounds with `GoalSource::ImplWhereBound`?
         // Right now this includes both the impl and the assoc item where bounds,
         // and I don't think the assoc item where-bounds are allowed to be coinductive.

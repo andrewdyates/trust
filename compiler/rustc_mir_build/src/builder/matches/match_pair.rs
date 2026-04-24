@@ -45,8 +45,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         opt_slice: &Option<Box<Pat<'tcx>>>,
         suffix: &[Pat<'tcx>],
     ) {
-        let prefix_len = u64::try_from(prefix.len()).expect("invariant: value is present"); // tRust: unwrap -> expect
-        let suffix_len = u64::try_from(suffix.len()).expect("invariant: value is present"); // tRust: unwrap -> expect
+        let prefix_len = u64::try_from(prefix.len()).unwrap();
+        let suffix_len = u64::try_from(suffix.len()).unwrap();
 
         // For slice patterns with a `..` followed by 0 or more suffix subpatterns,
         // the actual slice index of those subpatterns isn't statically known, so
@@ -96,7 +96,7 @@ impl<'tcx> MatchPairTree<'tcx> {
         extra_data: &mut PatternExtraData<'tcx>, // Bindings/ascriptions are added here
     ) {
         // Force the place type to the pattern's type.
-        // tRust: known issue — can we use this to simplify slice/array pattern hacks? (upstream FIXME by oli-obk)
+        // FIXME(oli-obk): can we use this to simplify slice/array pattern hacks?
         if let Some(resolved) = place_builder.resolve_upvar(cx) {
             place_builder = resolved;
         }
@@ -145,7 +145,7 @@ impl<'tcx> MatchPairTree<'tcx> {
                     // By only holding a place when bindings are present, we skip over any
                     // or-patterns that will be simplified by `merge_trivial_subcandidates`. In
                     // other words, we can assume this expands into subcandidates.
-                    // tRust: known issue — this needs updating/removing if we always merge or-patterns (upstream FIXME by @dianne)
+                    // FIXME(@dianne): this needs updating/removing if we always merge or-patterns
                     extra_data.bindings.push(super::SubpatternBindings::FromOrPattern);
                 }
                 Some(TestableCase::Or { pats })
@@ -174,7 +174,7 @@ impl<'tcx> MatchPairTree<'tcx> {
                 } else if pat_ty.is_str() {
                     PatConstKind::String
                 } else {
-                    // tRust: known issue — This still covers several different (upstream FIXME by Zalathar)
+                    // FIXME(Zalathar): This still covers several different
                     // categories (e.g. raw pointer, pattern-type)
                     // which could be split out into their own kinds.
                     PatConstKind::Other
@@ -281,7 +281,7 @@ impl<'tcx> MatchPairTree<'tcx> {
                     // Slice patterns with a `..` subpattern require a minimum
                     // length; those without `..` require an exact length.
                     Some(TestableCase::Slice {
-                        len: u64::try_from(prefix.len() + suffix.len()).expect("invariant: value is present"), // tRust: unwrap -> expect
+                        len: u64::try_from(prefix.len() + suffix.len()).unwrap(),
                         op: if slice.is_some() {
                             SliceLenOp::GreaterOrEqual
                         } else {
@@ -314,7 +314,6 @@ impl<'tcx> MatchPairTree<'tcx> {
             PatKind::Deref { pin: Pinnedness::Pinned, ref subpattern } => {
                 let pinned_ref_ty = match pattern.ty.pinned_ty() {
                     Some(p_ty) if p_ty.is_ref() => p_ty,
-                    // tRust: invariant — pinned deref patterns are only formed for `Pin<&T>` or `Pin<&mut T>` scrutinee types.
                     _ => span_bug!(pattern.span, "bad type for pinned deref: {:?}", pattern.ty),
                 };
                 MatchPairTree::for_pattern(
@@ -346,7 +345,7 @@ impl<'tcx> MatchPairTree<'tcx> {
                 borrow: DerefPatBorrowMode::Borrow(mutability),
             } => {
                 // Create a new temporary for each deref pattern.
-                // tRust: known issue — dedup temporaries to avoid multiple `deref()` calls? (upstream FIXME by deref_patterns)
+                // FIXME(deref_patterns): dedup temporaries to avoid multiple `deref()` calls?
                 let temp = cx.temp(
                     Ty::new_ref(cx.tcx, cx.tcx.lifetimes.re_erased, subpattern.ty, mutability),
                     pattern.span,
@@ -362,7 +361,7 @@ impl<'tcx> MatchPairTree<'tcx> {
             }
 
             PatKind::Guard { .. } => {
-                // tRust: known issue — (upstream FIXME by guard_patterns)
+                // FIXME(guard_patterns)
                 None
             }
 

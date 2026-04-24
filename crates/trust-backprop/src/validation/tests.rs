@@ -8,11 +8,16 @@ use std::time::Duration;
 
 use super::cargo_exec::{extract_test_summary, run_cargo_check, run_cargo_test};
 use super::checks::*;
-use super::helpers::{extract_identifiers, extract_spec_body, is_type_constant, strip_spec_lines};
+use super::helpers::{
+    extract_identifiers, extract_spec_attributes, extract_spec_body, is_type_constant,
+    strip_spec_lines,
+};
 use super::semantic::{extract_fn_name, extract_fn_params, extract_return_type};
 use super::types::*;
-use super::{check_semantic_preservation, parse_simplified_ast, validate_rewrite,
-            validate_rewrite_with_config};
+use super::{
+    check_semantic_preservation, parse_simplified_ast, validate_rewrite,
+    validate_rewrite_with_config,
+};
 
 // --- validate_rewrite tests ---
 
@@ -309,10 +314,7 @@ fn test_extract_fn_params_empty() {
 
 #[test]
 fn test_extract_return_type_present() {
-    assert_eq!(
-        extract_return_type("fn foo(x: u64) -> u64 {"),
-        Some("u64".into())
-    );
+    assert_eq!(extract_return_type("fn foo(x: u64) -> u64 {"), Some("u64".into()));
 }
 
 #[test]
@@ -364,9 +366,7 @@ fn test_validation_check_serialization() {
 #[test]
 fn test_semantic_diff_serialization() {
     let diff = SemanticDiff {
-        added: vec![AstNode::Attribute {
-            text: "#[requires(\"x > 0\")]".into(),
-        }],
+        added: vec![AstNode::Attribute { text: "#[requires(\"x > 0\")]".into() }],
         removed: vec![],
         preserves_semantics: true,
         summary: "1 added".into(),
@@ -381,11 +381,8 @@ fn test_semantic_diff_serialization() {
 
 #[test]
 fn test_full_validation_workflow() {
-    let original = concat!(
-        "pub fn get_midpoint(a: u64, b: u64) -> u64 {\n",
-        "    (a + b) / 2\n",
-        "}\n",
-    );
+    let original =
+        concat!("pub fn get_midpoint(a: u64, b: u64) -> u64 {\n", "    (a + b) / 2\n", "}\n",);
     let rewritten = concat!(
         "#[requires(\"a + b < u64::MAX\")]\n",
         "pub fn get_midpoint(a: u64, b: u64) -> u64 {\n",
@@ -549,6 +546,15 @@ fn test_extract_spec_body_no_quotes() {
     assert_eq!(body.as_deref(), Some("x > 0"));
 }
 
+#[test]
+fn test_extract_spec_attributes_namespaced() {
+    let source = "#[trust::requires(\"x > 0\")]\n#[trust::ensures(\"result >= 0\")]\nfn foo(x: u64) -> u64 { x }\n";
+    let attrs = extract_spec_attributes(source);
+    assert_eq!(attrs.len(), 2);
+    assert!(attrs.iter().any(|attr| attr.starts_with("#[trust::requires")));
+    assert!(attrs.iter().any(|attr| attr.starts_with("#[trust::ensures")));
+}
+
 // --- extract_identifiers tests ---
 
 #[test]
@@ -584,6 +590,14 @@ fn test_strip_spec_lines_removes_assertions() {
     assert!(stripped.contains("let y"));
 }
 
+#[test]
+fn test_strip_spec_lines_removes_namespaced_specs() {
+    let source = "#[trust::requires(\"x > 0\")]\nfn foo(x: u64) {}\n";
+    let stripped = strip_spec_lines(source);
+    assert!(!stripped.contains("trust::requires"));
+    assert!(stripped.contains("fn foo"));
+}
+
 // --- is_type_constant tests ---
 
 #[test]
@@ -605,7 +619,8 @@ fn test_is_type_constant_unknown() {
 #[test]
 fn test_full_validation_with_all_checks() {
     let original = "pub fn compute(a: u64, b: u64) -> u64 {\n    a + b\n}\n";
-    let rewritten = "#[requires(\"a + b > 0\")]\npub fn compute(a: u64, b: u64) -> u64 {\n    a + b\n}\n";
+    let rewritten =
+        "#[requires(\"a + b > 0\")]\npub fn compute(a: u64, b: u64) -> u64 {\n    a + b\n}\n";
 
     let result = validate_rewrite(
         original,
@@ -621,6 +636,25 @@ fn test_full_validation_with_all_checks() {
     );
     assert!(result.is_valid(), "failed checks: {:?}", result.failed_checks);
     assert_eq!(result.total_checks(), 6);
+}
+
+#[test]
+fn test_full_validation_with_namespaced_specs() {
+    let original = "pub fn compute(a: u64, b: u64) -> u64 {\n    a + b\n}\n";
+    let rewritten = "#[trust::requires(\"a + b > 0\")]\n#[trust::ensures(\"result > a\")]\npub fn compute(a: u64, b: u64) -> u64 {\n    a + b\n}\n";
+
+    let result = validate_rewrite(
+        original,
+        rewritten,
+        &[
+            ValidationCheck::SpecsStrengthen,
+            ValidationCheck::FormulaValid,
+            ValidationCheck::TypeConsistency,
+            ValidationCheck::ConservativeStrengthening,
+        ],
+    );
+    assert!(result.is_valid(), "failed checks: {:?}", result.failed_checks);
+    assert_eq!(result.total_checks(), 4);
 }
 
 // --- New ValidationCheck serialization ---
@@ -726,11 +760,7 @@ fn test_tests_pass_breaking_rewrite_via_validate() {
         "#[test]\nfn test_add() { assert_eq!(add(1, 2), 3); }\n",
     );
     let rewritten = "fn add(a: u64, b: u64) -> u64 { a + b }\n";
-    let result = validate_rewrite(
-        original,
-        rewritten,
-        &[ValidationCheck::TestsPass],
-    );
+    let result = validate_rewrite(original, rewritten, &[ValidationCheck::TestsPass]);
     assert!(!result.is_valid(), "rewrite removing tests must be rejected");
     assert_eq!(result.failed_checks.len(), 1);
     assert!(result.failed_checks[0].detail.contains("removed"));
@@ -748,17 +778,13 @@ fn test_validation_config_default() {
 #[test]
 fn test_validation_config_with_crate_path() {
     let config = ValidationConfig::with_crate_path("/tmp/my-crate");
-    assert_eq!(
-        config.crate_path.as_deref(),
-        Some(Path::new("/tmp/my-crate"))
-    );
+    assert_eq!(config.crate_path.as_deref(), Some(Path::new("/tmp/my-crate")));
     assert_eq!(config.test_timeout, DEFAULT_TEST_TIMEOUT);
 }
 
 #[test]
 fn test_validation_config_with_timeout() {
-    let config = ValidationConfig::default()
-        .with_timeout(Duration::from_secs(30));
+    let config = ValidationConfig::default().with_timeout(Duration::from_secs(30));
     assert_eq!(config.test_timeout, Duration::from_secs(30));
 }
 
@@ -768,12 +794,8 @@ fn test_validate_with_config_no_crate_path_falls_back_to_heuristic() {
     let original = "fn foo() { 1 + 1 }\n";
     let rewritten = "fn foo() { 2 }\n";
     let config = ValidationConfig::default();
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::TestsPass],
-        &config,
-    );
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::TestsPass], &config);
     assert!(result.is_valid(), "should fall back to heuristic: {:?}", result.failed_checks);
 }
 
@@ -783,12 +805,8 @@ fn test_validate_with_config_heuristic_fast_path_rejection() {
     let original = "#[test]\nfn test_foo() {}\n#[test]\nfn test_bar() {}\n";
     let rewritten = "#[test]\nfn test_foo() {}\n";
     let config = ValidationConfig::with_crate_path("/nonexistent/path");
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::TestsPass],
-        &config,
-    );
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::TestsPass], &config);
     assert!(!result.is_valid(), "heuristic failure must reject before cargo test");
     assert!(result.failed_checks[0].detail.contains("reduced"));
 }
@@ -800,12 +818,8 @@ fn test_validate_with_config_missing_cargo_toml_fails_closed() {
     let config = ValidationConfig::with_crate_path(dir.path());
     let original = "fn foo() {}\n";
     let rewritten = "fn foo() {}\n";
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::TestsPass],
-        &config,
-    );
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::TestsPass], &config);
     // No test constructs in source, so heuristic passes. But we have
     // a crate_path with no Cargo.toml, so cargo test should fail-closed.
     // However, when there are no test constructs and crate_path is set,
@@ -951,16 +965,14 @@ fn test_syntax_valid_rejects_invalid_rust() {
 
 #[test]
 fn test_validation_config_without_compile_check() {
-    let config = ValidationConfig::with_crate_path("/tmp/test")
-        .without_compile_check();
+    let config = ValidationConfig::with_crate_path("/tmp/test").without_compile_check();
     assert!(!config.compile_check_enabled);
     assert!(config.crate_path.is_some());
 }
 
 #[test]
 fn test_validation_config_with_compile_check_timeout() {
-    let config = ValidationConfig::default()
-        .with_compile_check_timeout(Duration::from_secs(30));
+    let config = ValidationConfig::default().with_compile_check_timeout(Duration::from_secs(30));
     assert_eq!(config.compile_check_timeout, Duration::from_secs(30));
 }
 
@@ -970,12 +982,8 @@ fn test_syntax_valid_with_config_no_crate_path_syn_only() {
     let original = "fn foo() {}\n";
     let rewritten = "fn foo() { let _ = 1; }\n";
     let config = ValidationConfig::default();
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::SyntaxValid],
-        &config,
-    );
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::SyntaxValid], &config);
     assert!(result.is_valid(), "should pass with syn-only: {:?}", result.failed_checks);
     assert!(
         result.passed_checks[0].detail.contains("no crate_path"),
@@ -989,15 +997,14 @@ fn test_syntax_valid_with_config_compile_check_disabled() {
     // Crate path set but compile check explicitly disabled.
     let original = "fn foo() {}\n";
     let rewritten = "fn foo() { let _ = 1; }\n";
-    let config = ValidationConfig::with_crate_path("/nonexistent")
-        .without_compile_check();
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::SyntaxValid],
-        &config,
+    let config = ValidationConfig::with_crate_path("/nonexistent").without_compile_check();
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::SyntaxValid], &config);
+    assert!(
+        result.is_valid(),
+        "should pass with compile check disabled: {:?}",
+        result.failed_checks
     );
-    assert!(result.is_valid(), "should pass with compile check disabled: {:?}", result.failed_checks);
     assert!(
         result.passed_checks[0].detail.contains("cargo check disabled"),
         "detail: {}",
@@ -1012,12 +1019,8 @@ fn test_syntax_valid_with_config_missing_cargo_toml_fails_closed() {
     let original = "fn foo() {}\n";
     let rewritten = "fn foo() { let _ = 1; }\n";
     let config = ValidationConfig::with_crate_path(dir.path());
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::SyntaxValid],
-        &config,
-    );
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::SyntaxValid], &config);
     assert!(!result.is_valid(), "missing Cargo.toml must fail-closed: {:?}", result.passed_checks);
     assert!(
         result.failed_checks[0].detail.contains("fail-closed"),
@@ -1046,11 +1049,8 @@ fn test_run_cargo_check_valid_crate() {
         "[package]\nname = \"check-crate-728\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )
     .expect("write Cargo.toml");
-    std::fs::write(
-        src_dir.join("lib.rs"),
-        "pub fn add(a: u64, b: u64) -> u64 { a + b }\n",
-    )
-    .expect("write lib.rs");
+    std::fs::write(src_dir.join("lib.rs"), "pub fn add(a: u64, b: u64) -> u64 { a + b }\n")
+        .expect("write lib.rs");
 
     let result = run_cargo_check(dir.path(), Duration::from_secs(120));
     let result = result.expect("cargo check should succeed");
@@ -1069,11 +1069,8 @@ fn test_run_cargo_check_invalid_crate() {
         "[package]\nname = \"check-crate-728-fail\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )
     .expect("write Cargo.toml");
-    std::fs::write(
-        src_dir.join("lib.rs"),
-        "pub fn add(a: u64, b: u64) -> String { a + b }\n",
-    )
-    .expect("write lib.rs");
+    std::fs::write(src_dir.join("lib.rs"), "pub fn add(a: u64, b: u64) -> String { a + b }\n")
+        .expect("write lib.rs");
 
     let result = run_cargo_check(dir.path(), Duration::from_secs(120));
     let result = result.expect("cargo check should execute (but fail)");
@@ -1092,21 +1089,14 @@ fn test_syntax_valid_with_config_valid_crate_passes() {
         "[package]\nname = \"syntax-crate-728\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )
     .expect("write Cargo.toml");
-    std::fs::write(
-        src_dir.join("lib.rs"),
-        "pub fn add(a: u64, b: u64) -> u64 { a + b }\n",
-    )
-    .expect("write lib.rs");
+    std::fs::write(src_dir.join("lib.rs"), "pub fn add(a: u64, b: u64) -> u64 { a + b }\n")
+        .expect("write lib.rs");
 
     let original = "pub fn add(a: u64, b: u64) -> u64 { a + b }\n";
     let rewritten = "pub fn add(a: u64, b: u64) -> u64 { a + b }\n";
     let config = ValidationConfig::with_crate_path(dir.path());
-    let result = validate_rewrite_with_config(
-        original,
-        rewritten,
-        &[ValidationCheck::SyntaxValid],
-        &config,
-    );
+    let result =
+        validate_rewrite_with_config(original, rewritten, &[ValidationCheck::SyntaxValid], &config);
     assert!(result.is_valid(), "valid crate should pass: {:?}", result.failed_checks);
     assert!(
         result.passed_checks[0].detail.contains("cargo check passed"),

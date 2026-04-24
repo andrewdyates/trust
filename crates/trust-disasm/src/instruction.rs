@@ -100,18 +100,12 @@ impl Instruction {
     /// Get operand by index.
     #[must_use]
     pub fn operand(&self, index: usize) -> Option<&Operand> {
-        if index < self.operand_count as usize {
-            self.operands[index].as_ref()
-        } else {
-            None
-        }
+        if index < self.operand_count as usize { self.operands[index].as_ref() } else { None }
     }
 
     /// Iterate over operands.
     pub fn operands(&self) -> impl Iterator<Item = &Operand> {
-        self.operands[..self.operand_count as usize]
-            .iter()
-            .filter_map(|o| o.as_ref())
+        self.operands[..self.operand_count as usize].iter().filter_map(|o| o.as_ref())
     }
 
     /// Returns true if this instruction reads the given register.
@@ -123,15 +117,13 @@ impl Instruction {
             match op {
                 Operand::Reg(r)
                 | Operand::ShiftedReg { reg: r, .. }
-                | Operand::ExtendedReg { reg: r, .. } => {
-                    if r == reg {
-                        return true;
-                    }
+                | Operand::ExtendedReg { reg: r, .. }
+                    if r == reg =>
+                {
+                    return true;
                 }
-                Operand::Mem(mem) => {
-                    if mem_reads_register(mem, reg) {
-                        return true;
-                    }
+                Operand::Mem(mem) if mem_reads_register(mem, reg) => {
+                    return true;
                 }
                 _ => {}
             }
@@ -192,7 +184,10 @@ impl Instruction {
     pub fn is_branch(&self) -> bool {
         matches!(
             self.flow,
-            ControlFlow::Branch | ControlFlow::ConditionalBranch | ControlFlow::Call | ControlFlow::Return
+            ControlFlow::Branch
+                | ControlFlow::ConditionalBranch
+                | ControlFlow::Call
+                | ControlFlow::Return
         )
     }
 

@@ -104,17 +104,31 @@ pub fn analyze_monotonicity(snapshots: &[MetricSnapshot]) -> Monotonicity {
         let prev = window[0].metric;
         let curr = window[1].metric;
 
-        if curr <= prev { strictly_increasing = false; }
-        if curr >= prev { strictly_decreasing = false; }
-        if curr < prev { non_decreasing = false; }
-        if curr > prev { non_increasing = false; }
+        if curr <= prev {
+            strictly_increasing = false;
+        }
+        if curr >= prev {
+            strictly_decreasing = false;
+        }
+        if curr < prev {
+            non_decreasing = false;
+        }
+        if curr > prev {
+            non_increasing = false;
+        }
     }
 
-    if strictly_increasing { Monotonicity::Increasing }
-    else if strictly_decreasing { Monotonicity::Decreasing }
-    else if non_decreasing { Monotonicity::NonDecreasing }
-    else if non_increasing { Monotonicity::NonIncreasing }
-    else { Monotonicity::None }
+    if strictly_increasing {
+        Monotonicity::Increasing
+    } else if strictly_decreasing {
+        Monotonicity::Decreasing
+    } else if non_decreasing {
+        Monotonicity::NonDecreasing
+    } else if non_increasing {
+        Monotonicity::NonIncreasing
+    } else {
+        Monotonicity::None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -175,19 +189,19 @@ pub struct ConvergenceRate {
 /// Analyze the convergence rate toward a target metric.
 pub fn convergence_rate(snapshots: &[MetricSnapshot], target: f64) -> ConvergenceRate {
     if snapshots.len() < 2 {
-        return ConvergenceRate { avg_improvement: 0.0, acceleration: 0.0, estimated_remaining: None };
+        return ConvergenceRate {
+            avg_improvement: 0.0,
+            acceleration: 0.0,
+            estimated_remaining: None,
+        };
     }
 
-    let improvements: Vec<f64> = snapshots.windows(2)
-        .map(|w| w[1].metric - w[0].metric)
-        .collect();
+    let improvements: Vec<f64> = snapshots.windows(2).map(|w| w[1].metric - w[0].metric).collect();
 
     let avg = improvements.iter().sum::<f64>() / improvements.len() as f64;
 
     let acceleration = if improvements.len() >= 2 {
-        let accels: Vec<f64> = improvements.windows(2)
-            .map(|w| w[1] - w[0])
-            .collect();
+        let accels: Vec<f64> = improvements.windows(2).map(|w| w[1] - w[0]).collect();
         accels.iter().sum::<f64>() / accels.len() as f64
     } else {
         0.0
@@ -203,11 +217,7 @@ pub fn convergence_rate(snapshots: &[MetricSnapshot], target: f64) -> Convergenc
         None
     };
 
-    ConvergenceRate {
-        avg_improvement: avg,
-        acceleration,
-        estimated_remaining: estimated,
-    }
+    ConvergenceRate { avg_improvement: avg, acceleration, estimated_remaining: estimated }
 }
 
 // ---------------------------------------------------------------------------
@@ -282,10 +292,10 @@ pub fn classify_loop(snapshots: &[MetricSnapshot]) -> LoopCharacteristic {
         Monotonicity::Decreasing | Monotonicity::NonIncreasing => LoopCharacteristic::Diverging,
         Monotonicity::None => {
             // Check for oscillation: alternating signs of change
-            let changes: Vec<f64> = snapshots.windows(2)
-                .map(|w| w[1].metric - w[0].metric)
-                .collect();
-            let sign_changes = changes.windows(2)
+            let changes: Vec<f64> =
+                snapshots.windows(2).map(|w| w[1].metric - w[0].metric).collect();
+            let sign_changes = changes
+                .windows(2)
                 .filter(|w| (w[0] > 0.0 && w[1] < 0.0) || (w[0] < 0.0 && w[1] > 0.0))
                 .count();
             if sign_changes > changes.len() / 2 {

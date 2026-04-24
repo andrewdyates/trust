@@ -38,7 +38,7 @@ where
             return;
         }
 
-        // tRust: known issue —: Don't consider alias bounds on types that have escaping bound
+        // FIXME: Don't consider alias bounds on types that have escaping bound
         // vars. See #117455.
         if ty.has_escaping_bound_vars() {
             return ty.super_visit_with(self);

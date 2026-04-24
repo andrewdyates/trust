@@ -1682,7 +1682,7 @@ symbols! {
         rust_preserve_none_cc,
         rustc,
         rustc_abi,
-        // tRust: known issue (#82232, #143834) — temporary name to mitigate `#[align]` nameres ambiguity
+        // FIXME(#82232, #143834): temporary name to mitigate `#[align]` nameres ambiguity
         rustc_align,
         rustc_align_static,
         rustc_allocator,
@@ -2545,16 +2545,8 @@ impl Symbol {
     /// this function is typically used for short-lived things, so in practice
     /// it works out ok.
     pub fn as_str(&self) -> &str {
-        with_session_globals(|session_globals| {
-            // SAFETY: The returned `&str` borrows from the interner's arena, which lives
-            // as long as the session globals. The transmute extends the lifetime from the
-            // closure's borrow of `session_globals` to `&self`'s lifetime. This is sound
-            // because the interner's arena is never deallocated while session globals exist.
-            // SAFETY: `get_str(*self)` is arena-backed for the lifetime of the interner, so
-            // extending this borrow from `session_globals` to `&self` is sound.
-            unsafe {
-                std::mem::transmute::<&str, &str>(session_globals.symbol_interner.get_str(*self))
-            }
+        with_session_globals(|session_globals| unsafe {
+            std::mem::transmute::<&str, &str>(session_globals.symbol_interner.get_str(*self))
         })
     }
 
@@ -2653,18 +2645,8 @@ impl ByteSymbol {
 
     /// Like `Symbol::as_str`.
     pub fn as_byte_str(&self) -> &[u8] {
-        with_session_globals(|session_globals| {
-            // SAFETY: The returned `&[u8]` borrows from the interner's arena, which lives
-            // as long as the session globals. The transmute extends the lifetime from the
-            // closure's borrow of `session_globals` to `&self`'s lifetime. This is sound
-            // because the interner's arena is never deallocated while session globals exist.
-            // SAFETY: `get_byte_str(*self)` is arena-backed for the lifetime of the interner,
-            // so extending this borrow from `session_globals` to `&self` is sound.
-            unsafe {
-                std::mem::transmute::<&[u8], &[u8]>(
-                    session_globals.symbol_interner.get_byte_str(*self),
-                )
-            }
+        with_session_globals(|session_globals| unsafe {
+            std::mem::transmute::<&[u8], &[u8]>(session_globals.symbol_interner.get_byte_str(*self))
         })
     }
 
@@ -2774,7 +2756,7 @@ impl Interner {
     }
 
     fn get_inner(&self, index: usize) -> &[u8] {
-        self.0.lock().byte_strs.get_index(index).expect("invariant: byte symbol index was previously interned") // tRust: unwrap -> expect
+        self.0.lock().byte_strs.get_index(index).unwrap()
     }
 }
 
@@ -2800,13 +2782,13 @@ pub mod sym {
     pub use super::sym_generated::*;
 
     // Used quite often in relation to C ABI.
-    pub const C: Symbol = ascii_letter_digit('C').expect("invariant: 'C' is a valid ASCII letter"); // tRust: unwrap -> expect
+    pub const C: Symbol = ascii_letter_digit('C').unwrap();
 
     // RISC-V stuff
     #[expect(non_upper_case_globals)]
-    pub const f: Symbol = ascii_letter_digit('f').expect("invariant: 'f' is a valid ASCII letter"); // tRust: unwrap -> expect
+    pub const f: Symbol = ascii_letter_digit('f').unwrap();
     #[expect(non_upper_case_globals)]
-    pub const d: Symbol = ascii_letter_digit('d').expect("invariant: 'd' is a valid ASCII letter"); // tRust: unwrap -> expect
+    pub const d: Symbol = ascii_letter_digit('d').unwrap();
 
     /// Get the symbol for an integer.
     ///

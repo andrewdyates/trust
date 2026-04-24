@@ -10,6 +10,5 @@
 
 #[allow(unused_imports)]
 pub use trust_cache::result_cache::{
-    CachePolicy, CacheStats, CachedResult, ReplayConfig, ResultCache, ResultCacheKey,
-    hash_formula,
+    CachePolicy, CacheStats, CachedResult, ReplayConfig, ResultCache, ResultCacheKey, hash_formula,
 };

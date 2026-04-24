@@ -232,14 +232,12 @@ impl<'tcx> AdtDef<'tcx> {
             }
             ty::Tuple(tys) => {
                 if variant_idx != FIRST_VARIANT {
-                    // tRust: invariant: expected variant of tuple to be FIRST_VARIANT, but found <...>
                     bug!("expected variant of tuple to be FIRST_VARIANT, but found {variant_idx:?}")
                 }
                 (
                     if let Some(ty) = tys.get(field_idx.index()) {
                         *ty
                     } else {
-                        // tRust: invariant: unexpected state in field_representing_type_info
                         bug!(
                             "expected valid tuple index, but got {field_idx:?}, tuple length: {}",
                             tys.len()
@@ -616,7 +614,6 @@ impl<'tcx> AdtDef<'tcx> {
             | Res::SelfTyParam { .. }
             | Res::SelfTyAlias { .. }
             | Res::SelfCtor(..) => self.non_enum_variant(),
-            // tRust: invariant: unexpected res <...> in variant_of_res
             _ => bug!("unexpected res {:?} in variant_of_res", res),
         }
     }
@@ -737,7 +734,7 @@ impl<'tcx> AdtDef<'tcx> {
         tcx.adt_destructor(self.did())
     }
 
-    // tRust: known issue — consider combining this method with `AdtDef::destructor` and removing
+    // FIXME: consider combining this method with `AdtDef::destructor` and removing
     // this version
     pub fn async_destructor(self, tcx: TyCtxt<'tcx>) -> Option<AsyncDestructor> {
         tcx.adt_async_destructor(self.did())

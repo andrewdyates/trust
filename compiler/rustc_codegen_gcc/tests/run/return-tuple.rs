@@ -24,7 +24,6 @@ fn int_cast(a: u16, b: i16) -> (u8, u16, u32, usize, i8, i16, i32, isize, u8, u3
 #[no_mangle]
 extern "C" fn main(argc: i32, _argv: *const *const u8) -> i32 {
     let (a, b, c, d, e, f, g, h, i, j) = int_cast(10, 42);
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf(b"%d\n\0" as *const u8 as *const i8, c);
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, d);

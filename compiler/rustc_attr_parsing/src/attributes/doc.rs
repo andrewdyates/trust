@@ -18,7 +18,7 @@ use crate::session_diagnostics::{
 };
 
 fn check_keyword<S: Stage>(cx: &mut AcceptContext<'_, '_, S>, keyword: Symbol, span: Span) -> bool {
-    // tRust: known issue — Once rustdoc can handle URL conflicts on case insensitive file systems, we
+    // FIXME: Once rustdoc can handle URL conflicts on case insensitive file systems, we
     // can remove the `SelfTy` case here, remove `sym::SelfTy`, and update the
     // `#[doc(keyword = "SelfTy")` attribute in `library/std/src/keyword_docs.rs`.
     if keyword.is_reserved(|| edition::LATEST_STABLE_EDITION)
@@ -36,7 +36,7 @@ fn check_attribute<S: Stage>(
     attribute: Symbol,
     span: Span,
 ) -> bool {
-    // tRust: known issue — This should support attributes with namespace like `diagnostic::do_not_recommend`.
+    // FIXME: This should support attributes with namespace like `diagnostic::do_not_recommend`.
     if rustc_feature::BUILTIN_ATTRIBUTE_MAP.contains_key(&attribute) {
         return true;
     }
@@ -70,7 +70,7 @@ fn check_attr_crate_level<S: Stage>(cx: &mut AcceptContext<'_, '_, S>, span: Spa
     true
 }
 
-// tRust: known issue — To be removed once merged and replace with `cx.expected_name_value(span, _name)`.
+// FIXME: To be removed once merged and replace with `cx.expected_name_value(span, _name)`.
 fn expected_name_value<S: Stage>(
     cx: &mut AcceptContext<'_, '_, S>,
     span: Span,
@@ -83,7 +83,7 @@ fn expected_name_value<S: Stage>(
     );
 }
 
-// tRust: known issue — remove this method once merged and use `cx.expected_no_args(span)` instead.
+// FIXME: remove this method once merged and use `cx.expected_no_args(span)` instead.
 fn expected_no_args<S: Stage>(cx: &mut AcceptContext<'_, '_, S>, span: Span) {
     cx.emit_lint(
         rustc_session::lint::builtin::INVALID_DOC_ATTRIBUTES,
@@ -92,7 +92,7 @@ fn expected_no_args<S: Stage>(cx: &mut AcceptContext<'_, '_, S>, span: Span) {
     );
 }
 
-// tRust: known issue — remove this method once merged and use `cx.expected_no_args(span)` instead.
+// FIXME: remove this method once merged and use `cx.expected_no_args(span)` instead.
 // cx.expected_string_literal(span, _actual_literal);
 fn expected_string_literal<S: Stage>(
     cx: &mut AcceptContext<'_, '_, S>,
@@ -134,7 +134,7 @@ fn parse_keyword_and_attribute<S: Stage>(
 
     let span = path.span();
     if attr_value.is_some() {
-        cx.duplicate_key(span, path.word_sym().expect("invariant: path is a single-segment word")); // tRust: unwrap -> expect
+        cx.duplicate_key(span, path.word_sym().unwrap());
         return;
     }
 
@@ -189,7 +189,7 @@ impl DocParser {
             }
             Some(sym::attr) => {
                 let Some(list) = args.list() else {
-                    // tRust: known issue — remove this method once merged and uncomment the line below instead.
+                    // FIXME: remove this method once merged and uncomment the line below instead.
                     // cx.expected_list(cx.attr_span, args);
                     let span = cx.attr_span;
                     cx.emit_lint(
@@ -200,7 +200,7 @@ impl DocParser {
                     return;
                 };
 
-                // tRust: known issue — convert list into a Vec of `AttributeKind` because current code is awful.
+                // FIXME: convert list into a Vec of `AttributeKind` because current code is awful.
                 for attr in list.mixed() {
                     self.attribute.test_attrs.push(attr.span());
                 }
@@ -380,7 +380,7 @@ impl DocParser {
                         match sub_item.args() {
                             a @ (ArgParser::NoArgs | ArgParser::NameValue(_)) => {
                                 let Some(name) = sub_item.path().word_sym() else {
-                                    // tRust: known issue — remove this method once merged and uncomment the line
+                                    // FIXME: remove this method once merged and uncomment the line
                                     // below instead.
                                     // cx.expected_identifier(sub_item.path().span());
                                     cx.emit_lint(
@@ -405,7 +405,7 @@ impl DocParser {
                                         // If `value` is `Some`, `a.name_value()` will always return
                                         // `Some` as well.
                                         value: value
-                                            .map(|v| (v, a.name_value().expect("invariant: value exists so name_value must be Some").value_span)), // tRust: unwrap -> expect
+                                            .map(|v| (v, a.name_value().unwrap().value_span)),
                                     })
                                 }
                             }
@@ -454,7 +454,7 @@ impl DocParser {
                     return;
                 }
 
-                // tRust: known issue — It's errorring when the attribute is passed multiple times on the command
+                // FIXME: It's errorring when the attribute is passed multiple times on the command
                 // line.
                 // The right fix for this would be to only check this rule if the attribute is
                 // not set on the command line but directly in the code.
@@ -508,7 +508,7 @@ impl DocParser {
                     return;
                 }
 
-                // tRust: known issue — It's errorring when the attribute is passed multiple times on the command
+                // FIXME: It's errorring when the attribute is passed multiple times on the command
                 // line.
                 // The right fix for this would be to only check this rule if the attribute is
                 // not set on the command line but directly in the code.
@@ -571,7 +571,7 @@ impl DocParser {
                             self.parse_single_test_doc_attr_item(cx, mip);
                         }
                         MetaItemOrLitParser::Lit(lit) => {
-                            // tRust: known issue — remove this method once merged and uncomment the line
+                            // FIXME: remove this method once merged and uncomment the line
                             // below instead.
                             // cx.unexpected_literal(lit.span);
                             cx.emit_lint(
@@ -716,7 +716,7 @@ impl<S: Stage> AttributeParser<S> for DocParser {
             this.accept_single_doc_attr(cx, args);
         },
     )];
-    // tRust: known issue — Currently emitted from 2 different places, generating duplicated warnings.
+    // FIXME: Currently emitted from 2 different places, generating duplicated warnings.
     const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS);
     // const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowListWarnRest(&[
     //     Allow(Target::ExternCrate),

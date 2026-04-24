@@ -262,7 +262,7 @@ impl OnDiskCache {
                     interpret_alloc_index.reserve(new_n - n);
                     for idx in n..new_n {
                         let id = encoder.interpret_allocs[idx];
-                        let pos: u64 = encoder.position().try_into().expect("invariant: value fits in target type");
+                        let pos: u64 = encoder.position().try_into().unwrap();
                         interpret_alloc_index.push(pos);
                         interpret::specialized_encode_alloc_id(&mut encoder, tcx, id);
                     }
@@ -381,7 +381,7 @@ impl OnDiskCache {
         let mut decoder = CacheDecoder {
             tcx,
             opaque: MemDecoder::new(serialized_data.as_deref().unwrap_or(&[]), pos.to_usize())
-                .expect("invariant: decoder position is valid"),
+                .unwrap(),
             file_index_to_file: &self.file_index_to_file,
             file_index_to_stable_id: &self.file_index_to_stable_id,
             alloc_decoding_session: self.alloc_decoding_state.new_decoding_session(),
@@ -548,7 +548,7 @@ impl<'a, 'tcx> SpanDecoder for CacheDecoder<'a, 'tcx> {
         rustc_span::hygiene::decode_syntax_context(self, self.hygiene_context, |this, id| {
             // This closure is invoked if we haven't already decoded the data for the `SyntaxContext` we are deserializing.
             // We look up the position of the associated `SyntaxData` and decode it.
-            let pos = syntax_contexts.get(&id).expect("invariant: index is in bounds");
+            let pos = syntax_contexts.get(&id).unwrap();
             this.with_position(pos.to_usize(), |decoder| {
                 let data: SyntaxContextKey = decode_tagged(decoder, TAG_SYNTAX_CONTEXT);
                 data
@@ -611,7 +611,7 @@ impl<'a, 'tcx> SpanDecoder for CacheDecoder<'a, 'tcx> {
                 let dlo = u32::decode(self);
                 let dto = u32::decode(self);
 
-                let enclosing = self.tcx.source_span_untracked(parent.expect("invariant: def id has parent")).data_untracked();
+                let enclosing = self.tcx.source_span_untracked(parent.unwrap()).data_untracked();
                 (
                     BytePos(enclosing.lo.0.wrapping_add(dlo)),
                     BytePos(enclosing.lo.0.wrapping_add(dto)),
@@ -943,7 +943,6 @@ impl<'a, 'tcx> SpanEncoder for CacheEncoder<'a, 'tcx> {
     }
 
     fn encode_def_index(&mut self, _def_index: DefIndex) {
-        // tRust: invariant: encoding DefIndex without context
         bug!("encoding `DefIndex` without context");
     }
 }

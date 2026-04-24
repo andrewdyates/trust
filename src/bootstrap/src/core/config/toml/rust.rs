@@ -404,7 +404,8 @@ pub fn check_incompatible_options_for_ci_rustc(
     Ok(())
 }
 
-pub(crate) const BUILTIN_CODEGEN_BACKENDS: &[&str] = &["llvm", "cranelift", "gcc"];
+// tRust: Added "llvm2" for verified codegen backend (#956).
+pub(crate) const BUILTIN_CODEGEN_BACKENDS: &[&str] = &["llvm", "llvm2", "cranelift", "gcc"];
 
 pub(crate) fn parse_codegen_backends(
     backends: Vec<String>,
@@ -429,6 +430,8 @@ pub(crate) fn parse_codegen_backends(
         }
         let backend = match backend.as_str() {
             "llvm" => CodegenBackendKind::Llvm,
+            // tRust: LLVM2 verified codegen backend (#956).
+            "llvm2" => CodegenBackendKind::Llvm2,
             "cranelift" => CodegenBackendKind::Cranelift,
             "gcc" => CodegenBackendKind::Gcc,
             backend => CodegenBackendKind::Custom(backend.to_string()),

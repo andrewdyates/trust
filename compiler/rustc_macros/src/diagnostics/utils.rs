@@ -64,11 +64,11 @@ pub(crate) fn report_type_error(
     attr: &Attribute,
     ty_name: &str,
 ) -> Result<!, DiagnosticDeriveError> {
-    let name = attr.path().segments.last().expect("invariant: attribute path has at least one segment").ident.to_string(); // tRust: unwrap -> expect
+    let name = attr.path().segments.last().unwrap().ident.to_string();
     let meta = &attr.meta;
 
     throw_span_err!(
-        attr.span().expect("invariant: attribute has a valid proc_macro span"), // tRust: unwrap -> expect
+        attr.span().unwrap(),
         &format!(
             "the `#[{}{}]` attribute can only be applied to fields of type {}",
             name,
@@ -618,7 +618,7 @@ impl SubdiagnosticVariant {
             "warning" => SubdiagnosticKind::Warn,
             _ => {
                 // Recover old `#[(multipart_)suggestion_*]` syntaxes
-                // tRust: known issue (#100717) — remove
+                // FIXME(#100717): remove
                 if let Some(suggestion_kind) =
                     name.strip_prefix("suggestion").and_then(SuggestionKind::from_suffix)
                 {

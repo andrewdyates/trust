@@ -20,9 +20,6 @@ use rustc_span::DUMMY_SP;
 use thin_vec::{ThinVec, thin_vec};
 use tracing::{debug, debug_span, instrument};
 
-// tRust: Import FxHashSet for DAG deduplication cache (rust-lang#30977)
-use rustc_data_structures::fx::FxHashSet;
-
 use super::effects::{self, HostEffectObligation};
 use super::project::{self, ProjectAndUnifyResult};
 use super::select::SelectionContext;
@@ -72,13 +69,6 @@ pub struct FulfillmentContext<'tcx, E: 'tcx> {
     /// use the context in exactly this snapshot.
     usable_in_snapshot: usize,
 
-    // tRust: DAG deduplication cache for resolved global predicates (rust-lang#30977).
-    // Tracks fully-resolved predicates that have been successfully proved in this
-    // fulfillment context, avoiding redundant re-evaluation when the same obligation
-    // appears in multiple branches of the obligation DAG. Only caches global
-    // predicates (no inference variables) to maintain soundness across unification.
-    global_predicate_cache: FxHashSet<ty::ParamEnvAnd<'tcx, ty::Predicate<'tcx>>>,
-
     _errors: PhantomData<E>,
 }
 
@@ -110,8 +100,6 @@ where
         FulfillmentContext {
             predicates: ObligationForest::new(),
             usable_in_snapshot: infcx.num_open_snapshots(),
-            // tRust: Initialize DAG dedup cache (rust-lang#30977)
-            global_predicate_cache: Default::default(),
             _errors: PhantomData,
         }
     }
@@ -122,17 +110,11 @@ where
         let _enter = span.enter();
         let infcx = selcx.infcx;
 
-        // tRust: Pass the DAG dedup cache to the processor (rust-lang#30977).
-        // This allows the processor to skip re-evaluation of global predicates
-        // that have already been proved in a previous select() round.
-        let outcome: Outcome<_, _> = self.predicates.process_obligations(
-            &mut FulfillProcessor {
-                selcx,
-                global_predicate_cache: &mut self.global_predicate_cache,
-            },
-        );
+        // Process pending obligations.
+        let outcome: Outcome<_, _> =
+            self.predicates.process_obligations(&mut FulfillProcessor { selcx });
 
-        // tRust: known issue — if we kept the original cache key, we could mark projection
+        // FIXME: if we kept the original cache key, we could mark projection
         // obligations as complete for the projection cache here.
 
         let errors: Vec<E> = outcome
@@ -269,9 +251,6 @@ where
 
 struct FulfillProcessor<'a, 'tcx> {
     selcx: SelectionContext<'a, 'tcx>,
-    // tRust: DAG dedup cache reference for cross-obligation deduplication (rust-lang#30977).
-    // Shared with FulfillmentContext to persist across select() rounds.
-    global_predicate_cache: &'a mut FxHashSet<ty::ParamEnvAnd<'tcx, ty::Predicate<'tcx>>>,
 }
 
 fn mk_pending<'tcx>(
@@ -388,24 +367,6 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
             return ProcessResult::Changed(thin_vec![]);
         }
 
-        // tRust: DAG dedup — check if this fully-resolved global predicate was already
-        // proved in a previous processing round (rust-lang#30977). This avoids redundant
-        // trait selection for obligations that appear in multiple DAG branches.
-        // Only applies to global predicates (no inference variables) because those
-        // produce deterministic results regardless of when they are evaluated.
-        if obligation.predicate.is_global()
-            && !obligation.predicate.has_non_region_infer()
-            && self
-                .global_predicate_cache
-                .contains(&obligation.param_env.and(obligation.predicate))
-        {
-            debug!(
-                "DAG dedup cache hit for global predicate at depth {}",
-                obligation.recursion_depth
-            );
-            return ProcessResult::Changed(thin_vec![]);
-        }
-
         if obligation.predicate.has_aliases() {
             let mut obligations = PredicateObligations::new();
             let predicate = normalize_with_depth_to(
@@ -454,7 +415,7 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                 | ty::PredicateKind::Coerce(_)
                 | ty::PredicateKind::Clause(ty::ClauseKind::ConstEvaluatable(..))
                 | ty::PredicateKind::ConstEquate(..)
-                // tRust: known issue (const_trait_impl) — We may need to do this using the higher-ranked
+                // FIXME(const_trait_impl): We may need to do this using the higher-ranked
                 // pred instead of just instantiating it with placeholders b/c of
                 // higher-ranked implied bound issues in the old solver.
                 | ty::PredicateKind::Clause(ty::ClauseKind::HostEffect(..)) => {
@@ -466,11 +427,9 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                 }
                 ty::PredicateKind::Ambiguous => ProcessResult::Unchanged,
                 ty::PredicateKind::NormalizesTo(..) => {
-                    // tRust: invariant — NormalizesTo is only used by the new solver
                     bug!("NormalizesTo is only used by the new solver")
                 }
                 ty::PredicateKind::AliasRelate(..) => {
-                    // tRust: invariant — AliasRelate is only used by the new solver
                     bug!("AliasRelate is only used by the new solver")
                 }
                 ty::PredicateKind::Clause(ty::ClauseKind::UnstableFeature(_)) => {
@@ -538,11 +497,9 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
 
                 ty::PredicateKind::Ambiguous => ProcessResult::Unchanged,
                 ty::PredicateKind::NormalizesTo(..) => {
-                    // tRust: invariant — NormalizesTo is only used by the new solver
                     bug!("NormalizesTo is only used by the new solver")
                 }
                 ty::PredicateKind::AliasRelate(..) => {
-                    // tRust: invariant — AliasRelate is only used by the new solver
                     bug!("AliasRelate is only used by the new solver")
                 }
                 // Compute `ConstArgHasType` above the overflow check below.
@@ -555,7 +512,6 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                             let var = match var {
                                 ty::InferConst::Var(vid) => TyOrConstInferVar::Const(vid),
                                 ty::InferConst::Fresh(_) => {
-                                    // tRust: invariant — Encountered fresh const in fulfill
                                     bug!("encountered fresh const in fulfill")
                                 }
                             };
@@ -570,7 +526,7 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                         ty::ConstKind::Unevaluated(uv) => {
                             infcx.tcx.type_of(uv.def).instantiate(infcx.tcx, uv.args)
                         }
-                        // tRust: known issue (generic_const_exprs) — we should construct an alias like
+                        // FIXME(generic_const_exprs): we should construct an alias like
                         // `<lhs_ty as Add<rhs_ty>>::Output` when this is an `Expr` representing
                         // `lhs + rhs`.
                         ty::ConstKind::Expr(_) => {
@@ -580,10 +536,8 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                             ));
                         }
                         ty::ConstKind::Placeholder(_) => {
-                            // tRust: invariant — Placeholder const in old solver
                             bug!("placeholder const {:?} in old solver", ct)
                         }
-                        // tRust: invariant — Escaping bound vars in
                         ty::ConstKind::Bound(_, _) => bug!("escaping bound vars in {:?}", ct),
                         ty::ConstKind::Param(param_ct) => {
                             param_ct.find_const_ty_from_env(obligation.param_env)
@@ -634,7 +588,7 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                     ) {
                         None => {
                             pending_obligation.stalled_on =
-                                vec![TyOrConstInferVar::maybe_from_term(term).expect("invariant: value is present")];
+                                vec![TyOrConstInferVar::maybe_from_term(term).unwrap()];
                             ProcessResult::Unchanged
                         }
                         Some(os) => ProcessResult::Changed(mk_pending(obligation, os)),
@@ -719,7 +673,7 @@ impl<'a, 'tcx> ObligationProcessor for FulfillProcessor<'a, 'tcx> {
                         tcx.features().generic_const_exprs(),
                         "`ConstEquate` without a feature gate: {c1:?} {c2:?}",
                     );
-                    // tRust: known issue — we probably should only try to unify abstract constants
+                    // FIXME: we probably should only try to unify abstract constants
                     // if the constants depend on generic parameters.
                     //
                     // Let's just see where this breaks :shrug:
@@ -890,15 +844,12 @@ impl<'a, 'tcx> FulfillProcessor<'a, 'tcx> {
         if obligation.predicate.is_global() && !matches!(infcx.typing_mode(), TypingMode::Coherence)
         {
             // no type variables present, can use evaluation for better caching.
-            // tRust: known issue — consider caching errors too.
+            // FIXME: consider caching errors too.
             if infcx.predicate_must_hold_considering_regions(obligation) {
                 debug!(
                     "selecting trait at depth {} evaluated to holds",
                     obligation.recursion_depth
                 );
-                // tRust: Cache successfully proved global trait predicate (rust-lang#30977)
-                self.global_predicate_cache
-                    .insert(obligation.param_env.and(obligation.predicate));
                 return ProcessResult::Changed(Default::default());
             }
         }
@@ -906,14 +857,6 @@ impl<'a, 'tcx> FulfillProcessor<'a, 'tcx> {
         match self.selcx.poly_select(&trait_obligation) {
             Ok(Some(impl_source)) => {
                 debug!("selecting trait at depth {} yielded Ok(Some)", obligation.recursion_depth);
-                // tRust: Cache global trait obligation on successful selection (rust-lang#30977)
-                if obligation.predicate.is_global()
-                    && !obligation.predicate.has_non_region_infer()
-                    && impl_source.nested_obligations().is_empty()
-                {
-                    self.global_predicate_cache
-                        .insert(obligation.param_env.and(obligation.predicate));
-                }
                 ProcessResult::Changed(mk_pending(obligation, impl_source.nested_obligations()))
             }
             Ok(None) => {
@@ -956,7 +899,7 @@ impl<'a, 'tcx> FulfillProcessor<'a, 'tcx> {
         if obligation.predicate.is_global() && !matches!(infcx.typing_mode(), TypingMode::Coherence)
         {
             // no type variables present, can use evaluation for better caching.
-            // tRust: known issue — consider caching errors too.
+            // FIXME: consider caching errors too.
             if infcx.predicate_must_hold_considering_regions(obligation) {
                 if let Some(key) = ProjectionCacheKey::from_poly_projection_obligation(
                     &mut self.selcx,
@@ -971,9 +914,6 @@ impl<'a, 'tcx> FulfillProcessor<'a, 'tcx> {
                         .projection_cache()
                         .complete(key, EvaluationResult::EvaluatedToOk);
                 }
-                // tRust: Cache successfully proved global projection predicate (rust-lang#30977)
-                self.global_predicate_cache
-                    .insert(obligation.param_env.and(obligation.predicate));
                 return ProcessResult::Changed(Default::default());
             } else {
                 debug!("Does NOT hold: {:?}", obligation);
@@ -1058,7 +998,7 @@ pub struct OldSolverError<'tcx>(
 impl<'tcx> FromSolverError<'tcx, OldSolverError<'tcx>> for FulfillmentError<'tcx> {
     fn from_solver_error(_infcx: &InferCtxt<'tcx>, error: OldSolverError<'tcx>) -> Self {
         let mut iter = error.0.backtrace.into_iter();
-        let obligation = iter.next().expect("invariant: iterator is non-empty").obligation;
+        let obligation = iter.next().unwrap().obligation;
         // The root obligation is the last item in the backtrace - if there's only
         // one item, then it's the same as the main obligation
         let root_obligation = iter.next_back().map_or_else(|| obligation.clone(), |e| e.obligation);

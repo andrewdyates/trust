@@ -422,7 +422,7 @@ pub enum InvocationKind {
 
 impl InvocationKind {
     fn placeholder_visibility(&self) -> Option<ast::Visibility> {
-        // tRust: known issue —: For unnamed fields placeholders should have the same visibility as the actual
+        // HACK: For unnamed fields placeholders should have the same visibility as the actual
         // fields because for tuple structs/variants resolve determines visibilities of their
         // constructor using these field visibilities before attributes on them are expanded.
         // The assumption is that the attribute expansion cannot change field visibilities,
@@ -522,7 +522,7 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                 progress = false;
                 if force && self.monotonic {
                     self.cx.dcx().span_delayed_bug(
-                        invocations.last().expect("invariant: invocations is non-empty in force mode").0.span(), // tRust: unwrap -> expect
+                        invocations.last().unwrap().0.span(),
                         "expansion entered force mode without producing any errors",
                     );
                 }
@@ -570,7 +570,7 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                             derives
                                 .into_iter()
                                 .map(|DeriveResolution { path, item, exts: _, is_const }| {
-                                    // tRust: known issue —: Consider using the derive resolutions (`_exts`)
+                                    // FIXME: Consider using the derive resolutions (`_exts`)
                                     // instead of enqueuing the derives to be resolved again later.
                                     // Note that this can result in duplicate diagnostics.
                                     let expn_id = LocalExpnId::fresh_empty();
@@ -793,7 +793,7 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                     self.gate_proc_macro_input(&item);
                     self.gate_proc_macro_attr_item(span, &item);
                     let tokens = match &item {
-                        // tRust: known issue —: Collect tokens and use them instead of generating
+                        // FIXME: Collect tokens and use them instead of generating
                         // fake ones. These are unstable, so it needs to be
                         // fixed prior to stabilization
                         // Fake tokens when we are invoking an inner attribute, and
@@ -819,10 +819,10 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                     };
                     let attr_item = attr.get_normal_item();
                     let safety = attr_item.unsafety;
-                    if let AttrArgs::Eq { .. } = attr_item.args.unparsed_ref().expect("invariant: proc macro attr args are always unparsed") { // tRust: unwrap -> expect
+                    if let AttrArgs::Eq { .. } = attr_item.args.unparsed_ref().unwrap() {
                         self.cx.dcx().emit_err(UnsupportedKeyValue { span });
                     }
-                    let inner_tokens = attr_item.args.unparsed_ref().expect("invariant: proc macro attr args are always unparsed").inner_tokens(); // tRust: unwrap -> expect
+                    let inner_tokens = attr_item.args.unparsed_ref().unwrap().inner_tokens();
                     match expander.expand_with_safety(self.cx, safety, span, inner_tokens, tokens) {
                         Ok(tok_result) => {
                             let fragment = self.parse_ast_fragment(
@@ -879,7 +879,7 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                                         span,
                                         &meta.path,
                                         &attr,
-                                        item_clone.expect("invariant: item_clone is set when derive_invocations is non-empty"), // tRust: unwrap -> expect
+                                        item_clone.unwrap(),
                                         &fragment,
                                     );
                                 }
@@ -1820,7 +1820,7 @@ impl InvocationCollectorNode for ast::Ty {
         // Save the pre-expanded name of this `ImplTrait`, so that later when defining
         // an APIT we use a name that doesn't have any placeholder fragments in it.
         if let ast::TyKind::ImplTrait(..) = self.kind {
-            // tRust: known issue —: pprust breaks strings with newlines when the type
+            // HACK: pprust breaks strings with newlines when the type
             // gets too long. We don't want these to show up in compiler
             // output or built artifacts, so replace them here...
             // Perhaps we should instead format APITs more robustly.
@@ -2192,7 +2192,7 @@ impl<'a, 'b> InvocationCollector<'a, 'b> {
             } else if rustc_attr_parsing::is_builtin_attr(attr)
                 && !AttributeParser::<Early>::is_parsed_attribute(&attr.path())
             {
-                let attr_name = attr.name().expect("invariant: builtin attrs always have a name"); // tRust: unwrap -> expect
+                let attr_name = attr.name().unwrap();
                 self.cx.sess.psess.buffer_lint(
                     UNUSED_ATTRIBUTES,
                     attr.span,
@@ -2456,7 +2456,7 @@ impl<'a, 'b> MutVisitor for InvocationCollector<'a, 'b> {
     }
 
     fn flat_map_stmt(&mut self, node: ast::Stmt) -> SmallVec<[ast::Stmt; 1]> {
-        // tRust: known issue —: invocations in semicolon-less expressions positions are expanded as expressions,
+        // FIXME: invocations in semicolon-less expressions positions are expanded as expressions,
         // changing that requires some compatibility measures.
         if node.is_expr() {
             // The only way that we can end up with a `MacCall` expression statement,
@@ -2497,7 +2497,7 @@ impl<'a, 'b> MutVisitor for InvocationCollector<'a, 'b> {
     }
 
     fn visit_expr(&mut self, node: &mut ast::Expr) {
-        // tRust: known issue —: Feature gating is performed inconsistently between `Expr` and `OptExpr`.
+        // FIXME: Feature gating is performed inconsistently between `Expr` and `OptExpr`.
         if let Some(attr) = node.attrs.first() {
             self.cfg().maybe_emit_expr_attr_err(attr);
         }
@@ -2548,7 +2548,7 @@ impl ExpansionConfig<'_> {
         ExpansionConfig {
             crate_name,
             features,
-            // tRust: known issue — should this limit be configurable?
+            // FIXME should this limit be configurable?
             recursion_limit: Limit::new(1024),
             trace_mac: false,
             should_test: false,

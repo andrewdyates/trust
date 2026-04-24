@@ -7,7 +7,6 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-#[cfg(test)]
 use std::path::Path;
 
 /// Extracted context from a function's source code.
@@ -31,7 +30,6 @@ pub struct SourceContext {
 ///
 /// Returns `None` if the file cannot be read or the function is not found.
 /// Used only in tests (proposer, llm_inference, spec_feedback_loop).
-#[cfg(test)]
 #[must_use]
 pub fn read_function(path: impl AsRef<Path>, function_name: &str) -> Option<SourceContext> {
     let source = std::fs::read_to_string(path.as_ref()).ok()?;
@@ -42,21 +40,15 @@ pub fn read_function(path: impl AsRef<Path>, function_name: &str) -> Option<Sour
 ///
 /// Finds `fn <name>(` and extracts the full function including body.
 /// Used only in tests (proposer, llm_inference, spec_feedback_loop).
-#[cfg(test)]
 #[must_use]
 pub fn extract_function(source: &str, function_name: &str) -> Option<SourceContext> {
     // Find the function declaration: `fn function_name(` or `fn function_name<`
     let needle_paren = format!("fn {function_name}(");
     let needle_generic = format!("fn {function_name}<");
-    let fn_start = source
-        .find(&needle_paren)
-        .or_else(|| source.find(&needle_generic))?;
+    let fn_start = source.find(&needle_paren).or_else(|| source.find(&needle_generic))?;
 
     // Walk backward to find any attributes or visibility modifiers on this line
-    let decl_start = source[..fn_start]
-        .rfind('\n')
-        .map(|pos| pos + 1)
-        .unwrap_or(0);
+    let decl_start = source[..fn_start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
 
     // Extract the signature: everything from fn_start to the opening brace
     let after_fn = &source[fn_start..];
@@ -92,7 +84,6 @@ pub fn extract_function(source: &str, function_name: &str) -> Option<SourceConte
 ///
 /// Handles `fn name(a: usize, b: usize) -> usize` and
 /// `fn name(arr: &[i32], target: i32) -> Option<usize>`.
-#[cfg(test)]
 fn extract_params(signature: &str) -> Vec<(String, String)> {
     // Find the parameter list between the first `(` and its matching `)`
     let open = match signature.find('(') {
@@ -127,18 +118,14 @@ fn extract_params(signature: &str) -> Vec<(String, String)> {
 }
 
 /// Extract the return type from a function signature, if present.
-#[cfg(test)]
 fn extract_return_type(signature: &str) -> Option<String> {
     // Find `) -> Type` pattern
     let close_paren = signature.rfind(')')?;
     let after_close = signature[close_paren + 1..].trim();
-    after_close
-        .strip_prefix("->")
-        .map(|rest| rest.trim().to_string())
+    after_close.strip_prefix("->").map(|rest| rest.trim().to_string())
 }
 
 /// Find the position of the matching closing brace for an opening brace at position 0.
-#[cfg(test)]
 fn find_matching_brace(s: &str) -> Option<usize> {
     let mut depth = 0;
     let mut in_string = false;
@@ -211,7 +198,6 @@ fn find_matching_brace(s: &str) -> Option<usize> {
 }
 
 /// Find the position of the matching closing paren for an opening paren at position 0.
-#[cfg(test)]
 fn find_matching_paren(s: &str) -> Option<usize> {
     let mut depth = 0;
     for (i, ch) in s.chars().enumerate() {
@@ -230,7 +216,6 @@ fn find_matching_paren(s: &str) -> Option<usize> {
 }
 
 /// Split parameter string by commas, respecting nested `<>`, `()`, `[]`.
-#[cfg(test)]
 fn split_params(s: &str) -> Vec<String> {
     let mut result = Vec::new();
     let mut current = String::new();
@@ -303,17 +288,11 @@ fn find_array_for_index(body: &str, index_name: &str) -> Option<String> {
     // Walk backward from `[` to find the identifier
     let before = &body[..pos];
     let ident_end = before.len();
-    let ident_start = before
-        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-        .map(|p| p + 1)
-        .unwrap_or(0);
+    let ident_start =
+        before.rfind(|c: char| !c.is_alphanumeric() && c != '_').map(|p| p + 1).unwrap_or(0);
 
     let ident = &before[ident_start..ident_end];
-    if ident.is_empty() {
-        None
-    } else {
-        Some(ident.to_string())
-    }
+    if ident.is_empty() { None } else { Some(ident.to_string()) }
 }
 
 /// Find parameter pairs involved in arithmetic operations that could overflow.
@@ -348,10 +327,8 @@ pub fn find_arithmetic_operands(ctx: &SourceContext) -> Vec<(String, String, cha
 /// Extract the trailing identifier from a string.
 fn extract_trailing_ident(s: &str) -> Option<String> {
     let trimmed = s.trim_end();
-    let start = trimmed
-        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-        .map(|p| p + 1)
-        .unwrap_or(0);
+    let start =
+        trimmed.rfind(|c: char| !c.is_alphanumeric() && c != '_').map(|p| p + 1).unwrap_or(0);
     let ident = &trimmed[start..];
     if ident.is_empty() { None } else { Some(ident.to_string()) }
 }
@@ -359,9 +336,7 @@ fn extract_trailing_ident(s: &str) -> Option<String> {
 /// Extract the leading identifier from a string.
 fn extract_leading_ident(s: &str) -> Option<String> {
     let trimmed = s.trim_start();
-    let end = trimmed
-        .find(|c: char| !c.is_alphanumeric() && c != '_')
-        .unwrap_or(trimmed.len());
+    let end = trimmed.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(trimmed.len());
     let ident = &trimmed[..end];
     if ident.is_empty() { None } else { Some(ident.to_string()) }
 }
@@ -405,8 +380,8 @@ mod tests {
 
     #[test]
     fn test_extract_midpoint_function() {
-        let ctx = extract_function(MIDPOINT_SOURCE, "get_midpoint")
-            .expect("should extract get_midpoint");
+        let ctx =
+            extract_function(MIDPOINT_SOURCE, "get_midpoint").expect("should extract get_midpoint");
         assert_eq!(ctx.function_name, "get_midpoint");
         assert_eq!(ctx.params.len(), 2);
         assert_eq!(ctx.params[0], ("a".to_string(), "usize".to_string()));
@@ -429,8 +404,8 @@ mod tests {
 
     #[test]
     fn test_extract_divide_function() {
-        let ctx = extract_function(DIVIDE_SOURCE, "safe_divide")
-            .expect("should extract safe_divide");
+        let ctx =
+            extract_function(DIVIDE_SOURCE, "safe_divide").expect("should extract safe_divide");
         assert_eq!(ctx.params.len(), 2);
         assert_eq!(ctx.params[0], ("x".to_string(), "u64".to_string()));
         assert_eq!(ctx.params[1], ("y".to_string(), "u64".to_string()));
@@ -439,8 +414,8 @@ mod tests {
 
     #[test]
     fn test_extract_indexed_function() {
-        let ctx = extract_function(INDEXED_SOURCE, "get_element")
-            .expect("should extract get_element");
+        let ctx =
+            extract_function(INDEXED_SOURCE, "get_element").expect("should extract get_element");
         assert_eq!(ctx.params.len(), 2);
         assert_eq!(ctx.params[0], ("arr".to_string(), "&[i32]".to_string()));
         assert_eq!(ctx.params[1], ("i".to_string(), "usize".to_string()));
@@ -509,8 +484,8 @@ mod tests {
             // Skip gracefully if examples dir not accessible from test runner
             return;
         }
-        let ctx = read_function(path, "get_midpoint")
-            .expect("should read get_midpoint from midpoint.rs");
+        let ctx =
+            read_function(path, "get_midpoint").expect("should read get_midpoint from midpoint.rs");
         assert_eq!(ctx.function_name, "get_midpoint");
         assert_eq!(ctx.params.len(), 2);
         assert_eq!(ctx.params[0].0, "a");
@@ -598,7 +573,8 @@ fn second(b: i32) -> i32 {
 
     #[test]
     fn test_extract_params_with_nested_generics() {
-        let source = "fn complex(map: HashMap<String, Vec<u8>>, count: usize) -> bool {\n    true\n}";
+        let source =
+            "fn complex(map: HashMap<String, Vec<u8>>, count: usize) -> bool {\n    true\n}";
         let ctx = extract_function(source, "complex").expect("should parse complex params");
         assert_eq!(ctx.params.len(), 2);
         assert_eq!(ctx.params[0].0, "map");

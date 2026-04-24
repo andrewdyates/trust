@@ -82,10 +82,7 @@ pub struct ReplayConfig {
 
 impl Default for ReplayConfig {
     fn default() -> Self {
-        Self {
-            depth_limit: 1000,
-            entry_block: 0,
-        }
+        Self { depth_limit: 1000, entry_block: 0 }
     }
 }
 
@@ -109,10 +106,7 @@ pub fn replay_counterexample(
         return Err(ReplayError::NoBlocks);
     }
     if config.entry_block >= blocks.len() {
-        return Err(ReplayError::BlockOutOfRange(
-            config.entry_block,
-            blocks.len(),
-        ));
+        return Err(ReplayError::BlockOutOfRange(config.entry_block, blocks.len()));
     }
 
     // Initialize the symbolic executor with concrete values from the counterexample.
@@ -260,11 +254,7 @@ fn confirm_or_spurious(
         })
     } else {
         let path_formula = path.to_formula();
-        ReplayResult::Spurious(UnsatPath {
-            path,
-            partial_trace: trace,
-            path_formula,
-        })
+        ReplayResult::Spurious(UnsatPath { path, partial_trace: trace, path_formula })
     }
 }
 
@@ -286,8 +276,10 @@ fn all_constraints_concrete_true(state: &SymbolicState, path: &PathConstraint) -
 
 #[cfg(test)]
 mod tests {
-    use trust_types::{BlockId, ConstValue, Operand, Place, Rvalue, SourceSpan, Statement,
-                      Terminator, VcKind, BinOp};
+    use trust_types::{
+        BinOp, BlockId, ConstValue, Operand, Place, Rvalue, SourceSpan, Statement, Terminator,
+        VcKind,
+    };
 
     use super::*;
 
@@ -298,7 +290,7 @@ mod tests {
     fn simple_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: span(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -308,21 +300,17 @@ mod tests {
     #[test]
     fn test_replay_real_bug_straight_line() {
         // A straight-line function: assign x = 42, then return.
-        let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![Statement::Assign {
-                    place: Place::local(1),
-                    rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(42))),
-                    span: span(),
-                }],
-                terminator: Terminator::Return,
-            },
-        ];
+        let blocks = vec![BasicBlock {
+            id: BlockId(0),
+            stmts: vec![Statement::Assign {
+                place: Place::local(1),
+                rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(42))),
+                span: span(),
+            }],
+            terminator: Terminator::Return,
+        }];
 
-        let cex = Counterexample::new(vec![
-            ("_local0".into(), CounterexampleValue::Int(0)),
-        ]);
+        let cex = Counterexample::new(vec![("_local0".into(), CounterexampleValue::Int(0))]);
 
         let result = replay_counterexample(&cex, &simple_vc(), &blocks, &ReplayConfig::default())
             .expect("replay should succeed");
@@ -350,22 +338,12 @@ mod tests {
                     span: span(),
                 },
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
         ];
 
         // Counterexample says _local0 = 1, so we should take the true branch.
-        let cex = Counterexample::new(vec![
-            ("_local0".into(), CounterexampleValue::Int(1)),
-        ]);
+        let cex = Counterexample::new(vec![("_local0".into(), CounterexampleValue::Int(1))]);
 
         let result = replay_counterexample(&cex, &simple_vc(), &blocks, &ReplayConfig::default())
             .expect("replay should succeed");
@@ -383,16 +361,8 @@ mod tests {
     fn test_replay_spurious_unreachable() {
         // Function where block 1 is unreachable.
         let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Unreachable,
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Unreachable },
         ];
 
         let cex = Counterexample::new(vec![]);
@@ -417,16 +387,10 @@ mod tests {
 
     #[test]
     fn test_replay_error_entry_out_of_range() {
-        let blocks = vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }];
+        let blocks =
+            vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }];
         let cex = Counterexample::new(vec![]);
-        let config = ReplayConfig {
-            entry_block: 5,
-            ..ReplayConfig::default()
-        };
+        let config = ReplayConfig { entry_block: 5, ..ReplayConfig::default() };
         let result = replay_counterexample(&cex, &simple_vc(), &blocks, &config);
         assert!(matches!(result, Err(ReplayError::BlockOutOfRange(5, 1))));
     }
@@ -435,22 +399,11 @@ mod tests {
     fn test_replay_depth_limit() {
         // Infinite loop: block 0 -> block 1 -> block 0.
         let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(0)),
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Goto(BlockId(0)) },
         ];
         let cex = Counterexample::new(vec![]);
-        let config = ReplayConfig {
-            depth_limit: 3,
-            ..ReplayConfig::default()
-        };
+        let config = ReplayConfig { depth_limit: 3, ..ReplayConfig::default() };
         let result = replay_counterexample(&cex, &simple_vc(), &blocks, &config);
         assert!(matches!(result, Err(ReplayError::DepthLimitExceeded(_))));
     }
@@ -491,11 +444,7 @@ mod tests {
                 }],
                 terminator: Terminator::Goto(BlockId(1)),
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
         ];
 
         let cex = Counterexample::new(vec![
@@ -523,13 +472,8 @@ mod tests {
     #[test]
     fn test_unsat_path_has_formula() {
         // Path that hits unreachable should produce a formula for CEGAR.
-        let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Unreachable,
-            },
-        ];
+        let blocks =
+            vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Unreachable }];
         let cex = Counterexample::new(vec![]);
         let result = replay_counterexample(&cex, &simple_vc(), &blocks, &ReplayConfig::default())
             .expect("replay should succeed");

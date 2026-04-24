@@ -52,7 +52,6 @@ fn skeleton_string<'tcx>(
                 // `u128` should definitely be able to hold the size of different architectures
                 // larger sizes should be reported as error `are too big for the target architecture`
                 // otherwise we have a bug somewhere
-                // tRust: invariant — target layout sizes are bounded well below `u128::MAX`, so converting bytes to bits cannot overflow `u128`
                 bug!("{:?} overflow for u128", size)
             }
         }

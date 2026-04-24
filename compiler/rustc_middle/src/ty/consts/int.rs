@@ -64,7 +64,6 @@ impl std::fmt::Debug for ConstInt {
                     (4, _) => write!(fmt, "i32::MIN"),
                     (8, _) => write!(fmt, "i64::MIN"),
                     (16, _) => write!(fmt, "i128::MIN"),
-                    // tRust: invariant: ConstInt 0x<...> with size = <...> and signed = <...>
                     _ => bug!("ConstInt 0x{:x} with size = {} and signed = {}", raw, size, signed),
                 }
             } else if raw == max {
@@ -75,7 +74,6 @@ impl std::fmt::Debug for ConstInt {
                     (4, _) => write!(fmt, "i32::MAX"),
                     (8, _) => write!(fmt, "i64::MAX"),
                     (16, _) => write!(fmt, "i128::MAX"),
-                    // tRust: invariant: ConstInt 0x<...> with size = <...> and signed = <...>
                     _ => bug!("ConstInt 0x{:x} with size = {} and signed = {}", raw, size, signed),
                 }
             } else {
@@ -85,7 +83,6 @@ impl std::fmt::Debug for ConstInt {
                     4 => write!(fmt, "{}", raw as i32)?,
                     8 => write!(fmt, "{}", raw as i64)?,
                     16 => write!(fmt, "{}", raw as i128)?,
-                    // tRust: invariant: ConstInt 0x<...> with size = <...> and signed = <...>
                     _ => bug!("ConstInt 0x{:x} with size = {} and signed = {}", raw, size, signed),
                 }
                 if fmt.alternate() {
@@ -96,7 +93,6 @@ impl std::fmt::Debug for ConstInt {
                         (4, _) => write!(fmt, "_i32")?,
                         (8, _) => write!(fmt, "_i64")?,
                         (16, _) => write!(fmt, "_i128")?,
-                        // tRust: invariant: unexpected int size i<...>
                         (sz, _) => bug!("unexpected int size i{sz}"),
                     }
                 }
@@ -112,7 +108,6 @@ impl std::fmt::Debug for ConstInt {
                     (4, _) => write!(fmt, "u32::MAX"),
                     (8, _) => write!(fmt, "u64::MAX"),
                     (16, _) => write!(fmt, "u128::MAX"),
-                    // tRust: invariant: ConstInt 0x<...> with size = <...> and signed = <...>
                     _ => bug!("ConstInt 0x{:x} with size = {} and signed = {}", raw, size, signed),
                 }
             } else {
@@ -122,7 +117,6 @@ impl std::fmt::Debug for ConstInt {
                     4 => write!(fmt, "{}", raw as u32)?,
                     8 => write!(fmt, "{}", raw as u64)?,
                     16 => write!(fmt, "{}", raw as u128)?,
-                    // tRust: invariant: ConstInt 0x<...> with size = <...> and signed = <...>
                     _ => bug!("ConstInt 0x{:x} with size = {} and signed = {}", raw, size, signed),
                 }
                 if fmt.alternate() {
@@ -133,7 +127,6 @@ impl std::fmt::Debug for ConstInt {
                         (4, _) => write!(fmt, "_u32")?,
                         (8, _) => write!(fmt, "_u64")?,
                         (16, _) => write!(fmt, "_u128")?,
-                        // tRust: invariant: unexpected unsigned int size u<...>
                         (sz, _) => bug!("unexpected unsigned int size u{sz}"),
                     }
                 }
@@ -182,16 +175,16 @@ impl<D: Decoder> Decodable<D> for ScalarInt {
         let mut data = [0u8; 16];
         let size = d.read_u8();
         data[..size as usize].copy_from_slice(d.read_raw_bytes(size as usize));
-        ScalarInt { data: u128::from_le_bytes(data), size: NonZero::new(size).expect("invariant: value is non-zero") }
+        ScalarInt { data: u128::from_le_bytes(data), size: NonZero::new(size).unwrap() }
     }
 }
 
 impl ScalarInt {
-    pub const TRUE: ScalarInt = ScalarInt { data: 1_u128, size: NonZero::new(1).expect("invariant: value is non-zero") };
-    pub const FALSE: ScalarInt = ScalarInt { data: 0_u128, size: NonZero::new(1).expect("invariant: value is non-zero") };
+    pub const TRUE: ScalarInt = ScalarInt { data: 1_u128, size: NonZero::new(1).unwrap() };
+    pub const FALSE: ScalarInt = ScalarInt { data: 0_u128, size: NonZero::new(1).unwrap() };
 
     fn raw(data: u128, size: Size) -> Self {
-        Self { data, size: NonZero::new(size.bytes() as u8).expect("invariant: value is non-zero") }
+        Self { data, size: NonZero::new(size.bytes() as u8).unwrap() }
     }
 
     #[inline]
@@ -268,6 +261,7 @@ impl ScalarInt {
     /// so the interpreter will generally use this `try` method.
     #[inline]
     pub fn try_to_bits(self, target_size: Size) -> Result<u128, Size> {
+        assert_ne!(target_size.bytes(), 0, "you should never look at the bits of a ZST");
         if target_size.bytes() == u64::from(self.size.get()) {
             self.check_data();
             Ok(self.data)
@@ -279,7 +273,6 @@ impl ScalarInt {
     #[inline]
     pub fn to_bits(self, target_size: Size) -> u128 {
         self.try_to_bits(target_size).unwrap_or_else(|size| {
-            // tRust: invariant: expected value must exist: expected int of size {}, but got size {}
             bug!("expected int of size {}, but got size {}", target_size.bytes(), size.bytes())
         })
     }
@@ -302,28 +295,28 @@ impl ScalarInt {
     /// Panics if the `size` of the `ScalarInt`in not equal to 1 byte.
     #[inline]
     pub fn to_u8(self) -> u8 {
-        self.to_uint(Size::from_bits(8)).try_into().expect("invariant: value fits in target type")
+        self.to_uint(Size::from_bits(8)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to `u16`.
     /// Panics if the size of the `ScalarInt` in not equal to 2 bytes.
     #[inline]
     pub fn to_u16(self) -> u16 {
-        self.to_uint(Size::from_bits(16)).try_into().expect("invariant: value fits in target type")
+        self.to_uint(Size::from_bits(16)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to `u32`.
     /// Panics if the `size` of the `ScalarInt` in not equal to 4 bytes.
     #[inline]
     pub fn to_u32(self) -> u32 {
-        self.to_uint(Size::from_bits(32)).try_into().expect("invariant: value fits in target type")
+        self.to_uint(Size::from_bits(32)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to `u64`.
     /// Panics if the `size` of the `ScalarInt` in not equal to 8 bytes.
     #[inline]
     pub fn to_u64(self) -> u64 {
-        self.to_uint(Size::from_bits(64)).try_into().expect("invariant: value fits in target type")
+        self.to_uint(Size::from_bits(64)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to `u128`.
@@ -335,7 +328,7 @@ impl ScalarInt {
 
     #[inline]
     pub fn to_target_usize(&self, tcx: TyCtxt<'_>) -> u64 {
-        self.to_uint(tcx.data_layout.pointer_size()).try_into().expect("invariant: value fits in target type")
+        self.to_uint(tcx.data_layout.pointer_size()).try_into().unwrap()
     }
 
     #[inline]
@@ -395,25 +388,25 @@ impl ScalarInt {
     /// Converts the `ScalarInt` to i8.
     /// Panics if the size of the `ScalarInt` is not equal to 1 byte.
     pub fn to_i8(self) -> i8 {
-        self.to_int(Size::from_bits(8)).try_into().expect("invariant: value fits in target type")
+        self.to_int(Size::from_bits(8)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to i16.
     /// Panics if the size of the `ScalarInt` is not equal to 2 bytes.
     pub fn to_i16(self) -> i16 {
-        self.to_int(Size::from_bits(16)).try_into().expect("invariant: value fits in target type")
+        self.to_int(Size::from_bits(16)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to i32.
     /// Panics if the size of the `ScalarInt` is not equal to 4 bytes.
     pub fn to_i32(self) -> i32 {
-        self.to_int(Size::from_bits(32)).try_into().expect("invariant: value fits in target type")
+        self.to_int(Size::from_bits(32)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to i64.
     /// Panics if the size of the `ScalarInt` is not equal to 8 bytes.
     pub fn to_i64(self) -> i64 {
-        self.to_int(Size::from_bits(64)).try_into().expect("invariant: value fits in target type")
+        self.to_int(Size::from_bits(64)).try_into().unwrap()
     }
 
     /// Converts the `ScalarInt` to i128.
@@ -424,7 +417,7 @@ impl ScalarInt {
 
     #[inline]
     pub fn to_target_isize(&self, tcx: TyCtxt<'_>) -> i64 {
-        self.to_int(tcx.data_layout.pointer_size()).try_into().expect("invariant: value fits in target type")
+        self.to_int(tcx.data_layout.pointer_size()).try_into().unwrap()
     }
 
     #[inline]
@@ -462,7 +455,7 @@ macro_rules! from_x_for_scalar_int {
                 fn from(u: $ty) -> Self {
                     Self {
                         data: u128::from(u),
-                        size: NonZero::new(size_of::<$ty>() as u8).expect("invariant: value is non-zero"),
+                        size: NonZero::new(size_of::<$ty>() as u8).unwrap(),
                     }
                 }
             }
@@ -479,7 +472,7 @@ macro_rules! from_scalar_int_for_x {
                     // The `unwrap` cannot fail because to_uint (if it succeeds)
                     // is guaranteed to return a value that fits into the size.
                     int.to_uint(Size::from_bytes(size_of::<$ty>()))
-                       .try_into().expect("invariant: value fits in target type")
+                       .try_into().unwrap()
                 }
             }
         )*
@@ -512,7 +505,7 @@ macro_rules! from_x_for_scalar_int_signed {
                 fn from(u: $ty) -> Self {
                     Self {
                         data: u128::from(u.cast_unsigned()), // go via the unsigned type of the same size
-                        size: NonZero::new(size_of::<$ty>() as u8).expect("invariant: value is non-zero"),
+                        size: NonZero::new(size_of::<$ty>() as u8).unwrap(),
                     }
                 }
             }
@@ -529,7 +522,7 @@ macro_rules! from_scalar_int_for_x_signed {
                     // The `unwrap` cannot fail because to_int (if it succeeds)
                     // is guaranteed to return a value that fits into the size.
                     int.to_int(Size::from_bytes(size_of::<$ty>()))
-                       .try_into().expect("invariant: value fits in target type")
+                       .try_into().unwrap()
                 }
             }
         )*
@@ -567,7 +560,7 @@ impl From<Half> for ScalarInt {
     #[inline]
     fn from(f: Half) -> Self {
         // We trust apfloat to give us properly truncated data.
-        Self { data: f.to_bits(), size: NonZero::new((Half::BITS / 8) as u8).expect("invariant: value is non-zero") }
+        Self { data: f.to_bits(), size: NonZero::new((Half::BITS / 8) as u8).unwrap() }
     }
 }
 
@@ -582,7 +575,7 @@ impl From<Single> for ScalarInt {
     #[inline]
     fn from(f: Single) -> Self {
         // We trust apfloat to give us properly truncated data.
-        Self { data: f.to_bits(), size: NonZero::new((Single::BITS / 8) as u8).expect("invariant: value is non-zero") }
+        Self { data: f.to_bits(), size: NonZero::new((Single::BITS / 8) as u8).unwrap() }
     }
 }
 
@@ -597,7 +590,7 @@ impl From<Double> for ScalarInt {
     #[inline]
     fn from(f: Double) -> Self {
         // We trust apfloat to give us properly truncated data.
-        Self { data: f.to_bits(), size: NonZero::new((Double::BITS / 8) as u8).expect("invariant: value is non-zero") }
+        Self { data: f.to_bits(), size: NonZero::new((Double::BITS / 8) as u8).unwrap() }
     }
 }
 
@@ -612,7 +605,7 @@ impl From<Quad> for ScalarInt {
     #[inline]
     fn from(f: Quad) -> Self {
         // We trust apfloat to give us properly truncated data.
-        Self { data: f.to_bits(), size: NonZero::new((Quad::BITS / 8) as u8).expect("invariant: value is non-zero") }
+        Self { data: f.to_bits(), size: NonZero::new((Quad::BITS / 8) as u8).unwrap() }
     }
 }
 

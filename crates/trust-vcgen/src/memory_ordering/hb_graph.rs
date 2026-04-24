@@ -6,8 +6,8 @@
 use trust_types::fx::FxHashMap;
 
 use trust_types::{
-    ConcurrencyPoint, HappensBeforeEdgeKind, VerifiableFunction,
-    detect_thread_joins, detect_thread_spawns,
+    ConcurrencyPoint, HappensBeforeEdgeKind, VerifiableFunction, detect_thread_joins,
+    detect_thread_spawns,
 };
 
 use super::checker::MemoryModelChecker;
@@ -157,10 +157,7 @@ impl MemoryModelChecker {
     ///
     /// This is Phase 2 of the memory ordering verification pipeline (#619).
     #[must_use]
-    pub fn build_happens_before(
-        &self,
-        functions: &[&VerifiableFunction],
-    ) -> HappensBeforeGraph {
+    pub fn build_happens_before(&self, functions: &[&VerifiableFunction]) -> HappensBeforeGraph {
         let mut graph = HappensBeforeGraph::new();
 
         // Phase 1: Add program-order edges within each function.
@@ -188,66 +185,45 @@ impl MemoryModelChecker {
             let joins = detect_thread_joins(func);
 
             for spawn in &spawns {
-                let spawn_point = ConcurrencyPoint::new(
-                    &spawn.caller_function,
-                    spawn.block,
-                    "main",
-                );
+                let spawn_point =
+                    ConcurrencyPoint::new(&spawn.caller_function, spawn.block, "main");
 
                 // Create a synthetic entry point for the spawned thread.
                 let child_thread_id = format!("spawned_at_bb{}", spawn.block.0);
-                let child_entry = ConcurrencyPoint::new(
-                    &spawn.caller_function,
-                    spawn.block,
-                    &child_thread_id,
-                );
+                let child_entry =
+                    ConcurrencyPoint::new(&spawn.caller_function, spawn.block, &child_thread_id);
 
                 graph.add_node(spawn_point.clone());
                 graph.add_node(child_entry.clone());
-                graph.add_edge(
-                    &spawn_point,
-                    &child_entry,
-                    HappensBeforeEdgeKind::Spawn,
-                );
+                graph.add_edge(&spawn_point, &child_entry, HappensBeforeEdgeKind::Spawn);
             }
 
             for join in &joins {
-                let join_point = ConcurrencyPoint::new(
-                    &join.caller_function,
-                    join.block,
-                    "main",
-                );
+                let join_point = ConcurrencyPoint::new(&join.caller_function, join.block, "main");
 
                 // Create a synthetic exit point for the joined thread.
                 // We match by handle_local back to the spawn site.
-                let child_thread_id = spawns.iter()
+                let child_thread_id = spawns
+                    .iter()
                     .find(|s| s.join_handle_local == Some(join.handle_local))
                     .map(|s| format!("spawned_at_bb{}", s.block.0))
                     .unwrap_or_else(|| format!("joined_at_bb{}", join.block.0));
 
-                let child_exit = ConcurrencyPoint::new(
-                    &join.caller_function,
-                    join.block,
-                    &child_thread_id,
-                );
+                let child_exit =
+                    ConcurrencyPoint::new(&join.caller_function, join.block, &child_thread_id);
 
                 graph.add_node(child_exit.clone());
                 graph.add_node(join_point.clone());
-                graph.add_edge(
-                    &child_exit,
-                    &join_point,
-                    HappensBeforeEdgeKind::Join,
-                );
+                graph.add_edge(&child_exit, &join_point, HappensBeforeEdgeKind::Join);
             }
         }
 
         // Phase 3: Add release-acquire sync edges from the atomic access log.
         let pairs = self.log.find_release_acquire_pairs();
         for (release_idx, acquire_idx) in pairs {
-            if let (Some(release), Some(acquire)) = (
-                self.log.entries().get(release_idx),
-                self.log.entries().get(acquire_idx),
-            ) {
+            if let (Some(release), Some(acquire)) =
+                (self.log.entries().get(release_idx), self.log.entries().get(acquire_idx))
+            {
                 // Create program points for the release and acquire entries.
                 // Thread ID comes from the entry itself.
                 let release_point = ConcurrencyPoint::new(
@@ -263,11 +239,7 @@ impl MemoryModelChecker {
 
                 graph.add_node(release_point.clone());
                 graph.add_node(acquire_point.clone());
-                graph.add_edge(
-                    &release_point,
-                    &acquire_point,
-                    HappensBeforeEdgeKind::SyncWith,
-                );
+                graph.add_edge(&release_point, &acquire_point, HappensBeforeEdgeKind::SyncWith);
             }
         }
 

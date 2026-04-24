@@ -262,7 +262,7 @@ fn sccs_info<'tcx>(infcx: &BorrowckInferCtxt<'tcx>, sccs: &ConstraintSccs) {
                 .into_iter()
                 .map(|reg_var_origin| reg_var_origin.1)
                 .max_by(|x, y| x.preference_value().cmp(&y.preference_value()))
-                .expect("invariant: SCC must have at least one region variable");
+                .unwrap();
 
             (ConstraintSccIndex::from_usize(scc_idx), repr)
         })
@@ -1396,7 +1396,6 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         to_region: RegionVid,
     ) -> Option<Vec<OutlivesConstraint<'tcx>>> {
         if from_region == to_region {
-            // tRust: invariant — region inference guarantee — region constraints must be satisfiable
             bug!("Tried to find a path between {from_region:?} and itself!");
         }
         self.constraint_path_to(from_region, |to| to == to_region, true).map(|o| o.0)
@@ -1506,7 +1505,6 @@ impl<'tcx> RegionInferenceContext<'tcx> {
                         }
 
                         Trace::NotVisited => {
-                            // tRust: invariant — type system guarantee
                             bug!("found unvisited region {:?} on path to {:?}", p, r)
                         }
                     }
@@ -1570,7 +1568,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         self.constraint_path_to(fr1, |r| {
             trace!(?r, liveness_constraints=?self.liveness_constraints.pretty_print_live_points(r));
             self.liveness_constraints.is_live_at(r, location)
-        }, true).expect("invariant: sub-region live at location must exist").1
+        }, true).unwrap().1
     }
 
     /// Get the region outlived by `longer_fr` and live at `element`.
@@ -1589,7 +1587,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
                     NllRegionVariableOrigin::Placeholder(p) if p == error_placeholder => Some(r),
                     _ => None,
                 })
-                .expect("invariant: placeholder region must have a corresponding NLL variable"),
+                .unwrap(),
         }
     }
 
@@ -1623,7 +1621,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
     ) -> (BlameConstraint<'tcx>, Vec<OutlivesConstraint<'tcx>>) {
         assert!(from_region != to_region, "Trying to blame a region for itself!");
 
-        let path = self.constraint_path_between_regions(from_region, to_region).expect("invariant: constraint path must exist between regions");
+        let path = self.constraint_path_between_regions(from_region, to_region).unwrap();
 
         // If we are passing through a constraint added because we reached an unnameable placeholder `'unnameable`,
         // redirect search towards `'unnameable`.
@@ -1641,7 +1639,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         {
             // We ignore the extra edges due to unnameable placeholders to get
             // an explanation that was present in the original constraint graph.
-            self.constraint_path_to(from_region, |r| r == unnameable, false).expect("invariant: constraint path to region must exist").0
+            self.constraint_path_to(from_region, |r| r == unnameable, false).unwrap().0
         } else {
             path
         };
@@ -1660,7 +1658,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
 
         // We try to avoid reporting a `ConstraintCategory::Predicate` as our best constraint.
         // Instead, we use it to produce an improved `ObligationCauseCode`.
-        // // NOTE: determine appropriate handling for multiple best-choice regions. if we encounter multiple
+        // FIXME - determine what we should do if we encounter multiple
         // `ConstraintCategory::Predicate` constraints. Currently, we just pick the first one.
         let cause_code = path
             .iter()
@@ -1745,7 +1743,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
                 ConstraintCategory::Return(_) => 0,
                 // Unsizing coercions are interesting, since we have a note for that:
                 // `BorrowExplanation::add_object_lifetime_default_note`.
-                // // NOTE(dianne): The note shouldn't depend on a coercion being blamed; see issue on a coercion being blamed; see issue
+                // FIXME(dianne): That note shouldn't depend on a coercion being blamed; see issue
                 // #131008 for an example of where we currently don't emit it but should.
                 // Once the note is handled properly, this case should be removed. Until then, it
                 // should be as limited as possible; the note is prone to false positives and this
@@ -1803,9 +1801,9 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         };
 
         let best_choice = if blame_source {
-            path.iter().enumerate().rev().min_by_key(|(_, c)| constraint_interest(c)).expect("invariant: constraint path must not be empty").0
+            path.iter().enumerate().rev().min_by_key(|(_, c)| constraint_interest(c)).unwrap().0
         } else {
-            path.iter().enumerate().min_by_key(|(_, c)| constraint_interest(c)).expect("invariant: constraint path must not be empty").0
+            path.iter().enumerate().min_by_key(|(_, c)| constraint_interest(c)).unwrap().0
         };
 
         debug!(?best_choice, ?blame_source);

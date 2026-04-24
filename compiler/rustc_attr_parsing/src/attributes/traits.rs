@@ -144,6 +144,6 @@ pub(crate) struct PointeeParser;
 impl<S: Stage> NoArgsAttributeParser<S> for PointeeParser {
     const PATH: &[Symbol] = &[sym::pointee];
     const ON_DUPLICATE: OnDuplicate<S> = OnDuplicate::Error;
-    const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS); //tRust: known issue — Still checked fully in `check_attr.rs`
+    const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS); //FIXME Still checked fully in `check_attr.rs`
     const CREATE: fn(Span) -> AttributeKind = AttributeKind::Pointee;
 }

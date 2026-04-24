@@ -272,8 +272,7 @@ impl<'tcx> MutVisitor<'tcx> for Merger<'tcx> {
 
     fn visit_statement(&mut self, statement: &mut Statement<'tcx>, location: Location) {
         match &statement.kind {
-            // NOTE: Storage statements are deleted for merged locals; merging storage
-            // ranges would be more precise but is not yet implemented.
+            // FIXME: Don't delete storage statements, but "merge" the storage ranges instead.
             StatementKind::StorageDead(local) | StatementKind::StorageLive(local)
                 if self.merged_locals.contains(*local) =>
             {
@@ -415,7 +414,7 @@ impl<'tcx> Visitor<'tcx> for FindAssignments<'_, 'tcx> {
             let src_ty = self.body.local_decls()[src].ty;
             let dest_ty = self.body.local_decls()[dest].ty;
             if src_ty != dest_ty {
-                // NOTE(#112651): Subtyping guard - skip when src and dest types differ.
+                // FIXME(#112651): This can be removed afterwards. Also update the module description.
                 trace!("skipped `{src:?} = {dest:?}` due to subtyping: {src_ty} != {dest_ty}");
                 return;
             }

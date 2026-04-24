@@ -688,7 +688,7 @@ impl<'tcx> fmt::Display for InvalidProgramInfo<'tcx> {
 #[derive(Debug)]
 pub enum UnsupportedOpInfo {
     /// Free-form case. Only for errors that are never caught! Used by Miri.
-    // tRust: known issue — still use translatable diagnostics
+    // FIXME still use translatable diagnostics
     Unsupported(String),
     /// Unsized local variables.
     UnsizedLocal,
@@ -1065,7 +1065,7 @@ impl<'tcx, T> InterpResult<'tcx, T> {
     #[inline]
     #[track_caller]
     pub fn unwrap(self) -> T {
-        self.disarm().expect("invariant: disarm returned a valid value")
+        self.disarm().unwrap()
     }
 
     #[inline]

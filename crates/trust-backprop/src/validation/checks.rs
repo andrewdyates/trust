@@ -180,9 +180,7 @@ pub(crate) fn check_no_new_warnings(original: &str, rewritten: &str) -> CheckRes
         CheckResult {
             check: ValidationCheck::NoNewWarnings,
             passed: false,
-            detail: format!(
-                "New warning patterns detected: {orig_warnings} -> {new_warnings}"
-            ),
+            detail: format!("New warning patterns detected: {orig_warnings} -> {new_warnings}"),
         }
     }
 }
@@ -274,19 +272,13 @@ pub(crate) fn check_type_consistency(rewritten: &str) -> CheckResult {
         CheckResult {
             check: ValidationCheck::TypeConsistency,
             passed: true,
-            detail: format!(
-                "All spec identifiers reference known parameters: {:?}",
-                param_names
-            ),
+            detail: format!("All spec identifiers reference known parameters: {:?}", param_names),
         }
     } else {
         CheckResult {
             check: ValidationCheck::TypeConsistency,
             passed: false,
-            detail: format!(
-                "Spec references unknown identifiers: {}",
-                unknown.join(", ")
-            ),
+            detail: format!("Spec references unknown identifiers: {}", unknown.join(", ")),
         }
     }
 }

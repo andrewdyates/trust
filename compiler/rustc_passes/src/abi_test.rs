@@ -82,7 +82,7 @@ fn dump_abi_of_fn_item(
             tcx.dcx().emit_err(AbiOf {
                 span: tcx.def_span(item_def_id),
                 fn_name,
-                // tRust: known issue — using the `Debug` impl here isn't ideal.
+                // FIXME: using the `Debug` impl here isn't ideal.
                 fn_abi: format!("{:#?}", abi),
             });
         }
@@ -122,7 +122,6 @@ fn dump_abi_of_fn_type(
     match attr_kind {
         RustcAbiAttrKind::Debug => {
             let ty::FnPtr(sig_tys, hdr) = ty.kind() else {
-                // tRust: invariant — rustc_abi(debug) on type alias requires function pointer type
                 span_bug!(
                     attr_span,
                     "`#[rustc_abi(debug)]` on a type alias requires function pointer type"
@@ -143,21 +142,18 @@ fn dump_abi_of_fn_type(
         }
         RustcAbiAttrKind::AssertEq => {
             let ty::Tuple(fields) = ty.kind() else {
-                // tRust: invariant — rustc_abi(assert_eq) on type alias requires a tuple type
                 span_bug!(
                     attr_span,
                     "`#[rustc_abi(assert_eq)]` on a type alias requires pair type"
                 );
             };
             let [field1, field2] = ***fields else {
-                // tRust: invariant — rustc_abi(assert_eq) tuple must contain exactly two elements
                 span_bug!(
                     attr_span,
                     "`#[rustc_abi(assert_eq)]` on a type alias requires pair type"
                 );
             };
             let ty::FnPtr(sig_tys1, hdr1) = field1.kind() else {
-                // tRust: invariant — first element of rustc_abi(assert_eq) pair must be a function pointer
                 span_bug!(
                     attr_span,
                     "`#[rustc_abi(assert_eq)]` on a type alias requires pair of function pointer types"
@@ -172,7 +168,6 @@ fn dump_abi_of_fn_type(
                 item_def_id,
             );
             let ty::FnPtr(sig_tys2, hdr2) = field2.kind() else {
-                // tRust: invariant — second element of rustc_abi(assert_eq) pair must be a function pointer
                 span_bug!(
                     attr_span,
                     "`#[rustc_abi(assert_eq)]` on a type alias requires pair of function pointer types"

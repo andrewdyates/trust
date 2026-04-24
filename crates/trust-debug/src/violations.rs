@@ -45,10 +45,7 @@ pub(crate) fn build_exploit_chains(violations: &[SecurityViolation]) -> Vec<Expl
         for write in &memory_writes {
             if overflow.function == write.function {
                 chains.push(ExploitChain {
-                    name: format!(
-                        "overflow-to-corruption in `{}`",
-                        overflow.function
-                    ),
+                    name: format!("overflow-to-corruption in `{}`", overflow.function),
                     severity: Severity::Critical,
                     violation_ids: vec![overflow.id.clone(), write.id.clone()],
                     description: format!(
@@ -84,10 +81,7 @@ pub(crate) fn build_exploit_chains(violations: &[SecurityViolation]) -> Vec<Expl
         for injection in &injections {
             if taint.function == injection.function {
                 chains.push(ExploitChain {
-                    name: format!(
-                        "taint-to-injection in `{}`",
-                        taint.function
-                    ),
+                    name: format!("taint-to-injection in `{}`", taint.function),
                     severity: Severity::Critical,
                     violation_ids: vec![taint.id.clone(), injection.id.clone()],
                     description: format!(
@@ -116,10 +110,7 @@ pub(crate) fn build_exploit_chains(violations: &[SecurityViolation]) -> Vec<Expl
         for write in &memory_writes {
             if bug.function == write.function {
                 chains.push(ExploitChain {
-                    name: format!(
-                        "lifetime-to-corruption in `{}`",
-                        bug.function
-                    ),
+                    name: format!("lifetime-to-corruption in `{}`", bug.function),
                     severity: Severity::Critical,
                     violation_ids: vec![bug.id.clone(), write.id.clone()],
                     description: format!(
@@ -141,10 +132,7 @@ pub(crate) fn build_exploit_chains(violations: &[SecurityViolation]) -> Vec<Expl
     for priv_v in &priv_esc {
         for injection in &injections {
             chains.push(ExploitChain {
-                name: format!(
-                    "injection-to-privilege-escalation via `{}`",
-                    injection.function
-                ),
+                name: format!("injection-to-privilege-escalation via `{}`", injection.function),
                 severity: Severity::Critical,
                 violation_ids: vec![injection.id.clone(), priv_v.id.clone()],
                 description: format!(
@@ -168,12 +156,12 @@ mod tests {
             id: id.to_string(),
             severity: Severity::Medium,
             kind,
-            function: func.to_string(),
+            function: func.into(),
             location: None,
             description: String::new(),
             flow_path: vec![],
             counterexample: None,
-            solver: "test".to_string(),
+            solver: "test".into(),
             time_ms: 0,
         }
     }
@@ -181,13 +169,19 @@ mod tests {
     #[test]
     fn test_overflow_to_corruption_chain() {
         let violations = vec![
-            make_violation("V1", "foo", SecurityViolationKind::ArithmeticOverflow {
-                operation: "Add".to_string(),
-            }),
-            make_violation("V2", "foo", SecurityViolationKind::BufferOverflow {
-                write_size: "n+1".to_string(),
-                buffer_size: "n".to_string(),
-            }),
+            make_violation(
+                "V1",
+                "foo",
+                SecurityViolationKind::ArithmeticOverflow { operation: "Add".to_string() },
+            ),
+            make_violation(
+                "V2",
+                "foo",
+                SecurityViolationKind::BufferOverflow {
+                    write_size: "n+1".to_string(),
+                    buffer_size: "n".to_string(),
+                },
+            ),
         ];
 
         let chains = build_exploit_chains(&violations);
@@ -199,14 +193,22 @@ mod tests {
     #[test]
     fn test_taint_to_injection_chain() {
         let violations = vec![
-            make_violation("V1", "handler", SecurityViolationKind::TaintFlow {
-                source: "user-input".to_string(),
-                sink: "db::query".to_string(),
-            }),
-            make_violation("V2", "handler", SecurityViolationKind::SqlInjection {
-                sink_func: "db::query".to_string(),
-                taint_source: "user-input".to_string(),
-            }),
+            make_violation(
+                "V1",
+                "handler",
+                SecurityViolationKind::TaintFlow {
+                    source: "user-input".to_string(),
+                    sink: "db::query".to_string(),
+                },
+            ),
+            make_violation(
+                "V2",
+                "handler",
+                SecurityViolationKind::SqlInjection {
+                    sink_func: "db::query".to_string(),
+                    taint_source: "user-input".to_string(),
+                },
+            ),
         ];
 
         let chains = build_exploit_chains(&violations);
@@ -217,13 +219,19 @@ mod tests {
     #[test]
     fn test_no_chain_across_functions() {
         let violations = vec![
-            make_violation("V1", "foo", SecurityViolationKind::ArithmeticOverflow {
-                operation: "Add".to_string(),
-            }),
-            make_violation("V2", "bar", SecurityViolationKind::BufferOverflow {
-                write_size: "n".to_string(),
-                buffer_size: "n".to_string(),
-            }),
+            make_violation(
+                "V1",
+                "foo",
+                SecurityViolationKind::ArithmeticOverflow { operation: "Add".to_string() },
+            ),
+            make_violation(
+                "V2",
+                "bar",
+                SecurityViolationKind::BufferOverflow {
+                    write_size: "n".to_string(),
+                    buffer_size: "n".to_string(),
+                },
+            ),
         ];
 
         let chains = build_exploit_chains(&violations);

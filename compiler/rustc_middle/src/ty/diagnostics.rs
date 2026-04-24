@@ -149,7 +149,7 @@ pub fn suggest_arbitrary_trait_bound<'tcx>(
     let mut constraint = trait_pred.to_string();
 
     if let Some((name, term)) = associated_ty {
-        // tRust: known issue — this case overlaps with code in TyCtxt::note_and_explain_type_err.
+        // FIXME: this case overlaps with code in TyCtxt::note_and_explain_type_err.
         // That should be extracted into a helper function.
         if let Some(stripped) = constraint.strip_suffix('>') {
             constraint = format!("{stripped}, {name} = {term}>");
@@ -473,7 +473,7 @@ pub fn suggest_constraining_type_params<'a>(
                 generics.tail_span_for_predicate_suggestion(),
                 post,
                 constraints.iter().fold(String::new(), |mut string, &(constraint, _, _)| {
-                    write!(string, ", {param_name}: {constraint}").expect("invariant: write to string/buffer succeeds");
+                    write!(string, ", {param_name}: {constraint}").unwrap();
                     string
                 }),
                 SuggestChangingConstraintsMessage::RestrictTypeFurther { ty: param_name },
@@ -537,14 +537,14 @@ pub fn suggest_constraining_type_params<'a>(
         }
     }
 
-    // tRust: known issue — remove the suggestions that are from derive, as the span is not correct
+    // FIXME: remove the suggestions that are from derive, as the span is not correct
     suggestions = suggestions
         .into_iter()
         .filter(|(span, _, _, _)| !span.in_derive_expansion())
         .collect::<Vec<_>>();
     let suggested = !suggestions.is_empty();
     if suggestions.len() == 1 {
-        let (span, post, suggestion, msg) = suggestions.pop().expect("invariant: collection is non-empty");
+        let (span, post, suggestion, msg) = suggestions.pop().unwrap();
         let msg = match msg {
             SuggestChangingConstraintsMessage::RestrictBoundFurther => {
                 format!("consider further restricting this bound")
@@ -647,7 +647,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for IsSuggestableVisitor<'tcx> {
                 return ControlFlow::Break(());
             }
 
-            // tRust: known issue — It would be nice to make this not use string manipulation,
+            // FIXME: It would be nice to make this not use string manipulation,
             // but it's pretty hard to do this, since `ty::ParamTy` is missing
             // sufficient info to determine if it is synthetic, and we don't
             // always have a convenient way of getting `ty::Generics` at the call
@@ -729,7 +729,7 @@ impl<'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for MakeSuggestableFolder<'tcx> {
                 }
             }
 
-            // tRust: known issue — It would be nice to make this not use string manipulation,
+            // FIXME: It would be nice to make this not use string manipulation,
             // but it's pretty hard to do this, since `ty::ParamTy` is missing
             // sufficient info to determine if it is synthetic, and we don't
             // always have a convenient way of getting `ty::Generics` at the call

@@ -19,7 +19,7 @@ pub(crate) fn target() -> Target {
             mcount: "\u{1}mcount".into(),
             cpu: "apple-m1".into(),
             max_atomic_width: Some(128),
-            // tRust: known issue — The leak sanitizer currently fails the tests, see #88132.
+            // FIXME: The leak sanitizer currently fails the tests, see #88132.
             supported_sanitizers: SanitizerSet::ADDRESS
                 | SanitizerSet::CFI
                 | SanitizerSet::THREAD

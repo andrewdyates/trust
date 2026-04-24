@@ -143,9 +143,7 @@ impl SpecMiner {
     /// Creates a new `SpecMiner` with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            min_confidence: 0.3,
-        }
+        Self { min_confidence: 0.3 }
     }
 
     /// Mine specifications from a slice of test cases.
@@ -157,10 +155,7 @@ impl SpecMiner {
         // Group tests by function under test
         let mut by_function: FxHashMap<&str, Vec<&TestCase>> = FxHashMap::default();
         for tc in tests {
-            by_function
-                .entry(&tc.function_under_test)
-                .or_default()
-                .push(tc);
+            by_function.entry(&tc.function_under_test).or_default().push(tc);
         }
 
         let mut specs = Vec::new();
@@ -214,16 +209,16 @@ impl SpecMiner {
 
         // Check for panic-expecting assertions => negated panic is a precondition
         for assertion in &test.assertions {
-            if assertion.kind == AssertionKind::Panics
-                && !assertion.expression.is_empty() {
-                    preconds.push(format!("!({})", assertion.expression));
-                }
+            if assertion.kind == AssertionKind::Panics && !assertion.expression.is_empty() {
+                preconds.push(format!("!({})", assertion.expression));
+            }
         }
 
         // Infer non-zero preconditions from inputs when test expects errors
-        let has_error_assertion = test.assertions.iter().any(|a| {
-            a.kind == AssertionKind::Panics || a.kind == AssertionKind::IsErr
-        });
+        let has_error_assertion = test
+            .assertions
+            .iter()
+            .any(|a| a.kind == AssertionKind::Panics || a.kind == AssertionKind::IsErr);
 
         if has_error_assertion {
             for (idx, input) in test.inputs.iter().enumerate() {
@@ -236,17 +231,21 @@ impl SpecMiner {
         // Infer positivity from input values
         for (idx, input) in test.inputs.iter().enumerate() {
             if let Some(val) = input.as_i64()
-                && val > 0 && !has_error_assertion {
-                    preconds.push(format!("param_{idx} > 0"));
-                }
+                && val > 0
+                && !has_error_assertion
+            {
+                preconds.push(format!("param_{idx} > 0"));
+            }
         }
 
         // Non-empty list preconditions
         for (idx, input) in test.inputs.iter().enumerate() {
             if let TestValue::List(items) = input
-                && !items.is_empty() && !has_error_assertion {
-                    preconds.push(format!("param_{idx}.len() > 0"));
-                }
+                && !items.is_empty()
+                && !has_error_assertion
+            {
+                preconds.push(format!("param_{idx}.len() > 0"));
+            }
         }
 
         preconds
@@ -264,11 +263,9 @@ impl SpecMiner {
 
         for assertion in &test.assertions {
             match &assertion.kind {
-                AssertionKind::Equality => {
+                AssertionKind::Equality if assertion.expression.contains("result") => {
                     // If expression mentions "result", it is a postcondition
-                    if assertion.expression.contains("result") {
-                        postconds.push(assertion.expression.clone());
-                    }
+                    postconds.push(assertion.expression.clone());
                 }
                 AssertionKind::IsOk => {
                     postconds.push("result.is_ok()".to_string());
@@ -282,20 +279,14 @@ impl SpecMiner {
                 AssertionKind::IsErr => {
                     postconds.push("result.is_err()".to_string());
                 }
-                AssertionKind::GreaterThan => {
-                    if assertion.expression.contains("result") {
-                        postconds.push(assertion.expression.clone());
-                    }
+                AssertionKind::GreaterThan if assertion.expression.contains("result") => {
+                    postconds.push(assertion.expression.clone());
                 }
-                AssertionKind::LessThan => {
-                    if assertion.expression.contains("result") {
-                        postconds.push(assertion.expression.clone());
-                    }
+                AssertionKind::LessThan if assertion.expression.contains("result") => {
+                    postconds.push(assertion.expression.clone());
                 }
-                AssertionKind::Contains => {
-                    if assertion.expression.contains("result") {
-                        postconds.push(assertion.expression.clone());
-                    }
+                AssertionKind::Contains if assertion.expression.contains("result") => {
+                    postconds.push(assertion.expression.clone());
                 }
                 _ => {}
             }
@@ -316,10 +307,7 @@ impl SpecMiner {
     pub fn generalize_specs(&self, specs: &[MinedSpec]) -> Vec<MinedSpec> {
         let mut by_function: FxHashMap<&str, Vec<&MinedSpec>> = FxHashMap::default();
         for spec in specs {
-            by_function
-                .entry(&spec.function_name)
-                .or_default()
-                .push(spec);
+            by_function.entry(&spec.function_name).or_default().push(spec);
         }
 
         let mut result = Vec::new();
@@ -361,9 +349,7 @@ impl SpecMiner {
 
             if has_general {
                 merged.postconditions.retain(|p| {
-                    !p.starts_with("result == ")
-                        || p.contains("param_")
-                        || p.contains("input")
+                    !p.starts_with("result == ") || p.contains("param_") || p.contains("input")
                 });
             }
 
@@ -459,19 +445,13 @@ pub fn merge_specs(a: &MinedSpec, b: &MinedSpec) -> Option<MinedSpec> {
 /// Format a `MinedSpec`'s preconditions as `#[requires("...")]` attributes.
 #[must_use]
 pub fn format_as_requires(spec: &MinedSpec) -> Vec<String> {
-    spec.preconditions
-        .iter()
-        .map(|pre| format!("#[requires(\"{pre}\")]"))
-        .collect()
+    spec.preconditions.iter().map(|pre| format!("#[requires(\"{pre}\")]")).collect()
 }
 
 /// Format a `MinedSpec`'s postconditions as `#[ensures("...")]` attributes.
 #[must_use]
 pub fn format_as_ensures(spec: &MinedSpec) -> Vec<String> {
-    spec.postconditions
-        .iter()
-        .map(|post| format!("#[ensures(\"{post}\")]"))
-        .collect()
+    spec.postconditions.iter().map(|post| format!("#[ensures(\"{post}\")]")).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -519,11 +499,7 @@ mod tests {
     }
 
     fn make_assertion(kind: AssertionKind, expr: &str, line: usize) -> MinedAssertion {
-        MinedAssertion {
-            kind,
-            expression: expr.to_string(),
-            line,
-        }
+        MinedAssertion { kind, expression: expr.to_string(), line }
     }
 
     // --- SpecMiner::new ---
@@ -552,11 +528,7 @@ mod tests {
             "double",
             vec![TestValue::Int(3)],
             Some(TestValue::Int(6)),
-            vec![make_assertion(
-                AssertionKind::Equality,
-                "result == 2 * x",
-                10,
-            )],
+            vec![make_assertion(AssertionKind::Equality, "result == 2 * x", 10)],
         )];
 
         let specs = miner.mine_from_tests(&tests);
@@ -601,22 +573,14 @@ mod tests {
                 "abs",
                 vec![TestValue::Int(5)],
                 Some(TestValue::Int(5)),
-                vec![make_assertion(
-                    AssertionKind::GreaterThan,
-                    "result >= 0",
-                    5,
-                )],
+                vec![make_assertion(AssertionKind::GreaterThan, "result >= 0", 5)],
             ),
             make_test_case(
                 "test_abs_negative",
                 "abs",
                 vec![TestValue::Int(-3)],
                 Some(TestValue::Int(3)),
-                vec![make_assertion(
-                    AssertionKind::GreaterThan,
-                    "result >= 0",
-                    5,
-                )],
+                vec![make_assertion(AssertionKind::GreaterThan, "result >= 0", 5)],
             ),
         ];
 
@@ -637,11 +601,7 @@ mod tests {
             "divide",
             vec![TestValue::Int(10), TestValue::Int(0)],
             None,
-            vec![make_assertion(
-                AssertionKind::Panics,
-                "division by zero",
-                15,
-            )],
+            vec![make_assertion(AssertionKind::Panics, "division by zero", 15)],
         );
 
         let preconds = miner.extract_preconditions(&tc);
@@ -690,11 +650,7 @@ mod tests {
             "identity",
             vec![TestValue::Int(42)],
             None,
-            vec![make_assertion(
-                AssertionKind::Equality,
-                "result == input",
-                10,
-            )],
+            vec![make_assertion(AssertionKind::Equality, "result == input", 10)],
         );
 
         let postconds = miner.extract_postconditions(&tc);
@@ -719,13 +675,8 @@ mod tests {
     #[test]
     fn test_extract_postconditions_from_expected_output() {
         let miner = SpecMiner::new();
-        let tc = make_test_case(
-            "test_constant",
-            "get_answer",
-            vec![],
-            Some(TestValue::Int(42)),
-            vec![],
-        );
+        let tc =
+            make_test_case("test_constant", "get_answer", vec![], Some(TestValue::Int(42)), vec![]);
 
         let postconds = miner.extract_postconditions(&tc);
         assert!(postconds.iter().any(|p| p == "result == 42"));
@@ -934,11 +885,7 @@ mod tests {
                 "divide",
                 vec![TestValue::Int(10), TestValue::Int(0)],
                 None,
-                vec![make_assertion(
-                    AssertionKind::Panics,
-                    "division by zero",
-                    12,
-                )],
+                vec![make_assertion(AssertionKind::Panics, "division by zero", 12)],
             ),
             make_test_case(
                 "test_divide_negative",
@@ -963,11 +910,7 @@ mod tests {
         );
 
         // Should have postconditions (from is_ok assertions and expected outputs)
-        assert!(
-            !div_spec.postconditions.is_empty(),
-            "should mine postconditions: {:?}",
-            div_spec,
-        );
+        assert!(!div_spec.postconditions.is_empty(), "should mine postconditions: {:?}", div_spec,);
 
         // Formatting should work
         let requires = format_as_requires(div_spec);

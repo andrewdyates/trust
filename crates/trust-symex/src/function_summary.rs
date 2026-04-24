@@ -23,10 +23,7 @@ use crate::state::SymbolicValue;
 #[non_exhaustive]
 pub enum SideEffect {
     /// The function writes to a memory region.
-    MemoryWrite {
-        region: MemoryRegion,
-        value: SymbolicValue,
-    },
+    MemoryWrite { region: MemoryRegion, value: SymbolicValue },
     /// The function returns a value.
     Return(SymbolicValue),
     /// The function may panic under the given condition.
@@ -87,18 +84,12 @@ impl FunctionSummary {
 
     /// Add a precondition.
     pub fn add_precondition(&mut self, param: impl Into<String>, constraint: SymbolicValue) {
-        self.preconditions.push(Precondition {
-            param: param.into(),
-            constraint,
-        });
+        self.preconditions.push(Precondition { param: param.into(), constraint });
     }
 
     /// Add a postcondition.
     pub fn add_postcondition(&mut self, name: impl Into<String>, constraint: SymbolicValue) {
-        self.postconditions.push(Postcondition {
-            name: name.into(),
-            constraint,
-        });
+        self.postconditions.push(Postcondition { name: name.into(), constraint });
     }
 
     /// Add a side effect.
@@ -112,13 +103,9 @@ impl FunctionSummary {
     /// Returns the return value side-effect, if any.
     #[must_use]
     pub fn return_value(&self) -> Option<&SymbolicValue> {
-        self.side_effects.iter().find_map(|e| {
-            if let SideEffect::Return(v) = e {
-                Some(v)
-            } else {
-                None
-            }
-        })
+        self.side_effects
+            .iter()
+            .find_map(|e| if let SideEffect::Return(v) = e { Some(v) } else { None })
     }
 
     /// Returns all panic conditions.
@@ -126,13 +113,7 @@ impl FunctionSummary {
     pub fn panic_conditions(&self) -> Vec<&SymbolicValue> {
         self.side_effects
             .iter()
-            .filter_map(|e| {
-                if let SideEffect::Panic(c) = e {
-                    Some(c)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|e| if let SideEffect::Panic(c) = e { Some(c) } else { None })
             .collect()
     }
 
@@ -176,11 +157,8 @@ pub fn apply_summary(
 ) -> AppliedSummary {
     let return_value = summary.return_value().map(|v| substitute(v, actuals));
 
-    let constraints = summary
-        .postconditions
-        .iter()
-        .map(|pc| substitute(&pc.constraint, actuals))
-        .collect();
+    let constraints =
+        summary.postconditions.iter().map(|pc| substitute(&pc.constraint, actuals)).collect();
 
     let memory_writes = summary
         .memory_writes()
@@ -188,18 +166,10 @@ pub fn apply_summary(
         .map(|(region, value)| (region.clone(), substitute(value, actuals)))
         .collect();
 
-    let panic_conditions = summary
-        .panic_conditions()
-        .into_iter()
-        .map(|c| substitute(c, actuals))
-        .collect();
+    let panic_conditions =
+        summary.panic_conditions().into_iter().map(|c| substitute(c, actuals)).collect();
 
-    AppliedSummary {
-        return_value,
-        constraints,
-        memory_writes,
-        panic_conditions,
-    }
+    AppliedSummary { return_value, constraints, memory_writes, panic_conditions }
 }
 
 /// Substitute symbols in a value according to the given mapping.
@@ -213,28 +183,20 @@ pub fn substitute(
 ) -> SymbolicValue {
     match value {
         SymbolicValue::Concrete(_) => value.clone(),
-        SymbolicValue::Symbol(name) => {
-            subst.get(name).cloned().unwrap_or_else(|| value.clone())
+        SymbolicValue::Symbol(name) => subst.get(name).cloned().unwrap_or_else(|| value.clone()),
+        SymbolicValue::BinOp(lhs, op, rhs) => {
+            SymbolicValue::bin_op(substitute(lhs, subst), *op, substitute(rhs, subst))
         }
-        SymbolicValue::BinOp(lhs, op, rhs) => SymbolicValue::bin_op(
-            substitute(lhs, subst),
-            *op,
-            substitute(rhs, subst),
-        ),
         SymbolicValue::Ite(cond, then_val, else_val) => SymbolicValue::ite(
             substitute(cond, subst),
             substitute(then_val, subst),
             substitute(else_val, subst),
         ),
-        SymbolicValue::Not(inner) => {
-            SymbolicValue::Not(Box::new(substitute(inner, subst)))
-        }
+        SymbolicValue::Not(inner) => SymbolicValue::Not(Box::new(substitute(inner, subst))),
         SymbolicValue::BitwiseNot(inner) => {
             SymbolicValue::BitwiseNot(Box::new(substitute(inner, subst)))
         }
-        SymbolicValue::Neg(inner) => {
-            SymbolicValue::Neg(Box::new(substitute(inner, subst)))
-        }
+        SymbolicValue::Neg(inner) => SymbolicValue::Neg(Box::new(substitute(inner, subst))),
     }
 }
 
@@ -256,41 +218,26 @@ pub fn compose_summaries(
     callee: &FunctionSummary,
     call_result_name: &str,
 ) -> FunctionSummary {
-    let callee_return = callee
-        .return_value()
-        .cloned()
-        .unwrap_or(SymbolicValue::Concrete(0));
+    let callee_return = callee.return_value().cloned().unwrap_or(SymbolicValue::Concrete(0));
 
     let mut subst = FxHashMap::default();
     subst.insert(call_result_name.to_owned(), callee_return);
 
-    let mut composed = FunctionSummary::new(
-        caller.function_name.clone(),
-        caller.params.clone(),
-    );
+    let mut composed = FunctionSummary::new(caller.function_name.clone(), caller.params.clone());
 
     // Carry over caller preconditions.
     for pre in &caller.preconditions {
-        composed.add_precondition(
-            pre.param.clone(),
-            substitute(&pre.constraint, &subst),
-        );
+        composed.add_precondition(pre.param.clone(), substitute(&pre.constraint, &subst));
     }
 
     // Carry over callee preconditions (they become caller preconditions).
     for pre in &callee.preconditions {
-        composed.add_precondition(
-            pre.param.clone(),
-            pre.constraint.clone(),
-        );
+        composed.add_precondition(pre.param.clone(), pre.constraint.clone());
     }
 
     // Caller postconditions with callee return substituted.
     for post in &caller.postconditions {
-        composed.add_postcondition(
-            post.name.clone(),
-            substitute(&post.constraint, &subst),
-        );
+        composed.add_postcondition(post.name.clone(), substitute(&post.constraint, &subst));
     }
 
     // Callee postconditions carried forward.
@@ -345,8 +292,7 @@ impl SummaryCache {
 
     /// Insert a summary into the cache.
     pub fn insert(&mut self, summary: FunctionSummary) {
-        self.summaries
-            .insert(summary.function_name.clone(), summary);
+        self.summaries.insert(summary.function_name.clone(), summary);
     }
 
     /// Look up a summary by function name.
@@ -538,10 +484,7 @@ mod tests {
         let mut map = FxHashMap::default();
         map.insert("x".into(), SymbolicValue::Concrete(1));
         let result = substitute(&v, &map);
-        assert_eq!(
-            result,
-            SymbolicValue::Not(Box::new(SymbolicValue::Concrete(1)))
-        );
+        assert_eq!(result, SymbolicValue::Not(Box::new(SymbolicValue::Concrete(1))));
     }
 
     // --- apply_summary ---

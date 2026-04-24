@@ -9,9 +9,6 @@
 #![feature(yeet_expr)]
 // tidy-alphabetical-end
 
-//! tRust: Root of `rustc_mir_transform`; registers and orchestrates MIR
-//! tRust: analysis and optimization passes.
-
 use hir::ConstContext;
 use required_consts::RequiredConstsVisitor;
 use rustc_const_eval::check_consts::{self, ConstCx};
@@ -54,11 +51,7 @@ mod patch;
 mod shim;
 mod ssa;
 mod trivial_const;
-mod trust_proof_query; // tRust: stub query providers for trust_proof_results & trust_proof_telemetry
-
-// tRust #538: Re-export the global verification status map API so other
-// compiler passes can query proof results without TyCtxt.
-pub use trust_verify::{VerificationStatus, trust_verification_status};
+mod trust_proof_query;
 
 /// We import passes via this macro so that we can have a static list of pass names
 /// (used to verify CLI arguments). It takes a list of modules, followed by the passes
@@ -214,7 +207,6 @@ declare_passes! {
     mod sroa : ScalarReplacementOfAggregates;
     mod strip_debuginfo : StripDebugInfo;
     mod ssa_range_prop: SsaRangePropagation;
-    // tRust: Verification pass — runs tRust verification pipeline on optimized MIR.
     mod trust_verify : TrustVerify;
     mod unreachable_enum_branching : UnreachableEnumBranching;
     mod unreachable_prop : UnreachablePropagation;
@@ -243,7 +235,6 @@ pub fn provide(providers: &mut Providers) {
         deduced_param_attrs: deduce_param_attrs::deduced_param_attrs,
         coroutine_by_move_body_def_id: coroutine::coroutine_by_move_body_def_id,
         trivial_const: trivial_const::trivial_const_provider,
-        // tRust: verification query providers (stub — returns None unless -Z trust-verify)
         trust_proof_results: trust_proof_query::trust_proof_results,
         trust_proof_telemetry: trust_proof_query::trust_proof_telemetry,
         ..providers.queries
@@ -376,7 +367,6 @@ fn mir_const_qualif(tcx: TyCtxt<'_>, def: LocalDefId) -> ConstQualifs {
     // No need to const-check a non-const `fn`.
     match ccx.const_kind {
         Some(ConstContext::Const { .. } | ConstContext::Static(_) | ConstContext::ConstFn) => {}
-        // tRust: invariant: structural invariant — MIR pass manager assumes well-formed phase ordering
         None => span_bug!(
             tcx.def_span(def),
             "`mir_const_qualif` should only be called on const fns and const items"
@@ -506,7 +496,7 @@ fn mir_for_ctfe(tcx: TyCtxt<'_>, def_id: LocalDefId) -> &Body<'_> {
 }
 
 fn inner_mir_for_ctfe(tcx: TyCtxt<'_>, def: LocalDefId) -> Body<'_> {
-    // NOTE: Constructor check duplicated with optimized_mir query; consolidation desired.
+    // FIXME: don't duplicate this between the optimized_mir/mir_for_ctfe queries
     if tcx.is_constructor(def.to_def_id()) {
         // There's no reason to run all of the MIR passes on constructors when
         // we can just output the MIR we want directly. This also saves const
@@ -521,7 +511,6 @@ fn inner_mir_for_ctfe(tcx: TyCtxt<'_>, def: LocalDefId) -> Body<'_> {
         // cloning it.
         Some(hir::ConstContext::Const { .. } | hir::ConstContext::Static(_)) => body.steal(),
         Some(hir::ConstContext::ConstFn) => body.borrow().clone(),
-        // tRust: invariant: structural invariant — MIR pass manager assumes well-formed phase ordering
         None => bug!("`mir_for_ctfe` called on non-const {def:?}"),
     };
 
@@ -622,7 +611,7 @@ pub fn run_analysis_to_runtime_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'
     assert!(body.phase == MirPhase::Runtime(RuntimePhase::PostCleanup));
 }
 
-// NOTE: Pass lists could potentially be const, but current infrastructure doesn't support it.
+// FIXME(JakobDegen): Can we make these lists of passes consts?
 
 /// After this series of passes, no lifetime analysis based on borrowing can be done.
 fn run_analysis_cleanup_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
@@ -790,8 +779,7 @@ pub(crate) fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'
             // Cleanup for human readability, off by default.
             &prettify::ReorderBasicBlocks,
             &prettify::ReorderLocals,
-            // tRust: Run verification on fully-optimized MIR, before codegen.
-            // Gated behind TRUST_VERIFY=1 env var. Does not modify MIR.
+            // tRust: verify the fully optimized MIR just before codegen.
             &trust_verify::TrustVerify,
             // Dump the end result for testing and debugging purposes.
             &dump_mir::Marker("PreCodegen"),

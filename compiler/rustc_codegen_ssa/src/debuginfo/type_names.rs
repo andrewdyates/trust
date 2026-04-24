@@ -182,27 +182,27 @@ fn push_debuginfo_type_name<'tcx>(
                 output.push_str("array$<");
                 push_debuginfo_type_name(tcx, inner_type, true, output, visited);
                 match len.kind() {
-                    ty::ConstKind::Param(param) => write!(output, ",{}>", param.name).expect("write to String buffer is infallible"),
+                    ty::ConstKind::Param(param) => write!(output, ",{}>", param.name).unwrap(),
                     _ => write!(
                         output,
                         ",{}>",
                         len.try_to_target_usize(tcx)
                             .expect("expected monomorphic const in codegen")
                     )
-                    .expect("write to String buffer is infallible"),
+                    .unwrap(),
                 }
             } else {
                 output.push('[');
                 push_debuginfo_type_name(tcx, inner_type, true, output, visited);
                 match len.kind() {
-                    ty::ConstKind::Param(param) => write!(output, "; {}]", param.name).expect("write to String buffer is infallible"),
+                    ty::ConstKind::Param(param) => write!(output, "; {}]", param.name).unwrap(),
                     _ => write!(
                         output,
                         "; {}]",
                         len.try_to_target_usize(tcx)
                             .expect("expected monomorphic const in codegen")
                     )
-                    .expect("write to String buffer is infallible"),
+                    .unwrap(),
                 }
             }
         }
@@ -210,11 +210,10 @@ fn push_debuginfo_type_name<'tcx>(
             if cpp_like_debuginfo {
                 output.push_str("pat$<");
                 push_debuginfo_type_name(tcx, inner_type, true, output, visited);
-                // tRust: Upstream TODO -- tracked by rust-lang wg-debugging.
-                // TODO(wg-debugging): Implement CPP-like printing for patterns.
-                write!(output, ",{:?}>", pat).expect("write to String buffer is infallible");
+                // FIXME(wg-debugging): implement CPP like printing for patterns.
+                write!(output, ",{:?}>", pat).unwrap();
             } else {
-                write!(output, "{:?}", t).expect("write to String buffer is infallible");
+                write!(output, "{:?}", t).unwrap();
             }
         }
         ty::Slice(inner_type) => {
@@ -417,7 +416,7 @@ fn push_debuginfo_type_name<'tcx>(
             // an artificial `enum2$<>` type, as defined in msvc_enum_fallback().
             if cpp_like_debuginfo && t.is_coroutine() {
                 let ty_and_layout =
-                    tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(t)).expect("invariant: monomorphized type must have layout");
+                    tcx.layout_of(ty::TypingEnv::fully_monomorphized().as_query_input(t)).unwrap();
                 msvc_enum_fallback(
                     tcx,
                     ty_and_layout,
@@ -451,7 +450,6 @@ fn push_debuginfo_type_name<'tcx>(
         | ty::Alias(..)
         | ty::Bound(..)
         | ty::CoroutineWitness(..) => {
-            // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
             bug!(
                 "debuginfo: Trying to create type name for \
                   unexpected type: {:?}",
@@ -602,9 +600,9 @@ fn push_disambiguated_special_name(
     output: &mut String,
 ) {
     if cpp_like_debuginfo {
-        write!(output, "{label}${disambiguator}").expect("write to String buffer is infallible");
+        write!(output, "{label}${disambiguator}").unwrap();
     } else {
-        write!(output, "{{{label}#{disambiguator}}}").expect("write to String buffer is infallible");
+        write!(output, "{{{label}#{disambiguator}}}").unwrap();
     }
 }
 
@@ -669,7 +667,6 @@ fn push_generic_args_internal<'tcx>(
         match arg {
             GenericArgKind::Type(ty) => push_debuginfo_type_name(tcx, ty, true, output, visited),
             GenericArgKind::Const(ct) => push_debuginfo_const_name(tcx, ct, output),
-            // tRust: invariant: structural invariant — this variant should not appear at this point in the compilation pipeline
             other => bug!("Unexpected non-erasable generic: {:?}", other),
         }
 
@@ -739,10 +736,9 @@ fn push_debuginfo_const_name<'tcx>(tcx: TyCtxt<'tcx>, ct: ty::Const<'tcx>, outpu
                 }
             }
         }
-        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
         _ => bug!("Invalid `Const` during codegen: {:?}", ct),
     }
-    .expect("write to String buffer is infallible");
+    .unwrap();
 }
 
 fn push_closure_or_coroutine_name<'tcx>(
@@ -759,13 +755,13 @@ fn push_closure_or_coroutine_name<'tcx>(
     let coroutine_kind = tcx.coroutine_kind(def_id);
 
     if qualified {
-        let parent_def_id = DefId { index: def_key.parent.expect("invariant: nested item must have parent"), ..def_id };
+        let parent_def_id = DefId { index: def_key.parent.unwrap(), ..def_id };
         push_item_name(tcx, parent_def_id, true, output);
         output.push_str("::");
     }
 
     let mut label = String::with_capacity(20);
-    write!(&mut label, "{}_env", coroutine_kind_label(coroutine_kind)).expect("write to String buffer is infallible");
+    write!(&mut label, "{}_env", coroutine_kind_label(coroutine_kind)).unwrap();
 
     push_disambiguated_special_name(
         &label,
@@ -784,7 +780,7 @@ fn push_closure_or_coroutine_name<'tcx>(
 
     // Truncate the args to the length of the above generics. This will cut off
     // anything closure- or coroutine-specific.
-    // NOTE(async_closures): May be incorrect for async closure capture naming.
+    // FIXME(async_closures): This is probably not going to be correct w.r.t.
     // multiple coroutine flavors. Maybe truncate to (parent + 1)?
     let args = args.truncate_to(tcx, generics);
     push_generic_args_internal(tcx, args, output, visited);

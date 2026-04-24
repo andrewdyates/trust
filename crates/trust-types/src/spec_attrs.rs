@@ -117,12 +117,14 @@ pub fn spec_expr_to_formula(expr: &SpecExpr) -> Formula {
             }
         }
         SpecExpr::FnCall { name, .. } => Formula::Var(name.clone(), Sort::Int),
-        SpecExpr::Forall { var, ty: _, body } => {
-            Formula::Forall(vec![(var.clone(), Sort::Int)], Box::new(spec_expr_to_formula(body)))
-        }
-        SpecExpr::Exists { var, ty: _, body } => {
-            Formula::Exists(vec![(var.clone(), Sort::Int)], Box::new(spec_expr_to_formula(body)))
-        }
+        SpecExpr::Forall { var, ty: _, body } => Formula::Forall(
+            vec![(crate::Symbol::intern(var), Sort::Int)],
+            Box::new(spec_expr_to_formula(body)),
+        ),
+        SpecExpr::Exists { var, ty: _, body } => Formula::Exists(
+            vec![(crate::Symbol::intern(var), Sort::Int)],
+            Box::new(spec_expr_to_formula(body)),
+        ),
         SpecExpr::Old(inner) => match inner.as_ref() {
             SpecExpr::Var(name) => Formula::Var(format!("old_{name}"), Sort::Int),
             _ => spec_expr_to_formula(inner),
@@ -671,7 +673,7 @@ mod tests {
         assert_eq!(
             formula,
             Formula::Forall(
-                vec![("i".to_string(), Sort::Int)],
+                vec![("i".into(), Sort::Int)],
                 Box::new(Formula::Ge(
                     Box::new(Formula::Var("i".to_string(), Sort::Int)),
                     Box::new(Formula::Int(0)),

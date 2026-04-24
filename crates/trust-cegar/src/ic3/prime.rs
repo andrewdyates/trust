@@ -146,13 +146,17 @@ pub(crate) fn prime_formula(formula: &Formula) -> Result<Formula, CegarError> {
 
         // -- Quantifiers: prime both bound variables and the body --
         Formula::Forall(bindings, body) => {
-            let primed_bindings: Vec<(String, Sort)> =
-                bindings.iter().map(|(name, sort)| (format!("{name}'"), sort.clone())).collect();
+            let primed_bindings: Vec<(trust_types::Symbol, Sort)> = bindings
+                .iter()
+                .map(|(name, sort)| (format!("{name}'").into(), sort.clone()))
+                .collect();
             Formula::Forall(primed_bindings, Box::new(prime_formula(body)?))
         }
         Formula::Exists(bindings, body) => {
-            let primed_bindings: Vec<(String, Sort)> =
-                bindings.iter().map(|(name, sort)| (format!("{name}'"), sort.clone())).collect();
+            let primed_bindings: Vec<(trust_types::Symbol, Sort)> = bindings
+                .iter()
+                .map(|(name, sort)| (format!("{name}'").into(), sort.clone()))
+                .collect();
             Formula::Exists(primed_bindings, Box::new(prime_formula(body)?))
         }
 

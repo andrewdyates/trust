@@ -281,17 +281,17 @@ impl VisitorState {
     // The values that can be set.
     const STATIC_TY: Self = Self::STATIC;
     const ARGUMENT_TY_IN_DEFINITION: Self =
-        Self::from_bits(Self::FUNC.bits() | Self::DEFINED.bits()).expect("invariant: known-valid bit combination for FUNC|DEFINED"); // tRust: unwrap -> expect
+        Self::from_bits(Self::FUNC.bits() | Self::DEFINED.bits()).unwrap();
     const RETURN_TY_IN_DEFINITION: Self =
-        Self::from_bits(Self::FUNC.bits() | Self::FN_RETURN.bits() | Self::DEFINED.bits()).expect("invariant: known-valid bit combination for FUNC|FN_RETURN|DEFINED"); // tRust: unwrap -> expect
+        Self::from_bits(Self::FUNC.bits() | Self::FN_RETURN.bits() | Self::DEFINED.bits()).unwrap();
     const ARGUMENT_TY_IN_DECLARATION: Self = Self::FUNC;
     const RETURN_TY_IN_DECLARATION: Self =
-        Self::from_bits(Self::FUNC.bits() | Self::FN_RETURN.bits()).expect("invariant: known-valid bit combination for FUNC|FN_RETURN"); // tRust: unwrap -> expect
+        Self::from_bits(Self::FUNC.bits() | Self::FN_RETURN.bits()).unwrap();
     const ARGUMENT_TY_IN_FNPTR: Self =
-        Self::from_bits(Self::FUNC.bits() | Self::THEORETICAL.bits()).expect("invariant: known-valid bit combination for FUNC|THEORETICAL"); // tRust: unwrap -> expect
+        Self::from_bits(Self::FUNC.bits() | Self::THEORETICAL.bits()).unwrap();
     const RETURN_TY_IN_FNPTR: Self =
         Self::from_bits(Self::FUNC.bits() | Self::THEORETICAL.bits() | Self::FN_RETURN.bits())
-            .expect("invariant: known-valid bit combination for FUNC|FN_RETURN|THEORETICAL"); // tRust: unwrap -> expect
+            .unwrap();
 
     /// Get the proper visitor state for a given function's arguments.
     fn argument_from_fnmode(fn_mode: CItemKind) -> Self {
@@ -443,7 +443,7 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
 
         // Protect against infinite recursion, for example
         // `struct S(*mut S);`.
-        // tRust: known issue — A recursion limit is necessary as well, for irregular
+        // FIXME: A recursion limit is necessary as well, for irregular
         // recursive types.
         if !self.cache.insert(ty) {
             return FfiSafe;
@@ -453,7 +453,7 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
             ty::Adt(def, args) => {
                 if let Some(boxed) = ty.boxed_ty()
                     && (
-                        // tRust: known issue — (ctypes) this logic is broken, but it still fits the current tests
+                        // FIXME(ctypes): this logic is broken, but it still fits the current tests
                         state.is_in_defined_function()
                             || (state.is_in_fnptr()
                                 && matches!(self.base_fn_mode, CItemKind::Definition))
@@ -699,7 +699,6 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
             | ty::Coroutine(..)
             | ty::CoroutineWitness(..)
             | ty::Placeholder(..)
-            // tRust: invariant — these type kinds must not reach foreign function type checking
             | ty::FnDef(..) => bug!("unexpected type in foreign function: {:?}", ty),
         }
     }
@@ -831,7 +830,7 @@ impl<'tcx> ImproperCTypesLint {
         let all_types = iter::zip(visitor.tys.drain(..), visitor.spans.drain(..));
         for (fn_ptr_ty, span) in all_types {
             let mut visitor = ImproperCTypesVisitor::new(cx, fn_ptr_ty, fn_mode);
-            // tRust: known issue — (ctypes) make a check_for_fnptr
+            // FIXME(ctypes): make a check_for_fnptr
             let ffi_res = visitor.check_type(state, fn_ptr_ty);
 
             self.process_ffi_result(cx, span, ffi_res, fn_mode);
@@ -872,7 +871,7 @@ impl<'tcx> ImproperCTypesLint {
             adt_def.repr().c() && !adt_def.repr().packed() && adt_def.repr().align.is_none()
         );
 
-        // tRust: known issue — (ctypes) this following call is awkward.
+        // FIXME(ctypes): this following call is awkward.
         // is there a way to perform its logic in MIR space rather than HIR space?
         // (so that its logic can be absorbed into visitor.visit_struct_or_union)
         check_struct_for_power_alignment(cx, item, adt_def);

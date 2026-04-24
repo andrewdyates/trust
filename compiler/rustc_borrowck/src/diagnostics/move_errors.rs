@@ -440,7 +440,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             [proj_base @ .., ProjectionElem::Deref] => {
                 PlaceRef { local: deref_target_place.local, projection: proj_base }
             }
-            // tRust: invariant: algorithm precondition — deref_target_place is constructed from a Deref projection
             _ => bug!("deref_target_place is not a deref projection"),
         };
 
@@ -560,10 +559,8 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         let closure_kind = match closure_kind_ty.to_opt_closure_kind() {
             Some(kind @ (ty::ClosureKind::Fn | ty::ClosureKind::FnMut)) => kind,
             Some(ty::ClosureKind::FnOnce) => {
-                // tRust: invariant: type system guarantee — closure kind must match first argument type
                 bug!("closure kind does not match first argument type")
             }
-            // tRust: invariant: structural invariant — closure kind is always inferred by the time borrowck runs
             None => bug!("closure kind not inferred by borrowck"),
         };
 
@@ -805,7 +802,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     }
                 }
                 // If the `inner` is a raw pointer, do not suggest removing the "*", see #126863
-                // // NOTE: need to check whether the assigned object can be a raw pointer, see `tests/ui/borrowck/issue-20801.rs`., see `tests/ui/borrowck/issue-20801.rs`.
+                // FIXME: need to check whether the assigned object can be a raw pointer, see `tests/ui/borrowck/issue-20801.rs`.
                 if !is_raw_ptr {
                     err.span_suggestion_verbose(
                         span.with_hi(span.lo() + BytePos(1)),

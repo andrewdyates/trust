@@ -7,16 +7,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::collections::BTreeSet;
-use std::io::Write as _;
-use std::process::{Command, Stdio};
-use std::fmt::Write;
-
-use trust_types::{Formula, Sort};
+use trust_types::Formula;
 
 use crate::error::CegarError;
-use crate::ic3::{Cube, SatResult, structural_sat_check};
-use crate::z4_bridge::formula_to_smtlib;
+use crate::ic3::{SatResult, structural_sat_check};
 
 // ---------------------------------------------------------------------------
 // SAT oracle trait
@@ -61,326 +55,296 @@ impl SatOracle for StructuralSatOracle {
 }
 
 // ---------------------------------------------------------------------------
-// SMT oracle (z4 subprocess)
+// SMT oracle + helpers (test-only until production integration)
 // ---------------------------------------------------------------------------
 
-/// SAT oracle using z4 SMT solver via subprocess.
-///
-/// Serializes the formula to SMT-LIB2, invokes z4, and parses the result.
-/// This gives IC3 full SMT-level reasoning for all queries.
-///
-/// When z4 is unavailable or returns an error, falls back to the structural
-/// oracle to maintain availability.
-pub(crate) struct SmtSatOracle {
-    /// Path to the z4 binary.
-    solver_path: String,
-    /// Arguments for z4 (default: ["-smt2", "-in"]).
-    solver_args: Vec<String>,
-    /// Timeout per query in milliseconds.
-    timeout_ms: u64,
-    /// Fallback oracle for when z4 is unavailable.
-    fallback: StructuralSatOracle,
-}
+#[cfg(test)]
+mod smt {
+    use std::collections::BTreeSet;
+    use std::fmt::Write;
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
 
-impl SmtSatOracle {
-    /// Create a new SMT oracle with default z4 path.
-    pub(crate) fn new() -> Self {
-        Self {
-            solver_path: "z4".to_string(),
-            solver_args: vec!["-smt2".to_string(), "-in".to_string()],
-            timeout_ms: 10_000, // 10s per IC3 query
-            fallback: StructuralSatOracle,
-        }
-    }
+    use trust_types::{Formula, Sort};
 
-    /// Create with a custom solver path.
-    pub(crate) fn with_solver_path(path: impl Into<String>) -> Self {
-        Self {
-            solver_path: path.into(),
-            ..Self::new()
-        }
-    }
+    use crate::error::CegarError;
+    use crate::ic3::{Cube, SatResult};
+    use crate::z4_bridge::formula_to_smtlib;
 
-    /// Set the per-query timeout in milliseconds.
-    #[must_use]
-    pub(crate) fn with_timeout(mut self, timeout_ms: u64) -> Self {
-        self.timeout_ms = timeout_ms;
-        self
-    }
+    use super::{SatOracle, StructuralSatOracle};
 
-    /// Generate an SMT-LIB2 script for a satisfiability check.
+    /// SAT oracle using z4 SMT solver via subprocess.
     ///
-    /// The script declares variables, asserts the formula, and checks sat.
-    /// If sat, requests a model for counterexample extraction.
-    fn generate_script(&self, formula: &Formula) -> String {
-        let mut script = String::new();
-
-        // Use ALL logic to handle mixed int/bool/bv formulas.
-        script.push_str("(set-logic ALL)\n");
-
-        // Collect and declare variables.
-        let mut vars = BTreeSet::new();
-        collect_vars(formula, &mut vars);
-        for (name, sort) in &vars {
-            let _ = writeln!(script, 
-                "(declare-const {} {})",
-                name,
-                sort.to_smtlib()
-            );
-        }
-
-        // Assert the formula.
-        let _ = writeln!(script, "(assert {})", formula_to_smtlib(formula));
-
-        // Check sat and get model if sat.
-        script.push_str("(check-sat)\n");
-        script.push_str("(get-model)\n");
-        script.push_str("(exit)\n");
-
-        script
-    }
-
-    /// Run z4 on a script and return raw stdout.
-    fn run_solver(&self, script: &str) -> Result<String, String> {
-        let mut child = Command::new(&self.solver_path)
-            .args(&self.solver_args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("failed to spawn {}: {e}", self.solver_path))?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(script.as_bytes())
-                .map_err(|e| format!("failed to write to solver stdin: {e}"))?;
-        }
-
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("failed to read solver output: {e}"))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-        if !stderr.is_empty() && !stdout.contains("sat") {
-            return Err(format!("solver stderr: {stderr}"));
-        }
-
-        Ok(stdout)
-    }
-
-    /// Parse z4 output into a SatResult.
+    /// Serializes the formula to SMT-LIB2, invokes z4, and parses the result.
+    /// This gives IC3 full SMT-level reasoning for all queries.
     ///
-    /// - "unsat" -> Unsat
-    /// - "sat" + model -> Sat(Some(cube)) with model extraction
-    /// - "sat" without model -> Sat(None)
-    /// - "unknown" or error -> falls back to structural
-    fn parse_output(&self, output: &str, formula: &Formula) -> Result<SatResult, CegarError> {
-        let trimmed = output.trim();
-
-        if trimmed.starts_with("unsat") {
-            return Ok(SatResult::Unsat);
-        }
-
-        if trimmed.starts_with("sat") {
-            // Try to extract a model (cube) from the define-fun lines.
-            let model = parse_model_to_cube(trimmed);
-            return Ok(SatResult::Sat(model));
-        }
-
-        if trimmed.starts_with("unknown") {
-            // Solver timed out or gave up -- fall back to structural.
-            return self.fallback.check_sat(formula);
-        }
-
-        // Unexpected output -- fall back.
-        self.fallback.check_sat(formula)
+    /// When z4 is unavailable or returns an error, falls back to the structural
+    /// oracle to maintain availability.
+    pub(crate) struct SmtSatOracle {
+        /// Path to the z4 binary.
+        solver_path: String,
+        /// Arguments for z4 (default: ["-smt2", "-in"]).
+        solver_args: Vec<String>,
+        /// Timeout per query in milliseconds.
+        pub(crate) timeout_ms: u64,
+        /// Fallback oracle for when z4 is unavailable.
+        fallback: StructuralSatOracle,
     }
-}
 
-impl SatOracle for SmtSatOracle {
-    fn check_sat(&self, formula: &Formula) -> Result<SatResult, CegarError> {
-        let script = self.generate_script(formula);
-
-        match self.run_solver(&script) {
-            Ok(output) => self.parse_output(&output, formula),
-            Err(_e) => {
-                // z4 not available or crashed -- fall back to structural.
-                self.fallback.check_sat(formula)
+    impl SmtSatOracle {
+        /// Create a new SMT oracle with default z4 path.
+        pub(crate) fn new() -> Self {
+            Self {
+                solver_path: "z4".to_string(),
+                solver_args: vec!["-smt2".to_string(), "-in".to_string()],
+                timeout_ms: 10_000, // 10s per IC3 query
+                fallback: StructuralSatOracle,
             }
         }
-    }
 
-    fn name(&self) -> &str {
-        "z4-smt"
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Recursively collect all free variables (with sorts) from a formula.
-fn collect_vars(formula: &Formula, vars: &mut BTreeSet<(String, Sort)>) {
-    formula.visit(&mut |node| {
-        if let Formula::Var(name, sort) = node {
-            vars.insert((name.clone(), sort.clone()));
-        }
-    });
-}
-
-/// Parse a z4 model into a Cube of equalities.
-///
-/// Extracts `(define-fun name () Sort value)` lines and produces
-/// literals like `name = value`.
-fn parse_model_to_cube(output: &str) -> Option<Cube> {
-    let mut literals = Vec::new();
-
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if !trimmed.contains("define-fun") {
-            continue;
+        /// Create with a custom solver path.
+        pub(crate) fn with_solver_path(path: impl Into<String>) -> Self {
+            Self { solver_path: path.into(), ..Self::new() }
         }
 
-        // Parse: (define-fun <name> () <sort> <value>)
-        if let Some((name, sort, value)) = parse_define_fun_to_formula(trimmed) {
-            // Create literal: name = value
-            let var = Formula::Var(name, sort);
-            literals.push(Formula::Eq(Box::new(var), Box::new(value)));
+        /// Set the per-query timeout in milliseconds.
+        #[must_use]
+        pub(crate) fn with_timeout(mut self, timeout_ms: u64) -> Self {
+            self.timeout_ms = timeout_ms;
+            self
+        }
+
+        /// Generate an SMT-LIB2 script for a satisfiability check.
+        pub(crate) fn generate_script(&self, formula: &Formula) -> String {
+            let mut script = String::new();
+            script.push_str("(set-logic ALL)\n");
+
+            let mut vars = BTreeSet::new();
+            collect_vars(formula, &mut vars);
+            for (name, sort) in &vars {
+                let _ = writeln!(script, "(declare-const {} {})", name, sort.to_smtlib());
+            }
+
+            let _ = writeln!(script, "(assert {})", formula_to_smtlib(formula));
+            script.push_str("(check-sat)\n");
+            script.push_str("(get-model)\n");
+            script.push_str("(exit)\n");
+
+            script
+        }
+
+        /// Run z4 on a script and return raw stdout.
+        fn run_solver(&self, script: &str) -> Result<String, String> {
+            let mut child = Command::new(&self.solver_path)
+                .args(&self.solver_args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("failed to spawn {}: {e}", self.solver_path))?;
+
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin
+                    .write_all(script.as_bytes())
+                    .map_err(|e| format!("failed to write to solver stdin: {e}"))?;
+            }
+
+            let output = child
+                .wait_with_output()
+                .map_err(|e| format!("failed to read solver output: {e}"))?;
+
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+            if !stderr.is_empty() && !stdout.contains("sat") {
+                return Err(format!("solver stderr: {stderr}"));
+            }
+
+            Ok(stdout)
+        }
+
+        /// Parse z4 output into a SatResult.
+        pub(crate) fn parse_output(
+            &self,
+            output: &str,
+            formula: &Formula,
+        ) -> Result<SatResult, CegarError> {
+            let trimmed = output.trim();
+
+            if trimmed.starts_with("unsat") {
+                return Ok(SatResult::Unsat);
+            }
+
+            if trimmed.starts_with("sat") {
+                let model = parse_model_to_cube(trimmed);
+                return Ok(SatResult::Sat(model));
+            }
+
+            if trimmed.starts_with("unknown") {
+                return self.fallback.check_sat(formula);
+            }
+
+            self.fallback.check_sat(formula)
         }
     }
 
-    if literals.is_empty() {
+    impl SatOracle for SmtSatOracle {
+        fn check_sat(&self, formula: &Formula) -> Result<SatResult, CegarError> {
+            let script = self.generate_script(formula);
+
+            match self.run_solver(&script) {
+                Ok(output) => self.parse_output(&output, formula),
+                Err(_e) => self.fallback.check_sat(formula),
+            }
+        }
+
+        fn name(&self) -> &str {
+            "z4-smt"
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /// Recursively collect all free variables (with sorts) from a formula.
+    pub(crate) fn collect_vars(formula: &Formula, vars: &mut BTreeSet<(String, Sort)>) {
+        formula.visit(&mut |node| {
+            if let Formula::Var(name, sort) = node {
+                vars.insert((name.clone(), sort.clone()));
+            }
+        });
+    }
+
+    /// Parse a z4 model into a Cube of equalities.
+    pub(crate) fn parse_model_to_cube(output: &str) -> Option<Cube> {
+        let mut literals = Vec::new();
+
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if !trimmed.contains("define-fun") {
+                continue;
+            }
+
+            if let Some((name, sort, value)) = parse_define_fun_to_formula(trimmed) {
+                let var = Formula::Var(name, sort);
+                literals.push(Formula::Eq(Box::new(var), Box::new(value)));
+            }
+        }
+
+        if literals.is_empty() { None } else { Some(Cube::new(literals)) }
+    }
+
+    /// Parse a single `(define-fun name () Sort value)` line.
+    fn parse_define_fun_to_formula(line: &str) -> Option<(String, Sort, Formula)> {
+        let content = line.trim().trim_start_matches('(');
+        let rest = content.strip_prefix("define-fun ")?;
+
+        let name_end = rest.find(|c: char| c.is_whitespace())?;
+        let name = rest[..name_end].to_string();
+        let rest = rest[name_end..].trim();
+
+        let rest = rest.strip_prefix("()")?.trim();
+
+        let (sort_str, rest) = if rest.starts_with('(') {
+            let depth = find_matching_paren(rest)?;
+            (&rest[..=depth], rest[depth + 1..].trim())
+        } else {
+            let end = rest.find(|c: char| c.is_whitespace())?;
+            (&rest[..end], rest[end..].trim())
+        };
+
+        let sort = parse_sort(sort_str);
+        let value_str = rest.trim_end_matches(')').trim();
+        let value = parse_value(&sort, value_str)?;
+
+        Some((name, sort, value))
+    }
+
+    fn find_matching_paren(s: &str) -> Option<usize> {
+        let mut depth = 0;
+        for (i, ch) in s.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
         None
-    } else {
-        Some(Cube::new(literals))
     }
-}
 
-/// Parse a single `(define-fun name () Sort value)` line into (name, sort, value).
-fn parse_define_fun_to_formula(line: &str) -> Option<(String, Sort, Formula)> {
-    let content = line.trim().trim_start_matches('(');
-    let rest = content.strip_prefix("define-fun ")?;
+    /// Parse an SMT-LIB2 sort string.
+    pub(crate) fn parse_sort(s: &str) -> Sort {
+        match s {
+            "Bool" => Sort::Bool,
+            "Int" => Sort::Int,
+            _ if s.contains("BitVec") => {
+                let inner = s.trim_start_matches("(_ BitVec").trim_end_matches(')').trim();
+                let width: u32 = inner.parse().unwrap_or(32);
+                Sort::BitVec(width)
+            }
+            _ => Sort::Int,
+        }
+    }
 
-    // Extract name.
-    let name_end = rest.find(|c: char| c.is_whitespace())?;
-    let name = rest[..name_end].to_string();
-    let rest = rest[name_end..].trim();
-
-    // Skip "()" parameter list.
-    let rest = rest.strip_prefix("()")?.trim();
-
-    // Extract sort.
-    let (sort_str, rest) = if rest.starts_with('(') {
-        let depth = find_matching_paren(rest)?;
-        (&rest[..=depth], rest[depth + 1..].trim())
-    } else {
-        let end = rest.find(|c: char| c.is_whitespace())?;
-        (&rest[..end], rest[end..].trim())
-    };
-
-    // Parse sort.
-    let sort = parse_sort(sort_str);
-
-    // Parse value.
-    let value_str = rest.trim_end_matches(')').trim();
-    let value = parse_value(&sort, value_str)?;
-
-    Some((name, sort, value))
-}
-
-/// Find the matching closing paren for an opening paren at position 0.
-fn find_matching_paren(s: &str) -> Option<usize> {
-    let mut depth = 0;
-    for (i, ch) in s.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(i);
+    /// Parse a model value given a sort.
+    pub(crate) fn parse_value(sort: &Sort, s: &str) -> Option<Formula> {
+        let s = s.trim();
+        match sort {
+            Sort::Bool => match s {
+                "true" => Some(Formula::Bool(true)),
+                "false" => Some(Formula::Bool(false)),
+                _ => None,
+            },
+            Sort::Int => {
+                if s.starts_with("(-") || s.starts_with("(- ") {
+                    let inner = s
+                        .trim_start_matches('(')
+                        .trim_start_matches('-')
+                        .trim()
+                        .trim_end_matches(')');
+                    let n: i128 = inner.parse().ok()?;
+                    Some(Formula::Int(-n))
+                } else {
+                    let n: i128 = s.parse().ok()?;
+                    Some(Formula::Int(n))
                 }
             }
-            _ => {}
-        }
-    }
-    None
-}
-
-/// Parse an SMT-LIB2 sort string.
-fn parse_sort(s: &str) -> Sort {
-    match s {
-        "Bool" => Sort::Bool,
-        "Int" => Sort::Int,
-        _ if s.contains("BitVec") => {
-            // (_ BitVec N)
-            let inner = s.trim_start_matches("(_ BitVec").trim_end_matches(')').trim();
-            let width: u32 = inner.parse().unwrap_or(32);
-            Sort::BitVec(width)
-        }
-        _ => Sort::Int, // Default fallback.
-    }
-}
-
-/// Parse a model value given a sort.
-fn parse_value(sort: &Sort, s: &str) -> Option<Formula> {
-    let s = s.trim();
-    match sort {
-        Sort::Bool => match s {
-            "true" => Some(Formula::Bool(true)),
-            "false" => Some(Formula::Bool(false)),
+            Sort::BitVec(w) => {
+                if let Some(hex) = s.strip_prefix("#x") {
+                    let n = u128::from_str_radix(hex, 16).ok()?;
+                    Some(Formula::BitVec { value: n as i128, width: *w })
+                } else if let Some(bin) = s.strip_prefix("#b") {
+                    let n = u128::from_str_radix(bin, 2).ok()?;
+                    Some(Formula::BitVec { value: n as i128, width: *w })
+                } else {
+                    None
+                }
+            }
             _ => None,
-        },
-        Sort::Int => {
-            if s.starts_with("(-") || s.starts_with("(- ") {
-                let inner = s
-                    .trim_start_matches('(')
-                    .trim_start_matches('-')
-                    .trim()
-                    .trim_end_matches(')');
-                let n: i128 = inner.parse().ok()?;
-                Some(Formula::Int(-n))
-            } else {
-                let n: i128 = s.parse().ok()?;
-                Some(Formula::Int(n))
-            }
         }
-        Sort::BitVec(w) => {
-            if let Some(hex) = s.strip_prefix("#x") {
-                let n = u128::from_str_radix(hex, 16).ok()?;
-                Some(Formula::BitVec { value: n as i128, width: *w })
-            } else if let Some(bin) = s.strip_prefix("#b") {
-                let n = u128::from_str_radix(bin, 2).ok()?;
-                Some(Formula::BitVec { value: n as i128, width: *w })
-            } else {
-                None
-            }
-        }
-        _ => None,
     }
-}
 
-/// Check if z4 is available on the system.
-#[must_use]
-pub(crate) fn z4_available() -> bool {
-    Command::new("z4")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
-}
+    /// Check if z4 is available on the system.
+    #[must_use]
+    pub(crate) fn z4_available() -> bool {
+        Command::new("z4")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    }
 
-/// Create the best available SAT oracle.
-///
-/// Returns `SmtSatOracle` if z4 is on PATH, otherwise `StructuralSatOracle`.
-#[must_use]
-pub(crate) fn default_oracle() -> Box<dyn SatOracle> {
-    if z4_available() {
-        Box::new(SmtSatOracle::new())
-    } else {
-        Box::new(StructuralSatOracle)
+    /// Create the best available SAT oracle.
+    #[must_use]
+    pub(crate) fn default_oracle() -> Box<dyn SatOracle> {
+        if z4_available() { Box::new(SmtSatOracle::new()) } else { Box::new(StructuralSatOracle) }
     }
 }
 
@@ -390,7 +354,13 @@ pub(crate) fn default_oracle() -> Box<dyn SatOracle> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
+    use trust_types::{Formula, Sort};
+
+    use super::smt::*;
     use super::*;
+    use crate::ic3::SatResult;
 
     #[test]
     fn test_structural_oracle_trivially_false() {
@@ -450,18 +420,14 @@ mod tests {
     #[test]
     fn test_smt_oracle_parse_unsat() {
         let oracle = SmtSatOracle::new();
-        let result = oracle
-            .parse_output("unsat\n", &Formula::Bool(false))
-            .expect("should parse");
+        let result = oracle.parse_output("unsat\n", &Formula::Bool(false)).expect("should parse");
         assert_eq!(result, SatResult::Unsat);
     }
 
     #[test]
     fn test_smt_oracle_parse_sat_no_model() {
         let oracle = SmtSatOracle::new();
-        let result = oracle
-            .parse_output("sat\n", &Formula::Bool(true))
-            .expect("should parse");
+        let result = oracle.parse_output("sat\n", &Formula::Bool(true)).expect("should parse");
         assert_eq!(result, SatResult::Sat(None));
     }
 
@@ -469,13 +435,10 @@ mod tests {
     fn test_smt_oracle_parse_sat_with_model() {
         let oracle = SmtSatOracle::new();
         let output = "sat\n(model\n  (define-fun x () Int 42)\n)\n";
-        let result = oracle
-            .parse_output(output, &Formula::Bool(true))
-            .expect("should parse");
+        let result = oracle.parse_output(output, &Formula::Bool(true)).expect("should parse");
         match result {
             SatResult::Sat(Some(cube)) => {
                 assert_eq!(cube.len(), 1);
-                // The literal should be x = 42.
                 assert_eq!(
                     cube.literals[0],
                     Formula::Eq(
@@ -491,31 +454,21 @@ mod tests {
     #[test]
     fn test_smt_oracle_parse_unknown_falls_back() {
         let oracle = SmtSatOracle::new();
-        // unknown should fall back to structural checker
-        let result = oracle
-            .parse_output("unknown\n", &Formula::Bool(true))
-            .expect("should parse");
-        // Structural on Bool(true) returns Sat(None)
+        let result = oracle.parse_output("unknown\n", &Formula::Bool(true)).expect("should parse");
         assert_eq!(result, SatResult::Sat(None));
     }
 
     #[test]
     fn test_smt_oracle_fallback_on_missing_binary() {
-        // Use a non-existent binary path -- should fall back to structural.
         let oracle = SmtSatOracle::with_solver_path("/nonexistent/z4");
-        let result = oracle
-            .check_sat(&Formula::Bool(false))
-            .expect("should fall back");
+        let result = oracle.check_sat(&Formula::Bool(false)).expect("should fall back");
         assert_eq!(result, SatResult::Unsat);
     }
 
     #[test]
     fn test_default_oracle_returns_something() {
         let oracle = default_oracle();
-        // Should work regardless of z4 availability.
-        let result = oracle
-            .check_sat(&Formula::Bool(false))
-            .expect("should not error");
+        let result = oracle.check_sat(&Formula::Bool(false)).expect("should not error");
         assert_eq!(result, SatResult::Unsat);
     }
 
@@ -569,26 +522,14 @@ mod tests {
 
     #[test]
     fn test_parse_value_int() {
-        assert_eq!(
-            parse_value(&Sort::Int, "42"),
-            Some(Formula::Int(42))
-        );
-        assert_eq!(
-            parse_value(&Sort::Int, "(- 7)"),
-            Some(Formula::Int(-7))
-        );
+        assert_eq!(parse_value(&Sort::Int, "42"), Some(Formula::Int(42)));
+        assert_eq!(parse_value(&Sort::Int, "(- 7)"), Some(Formula::Int(-7)));
     }
 
     #[test]
     fn test_parse_value_bool() {
-        assert_eq!(
-            parse_value(&Sort::Bool, "true"),
-            Some(Formula::Bool(true))
-        );
-        assert_eq!(
-            parse_value(&Sort::Bool, "false"),
-            Some(Formula::Bool(false))
-        );
+        assert_eq!(parse_value(&Sort::Bool, "true"), Some(Formula::Bool(true)));
+        assert_eq!(parse_value(&Sort::Bool, "false"), Some(Formula::Bool(false)));
     }
 
     #[test]
@@ -603,17 +544,14 @@ mod tests {
         );
     }
 
-    // Integration test: if z4 is available, test a real query.
     #[test]
     fn test_smt_oracle_real_query_if_z4_available() {
         if !z4_available() {
-            // z4 not installed; skip gracefully (test still passes).
             return;
         }
 
         let oracle = SmtSatOracle::new();
 
-        // Trivially unsat: x < 0 AND x > 0 AND x = 0
         let x = Formula::Var("x".into(), Sort::Int);
         let unsat_formula = Formula::And(vec![
             Formula::Lt(Box::new(x.clone()), Box::new(Formula::Int(0))),
@@ -622,12 +560,8 @@ mod tests {
         let result = oracle.check_sat(&unsat_formula).expect("should not error");
         assert_eq!(result, SatResult::Unsat, "x < 0 AND x > 0 should be unsat");
 
-        // Trivially sat: x > 5
         let sat_formula = Formula::Gt(Box::new(x), Box::new(Formula::Int(5)));
         let result = oracle.check_sat(&sat_formula).expect("should not error");
-        assert!(
-            matches!(result, SatResult::Sat(_)),
-            "x > 5 should be sat"
-        );
+        assert!(matches!(result, SatResult::Sat(_)), "x > 5 should be sat");
     }
 }

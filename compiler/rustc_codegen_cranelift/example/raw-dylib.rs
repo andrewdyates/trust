@@ -15,8 +15,6 @@ fn main() {
 
         // Get the filename of the current executable....
         let mut buffer = [0u8; 1024];
-        // SAFETY: `GetModuleFileNameA` is called with a null module handle (current exe),
-        // a valid buffer pointer, and its size; the buffer is stack-allocated and alive.
         let size = unsafe {
             GetModuleFileNameA(core::ptr::null_mut(), buffer.as_mut_ptr(), buffer.len() as u32)
         };

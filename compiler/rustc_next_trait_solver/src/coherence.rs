@@ -343,7 +343,7 @@ where
             | ty::RawPtr(..)
             | ty::Never
             | ty::Tuple(..)
-            // tRust: known issue (unsafe_binders) — Non-local?
+            // FIXME(unsafe_binders): Non-local?
             | ty::UnsafeBinder(_) => self.found_non_local_ty(ty),
 
             ty::Param(..) => panic!("unexpected ty param"),

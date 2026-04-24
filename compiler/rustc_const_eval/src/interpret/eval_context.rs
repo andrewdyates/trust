@@ -89,7 +89,7 @@ impl<'tcx, M: Machine<'tcx>> LayoutOfHelpers<'tcx> for InterpCx<'tcx, M> {
         _: Span,
         _: Ty<'tcx>,
     ) -> InterpErrorKind<'tcx> {
-        // tRust: known issue (#149283) — This is really hacky and is only used to hide type
+        // FIXME(#149283): This is really hacky and is only used to hide type
         // system bugs. We use it as a temporary fix for #149081.
         //
         // While it's expected that we sometimes get ambiguity errors when
@@ -208,7 +208,6 @@ pub(super) fn from_known_layout<'tcx>(
             if cfg!(debug_assertions) {
                 let check_layout = compute()?;
                 if !mir_assign_valid_types(tcx.tcx, typing_env, check_layout, known_layout) {
-                    // tRust: invariant — pushed stack frame argument types must match the function signature
                     span_bug!(
                         tcx.span,
                         "expected type differs from actual type.\nexpected: {}\nactual: {}",
@@ -366,7 +365,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             Ok(Some(instance)) => interp_ok(instance),
             Ok(None) => throw_inval!(TooGeneric),
 
-            // tRust: known issue (eddyb) — this could be a bit more specific than `AlreadyReported`.
+            // FIXME(eddyb) this could be a bit more specific than `AlreadyReported`.
             Err(error_guaranteed) => throw_inval!(AlreadyReported(
                 ReportedErrorInfo::non_const_eval_error(error_guaranteed)
             )),
@@ -382,7 +381,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
             // Assert that the frame we look at is actually executing code currently
             // (`loc` is `Right` when we are unwinding and the frame does not require cleanup).
-            let loc = frame.loc.left().expect("invariant: frame location is Left (has valid source location) when generating caller info");
+            let loc = frame.loc.left().unwrap();
 
             // This could be a non-`Call` terminator (such as `Drop`), or not a terminator at all
             // (such as `box`). Use the normal span by default.
@@ -415,7 +414,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             }
         }
 
-        // tRust: invariant — call stack must contain at least one non-track_caller frame
         span_bug!(self.cur_span(), "no non-`#[track_caller]` frame found")
     }
 
@@ -506,7 +504,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
             ty::Foreign(_) => interp_ok(None),
 
-            // tRust: invariant — size_and_align_of unsized tail must be a slice, str, or trait object
             _ => span_bug!(self.cur_span(), "size_and_align_of::<{}> not supported", layout.ty),
         }
     }
@@ -611,7 +608,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                                 // or when some layout could not be computed.
                             } else {
                                 // Looks like the const is not captured by `required_consts`, that's bad.
-                                // tRust: invariant — const eval failure must correspond to a const in required_consts
                                 span_bug!(span, "interpret const eval failure of {val:?} which is not in required_consts");
                             }
                         }

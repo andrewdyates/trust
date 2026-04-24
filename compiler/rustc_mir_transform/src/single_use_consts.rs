@@ -55,12 +55,10 @@ impl<'tcx> crate::MirPass<'tcx> for SingleUseConsts {
                 StatementKind::Nop,
             );
             let StatementKind::Assign(place_and_rvalue) = init_statement_kind else {
-                // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                 bug!("No longer an assign?");
             };
             let (place, rvalue) = *place_and_rvalue;
             assert_eq!(place.as_local(), Some(local));
-            // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
             let Rvalue::Use(operand) = rvalue else { bug!("No longer a use?") };
 
             let mut replacer = LocalReplacer { tcx, local, operand: Some(operand) };
@@ -81,7 +79,6 @@ impl<'tcx> crate::MirPass<'tcx> for SingleUseConsts {
             }
 
             if replacer.operand.is_some() {
-                // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                 bug!(
                     "operand wasn't used replacing local {local:?} with locations {locations:?} in body {body:#?}"
                 );
@@ -188,7 +185,6 @@ impl<'tcx> MutVisitor<'tcx> for LocalReplacer<'tcx> {
             && local == self.local
         {
             *operand = self.operand.take().unwrap_or_else(|| {
-                // tRust: invariant: structural invariant — operand variant is constrained by the match context
                 bug!("there was a second use of the operand");
             });
         }
@@ -203,11 +199,10 @@ impl<'tcx> MutVisitor<'tcx> for LocalReplacer<'tcx> {
                 .operand
                 .as_ref()
                 .unwrap_or_else(|| {
-                    // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                     bug!("the operand was already stolen");
                 })
                 .constant()
-                .expect("invariant: operand must be a constant after steal"); // tRust: unwrap elimination
+                .unwrap();
             var_debug_info.value = VarDebugInfoContents::Const(const_op);
         }
     }

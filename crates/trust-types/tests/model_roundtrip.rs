@@ -23,11 +23,7 @@ fn midpoint_function() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::usize(), name: None },
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::usize(), name: None },
                 LocalDecl { index: 5, ty: Ty::usize(), name: None },
             ],
@@ -237,11 +233,7 @@ fn test_formula_array_ops_roundtrip() {
     let formula = Formula::Eq(
         Box::new(Formula::Select(Box::new(arr.clone()), Box::new(idx.clone()))),
         Box::new(Formula::Select(
-            Box::new(Formula::Store(
-                Box::new(arr),
-                Box::new(idx),
-                Box::new(val),
-            )),
+            Box::new(Formula::Store(Box::new(arr), Box::new(idx), Box::new(val))),
             Box::new(Formula::Int(5)),
         )),
     );
@@ -271,10 +263,7 @@ fn test_ty_all_variants_roundtrip() {
         Ty::Tuple(vec![Ty::i32(), Ty::Bool, Ty::usize()]),
         Ty::Adt {
             name: "MyStruct".into(),
-            fields: vec![
-                ("x".into(), Ty::i32()),
-                ("y".into(), Ty::Bool),
-            ],
+            fields: vec![("x".into(), Ty::i32()), ("y".into(), Ty::Bool)],
         },
     ];
     for ty in &types {
@@ -335,15 +324,8 @@ fn test_sort_from_ty_comprehensive() {
 #[test]
 fn test_verification_condition_all_kinds_roundtrip() {
     let vc_kinds: Vec<VcKind> = vec![
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        },
-        VcKind::ShiftOverflow {
-            op: BinOp::Shl,
-            operand_ty: Ty::u32(),
-            shift_ty: Ty::u32(),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::i32(), Ty::i32()) },
+        VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: Ty::u32(), shift_ty: Ty::u32() },
         VcKind::DivisionByZero,
         VcKind::RemainderByZero,
         VcKind::IndexOutOfBounds,
@@ -357,10 +339,7 @@ fn test_verification_condition_all_kinds_roundtrip() {
         VcKind::DeadState { state: "idle".into() },
         VcKind::Deadlock,
         VcKind::Temporal { property: "eventually done".into() },
-        VcKind::NonTermination {
-            context: "loop".into(),
-            measure: "n".into(),
-        },
+        VcKind::NonTermination { context: "loop".into(), measure: "n".into() },
     ];
 
     for kind in vc_kinds {
@@ -378,8 +357,7 @@ fn test_verification_condition_all_kinds_roundtrip() {
             contract_metadata: None,
         };
         let json = serde_json::to_string(&vc).expect("serialize");
-        let round: VerificationCondition =
-            serde_json::from_str(&json).expect("deserialize");
+        let round: VerificationCondition = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(round.function, "test_fn");
         // Verify description is non-empty for all kinds
         assert!(!kind.description().is_empty(), "description for {:?}", kind);
@@ -396,15 +374,24 @@ fn test_verification_result_all_variants_roundtrip() {
         VerificationResult::Proved {
             solver: "z4".into(),
             time_ms: 5,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        },
         VerificationResult::Proved {
             solver: "lean5".into(),
             time_ms: 100,
-            strength: ProofStrength::constructive(), proof_certificate: None, solver_warnings: None, },
+            strength: ProofStrength::constructive(),
+            proof_certificate: None,
+            solver_warnings: None,
+        },
         VerificationResult::Proved {
             solver: "zani".into(),
             time_ms: 50,
-            strength: ProofStrength::bounded(100), proof_certificate: None, solver_warnings: None, },
+            strength: ProofStrength::bounded(100),
+            proof_certificate: None,
+            solver_warnings: None,
+        },
         VerificationResult::Failed {
             solver: "z4".into(),
             time_ms: 7,
@@ -413,26 +400,18 @@ fn test_verification_result_all_variants_roundtrip() {
                 ("b".into(), CounterexampleValue::Uint(1)),
             ])),
         },
-        VerificationResult::Failed {
-            solver: "z4".into(),
-            time_ms: 3,
-            counterexample: None,
-        },
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 3, counterexample: None },
         VerificationResult::Unknown {
             solver: "z4".into(),
             time_ms: 200,
             reason: "quantifier instantiation limit".into(),
         },
-        VerificationResult::Timeout {
-            solver: "z4".into(),
-            timeout_ms: 5000,
-        },
+        VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 },
     ];
 
     for result in &results {
         let json = serde_json::to_string(result).expect("serialize");
-        let round: VerificationResult =
-            serde_json::from_str(&json).expect("deserialize");
+        let round: VerificationResult = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(round.solver_name(), result.solver_name());
         assert_eq!(round.time_ms(), result.time_ms());
         assert_eq!(round.is_proved(), result.is_proved());
@@ -456,30 +435,10 @@ fn test_state_machine_roundtrip() {
             StateInfo { name: "Disconnecting".into(), discriminant: 3 },
         ],
         transitions: vec![
-            Transition {
-                from: 0,
-                to: 1,
-                source_block: BlockId(0),
-                target_block: BlockId(1),
-            },
-            Transition {
-                from: 1,
-                to: 2,
-                source_block: BlockId(1),
-                target_block: BlockId(2),
-            },
-            Transition {
-                from: 2,
-                to: 3,
-                source_block: BlockId(2),
-                target_block: BlockId(3),
-            },
-            Transition {
-                from: 3,
-                to: 0,
-                source_block: BlockId(3),
-                target_block: BlockId(0),
-            },
+            Transition { from: 0, to: 1, source_block: BlockId(0), target_block: BlockId(1) },
+            Transition { from: 1, to: 2, source_block: BlockId(1), target_block: BlockId(2) },
+            Transition { from: 2, to: 3, source_block: BlockId(2), target_block: BlockId(3) },
+            Transition { from: 3, to: 0, source_block: BlockId(3), target_block: BlockId(0) },
         ],
         initial_state: Some(0),
     };
@@ -520,24 +479,20 @@ fn test_liveness_property_all_operators_roundtrip() {
             operator: TemporalOperator::AlwaysEventually,
             predicate: "served".into(),
             consequent: None,
-            fairness: vec![
-                FairnessConstraint::Weak {
-                    action: "schedule".into(),
-                    vars: vec!["tasks".into()],
-                },
-            ],
+            fairness: vec![FairnessConstraint::Weak {
+                action: "schedule".into(),
+                vars: vec!["tasks".into()],
+            }],
         },
         LivenessProperty {
             name: "response".into(),
             operator: TemporalOperator::LeadsTo,
             predicate: "request".into(),
             consequent: Some("response".into()),
-            fairness: vec![
-                FairnessConstraint::Strong {
-                    action: "dispatch".into(),
-                    vars: vec!["queue".into(), "workers".into()],
-                },
-            ],
+            fairness: vec![FairnessConstraint::Strong {
+                action: "dispatch".into(),
+                vars: vec!["queue".into(), "workers".into()],
+            }],
         },
     ];
 
@@ -564,21 +519,22 @@ fn test_crate_verification_result_aggregation_roundtrip() {
     let func1 = FunctionVerificationResult {
         function_path: "my_crate::safe_div".into(),
         function_name: "safe_div".into(),
-        results: vec![
-            (
-                VerificationCondition {
-                    kind: VcKind::DivisionByZero,
-                    function: "safe_div".into(),
-                    location: SourceSpan::default(),
-                    formula: Formula::Bool(false),
-                    contract_metadata: None,
-                },
-                VerificationResult::Proved {
-                    solver: "z4".into(),
-                    time_ms: 5,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
-            ),
-        ],
+        results: vec![(
+            VerificationCondition {
+                kind: VcKind::DivisionByZero,
+                function: "safe_div".into(),
+                location: SourceSpan::default(),
+                formula: Formula::Bool(false),
+                contract_metadata: None,
+            },
+            VerificationResult::Proved {
+                solver: "z4".into(),
+                time_ms: 5,
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
+        )],
         from_notes: 1,
         with_assumptions: 0,
     };
@@ -615,7 +571,10 @@ fn test_crate_verification_result_aggregation_roundtrip() {
                 VerificationResult::Proved {
                     solver: "z4".into(),
                     time_ms: 3,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
         ],
         from_notes: 0,
@@ -633,8 +592,7 @@ fn test_crate_verification_result_aggregation_roundtrip() {
 
     // Serde roundtrip
     let json = serde_json::to_string(&crate_result).expect("serialize");
-    let round: CrateVerificationResult =
-        serde_json::from_str(&json).expect("deserialize");
+    let round: CrateVerificationResult = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(round.crate_name, "my_crate");
     assert_eq!(round.function_count(), 2);
     assert_eq!(round.total_obligations(), 3);
@@ -648,10 +606,8 @@ fn test_crate_verification_result_aggregation_roundtrip() {
 #[test]
 fn test_runtime_disposition_classification_matrix() {
     // Test that the full classification matrix works end-to-end
-    let overflow_vc = VcKind::ArithmeticOverflow {
-        op: BinOp::Add,
-        operand_tys: (Ty::i32(), Ty::i32()),
-    };
+    let overflow_vc =
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::i32(), Ty::i32()) };
     let postcondition_vc = VcKind::Postcondition;
 
     // Proved + Auto = Proved
@@ -661,7 +617,10 @@ fn test_runtime_disposition_classification_matrix() {
             &VerificationResult::Proved {
                 solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
             RuntimeCheckPolicy::Auto,
             true,
         ),
@@ -751,9 +710,10 @@ fn test_proof_report_legacy_roundtrip() {
             failed: vec![FailedProperty {
                 description: "overflow".into(),
                 solver: "z4".into(),
-                counterexample: Some(Counterexample::new(vec![
-                    ("x".into(), CounterexampleValue::Int(i64::MAX as i128)),
-                ])),
+                counterexample: Some(Counterexample::new(vec![(
+                    "x".into(),
+                    CounterexampleValue::Int(i64::MAX as i128),
+                )])),
             }],
             unknown: vec![],
         }],
@@ -816,9 +776,7 @@ fn test_json_proof_report_roundtrip() {
                 kind: "division_by_zero".into(),
                 proof_level: ProofLevel::L0Safety,
                 location: None,
-                outcome: ObligationOutcome::Proved {
-                    strength: ProofStrength::smt_unsat(),
-                },
+                outcome: ObligationOutcome::Proved { strength: ProofStrength::smt_unsat() },
                 solver: "z4".into(),
                 time_ms: 5,
                 evidence: None,

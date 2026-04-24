@@ -21,14 +21,14 @@ use trust_types::JsonProofReport;
 use crate::actions::code_actions_for_diagnostics;
 use crate::convert::report_to_diagnostics;
 use crate::inlay_hints::inlay_hints_for_report;
-use crate::progress::{format_summary, ProgressReporter};
+use crate::progress::{ProgressReporter, format_summary};
 use crate::protocol::{
-    error_codes, CodeActionParams, DiagnosticOptions, DidSaveTextDocumentParams, InlayHintParams,
-    InitializeParams, InitializeResult, Notification, Request, Response, SaveOptions,
-    ServerCapabilities, ServerInfo, TextDocumentSyncKind, TextDocumentSyncOptions,
+    CodeActionParams, DiagnosticOptions, DidSaveTextDocumentParams, InitializeParams,
+    InitializeResult, InlayHintParams, Notification, Request, Response, SaveOptions,
+    ServerCapabilities, ServerInfo, TextDocumentSyncKind, TextDocumentSyncOptions, error_codes,
 };
-use crate::transport::{read_message, write_message, TransportError};
-use crate::verification::{run_verification, VerificationState};
+use crate::transport::{TransportError, read_message, write_message};
+use crate::verification::{VerificationState, run_verification};
 
 /// Server state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,12 +63,6 @@ impl<R: BufRead, W: Write> Server<R, W> {
             root_uri: None,
             verify: VerificationState::new(),
         }
-    }
-
-    /// Current server state.
-    #[must_use]
-    pub(crate) fn state(&self) -> ServerState {
-        self.state
     }
 
     /// Run the server main loop until exit.
@@ -217,16 +211,14 @@ impl<R: BufRead, W: Write> Server<R, W> {
 
         // Send progress begin.
         let reporter = ProgressReporter::with_id(generation as i64);
-        self.send_notification("$/progress", reporter.begin(
-            "tRust verification",
-            Some(&format!("Checking {uri}")),
-        ))?;
+        self.send_notification(
+            "$/progress",
+            reporter.begin("tRust verification", Some(&format!("Checking {uri}"))),
+        )?;
 
         // Run verification (blocking).
         let workspace = self.verify.workspace_root().map(|p| p.to_path_buf());
-        let result = workspace
-            .as_deref()
-            .map(|root| run_verification(root, uri));
+        let result = workspace.as_deref().map(|root| run_verification(root, uri));
 
         // Check debounce: is this still the most recent save for this file?
         if !self.verify.is_current(uri, generation) {
@@ -260,10 +252,7 @@ impl<R: BufRead, W: Write> Server<R, W> {
                 )?;
             }
             None => {
-                self.send_notification(
-                    "$/progress",
-                    reporter.end("No workspace root configured"),
-                )?;
+                self.send_notification("$/progress", reporter.end("No workspace root configured"))?;
             }
         }
 
@@ -317,7 +306,10 @@ impl<R: BufRead, W: Write> Server<R, W> {
     }
 
     /// Convert a `JsonProofReport` to LSP diagnostics and publish them.
-    pub(crate) fn publish_report(&mut self, report: &JsonProofReport) -> Result<(), TransportError> {
+    pub(crate) fn publish_report(
+        &mut self,
+        report: &JsonProofReport,
+    ) -> Result<(), TransportError> {
         let diagnostics_params = report_to_diagnostics(report);
         for params in diagnostics_params {
             self.send_notification("textDocument/publishDiagnostics", params)?;
@@ -411,7 +403,7 @@ mod tests {
         let mut server = Server::new(reader, &mut output);
 
         server.run().expect("server should run cleanly");
-        assert_eq!(server.state(), ServerState::ShuttingDown);
+        assert_eq!(server.state, ServerState::ShuttingDown);
 
         let responses = read_all_lsp_responses(&output);
         assert_eq!(responses.len(), 2); // initialize response + shutdown response
@@ -507,7 +499,7 @@ mod tests {
                 verdict: CrateVerdict::HasViolations,
             },
             functions: vec![FunctionProofReport {
-                function: "bad_fn".to_string(),
+                function: "bad_fn".into(),
                 summary: FunctionSummary {
                     total_obligations: 1,
                     proved: 0,
@@ -529,10 +521,8 @@ mod tests {
                         line_end: 5,
                         col_end: 10,
                     }),
-                    outcome: ObligationOutcome::Failed {
-                        counterexample: None,
-                    },
-                    solver: "z4".to_string(),
+                    outcome: ObligationOutcome::Failed { counterexample: None },
+                    solver: "z4".into(),
                     time_ms: 5,
                     evidence: None,
                 }],
@@ -696,10 +686,8 @@ mod tests {
         assert!(responses.len() >= 3);
 
         // Find progress notifications
-        let progress_msgs: Vec<_> = responses
-            .iter()
-            .filter(|r| r["method"] == "$/progress")
-            .collect();
+        let progress_msgs: Vec<_> =
+            responses.iter().filter(|r| r["method"] == "$/progress").collect();
         assert_eq!(progress_msgs.len(), 2); // begin + end
 
         let begin = &progress_msgs[0]["params"]["value"];

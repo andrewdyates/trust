@@ -459,11 +459,11 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     end_of_fn: f.span.shrink_to_hi(),
                     const_args: const_args.join(", "),
                     other_args: other_args.join(", "),
-                    call_args: args[0].span.to(args.last().expect("invariant: args is non-empty, checked via indexing [0]").span), // tRust:,
+                    call_args: args[0].span.to(args.last().unwrap().span),
                 };
                 error = Some(tcx.dcx().emit_err(InvalidLegacyConstGenericArg { span, suggestion }));
             }
-            error.expect("invariant: error is Some when method call has no receiver") // tRust:
+            error.unwrap()
         };
 
         // Split the arguments into const generics and normal arguments
@@ -504,7 +504,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         }
 
         // Add generic args to the last element of the path.
-        let last_segment = path.segments.last_mut().expect("invariant: path has at least one segment"); // tRust:;
+        let last_segment = path.segments.last_mut().unwrap();
         assert!(last_segment.args.is_none());
         last_segment.args = Some(Box::new(GenericArgs::AngleBracketed(AngleBracketedArgs {
             span: DUMMY_SP,
@@ -833,9 +833,6 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
     /// ```ignore (pseudo-rust)
     /// match ::std::future::IntoFuture::into_future(<expr>) {
     ///     mut __awaitee => loop {
-    ///         // SAFETY: `__awaitee` lives in the coroutine state for the whole
-    ///         // await loop and is only reborrowed for polling, so creating a
-    ///         // temporary `Pin<&mut _>` here does not move it after pinning.
     ///         match unsafe { ::std::future::Future::poll(
     ///             <::std::pin::Pin>::new_unchecked(&mut __awaitee),
     ///             ::std::future::get_context(task_context),
@@ -914,9 +911,6 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
 
         let task_context_ident = Ident::with_dummy_span(sym::_task_context);
 
-        // SAFETY: `__awaitee` is the match-arm local that stores the awaited
-        // future in the coroutine state. The desugaring only reborrows it for
-        // the duration of `poll`, so the temporary `Pin<&mut _>` does not move it.
         // unsafe {
         //     ::std::future::Future::poll(
         //         ::std::pin::Pin::new_unchecked(&mut __awaitee),
@@ -1087,7 +1081,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         let (body_id, closure_kind) = self.with_new_scopes(fn_decl_span, move |this| {
             let mut coroutine_kind = find_attr!(attrs, Coroutine(_) => hir::CoroutineKind::Coroutine(Movability::Movable));
 
-            // tRust: known issue — (contracts) Support contracts on closures?
+            // FIXME(contracts): Support contracts on closures?
             let body_id = this.lower_fn_body(decl, None, constness, |this| {
                 this.coroutine_kind = coroutine_kind;
                 let e = this.lower_expr_mut(body);
@@ -1867,9 +1861,6 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     )
                 }
                 ForLoopKind::ForAwait => {
-                    // SAFETY: `iter` here is the already-pinned iterator binding
-                    // from the outer match arm. Reborrowing it with
-                    // `Pin::new_unchecked` is the `Pin::as_mut` pattern.
                     // we'll generate `unsafe { Pin::new_unchecked(&mut iter) })` and then pass this
                     // to make_lowered_await with `FutureKind::AsyncIterator` which will generator
                     // calls to `poll_next`. In user code, this would probably be a call to
@@ -1883,9 +1874,6 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                         hir::LangItem::PinNewUnchecked,
                         arena_vec![self; iter],
                     ));
-                    // SAFETY: This compiler-generated unsafe block only
-                    // materializes that transient reborrowed pin so the lowered
-                    // await can poll without moving the already-pinned iterator.
                     // `unsafe { ... }`
                     let iter = self.arena.alloc(self.expr_unsafe(head_span, iter));
                     let kind = self.make_lowered_await(head_span, iter, FutureKind::AsyncIterator);
@@ -1929,9 +1917,6 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     hir::MatchSource::ForLoopDesugar,
                 ))
             }
-            // SAFETY: `ref mut iter` borrows the result of
-            // `into_async_iter(<head>)` in place for the whole arm, so wrapping
-            // that borrow in `Pin<&mut _>` pins the iterator for the loop.
             // `match into_async_iter(<head>) { ref mut iter => match unsafe { Pin::new_unchecked(iter) } { ... } }`
             ForLoopKind::ForAwait => {
                 let iter_ident = iter;
@@ -1944,9 +1929,6 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     hir::LangItem::PinNewUnchecked,
                     arena_vec![self; iter],
                 ));
-                // SAFETY: This compiler-generated unsafe block creates the
-                // pinned borrow described above; the iterator stays in the match
-                // arm's storage and is only accessed through that pin.
                 // `unsafe { ... }`
                 let iter = self.arena.alloc(self.expr_unsafe(head_span, iter));
                 let inner_match_expr = self.arena.alloc(self.expr_match(

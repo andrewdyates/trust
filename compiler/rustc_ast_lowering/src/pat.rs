@@ -199,7 +199,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             // There was a previous sub-tuple pattern; make sure we don't allow more...
             if pat.is_rest() {
                 // ...but there was one again, so error.
-                self.ban_extra_rest_pat(pat.span, rest.expect("invariant: rest is Some when banning extra rest pat").1, ctx); // tRust:;
+                self.ban_extra_rest_pat(pat.span, rest.unwrap().1, ctx);
             } else {
                 elems.push(self.lower_pat_mut(pat));
             }
@@ -266,7 +266,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             };
             if let Some(rest_span) = rest_span {
                 // We have e.g., `[a, .., b, ..]`. That's no good, error!
-                self.ban_extra_rest_pat(rest_span, prev_rest_span.expect("invariant: prev_rest_span is Some when duplicate rest detected"), "slice"); // tRust:, "slice");
+                self.ban_extra_rest_pat(rest_span, prev_rest_span.unwrap(), "slice");
             } else {
                 // Lower the pattern normally.
                 after.push(self.lower_pat_mut(pat));
@@ -377,10 +377,10 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
     /// Matches `'-' lit | lit (cf. parser::Parser::parse_literal_maybe_minus)`,
     /// or paths for ranges.
     //
-    // tRust: known issue — do we want to allow `expr -> pattern` conversion to create path expressions?
+    // FIXME: do we want to allow `expr -> pattern` conversion to create path expressions?
     // That means making this work:
     //
-    // ```rust,ignore (tRust: known issue)
+    // ```rust,ignore (FIXME)
     // struct S;
     // macro_rules! m {
     //     ($a:expr) => {

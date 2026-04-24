@@ -23,7 +23,7 @@ pub(crate) fn expand(
     let orig_item = item.clone();
 
     // Allow using `#[global_allocator]` on an item statement
-    // tRust: known issue — if we get deref patterns, use them to reduce duplication here
+    // FIXME - if we get deref patterns, use them to reduce duplication here
     let (item, ident, is_stmt, ty_span) = if let Annotatable::Item(item) = &item
         && let ItemKind::Static(box ast::StaticItem { ident, ty, .. }) = &item.kind
     {

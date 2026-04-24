@@ -71,10 +71,7 @@ impl Arch for X86_64Decoder {
 impl Decoder for X86_64Decoder {
     fn decode(&self, bytes: &[u8], address: u64) -> Result<Instruction, DisasmError> {
         if bytes.is_empty() {
-            return Err(DisasmError::InsufficientBytes {
-                needed: 1,
-                available: 0,
-            });
+            return Err(DisasmError::InsufficientBytes { needed: 1, available: 0 });
         }
         decoder::decode_instruction(bytes, address)
     }

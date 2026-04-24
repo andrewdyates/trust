@@ -197,7 +197,6 @@ declare_lint! {
     /// ```rust,compile_fail
     /// #![deny(unsafe_code)]
     /// fn main() {
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe {
     ///
     ///     }
@@ -1032,7 +1031,6 @@ declare_lint! {
     /// ### Example
     ///
     /// ```rust,compile_fail
-    /// // SAFETY: This is illustrative code in the lint documentation and is not executed.
     /// unsafe {
     ///     let y = std::mem::transmute::<&i32, &mut i32>(&5);
     /// }
@@ -1379,7 +1377,7 @@ impl<'tcx> LateLintPass<'tcx> for TypeAliasBounds {
             return;
         }
 
-        // tRust: known issue — (generic_const_exprs) Revisit this before stabilization.
+        // FIXME(generic_const_exprs): Revisit this before stabilization.
         // See also `tests/ui/const-generics/generic_const_exprs/type-alias-bounds.rs`.
         let ty = cx.tcx.type_of(item.owner_id).instantiate_identity();
         if ty.has_type_flags(ty::TypeFlags::HAS_CT_PROJECTION)
@@ -1521,7 +1519,7 @@ impl<'tcx> LateLintPass<'tcx> for TrivialConstraints {
                     | ClauseKind::Projection(..)
                     // Ignore bounds that a user can't type
                     | ClauseKind::WellFormed(..)
-                    // tRust: known issue — (generic_const_exprs) `ConstEvaluatable` can be written
+                    // FIXME(generic_const_exprs): `ConstEvaluatable` can be written
                     | ClauseKind::ConstEvaluatable(..)
                     // Users don't write this directly, only via another trait ref.
                     | ty::ClauseKind::HostEffect(..) => continue,
@@ -2047,7 +2045,6 @@ impl ExplicitOutlivesRequirements {
                             *tail = tail.to(to_span);
                             last_merged_i = Some(i);
                         } else {
-                            // tRust: invariant — each bound-span must be visited at most once during merging
                             bug!("another bound-span visited earlier");
                         }
                     }
@@ -2118,7 +2115,7 @@ impl<'tcx> LateLintPass<'tcx> for ExplicitOutlivesRequirements {
                             }
                         }
                         hir::WherePredicateKind::BoundPredicate(predicate) => {
-                            // tRust: known issue — we can also infer bounds on associated types,
+                            // FIXME we can also infer bounds on associated types,
                             // and should check for them here.
                             match predicate.bounded_ty.kind {
                                 hir::TyKind::Path(hir::QPath::Resolved(None, path)) => {
@@ -2348,7 +2345,6 @@ declare_lint! {
     ///
     /// ```rust,no_run
     /// # #![allow(unused)]
-    /// // SAFETY: This is illustrative code in the lint documentation and is not executed.
     /// unsafe {
     ///     let x: &'static i32 = std::mem::zeroed();
     /// }
@@ -2483,7 +2479,7 @@ impl<'tcx> LateLintPass<'tcx> for InvalidValue {
                         err
                     } else if err.span.is_none() {
                         err.span = Some(cx.tcx.def_span(field.did));
-                        write!(&mut err.message, " (in this {descr})").expect("invariant: write to String never fails"); // tRust: unwrap -> expect
+                        write!(&mut err.message, " (in this {descr})").unwrap();
                         err
                     } else {
                         InitError::from(format!("in this {descr}"))
@@ -2684,7 +2680,6 @@ declare_lint! {
     /// ```rust,compile_fail
     /// # #![allow(unused)]
     /// use std::ptr;
-    /// // SAFETY: This is illustrative code in the lint documentation and is not executed.
     /// unsafe {
     ///     let x = &*ptr::null::<i32>();
     ///     let x = ptr::addr_of!(*ptr::null::<i32>());
@@ -2787,7 +2782,6 @@ declare_lint! {
     /// use std::arch::asm;
     ///
     /// fn main() {
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe {
     ///         asm!("foo: bar");
     ///     }
@@ -2824,7 +2818,6 @@ declare_lint! {
     /// use std::arch::asm;
     ///
     /// fn main() {
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe {
     ///         asm!("0: jmp 0b");
     ///     }
@@ -2917,7 +2910,7 @@ fn is_hexagon_register_span_impl(before_colon: &str, after_colon: &str) -> bool 
     }
 
     let mut chars = before_colon.chars();
-    let start = chars.next().expect("invariant: chars non-empty, checked earlier"); // tRust: unwrap -> expect
+    let start = chars.next().unwrap();
 
     // Must start with a letter (r, V, p, etc.)
     if !start.is_ascii_alphabetic() {

@@ -54,7 +54,6 @@ impl<'tcx> Expr<'tcx> {
                 lhs_ct.expect_const(),
                 rhs_ct.expect_const(),
             ),
-            // tRust: invariant: Invalid args for Binop expr <...>
             _ => bug!("Invalid args for `Binop` expr {self:?}"),
         }
     }
@@ -71,7 +70,6 @@ impl<'tcx> Expr<'tcx> {
 
         match self.args().as_slice() {
             [ty, ct] => (ty.expect_ty(), ct.expect_const()),
-            // tRust: invariant: Invalid args for UnOp expr <...>
             _ => bug!("Invalid args for `UnOp` expr {self:?}"),
         }
     }
@@ -100,7 +98,6 @@ impl<'tcx> Expr<'tcx> {
                 func.expect_const(),
                 rest.iter().map(|arg| arg.expect_const()),
             ),
-            // tRust: invariant: Invalid args for Call expr <...>
             _ => bug!("Invalid args for `Call` expr {self:?}"),
         }
     }
@@ -126,7 +123,6 @@ impl<'tcx> Expr<'tcx> {
             [value_ty, value, to_ty] => {
                 (value_ty.expect_ty(), value.expect_const(), to_ty.expect_ty())
             }
-            // tRust: invariant: Invalid args for Cast expr <...>
             _ => bug!("Invalid args for `Cast` expr {self:?}"),
         }
     }

@@ -9,8 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::time::{Duration, Instant};
+use trust_types::fx::FxHashMap;
 
 use trust_types::Formula;
 
@@ -501,12 +501,7 @@ fn find_bottlenecks(times: &[Duration]) -> Vec<usize> {
     let avg_nanos = total.as_nanos() / times.len() as u128;
     let threshold = avg_nanos * 2;
 
-    times
-        .iter()
-        .enumerate()
-        .filter(|(_, t)| t.as_nanos() > threshold)
-        .map(|(i, _)| i)
-        .collect()
+    times.iter().enumerate().filter(|(_, t)| t.as_nanos() > threshold).map(|(i, _)| i).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -611,7 +606,10 @@ pub fn diagnose_failure(
             return FailureDiagnosis {
                 step_index,
                 rule: ReplayRule::Axiom("unknown".to_string()),
-                explanation: format!("step index {step_index} is out of bounds (total steps: {})", certificate.steps.len()),
+                explanation: format!(
+                    "step index {step_index} is out of bounds (total steps: {})",
+                    certificate.steps.len()
+                ),
                 missing_prerequisites: vec![],
             };
         }
@@ -659,7 +657,10 @@ pub fn diagnose_failure(
                     }
                 }
                 if missing.is_empty() {
-                    format!("{:?} failed: premises are verified but conclusion does not follow", step.rule_applied)
+                    format!(
+                        "{:?} failed: premises are verified but conclusion does not follow",
+                        step.rule_applied
+                    )
                 } else {
                     format!(
                         "{:?} failed: premise(s) {} not yet verified (only {} steps verified)",
@@ -672,7 +673,11 @@ pub fn diagnose_failure(
         }
         ReplayRule::Instantiation | ReplayRule::Congruence => {
             if step.premises.len() != 1 {
-                format!("{:?} requires 1 premise but got {}", step.rule_applied, step.premises.len())
+                format!(
+                    "{:?} requires 1 premise but got {}",
+                    step.rule_applied,
+                    step.premises.len()
+                )
             } else if step.premises[0] >= verified_count {
                 missing.push(format!("premise:{}", step.premises[0]));
                 format!(
@@ -680,7 +685,10 @@ pub fn diagnose_failure(
                     step.rule_applied, step.premises[0]
                 )
             } else {
-                format!("{:?} failed: premise is verified but conclusion does not follow", step.rule_applied)
+                format!(
+                    "{:?} failed: premise is verified but conclusion does not follow",
+                    step.rule_applied
+                )
             }
         }
     };
@@ -713,10 +721,7 @@ pub struct SuggestedFix {
 /// Analyzes the failure diagnosis and proposes alternative rules or
 /// additional context that might make the step succeed.
 #[must_use]
-pub fn suggest_fix(
-    diagnosis: &FailureDiagnosis,
-    context: &ProofContext,
-) -> Vec<SuggestedFix> {
+pub fn suggest_fix(diagnosis: &FailureDiagnosis, context: &ProofContext) -> Vec<SuggestedFix> {
     let mut suggestions = Vec::new();
 
     // Suggest adding missing prerequisites
@@ -859,8 +864,7 @@ mod tests {
         let failed = ReplayResult::Failed { step_index: 0, reason: "bad".into() };
         assert!(!failed.is_verified());
 
-        let incomplete =
-            ReplayResult::Incomplete { missing_lemmas: vec!["x".into()] };
+        let incomplete = ReplayResult::Incomplete { missing_lemmas: vec!["x".into()] };
         assert!(!incomplete.is_verified());
     }
 
@@ -941,10 +945,8 @@ mod tests {
     fn test_replay_detects_missing_lemmas() {
         let ctx = ProofContext::new();
 
-        let cert = ReplayCertificate {
-            steps: vec![],
-            required_lemmas: vec!["needed_lemma".to_string()],
-        };
+        let cert =
+            ReplayCertificate { steps: vec![], required_lemmas: vec!["needed_lemma".to_string()] };
 
         let mut replayer = ProofReplayer::new();
         let result = replayer.replay_proof(&cert, &ctx);
@@ -1028,10 +1030,8 @@ mod tests {
     #[test]
     fn test_replay_with_diagnostics_incomplete() {
         let ctx = ProofContext::new();
-        let cert = ReplayCertificate {
-            steps: vec![],
-            required_lemmas: vec!["missing".to_string()],
-        };
+        let cert =
+            ReplayCertificate { steps: vec![], required_lemmas: vec!["missing".to_string()] };
 
         let mut replayer = ProofReplayer::new();
         let diag = replayer.replay_with_diagnostics(&cert, &ctx);
@@ -1099,10 +1099,7 @@ mod tests {
         let term = LeanProofTerm::Const("tRust.Axiom.foo".to_string());
         let cert = certificate_from_proof_term(&term);
         assert_eq!(cert.steps.len(), 1);
-        assert_eq!(
-            cert.steps[0].rule_applied,
-            ReplayRule::Axiom("tRust.Axiom.foo".to_string())
-        );
+        assert_eq!(cert.steps[0].rule_applied, ReplayRule::Axiom("tRust.Axiom.foo".to_string()));
         assert!(cert.required_lemmas.is_empty());
     }
 
@@ -1125,10 +1122,7 @@ mod tests {
         let term = LeanProofTerm::ByDecidability { proposition: f.clone() };
         let cert = certificate_from_proof_term(&term);
         assert_eq!(cert.steps.len(), 1);
-        assert_eq!(
-            cert.steps[0].rule_applied,
-            ReplayRule::Axiom("decidability".to_string())
-        );
+        assert_eq!(cert.steps[0].rule_applied, ReplayRule::Axiom("decidability".to_string()));
         assert_eq!(cert.steps[0].conclusion, f);
     }
 
@@ -1270,10 +1264,7 @@ mod tests {
     #[test]
     fn test_checkpoint_replay_missing_lemmas() {
         let ctx = ProofContext::new();
-        let cert = ReplayCertificate {
-            steps: vec![],
-            required_lemmas: vec!["needed".to_string()],
-        };
+        let cert = ReplayCertificate { steps: vec![], required_lemmas: vec!["needed".to_string()] };
         let (result, cp) = checkpoint_replay(&cert, &ctx, None);
         assert!(!result.is_verified());
         assert_eq!(cp.step_index, 0);

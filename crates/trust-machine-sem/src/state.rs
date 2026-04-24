@@ -61,12 +61,8 @@ impl MachineState {
     pub fn symbolic() -> Self {
         let bv64 = Sort::BitVec(64);
         let bv128 = Sort::BitVec(128);
-        let gpr = core::array::from_fn(|i| {
-            Formula::Var(format!("X{i}"), bv64.clone())
-        });
-        let fpr = core::array::from_fn(|i| {
-            Formula::Var(format!("V{i}"), bv128.clone())
-        });
+        let gpr = core::array::from_fn(|i| Formula::Var(format!("X{i}"), bv64.clone()));
+        let fpr = core::array::from_fn(|i| Formula::Var(format!("V{i}"), bv128.clone()));
         Self {
             gpr,
             fpr,
@@ -93,11 +89,7 @@ impl MachineState {
             full
         } else {
             // Truncate to lower `width` bits.
-            Formula::BvExtract {
-                inner: Box::new(full),
-                high: width - 1,
-                low: 0,
-            }
+            Formula::BvExtract { inner: Box::new(full), high: width - 1, low: 0 }
         }
     }
 
@@ -107,11 +99,7 @@ impl MachineState {
         if width == 64 {
             self.sp.clone()
         } else {
-            Formula::BvExtract {
-                inner: Box::new(self.sp.clone()),
-                high: width - 1,
-                low: 0,
-            }
+            Formula::BvExtract { inner: Box::new(self.sp.clone()), high: width - 1, low: 0 }
         }
     }
 
@@ -125,11 +113,7 @@ impl MachineState {
         if width >= 128 {
             full
         } else {
-            Formula::BvExtract {
-                inner: Box::new(full),
-                high: width - 1,
-                low: 0,
-            }
+            Formula::BvExtract { inner: Box::new(full), high: width - 1, low: 0 }
         }
     }
 }

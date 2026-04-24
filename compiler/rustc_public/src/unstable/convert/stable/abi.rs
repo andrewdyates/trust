@@ -57,7 +57,7 @@ impl<'tcx> Stable<'tcx> for rustc_abi::Layout<'tcx> {
         tables: &mut Tables<'cx, BridgeTys>,
         cx: &CompilerCtxt<'cx, BridgeTys>,
     ) -> Self::T {
-        tables.layout_id(cx.lift(*self).expect("invariant: Layout must be liftable to current context")) // tRust: unwrap -> expect
+        tables.layout_id(cx.lift(*self).unwrap())
     }
 }
 

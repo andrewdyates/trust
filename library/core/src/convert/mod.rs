@@ -14,6 +14,7 @@
 //! The traits in this module are often used as trait bounds for generic functions such that to
 //! arguments of multiple types are supported. See the documentation of each trait for examples.
 //!
+
 //! [`TryFrom<T>`][`TryFrom`] rather than [`Into<U>`][`Into`] or [`TryInto<U>`][`TryInto`],
 //! as [`From`] and [`TryFrom`] provide greater flexibility and offer
 //! equivalent [`Into`] or [`TryInto`] implementations for free, thanks to a
@@ -419,6 +420,7 @@ pub const trait AsMut<T: PointeeSized>: PointeeSized {
 /// ```
 ///
 /// It is important to understand that [`Into`] does not provide a [`From`] implementation
+
 /// and then fall back to [`Into`] if [`From`] can't be implemented.
 ///
 /// # Examples

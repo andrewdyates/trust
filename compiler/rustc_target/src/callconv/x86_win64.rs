@@ -22,7 +22,7 @@ where
                 }
             }
             BackendRepr::SimdVector { .. } => {
-                // tRust: known issue (eddyb) — there should be a size cap here
+                // FIXME(eddyb) there should be a size cap here
                 // (probably what clang calls "illegal vectors").
             }
             BackendRepr::SimdScalableVector { .. } => panic!("scalable vectors are unsupported"),
@@ -32,7 +32,7 @@ where
                         // Use the native `i128` LLVM type for the softfloat ABI -- in other words, adjust nothing.
                     } else {
                         // `i128` is returned in xmm0 by Clang and GCC
-                        // tRust: known issue (#134288) — This may change for the `-msvc` targets in the future.
+                        // FIXME(#134288): This may change for the `-msvc` targets in the future.
                         let reg = Reg { kind: RegKind::Vector, size: Size::from_bits(128) };
                         a.cast_to(reg);
                     }
@@ -69,7 +69,7 @@ where
         }
         fixup(arg, false);
     }
-    // tRust: known issue — We should likely also do something about ZST return types, similar to above.
+    // FIXME: We should likely also do something about ZST return types, similar to above.
     // However, that's non-trivial due to `()`.
     // See <https://github.com/rust-lang/unsafe-code-guidelines/issues/552>.
 }

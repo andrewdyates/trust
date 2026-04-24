@@ -269,22 +269,20 @@ pub fn abstract_block(block: &BasicBlock, preds: &[Predicate]) -> AbstractState 
     // Extract predicates from assignments that are comparisons.
     for stmt in &block.stmts {
         if let Statement::Assign { place, rvalue, .. } = stmt
-            && let Rvalue::BinaryOp(op, lhs, rhs) | Rvalue::CheckedBinaryOp(op, lhs, rhs) =
-                rvalue
-            {
-                if let Some(cmp) = CmpOp::from_bin_op(*op) {
-                    let pred =
-                        Predicate::comparison(operand_name(lhs), cmp, operand_name(rhs));
-                    state.add(pred);
-                }
-                // Track the assigned variable for range predicates.
-                let assigned = format!("_{}", place.local);
-                for p in preds {
-                    if predicate_mentions(p, &assigned) {
-                        state.add(p.clone());
-                    }
+            && let Rvalue::BinaryOp(op, lhs, rhs) | Rvalue::CheckedBinaryOp(op, lhs, rhs) = rvalue
+        {
+            if let Some(cmp) = CmpOp::from_bin_op(*op) {
+                let pred = Predicate::comparison(operand_name(lhs), cmp, operand_name(rhs));
+                state.add(pred);
+            }
+            // Track the assigned variable for range predicates.
+            let assigned = format!("_{}", place.local);
+            for p in preds {
+                if predicate_mentions(p, &assigned) {
+                    state.add(p.clone());
                 }
             }
+        }
     }
 
     state
@@ -395,11 +393,7 @@ mod tests {
 
     #[test]
     fn test_abstract_block_empty_block() {
-        let block = BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        };
+        let block = BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return };
         let preds = vec![Predicate::comparison("x", CmpOp::Ge, "0")];
         let state = abstract_block(&block, &preds);
         assert!(state.contains(&preds[0]));

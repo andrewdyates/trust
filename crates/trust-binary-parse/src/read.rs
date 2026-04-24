@@ -112,16 +112,10 @@ pub fn read_fixed_name(bytes: &[u8]) -> &str {
 pub fn read_strtab_entry(strtab: &[u8], index: u32) -> Result<&str, ParseError> {
     let idx = index as usize;
     if idx >= strtab.len() {
-        return Err(ParseError::StringIndexOutOfBounds {
-            index,
-            size: strtab.len() as u32,
-        });
+        return Err(ParseError::StringIndexOutOfBounds { index, size: strtab.len() as u32 });
     }
     let remaining = &strtab[idx..];
-    let end = remaining
-        .iter()
-        .position(|&b| b == 0)
-        .unwrap_or(remaining.len());
+    let end = remaining.iter().position(|&b| b == 0).unwrap_or(remaining.len());
     std::str::from_utf8(&remaining[..end]).map_err(|_| ParseError::InvalidUtf8 { index })
 }
 

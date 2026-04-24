@@ -381,7 +381,7 @@ impl DropTree {
                 let block = *blocks[drop_idx].get_or_insert_with(|| T::make_block(cfg));
                 needs_block[drop_idx] = Block::Own;
                 while entry_points.last().is_some_and(|entry_point| entry_point.0 == drop_idx) {
-                    let entry_block = entry_points.pop().expect("invariant: entry points stack is non-empty").1; // tRust: unwrap -> expect
+                    let entry_block = entry_points.pop().unwrap().1;
                     T::link_entry_point(cfg, entry_block, block);
                 }
             }
@@ -421,7 +421,7 @@ impl DropTree {
             match drop_node.data.kind {
                 DropKind::Value => {
                     let terminator = TerminatorKind::Drop {
-                        target: blocks[drop_node.next].expect("invariant: block exists in drop tree"), // tRust: unwrap -> expect
+                        target: blocks[drop_node.next].unwrap(),
                         // The caller will handle this if needed.
                         unwind: UnwindAction::Terminate(UnwindTerminateReason::InCleanup),
                         place: drop_node.data.local.into(),
@@ -440,7 +440,7 @@ impl DropTree {
                         },
                     );
                     cfg.push(block, stmt);
-                    let target = blocks[drop_node.next].expect("invariant: block exists in drop tree"); // tRust: unwrap -> expect
+                    let target = blocks[drop_node.next].unwrap();
                     if target != block {
                         // Diagnostics don't use this `Span` but debuginfo
                         // might. Since we don't want breakpoints to be placed
@@ -460,7 +460,7 @@ impl DropTree {
                         StatementKind::StorageDead(drop_node.data.local),
                     );
                     cfg.push(block, stmt);
-                    let target = blocks[drop_node.next].expect("invariant: block exists in drop tree"); // tRust: unwrap -> expect
+                    let target = blocks[drop_node.next].unwrap();
                     if target != block {
                         // Diagnostics don't use this `Span` but debuginfo
                         // might. Since we don't want breakpoints to be placed
@@ -502,7 +502,7 @@ impl<'tcx> Scopes<'tcx> {
     }
 
     fn pop_scope(&mut self, region_scope: (region::Scope, SourceInfo)) -> Scope {
-        let scope = self.scopes.pop().expect("invariant: scope stack is non-empty"); // tRust: unwrap -> expect
+        let scope = self.scopes.pop().unwrap();
         assert_eq!(scope.region_scope, region_scope.0);
         scope
     }
@@ -511,7 +511,6 @@ impl<'tcx> Scopes<'tcx> {
         self.scopes
             .iter()
             .rposition(|scope| scope.region_scope == region_scope)
-            // tRust: invariant — callers only ask for active enclosing region scopes, so the target scope must already be present in `self.scopes`.
             .unwrap_or_else(|| span_bug!(span, "region_scope {:?} does not enclose", region_scope))
     }
 
@@ -555,7 +554,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         };
         self.scopes.breakable_scopes.push(scope);
         let normal_exit_block = f(self);
-        let breakable_scope = self.scopes.breakable_scopes.pop().expect("invariant: breakable scope stack is non-empty"); // tRust: unwrap -> expect
+        let breakable_scope = self.scopes.breakable_scopes.pop().unwrap();
         assert!(breakable_scope.region_scope == region_scope);
         let break_block =
             self.build_exit_tree(breakable_scope.break_drops, region_scope, span, None);
@@ -606,7 +605,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         };
         self.scopes.const_continuable_scopes.push(scope);
         let normal_exit_block = f(self);
-        let const_continue_scope = self.scopes.const_continuable_scopes.pop().expect("invariant: const-continuable scope stack is non-empty"); // tRust: unwrap -> expect
+        let const_continue_scope = self.scopes.const_continuable_scopes.pop().unwrap();
         assert!(const_continue_scope.region_scope == region_scope);
 
         let break_block = self.build_exit_tree(
@@ -666,7 +665,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         let then_block = f(self).into_block();
 
-        let if_then_scope = mem::replace(&mut self.scopes.if_then_scope, previous_scope).expect("invariant: if-then scope was set"); // tRust: unwrap -> expect
+        let if_then_scope = mem::replace(&mut self.scopes.if_then_scope, previous_scope).unwrap();
         assert!(if_then_scope.region_scope == region_scope);
 
         let else_block =
@@ -760,14 +759,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 .breakable_scopes
                 .iter()
                 .rposition(|breakable_scope| breakable_scope.region_scope == scope)
-                // tRust: invariant — resolved break/continue targets must correspond to an active breakable scope pushed during lowering.
                 .unwrap_or_else(|| span_bug!(span, "no enclosing breakable scope found"))
         };
         let (break_index, destination) = match target {
             BreakableTarget::Return => {
                 let scope = &self.scopes.breakable_scopes[0];
                 if scope.break_destination != Place::return_place() {
-                    // tRust: invariant — the outermost breakable scope for a body is the synthetic return scope targeting `Place::return_place()`.
                     span_bug!(span, "`return` in item with no return scope");
                 }
                 (0, Some(scope.break_destination))
@@ -854,7 +851,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // A constant that came from a const generic but was then used as an argument to
                 // old-style simd_shuffle (passing as argument instead of as a generic param).
                 ty::ConstKind::Value(cv) => return Ok((cv.valtree, cv.ty)),
-                // tRust: invariant — a `Const::Ty` reaching this simd-shuffle helper is only the already-valued const-generic case handled above.
                 other => span_bug!(constant.span, "{other:#?}"),
             },
             mir::Const::Val(mir::ConstValue::Scalar(mir::interpret::Scalar::Int(val)), ty) => {
@@ -867,15 +863,13 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             // macro expanding to a `simd_shuffle` call without wrapping the constant argument in a
             // `const {}` block, but the user pass through arbitrary expressions.
 
-            // tRust: known issue — Replace the magic const generic argument of `simd_shuffle` with a (upstream FIXME by oli-obk)
+            // FIXME(oli-obk): Replace the magic const generic argument of `simd_shuffle` with a
             // real const generic, and get rid of this entire function.
-            // tRust: invariant — simd-shuffle indices reaching valtree lowering must be unevaluated consts or scalar-int values, not other MIR const forms.
             other => span_bug!(constant.span, "{other:#?}"),
         };
 
         match self.tcx.const_eval_resolve_for_typeck(self.typing_env(), uv, constant.span) {
             Ok(Ok(valtree)) => Ok((valtree, ty)),
-            // tRust: invariant — const evaluation for this monomorphic shuffle index should always yield a structural valtree.
             Ok(Err(ty)) => span_bug!(constant.span, "could not convert {ty:?} to a valtree"),
             Err(e) => Err(e),
         }
@@ -893,7 +887,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         // A break can only break out of a scope, so the value should be a scope.
         let rustc_middle::thir::ExprKind::Scope { value, .. } = self.thir[value].kind else {
-            // tRust: invariant — const-continue lowering only accepts a break value wrapped in `ExprKind::Scope` for the target scope.
             span_bug!(span, "break value must be a scope")
         };
 
@@ -953,12 +946,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .const_continuable_scopes
             .iter()
             .rposition(|const_continuable_scope| const_continuable_scope.region_scope == scope)
-            // tRust: invariant — a `#[loop_match]` const-continue label must resolve to an active const-continuable scope recorded during lowering.
             .unwrap_or_else(|| span_bug!(span, "no enclosing const-continuable scope found"));
 
         let scope = &self.scopes.const_continuable_scopes[break_index];
 
-        let state_decl = &self.local_decls[scope.state_place.as_local().expect("invariant: place is a local variable")]; // tRust: unwrap -> expect
+        let state_decl = &self.local_decls[scope.state_place.as_local().unwrap()];
         let state_ty = state_decl.ty;
         let (discriminant_ty, rvalue) = match state_ty.kind() {
             ty::Adt(adt_def, _) if adt_def.is_enum() => {
@@ -967,7 +959,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             ty::Uint(_) | ty::Int(_) | ty::Float(_) | ty::Bool | ty::Char => {
                 (state_ty, Rvalue::Use(Operand::Copy(scope.state_place)))
             }
-            // tRust: invariant — `#[loop_match]` state lowering only synthesizes enum or primitive state temporaries readable as a discriminant/value.
             _ => span_bug!(state_decl.source_info.span, "unsupported #[loop_match] state"),
         };
 
@@ -979,7 +970,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             tcx: self.tcx,
             typeck_results,
             module: self.tcx.parent_module(self.hir_id).to_def_id(),
-            // tRust: known issue — We're in a body, should handle opaques. (upstream #132279)
+            // FIXME(#132279): We're in a body, should handle opaques.
             typing_env: rustc_middle::ty::TypingEnv::non_body_analysis(self.tcx, self.def_id),
             dropless_arena: &dropless_arena,
             match_lint_level: self.hir_id,
@@ -1073,7 +1064,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .scopes
             .if_then_scope
             .as_ref()
-            // tRust: invariant — `break_for_else` is only called from `in_if_then_scope`, which installs `self.scopes.if_then_scope`.
             .unwrap_or_else(|| span_bug!(source_info.span, "no if-then scope found"));
 
         let target = if_then_scope.region_scope;
@@ -1112,11 +1102,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .iter()
             .rev()
             .filter_map(|arg| match &arg.node {
-                // tRust: invariant — explicit tail-call arguments that transfer ownership should already be represented as `Operand::Move`.
                 Operand::Copy(_) => bug!("copy op in tail call args"),
                 Operand::Move(place) => {
                     let local =
-                        // tRust: invariant — a tail-call argument that needs a drop must be a bare local, not a projected place.
                         place.as_local().unwrap_or_else(|| bug!("projection in tail call args"));
 
                     if !self.local_decls[local].ty.needs_drop(self.tcx, self.typing_env()) {
@@ -1130,7 +1118,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .collect();
 
         let mut unwind_to = self.diverge_cleanup_target(
-            self.scopes.scopes.iter().rev().nth(1).expect("invariant: scope stack has at least two elements").region_scope, // tRust: unwrap -> expect
+            self.scopes.scopes.iter().rev().nth(1).unwrap().region_scope,
             DUMMY_SP,
         );
         let typing_env = self.typing_env();
@@ -1139,7 +1127,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // the innermost scope contains only the destructors for the tail call arguments
         // we only want to drop these in case of a panic, so we skip it
         for scope in self.scopes.scopes[1..].iter().rev().skip(1) {
-            // tRust: known issue — code duplication with `build_scope_drops` (upstream FIXME by explicit_tail_calls)
+            // FIXME(explicit_tail_calls) code duplication with `build_scope_drops`
             for drop_data in scope.drops.iter().rev() {
                 let source_info = drop_data.source_info;
                 let local = drop_data.local;
@@ -1318,7 +1306,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
             let next = self.tcx.parent_hir_id(id);
             if next == id {
-                // tRust: invariant — this walk stays within the current body owner and must reach `self.hir_id` before the crate root.
                 bug!("lint traversal reached the root of the crate");
             }
             id = next;
@@ -1430,7 +1417,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
             DropKind::Storage => {
                 if local.index() <= self.arg_count {
-                    // tRust: invariant — body arguments never receive a separate storage drop, so `schedule_drop` must not request `DropKind::Storage` for them.
                     span_bug!(
                         span,
                         "`schedule_drop` called with body argument {:?} \
@@ -1509,7 +1495,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
         }
 
-        // tRust: invariant — `schedule_drop` is only called for locals whose region scope is still active in `self.scopes`.
         span_bug!(span, "region scope {:?} not in scope to drop {:?}", region_scope, local);
     }
 
@@ -1540,7 +1525,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 return;
             }
         }
-        // tRust: invariant — backwards-incompatible drop linting only targets locals in an active scope already tracked in `self.scopes`.
         span_bug!(
             span,
             "region scope {:?} not in scope to drop {:?} for linting",
@@ -1587,7 +1571,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// that it creates. See #64391 for an example.
     pub(crate) fn record_operands_moved(&mut self, operands: &[Spanned<Operand<'tcx>>]) {
         let local_scope = self.local_scope();
-        let scope = self.scopes.scopes.last_mut().expect("invariant: collection is non-empty"); // tRust: unwrap -> expect
+        let scope = self.scopes.scopes.last_mut().unwrap();
 
         assert_eq!(scope.region_scope, local_scope, "local scope is not the topmost scope!",);
 
@@ -1801,7 +1785,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// for guards' temporaries and bindings between lowering each instance of an match arm's guard.
     pub(crate) fn clear_match_arm_and_guard_scopes(&mut self, region_scope: region::Scope) {
         let [.., arm_scope, guard_scope] = &mut *self.scopes.scopes else {
-            // tRust: invariant — lowering a guarded match arm pushes distinct arm and guard scopes onto the top of the scope stack.
             bug!("matches with guards should introduce separate scopes for the pattern and guard");
         };
 
@@ -2033,7 +2016,7 @@ impl<'a, 'tcx: 'a> Builder<'a, 'tcx> {
                             .unwind_drops
                             .add_drop(drop_node.data, unwind_indices[drop_node.next]);
                         self.scopes.unwind_drops.add_entry_point(
-                            blocks[drop_idx].expect("invariant: block exists in drop tree"), // tRust: unwrap -> expect
+                            blocks[drop_idx].unwrap(),
                             unwind_indices[drop_node.next],
                         );
                         unwind_indices.push(unwind_drop);
@@ -2059,7 +2042,7 @@ impl<'a, 'tcx: 'a> Builder<'a, 'tcx> {
                     DropKind::Value => {
                         if self.is_async_drop(drop_data.data.local) {
                             self.scopes.coroutine_drops.add_entry_point(
-                                blocks[drop_idx].expect("invariant: block exists in drop tree"), // tRust: unwrap -> expect
+                                blocks[drop_idx].unwrap(),
                                 dropline_indices[drop_data.next],
                             );
                         }
@@ -2153,7 +2136,6 @@ impl<'tcx> DropTreeBuilder<'tcx> for ExitScopes {
         if let TerminatorKind::UnwindResume = term.kind {
             term.kind = TerminatorKind::Goto { target: to };
         } else {
-            // tRust: invariant — drop-tree entry points created by `break_scope`/`break_for_else` always start with the `UnwindResume` dummy terminator.
             span_bug!(term.source_info.span, "unexpected dummy terminator kind: {:?}", term.kind);
         }
     }
@@ -2172,7 +2154,6 @@ impl<'tcx> DropTreeBuilder<'tcx> for CoroutineDrop {
         } else if let TerminatorKind::Drop { ref mut drop, .. } = term.kind {
             *drop = Some(to);
         } else {
-            // tRust: invariant — coroutine drop edges are only threaded through `Yield` or `Drop` terminators that carry a coroutine-drop successor.
             span_bug!(
                 term.source_info.span,
                 "cannot enter coroutine drop tree from {:?}",
@@ -2215,7 +2196,6 @@ impl<'tcx> DropTreeBuilder<'tcx> for Unwind {
             | TerminatorKind::Yield { .. }
             | TerminatorKind::CoroutineDrop
             | TerminatorKind::FalseEdge { .. } => {
-                // tRust: invariant — only terminators with an unwind edge are linked into the unwind drop tree; non-unwinding terminators are excluded earlier.
                 span_bug!(term.source_info.span, "cannot unwind from {:?}", term.kind)
             }
         }

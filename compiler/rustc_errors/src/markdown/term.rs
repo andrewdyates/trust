@@ -101,7 +101,7 @@ fn write_tt(
             reset_cursor();
         }
         MdTree::HorizontalRule => {
-            (0..WIDTH.get()).for_each(|_| buf.write_all(b"-").expect("invariant: write to vec must succeed")); // tRust: unwrap -> expect
+            (0..WIDTH.get()).for_each(|_| buf.write_all(b"-").unwrap());
             reset_cursor();
         }
         MdTree::Heading(n, stream) => {

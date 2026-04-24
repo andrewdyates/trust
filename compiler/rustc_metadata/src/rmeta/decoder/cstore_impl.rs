@@ -286,7 +286,7 @@ provide! { tcx, def_id, other, cdata,
     }
     trait_def => { table }
     deduced_param_attrs => {
-        // tRust: known issue — `deduced_param_attrs` has some sketchy encoding settings,
+        // FIXME: `deduced_param_attrs` has some sketchy encoding settings,
         // where we don't encode unless we're optimizing, doing codegen,
         // and not incremental (see `encoder.rs`). I don't think this is right!
         cdata
@@ -331,11 +331,11 @@ provide! { tcx, def_id, other, cdata,
     is_panic_runtime => { cdata.root.panic_runtime }
     is_compiler_builtins => { cdata.root.compiler_builtins }
 
-    // tRust: known issue — to be replaced with externally_implementable_items below
+    // FIXME: to be replaced with externally_implementable_items below
     has_global_allocator => { cdata.root.has_global_allocator }
-    // tRust: known issue — to be replaced with externally_implementable_items below
+    // FIXME: to be replaced with externally_implementable_items below
     has_alloc_error_handler => { cdata.root.has_alloc_error_handler }
-    // tRust: known issue — to be replaced with externally_implementable_items below
+    // FIXME: to be replaced with externally_implementable_items below
     has_panic_handler => { cdata.root.has_panic_handler }
 
     externally_implementable_items => {

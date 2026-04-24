@@ -487,7 +487,7 @@ impl<'a, 'tcx> WfPredicates<'a, 'tcx> {
 
     /// Pushes the obligations required for an inherent alias to be WF
     /// into `self.out`.
-    // tRust: known issue (inherent_associated_types) — Merge this function with `fn compute_alias`.
+    // FIXME(inherent_associated_types): Merge this function with `fn compute_alias`.
     fn add_wf_preds_for_inherent_projection(&mut self, data: ty::AliasTerm<'tcx>) {
         // An inherent projection is well-formed if
         //
@@ -498,8 +498,8 @@ impl<'a, 'tcx> WfPredicates<'a, 'tcx> {
         //     predicates of the impl that it's contained in.
 
         if !data.self_ty().has_escaping_bound_vars() {
-            // tRust: known issue (inherent_associated_types) — Should this happen inside of a snapshot?
-            // tRust: known issue (inherent_associated_types) — This is incompatible with the new solver and lazy norm!
+            // FIXME(inherent_associated_types): Should this happen inside of a snapshot?
+            // FIXME(inherent_associated_types): This is incompatible with the new solver and lazy norm!
             let args = traits::project::compute_inherent_assoc_term_args(
                 &mut traits::SelectionContext::new(self.infcx),
                 self.param_env,
@@ -814,7 +814,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
             }
 
             ty::FnDef(did, args) => {
-                // tRust: accepted tradeoff — Check the return type of function definitions for
+                // HACK: Check the return type of function definitions for
                 // well-formedness to mostly fix #84533. This is still not
                 // perfect and there may be ways to abuse the fact that we
                 // ignore requirements with escaping bound vars. That's a
@@ -909,7 +909,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
                 // types appearing in the fn signature.
             }
             ty::UnsafeBinder(ty) => {
-                // tRust: known issue (unsafe_binders) — For now, we have no way to express
+                // FIXME(unsafe_binders): For now, we have no way to express
                 // that a type must be `ManuallyDrop` OR `Copy` (or a pointer).
                 if !ty.has_escaping_bound_vars() {
                     self.out.push(traits::Obligation::new(
@@ -939,7 +939,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
                 // regions. This is perhaps not ideal.
                 self.add_wf_preds_for_dyn_ty(t, data, r);
 
-                // tRust: known issue (#27579) — RFC also considers adding trait
+                // FIXME(#27579) RFC also considers adding trait
                 // obligations that don't refer to Self and
                 // checking those
                 if let Some(principal) = data.principal() {
@@ -1095,7 +1095,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
                 ));
             }
             ty::ConstKind::Expr(_) => {
-                // tRust: known issue (generic_const_exprs) — this doesn't verify that given `Expr(N + 1)` the
+                // FIXME(generic_const_exprs): this doesn't verify that given `Expr(N + 1)` the
                 // trait bound `typeof(N): Add<typeof(1)>` holds. This is currently unnecessary
                 // as `ConstKind::Expr` is only produced via normalization of `ConstKind::Unevaluated`
                 // which means that the `DefId` would have been typeck'd elsewhere. However in
@@ -1122,7 +1122,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
                 // These variants are trivially WF, so nothing to do here.
             }
             ty::ConstKind::Value(val) => {
-                // tRust: known issue (mgca) — no need to feature-gate once valtree lifetimes are not erased
+                // FIXME(mgca): no need to feature-gate once valtree lifetimes are not erased
                 if tcx.features().min_generic_const_args() {
                     match val.ty.kind() {
                         ty::Adt(adt_def, args) => {
@@ -1185,7 +1185,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
                     }
                 }
 
-                // tRust: known issue — Enforce that values are structurally-matchable.
+                // FIXME: Enforce that values are structurally-matchable.
             }
         }
 
@@ -1193,7 +1193,6 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
     }
 
     fn visit_predicate(&mut self, _p: ty::Predicate<'tcx>) -> Self::Result {
-        // tRust: invariant — Predicate should not be checked for well-formedness
         bug!("predicate should not be checked for well-formedness");
     }
 }

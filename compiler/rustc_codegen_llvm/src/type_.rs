@@ -35,7 +35,6 @@ impl Hash for Type {
 impl fmt::Debug for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(
-            // SAFETY: The output function pointer is valid, and the LLVM value/type being printed is a valid reference.
             &llvm::build_string(|s| unsafe {
                 llvm::LLVMRustWriteTypeToString(self, s);
             })
@@ -48,18 +47,15 @@ impl<'ll> CodegenCx<'ll, '_> {}
 impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     pub(crate) fn type_named_struct(&self, name: &str) -> &'ll Type {
         let name = SmallCStr::new(name);
-        // SAFETY: `self.llcx()` is a valid LLVM context, and the name is a valid C string.
         unsafe { llvm::LLVMStructCreateNamed(self.llcx(), name.as_ptr()) }
     }
 
     pub(crate) fn set_struct_body(&self, ty: &'ll Type, els: &[&'ll Type], packed: bool) {
-        // SAFETY: `ty` is a valid named struct type, all element types in `els` are valid LLVM types in the same context, and the count matches the slice length.
         unsafe {
             llvm::LLVMStructSetBody(ty, els.as_ptr(), els.len() as c_uint, packed.to_llvm_bool())
         }
     }
     pub(crate) fn type_void(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMVoidTypeInContext(self.llcx()) }
     }
 
@@ -69,23 +65,19 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     }
 
     pub(crate) fn type_vector(&self, ty: &'ll Type, len: u64) -> &'ll Type {
-        // SAFETY: `ty` is a valid LLVM element type, and `len` specifies the vector length.
         unsafe { llvm::LLVMVectorType(ty, len as c_uint) }
     }
 
     pub(crate) fn type_scalable_vector(&self, ty: &'ll Type, count: u64) -> &'ll Type {
-        // SAFETY: `ty` is a valid LLVM element type, and `count` specifies the minimum vector length.
         unsafe { llvm::LLVMScalableVectorType(ty, count as c_uint) }
     }
 
     pub(crate) fn add_func(&self, name: &str, ty: &'ll Type) -> &'ll Value {
         let name = SmallCStr::new(name);
-        // SAFETY: `self.llmod()` is a valid LLVM module, the name is a valid C string, and `ty` is a valid function type.
         unsafe { llvm::LLVMAddFunction(self.llmod(), name.as_ptr(), ty) }
     }
 
     pub(crate) fn func_params_types(&self, ty: &'ll Type) -> Vec<&'ll Type> {
-        // SAFETY: The type reference is a valid LLVM function type.
         unsafe {
             let n_args = llvm::LLVMCountParamTypes(ty) as usize;
             let mut args = Vec::with_capacity(n_args);
@@ -156,17 +148,14 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
     }
 
     pub(crate) fn type_variadic_func(&self, args: &[&'ll Type], ret: &'ll Type) -> &'ll Type {
-        // SAFETY: `ret` is a valid LLVM return type, all parameter types in `args` are valid LLVM types, and the count matches the slice length.
         unsafe { llvm::LLVMFunctionType(ret, args.as_ptr(), args.len() as c_uint, TRUE) }
     }
 
     pub(crate) fn type_i1(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMInt1TypeInContext(self.llcx()) }
     }
 
     pub(crate) fn type_struct(&self, els: &[&'ll Type], packed: bool) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context, and all element types in the slice are valid LLVM types.
         unsafe {
             llvm::LLVMStructTypeInContext(
                 self.llcx(),
@@ -180,22 +169,18 @@ impl<'ll, CX: Borrow<SCx<'ll>>> GenericCx<'ll, CX> {
 
 impl<'ll, CX: Borrow<SCx<'ll>>> BaseTypeCodegenMethods for GenericCx<'ll, CX> {
     fn type_i8(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMInt8TypeInContext(self.llcx()) }
     }
 
     fn type_i16(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMInt16TypeInContext(self.llcx()) }
     }
 
     fn type_i32(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMInt32TypeInContext(self.llcx()) }
     }
 
     fn type_i64(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMInt64TypeInContext(self.llcx()) }
     }
 
@@ -208,27 +193,22 @@ impl<'ll, CX: Borrow<SCx<'ll>>> BaseTypeCodegenMethods for GenericCx<'ll, CX> {
     }
 
     fn type_f16(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMHalfTypeInContext(self.llcx()) }
     }
 
     fn type_f32(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMFloatTypeInContext(self.llcx()) }
     }
 
     fn type_f64(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMDoubleTypeInContext(self.llcx()) }
     }
 
     fn type_f128(&self) -> &'ll Type {
-        // SAFETY: `self.llcx()` is a valid LLVM context reference owned by this codegen session.
         unsafe { llvm::LLVMFP128TypeInContext(self.llcx()) }
     }
 
     fn type_func(&self, args: &[&'ll Type], ret: &'ll Type) -> &'ll Type {
-        // SAFETY: `ret` is a valid LLVM return type, all parameter types in `args` are valid LLVM types, and the count matches the slice length.
         unsafe { llvm::LLVMFunctionType(ret, args.as_ptr(), args.len() as c_uint, FALSE) }
     }
 
@@ -246,17 +226,13 @@ impl<'ll, CX: Borrow<SCx<'ll>>> BaseTypeCodegenMethods for GenericCx<'ll, CX> {
 
     fn element_type(&self, ty: &'ll Type) -> &'ll Type {
         match self.type_kind(ty) {
-            // SAFETY: The type is a valid LLVM sequential type (array, vector, or pointer).
             TypeKind::Array | TypeKind::Vector => unsafe { llvm::LLVMGetElementType(ty) },
-            // tRust: invariant — callers never ask for the element type of an opaque pointer
             TypeKind::Pointer => bug!("element_type is not supported for opaque pointers"),
-            // tRust: invariant — `element_type` is only queried for sequential LLVM types
             other => bug!("element_type called on unsupported type {other:?}"),
         }
     }
 
     fn vector_length(&self, ty: &'ll Type) -> usize {
-        // SAFETY: The type is a valid LLVM integer type.
         unsafe { llvm::LLVMGetVectorSize(ty) as usize }
     }
 
@@ -267,13 +243,11 @@ impl<'ll, CX: Borrow<SCx<'ll>>> BaseTypeCodegenMethods for GenericCx<'ll, CX> {
             TypeKind::Double => 64,
             TypeKind::X86_FP80 => 80,
             TypeKind::FP128 | TypeKind::PPC_FP128 => 128,
-            // tRust: invariant — `float_width` is only called with LLVM floating-point types
             other => bug!("llvm_float_width called on a non-float type {other:?}"),
         }
     }
 
     fn int_width(&self, ty: &'ll Type) -> u64 {
-        // SAFETY: The type is a valid LLVM integer type.
         unsafe { llvm::LLVMGetIntTypeWidth(ty) as u64 }
     }
 
@@ -282,7 +256,6 @@ impl<'ll, CX: Borrow<SCx<'ll>>> BaseTypeCodegenMethods for GenericCx<'ll, CX> {
     }
 
     fn type_array(&self, ty: &'ll Type, len: u64) -> &'ll Type {
-        // SAFETY: `ty` is a valid LLVM type, and `len` specifies the array element count.
         unsafe { llvm::LLVMArrayType2(ty, len) }
     }
 }

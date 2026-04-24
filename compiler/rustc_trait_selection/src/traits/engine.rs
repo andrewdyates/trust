@@ -315,7 +315,7 @@ where
         let mut implied_bounds = FxIndexSet::default();
         let mut errors = Vec::new();
         for &(ty, span) in tcx.assumed_wf_types(def_id) {
-            // tRust: known issue (@lcnr) — rustc currently does not check wf for types
+            // FIXME(@lcnr): rustc currently does not check wf for types
             // pre-normalization, meaning that implied bounds are sometimes
             // incorrect. See #100910 for more details.
             //

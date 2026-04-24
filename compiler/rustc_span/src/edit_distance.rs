@@ -192,8 +192,8 @@ pub fn find_best_match_for_names(
         .map(|s| (s, find_best_match_for_name_impl(false, candidates, *s, dist)))
         .filter_map(|(s, r)| r.map(|r| (s, r)))
         .min_by(|(s1, r1), (s2, r2)| {
-            let d1 = edit_distance(s1.as_str(), r1.as_str(), usize::MAX).expect("invariant: usize::MAX limit guarantees a result"); // tRust: unwrap -> expect
-            let d2 = edit_distance(s2.as_str(), r2.as_str(), usize::MAX).expect("invariant: usize::MAX limit guarantees a result"); // tRust: unwrap -> expect
+            let d1 = edit_distance(s1.as_str(), r1.as_str(), usize::MAX).unwrap();
+            let d2 = edit_distance(s2.as_str(), r2.as_str(), usize::MAX).unwrap();
             d1.cmp(&d2)
         })
         .map(|(_, r)| r)

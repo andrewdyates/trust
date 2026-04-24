@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-strengthen: AI-driven spec inference for the prove-strengthen-backprop loop.
 //!
 //! Reads proof reports (which VCs failed), analyzes failure patterns, and proposes
@@ -58,33 +58,43 @@ pub(crate) mod weakest_precondition;
 // tRust #793: Loop invariant feedback from sunder via MIR router.
 pub(crate) mod invariant_feedback;
 
+// tRust #448: Re-export abstract domain hierarchy types.
+pub use abstract_domains::{
+    AbstractDomainOps, Bound, CongruenceDomain, CongruenceValue, IntervalDomain, OctagonDomain,
+    ReducedProduct, reduce_interval_congruence, reduce_interval_octagon,
+};
+pub use abstract_invariant::{
+    AbstractDomain, AbstractInferenceConfig, AbstractInferenceResult, DomainPrecision,
+    InvariantCandidate, InvariantInferrer,
+};
 pub use analyzer::{FailureAnalysis, FailurePattern, analyze_failure};
+// tRust: Re-export backward_inference types for structured AI Model integration (#364)
+pub use backward_inference::{
+    FailureDescription, FunctionSummary, InferredSpec, InferredSpecItem, SpecCategory,
+    SpecInferenceRequest, SpecParseError, ValidationError,
+    ValidationResult as BackwardValidationResult, format_inference_prompt,
+    parse_inference_response, validate_inferred_spec,
+};
 pub use caller_propagation::{
     CallerObligation, CallerPropagator, FnVisibility, PropagationResult, SignatureSpec,
 };
-pub use gate_diagnostics::{
-    DiagnosticKind, FixSuggestion, GateDiagnostic, Severity,
-    format_diagnostics, suggest_fix,
+pub use cex_guided::{CexModel, CexValue, CounterexampleAnalyzer};
+pub use cex_guided_refinement::{
+    CexAnalyzer, Counterexample, RefinementStrategy, RefinementSuggestion, apply_refinement,
+    is_spurious, rank_suggestions,
+};
+// tRust #483: Re-export counterexample-guided refinement loop types.
+pub use cex_refine::{
+    CexRefinementSuggestion, CounterexampleAnalysis, IterationResult, RefineVerifier,
+    RefinementLoop, SpecWeakness, analyze_counterexample, suggest_refinement,
 };
 pub use confidence::{
     CalibrationTracker, ConfidenceBreakdown, ConfidenceEstimator, ConfidenceScore,
     ConfidenceWeights, ProposalSource, RankingStrategy, ScoredProposal, rank_proposals,
 };
-pub use cex_guided::{CexModel, CexValue, CounterexampleAnalyzer};
-pub use cex_guided_refinement::{
-    CexAnalyzer, Counterexample, RefinementStrategy, RefinementSuggestion,
-    apply_refinement, is_spurious, rank_suggestions,
-};
-// tRust #483: Re-export counterexample-guided refinement loop types.
-pub use cex_refine::{
-    CexRefinementSuggestion, CounterexampleAnalysis, IterationResult,
-    RefineVerifier, RefinementLoop, SpecWeakness, analyze_counterexample,
-    suggest_refinement,
-};
 pub use counterexample::{CounterexampleHint, HintKind};
 pub use ensemble::{
-    EnsembleGenerator, EnsembleResult, GeneratorConfig,
-    ScoredProposal as EnsembleScoredProposal,
+    EnsembleGenerator, EnsembleResult, GeneratorConfig, ScoredProposal as EnsembleScoredProposal,
     consensus, dedup_proposals as ensemble_dedup, diversity_bonus, vote,
 };
 pub use feedback::{
@@ -92,22 +102,39 @@ pub use feedback::{
     StrategyAdjustment, VerificationOutcome,
 };
 pub use feedback_loop::{
-    FeedbackEntry, FeedbackLoop, FeedbackLoopConfig, FeedbackLoopResult,
-    FailureClass, analyze_failures, classify_failures,
+    FailureClass, FeedbackEntry, FeedbackLoop, FeedbackLoopConfig, FeedbackLoopResult,
+    analyze_failures, classify_failures,
+};
+pub use gate_diagnostics::{
+    DiagnosticKind, FixSuggestion, GateDiagnostic, Severity, format_diagnostics, suggest_fix,
 };
 pub use heuristic::{FunctionSignature, HeuristicStrengthener, VerificationFailure};
 pub use heuristic_rules::{
     BoundsCheck, DivisionGuard, HeuristicRule, NonNullReturn, OverflowGuard, ResultOk, RuleEngine,
 };
+// tRust #548: Re-export Houdini conjunctive refinement types.
+pub use houdini::{
+    Counterexample as HoudiniCounterexample, HoudiniConfig, HoudiniError, HoudiniRefiner,
+    HoudiniResult, HoudiniVerifier,
+};
+// tRust #550: Re-export ICE learning types.
+pub use ice::{
+    ConcreteState, IceConfig, IceCounterexample, IceError, IceLearner, IceResult, IceVerifier,
+    ImplicationExample,
+};
+// tRust #793: Re-export loop invariant feedback types.
+pub use invariant_feedback::{
+    InvariantHint, apply_invariant_hints, from_sunder_invariants, rank_invariant_hints,
+};
 pub use llm_budget::{
-    ContentPriority, PromptSection, RequestCost, RunCostTracker, TokenBudget,
-    TruncationRecord, estimate_tokens, truncate_source_lines, truncate_to_budget,
+    ContentPriority, PromptSection, RequestCost, RunCostTracker, TokenBudget, TruncationRecord,
+    estimate_tokens, truncate_source_lines, truncate_to_budget,
 };
 pub use llm_cache::{CacheConfig, CacheStats as LlmCacheStats, ResponseCache};
 pub use llm_claude::{ClaudeConfig, ClaudeLlm};
 pub use llm_escalation::{
-    EscalatedResponse, EscalationPolicy, EscalationTracker, EscalationTrigger,
-    ModelTier, send_with_escalation,
+    EscalatedResponse, EscalationPolicy, EscalationTracker, EscalationTrigger, ModelTier,
+    send_with_escalation,
 };
 // llm_token_budget re-exports removed: TokenBudget, estimate_tokens, truncate_to_budget
 // are already exported from llm_budget above. TokenPriority alias also removed (no callers).
@@ -115,84 +142,52 @@ pub use llm_inference::{
     EscalationConfig, ExistingSpec, InferenceConfig, InferenceResult, LlmSpecInference,
     ThreeViewContext,
 };
+// tRust #658: Sunder-direct verification oracle for CEGIS loop.
+pub use pattern_library::{
+    CatalogEntry, CatalogMatch, MonotonicDirection, PatternCatalog, PatternCategory,
+    PatternDatabase, PatternMatcher, PatternSuggestion, SpecPattern, apply_patterns,
+    apply_patterns_with_db, builtin_patterns, instantiate_pattern, match_pattern,
+};
+pub use patterns::{
+    CodePattern, PatternLibrary, PatternMatch, pattern_matches_to_proposals, recognize_patterns,
+};
+pub use proposer::{Proposal, ProposalKind, strengthen, strengthen_with_context};
+pub use scoring::{
+    ScoringWeights, SpecScore, rank_by_score, rank_by_score_weighted, score_proposal,
+    score_proposal_weighted,
+};
+pub use source_reader::{SourceContext, extract_function, read_function};
 // Phase 1 re-exports for typed LLM boundary (#599)
 // LlmBackend, LlmRequest, LlmResponse, LlmError, NoOpLlm are defined above in this file.
 pub use spec_feedback_loop::{
     AlwaysPassVerifier, FailThenPassVerifier, FeedbackLoopConfig as SpecFeedbackLoopConfig,
-    IterationOutcome, IterationRecord, SpecFeedbackLoop, SpecFeedbackResult,
-    VerificationOracle, VerifyOutcome,
+    IterationOutcome, IterationRecord, SpecFeedbackLoop, SpecFeedbackResult, VerificationOracle,
+    VerifyOutcome,
 };
-// tRust #658: Sunder-direct verification oracle for CEGIS loop.
-#[cfg(feature = "sunder")]
-pub use sunder_oracle::{SunderDirectOracle, import_stdlib_seed_specs};
 pub use spec_inference::{
     InsertionTarget, StrengtheningProposal, infer_binary_search_specs, infer_null_deref,
     infer_specs, infer_specs_with_cex,
 };
-pub use spec_proposal::{
-    SpecKind, SpecProposal, format_suggestions, validate_spec,
+pub use spec_mining::{
+    AssertionKind, MinedAssertion, MinedSpec, SpecMiner, TestCase, TestValue, format_as_ensures,
+    format_as_requires, merge_specs,
 };
+pub use spec_proposal::{SpecKind, SpecProposal, format_suggestions, validate_spec};
 pub use spec_quality::{
-    MetricKind, QualityConfig, QualityEvaluator, QualityMetrics, QualityReport,
-    QualityScore, SpecCoverage,
+    MetricKind, QualityConfig, QualityEvaluator, QualityMetrics, QualityReport, QualityScore,
+    SpecCoverage,
 };
-pub use pattern_library::{
-    CatalogEntry, CatalogMatch, MonotonicDirection, PatternCatalog, PatternCategory,
-    PatternDatabase, PatternMatcher, PatternSuggestion, SpecPattern,
-    apply_patterns, apply_patterns_with_db, builtin_patterns, instantiate_pattern, match_pattern,
-};
-pub use patterns::{CodePattern, PatternMatch, PatternLibrary, recognize_patterns, pattern_matches_to_proposals};
-pub use proposer::{Proposal, ProposalKind, strengthen, strengthen_with_context};
-pub use source_reader::SourceContext;
+pub use strategy::{Strategy, StrategyRecord, StrategySelector, StrategySummary};
 pub use structural_gate::{GateConfig, GateResult, ScopedVar, StructuralGate};
+#[cfg(feature = "sunder")]
+pub use sunder_oracle::{SunderDirectOracle, import_stdlib_seed_specs};
 pub use template_match::{
     FunctionCategory, TemplateMatchResult, classify_function, match_and_propose,
     proposal_from_template,
 };
 pub use templates::{SpecTemplate, SpecTemplateKind, instantiate_template, standard_templates};
-pub use scoring::{
-    ScoringWeights, SpecScore, rank_by_score, rank_by_score_weighted,
-    score_proposal, score_proposal_weighted,
-};
-pub use spec_mining::{
-    AssertionKind, MinedAssertion, MinedSpec, SpecMiner, TestCase, TestValue,
-    format_as_ensures, format_as_requires, merge_specs,
-};
-pub use strategy::{Strategy, StrategyRecord, StrategySelector, StrategySummary};
-pub use weakest_precondition::{Statement, compute_weakest_precondition, substitute, wp_transform};
-// tRust #448: Re-export abstract domain hierarchy types.
-pub use abstract_domains::{
-    AbstractDomainOps, Bound, CongruenceDomain, CongruenceValue,
-    IntervalDomain, OctagonDomain, ReducedProduct,
-    reduce_interval_congruence, reduce_interval_octagon,
-};
-pub use abstract_invariant::{
-    AbstractDomain, AbstractInferenceConfig, AbstractInferenceResult,
-    DomainPrecision, InvariantCandidate, InvariantInferrer,
-};
-// tRust #548: Re-export Houdini conjunctive refinement types.
-pub use houdini::{
-    Counterexample as HoudiniCounterexample, HoudiniConfig, HoudiniError,
-    HoudiniRefiner, HoudiniResult, HoudiniVerifier,
-};
-// tRust #550: Re-export ICE learning types.
-pub use ice::{
-    ConcreteState, IceConfig, IceCounterexample, IceError, IceLearner,
-    IceResult, IceVerifier, ImplicationExample,
-};
-// tRust: Re-export backward_inference types for structured AI Model integration (#364)
-pub use backward_inference::{
-    FailureDescription, FunctionSummary, InferredSpec, InferredSpecItem,
-    SpecCategory, SpecInferenceRequest, SpecParseError, ValidationError,
-    ValidationResult as BackwardValidationResult,
-    format_inference_prompt, parse_inference_response, validate_inferred_spec,
-};
-// tRust #793: Re-export loop invariant feedback types.
-pub use invariant_feedback::{
-    apply_invariant_hints, from_sunder_invariants, rank_invariant_hints, InvariantHint,
-};
-
 use trust_types::{CrateVerificationResult, VerificationResult};
+pub use weakest_precondition::{Statement, compute_weakest_precondition, substitute, wp_transform};
 
 /// Configuration for the strengthen pass.
 #[derive(Debug, Clone)]
@@ -207,11 +202,7 @@ pub struct StrengthenConfig {
 
 impl Default for StrengthenConfig {
     fn default() -> Self {
-        Self {
-            min_confidence: 0.5,
-            max_proposals_per_function: 10,
-            use_llm: false,
-        }
+        Self { min_confidence: 0.5, max_proposals_per_function: 10, use_llm: false }
     }
 }
 
@@ -297,11 +288,7 @@ pub struct NoOpLlm;
 
 impl LlmBackend for NoOpLlm {
     fn send(&self, _request: &LlmRequest) -> Result<LlmResponse, LlmError> {
-        Ok(LlmResponse {
-            content: "[]".into(),
-            used_tool_use: false,
-            model_used: "none".into(),
-        })
+        Ok(LlmResponse { content: "[]".into(), used_tool_use: false, model_used: "none".into() })
     }
 }
 
@@ -332,7 +319,9 @@ pub fn run(
     let mut total_failures = 0;
 
     for func in &results.functions {
-        let failures: Vec<_> = func.results.iter()
+        let failures: Vec<_> = func
+            .results
+            .iter()
             .filter(|(_, result)| matches!(result, VerificationResult::Failed { .. }))
             .collect();
 
@@ -343,24 +332,17 @@ pub fn run(
         total_failures += failures.len();
 
         // Analyze failure patterns
-        let analyses: Vec<_> = failures.iter()
-            .map(|(vc, result)| analyzer::analyze_failure(vc, result))
-            .collect();
+        let analyses: Vec<_> =
+            failures.iter().map(|(vc, result)| analyzer::analyze_failure(vc, result)).collect();
 
         // Generate pattern-based proposals
-        let mut proposals = proposer::strengthen(
-            &func.function_path,
-            &func.function_name,
-            &analyses,
-        );
+        let mut proposals =
+            proposer::strengthen(&func.function_path, &func.function_name, &analyses);
 
         // Optionally augment with LLM proposals
         if config.use_llm {
-            let prompt = llm_claude::build_prompt(
-                &func.function_name,
-                &func.function_path,
-                &analyses,
-            );
+            let prompt =
+                llm_claude::build_prompt(&func.function_name, &func.function_path, &analyses);
             let request = LlmRequest {
                 prompt,
                 model: String::new(), // backend uses its configured default
@@ -393,25 +375,28 @@ pub fn run(
 
 #[cfg(test)]
 mod tests {
+    use trust_types::{
+        BinOp, Formula, FunctionVerificationResult, SourceSpan, Ty, VcKind, VerificationCondition,
+    };
+
     use super::*;
-    use trust_types::{BinOp, Formula, FunctionVerificationResult, SourceSpan, Ty, VcKind, VerificationCondition};
 
     fn make_overflow_failure() -> (VerificationCondition, VerificationResult) {
         let vc = VerificationCondition {
             kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "get_midpoint".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
-        let result = VerificationResult::Failed {
-            solver: "z4".into(),
-            time_ms: 1,
-            counterexample: None,
-        };
+        let result =
+            VerificationResult::Failed { solver: "z4".into(), time_ms: 1, counterexample: None };
         (vc, result)
     }
 
@@ -423,11 +408,8 @@ mod tests {
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
-        let result = VerificationResult::Failed {
-            solver: "z4".into(),
-            time_ms: 1,
-            counterexample: None,
-        };
+        let result =
+            VerificationResult::Failed { solver: "z4".into(), time_ms: 1, counterexample: None };
         (vc, result)
     }
 
@@ -439,11 +421,8 @@ mod tests {
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
-        let result = VerificationResult::Failed {
-            solver: "z4".into(),
-            time_ms: 1,
-            counterexample: None,
-        };
+        let result =
+            VerificationResult::Failed { solver: "z4".into(), time_ms: 1, counterexample: None };
         (vc, result)
     }
 
@@ -529,7 +508,13 @@ mod tests {
                         formula: Formula::Bool(true),
                         contract_metadata: None,
                     },
-                    VerificationResult::Proved { solver: "z4".into(), time_ms: 1, strength: trust_types::ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None },
+                    VerificationResult::Proved {
+                        solver: "z4".into(),
+                        time_ms: 1,
+                        strength: trust_types::ProofStrength::smt_unsat(),
+                        proof_certificate: None,
+                        solver_warnings: None,
+                    },
                 )],
                 from_notes: 0,
                 with_assumptions: 0,

@@ -51,10 +51,7 @@ impl CoverageStatus {
     /// Returns true if this variant has at least formula translation.
     #[must_use]
     pub fn has_formula(&self) -> bool {
-        matches!(
-            self,
-            CoverageStatus::Covered { .. } | CoverageStatus::FormulaOnly { .. }
-        )
+        matches!(self, CoverageStatus::Covered { .. } | CoverageStatus::FormulaOnly { .. })
     }
 
     /// Returns true if this is a gap (no coverage at all).
@@ -90,64 +87,43 @@ impl CoverageReport {
     /// Count of Rvalue variants with VC generation.
     #[must_use]
     pub fn rvalue_covered_count(&self) -> usize {
-        self.rvalue_coverage
-            .iter()
-            .filter(|v| v.status.has_vc_generation())
-            .count()
+        self.rvalue_coverage.iter().filter(|v| v.status.has_vc_generation()).count()
     }
 
     /// Count of Rvalue variants with at least formula translation.
     #[must_use]
     pub fn rvalue_formula_count(&self) -> usize {
-        self.rvalue_coverage
-            .iter()
-            .filter(|v| v.status.has_formula())
-            .count()
+        self.rvalue_coverage.iter().filter(|v| v.status.has_formula()).count()
     }
 
     /// Count of Rvalue variants that are gaps.
     #[must_use]
     pub fn rvalue_gap_count(&self) -> usize {
-        self.rvalue_coverage
-            .iter()
-            .filter(|v| v.status.is_gap())
-            .count()
+        self.rvalue_coverage.iter().filter(|v| v.status.is_gap()).count()
     }
 
     /// Count of Terminator variants with VC generation.
     #[must_use]
     pub fn terminator_covered_count(&self) -> usize {
-        self.terminator_coverage
-            .iter()
-            .filter(|v| v.status.has_vc_generation())
-            .count()
+        self.terminator_coverage.iter().filter(|v| v.status.has_vc_generation()).count()
     }
 
     /// Count of Terminator variants that are gaps.
     #[must_use]
     pub fn terminator_gap_count(&self) -> usize {
-        self.terminator_coverage
-            .iter()
-            .filter(|v| v.status.is_gap())
-            .count()
+        self.terminator_coverage.iter().filter(|v| v.status.is_gap()).count()
     }
 
     /// Count of BinOp variants with overflow/safety checking.
     #[must_use]
     pub fn binop_covered_count(&self) -> usize {
-        self.binop_coverage
-            .iter()
-            .filter(|v| v.status.has_vc_generation())
-            .count()
+        self.binop_coverage.iter().filter(|v| v.status.has_vc_generation()).count()
     }
 
     /// Count of BinOp variants that are gaps.
     #[must_use]
     pub fn binop_gap_count(&self) -> usize {
-        self.binop_coverage
-            .iter()
-            .filter(|v| v.status.is_gap())
-            .count()
+        self.binop_coverage.iter().filter(|v| v.status.is_gap()).count()
     }
 
     /// All identified gaps across all categories.
@@ -226,16 +202,8 @@ impl fmt::Display for CoverageReport {
         } else {
             writeln!(f, "Gaps ({}):", gaps.len())?;
             for gap in &gaps {
-                if let CoverageStatus::NotCovered {
-                    gap_description,
-                    priority,
-                } = &gap.status
-                {
-                    writeln!(
-                        f,
-                        "  [{priority}] {}: {gap_description}",
-                        gap.variant_name
-                    )?;
+                if let CoverageStatus::NotCovered { gap_description, priority } = &gap.status {
+                    writeln!(f, "  [{priority}] {}: {gap_description}", gap.variant_name)?;
                 }
             }
         }
@@ -379,28 +347,21 @@ fn analyze_terminator_coverage() -> Vec<VariantCoverage> {
             variant_name: "Terminator::SwitchInt",
             status: CoverageStatus::Covered {
                 modules: vec!["guards", "sp"],
-                vc_kinds: vec![
-                    "Path condition extraction (SwitchIntMatch, SwitchIntOtherwise)",
-                ],
+                vc_kinds: vec!["Path condition extraction (SwitchIntMatch, SwitchIntOtherwise)"],
             },
         },
         VariantCoverage {
             variant_name: "Terminator::Return",
             status: CoverageStatus::Covered {
                 modules: vec!["contracts", "sp"],
-                vc_kinds: vec![
-                    "Postcondition (from #[ensures])",
-                ],
+                vc_kinds: vec!["Postcondition (from #[ensures])"],
             },
         },
         VariantCoverage {
             variant_name: "Terminator::Call",
             status: CoverageStatus::Covered {
                 modules: vec!["contracts", "sp", "interprocedural"],
-                vc_kinds: vec![
-                    "Precondition (callee's #[requires])",
-                    "Uninterpreted result in SP",
-                ],
+                vc_kinds: vec!["Precondition (callee's #[requires])", "Uninterpreted result in SP"],
             },
         },
         VariantCoverage {
@@ -426,9 +387,7 @@ fn analyze_terminator_coverage() -> Vec<VariantCoverage> {
             variant_name: "Terminator::Unreachable",
             status: CoverageStatus::Covered {
                 modules: vec!["unreachable"],
-                vc_kinds: vec![
-                    "Unreachable (reachability check via path conditions)",
-                ],
+                vc_kinds: vec!["Unreachable (reachability check via path conditions)"],
             },
         },
     ]
@@ -466,20 +425,14 @@ fn analyze_binop_coverage() -> Vec<VariantCoverage> {
             variant_name: "BinOp::Div",
             status: CoverageStatus::Covered {
                 modules: vec!["divzero"],
-                vc_kinds: vec![
-                    "DivisionByZero",
-                    "ArithmeticOverflow (signed INT_MIN / -1)",
-                ],
+                vc_kinds: vec!["DivisionByZero", "ArithmeticOverflow (signed INT_MIN / -1)"],
             },
         },
         VariantCoverage {
             variant_name: "BinOp::Rem",
             status: CoverageStatus::Covered {
                 modules: vec!["divzero"],
-                vc_kinds: vec![
-                    "RemainderByZero",
-                    "ArithmeticOverflow (signed INT_MIN % -1)",
-                ],
+                vc_kinds: vec!["RemainderByZero", "ArithmeticOverflow (signed INT_MIN % -1)"],
             },
         },
         VariantCoverage {
@@ -643,11 +596,7 @@ mod tests {
             "BinOp has 17 variants: Add, Sub, Mul, Div, Rem, Eq, Ne, Lt, Le, \
              Gt, Ge, BitAnd, BitOr, BitXor, Shl, Shr, Cmp"
         );
-        assert_eq!(
-            report.unop_coverage.len(),
-            3,
-            "UnOp has 3 variants: Not, Neg, PtrMetadata"
-        );
+        assert_eq!(report.unop_coverage.len(), 3, "UnOp has 3 variants: Not, Neg, PtrMetadata");
     }
 
     #[test]
@@ -656,27 +605,15 @@ mod tests {
 
         // Covered (have safety VCs): BinaryOp, CheckedBinaryOp, UnaryOp,
         // Cast, Aggregate, Discriminant = 6
-        assert_eq!(
-            report.rvalue_covered_count(),
-            6,
-            "6 Rvalue variants should have VC generation"
-        );
+        assert_eq!(report.rvalue_covered_count(), 6, "6 Rvalue variants should have VC generation");
 
         // Formula-only (safe, no VCs needed): Use, Ref, Len, Repeat,
         // CopyForDeref = 5
         let formula_only = report.rvalue_formula_count() - report.rvalue_covered_count();
-        assert_eq!(
-            formula_only,
-            5,
-            "5 Rvalue variants should be formula-only (safe)"
-        );
+        assert_eq!(formula_only, 5, "5 Rvalue variants should be formula-only (safe)");
 
         // Gaps: AddressOf = 1
-        assert_eq!(
-            report.rvalue_gap_count(),
-            1,
-            "1 Rvalue variant should be a gap (AddressOf)"
-        );
+        assert_eq!(report.rvalue_gap_count(), 1, "1 Rvalue variant should be a gap (AddressOf)");
     }
 
     #[test]
@@ -691,11 +628,7 @@ mod tests {
         );
 
         // No gaps -- Goto and Drop are formula-only (safe)
-        assert_eq!(
-            report.terminator_gap_count(),
-            0,
-            "no Terminator gaps"
-        );
+        assert_eq!(report.terminator_gap_count(), 0, "no Terminator gaps");
     }
 
     #[test]
@@ -703,11 +636,7 @@ mod tests {
         let report = coverage_report();
 
         // Covered (have overflow/safety VCs): Add, Sub, Mul, Div, Rem, Shl, Shr = 7
-        assert_eq!(
-            report.binop_covered_count(),
-            7,
-            "7 BinOp variants should have safety VCs"
-        );
+        assert_eq!(report.binop_covered_count(), 7, "7 BinOp variants should have safety VCs");
 
         // No gaps -- comparisons and bitwise ops are formula-only (safe)
         assert_eq!(
@@ -743,18 +672,13 @@ mod tests {
         assert!(covered.has_formula());
         assert!(!covered.is_gap());
 
-        let formula_only = CoverageStatus::FormulaOnly {
-            module: "chc",
-            reason: "safe",
-        };
+        let formula_only = CoverageStatus::FormulaOnly { module: "chc", reason: "safe" };
         assert!(!formula_only.has_vc_generation());
         assert!(formula_only.has_formula());
         assert!(!formula_only.is_gap());
 
-        let not_covered = CoverageStatus::NotCovered {
-            gap_description: "needs work",
-            priority: "high",
-        };
+        let not_covered =
+            CoverageStatus::NotCovered { gap_description: "needs work", priority: "high" };
         assert!(!not_covered.has_vc_generation());
         assert!(!not_covered.has_formula());
         assert!(not_covered.is_gap());
@@ -783,22 +707,10 @@ mod tests {
         let report = coverage_report();
         let display = format!("{report}");
 
-        assert!(
-            display.contains("MIR-to-Formula Coverage Report"),
-            "display should have header"
-        );
-        assert!(
-            display.contains("Rvalue:"),
-            "display should list Rvalue stats"
-        );
-        assert!(
-            display.contains("AddressOf"),
-            "display should mention the AddressOf gap"
-        );
-        assert!(
-            display.contains("[medium]"),
-            "display should show gap priority"
-        );
+        assert!(display.contains("MIR-to-Formula Coverage Report"), "display should have header");
+        assert!(display.contains("Rvalue:"), "display should list Rvalue stats");
+        assert!(display.contains("AddressOf"), "display should mention the AddressOf gap");
+        assert!(display.contains("[medium]"), "display should show gap priority");
     }
 
     // -----------------------------------------------------------------------
@@ -827,10 +739,7 @@ mod tests {
             .iter()
             .find(|v| v.variant_name == "Rvalue::BinaryOp")
             .expect("Rvalue::BinaryOp should be in report");
-        assert!(
-            entry.status.has_vc_generation(),
-            "Rvalue::BinaryOp should have VC generation"
-        );
+        assert!(entry.status.has_vc_generation(), "Rvalue::BinaryOp should have VC generation");
     }
 
     #[test]
@@ -855,10 +764,7 @@ mod tests {
             .iter()
             .find(|v| v.variant_name == "Rvalue::AddressOf")
             .expect("Rvalue::AddressOf should be in report");
-        assert!(
-            entry.status.is_gap(),
-            "Rvalue::AddressOf should be a gap"
-        );
+        assert!(entry.status.is_gap(), "Rvalue::AddressOf should be a gap");
     }
 
     #[test]
@@ -869,10 +775,7 @@ mod tests {
             .iter()
             .find(|v| v.variant_name == "Terminator::Assert")
             .expect("Terminator::Assert should be in report");
-        assert!(
-            entry.status.has_vc_generation(),
-            "Terminator::Assert should have VC generation"
-        );
+        assert!(entry.status.has_vc_generation(), "Terminator::Assert should have VC generation");
     }
 
     #[test]
@@ -898,24 +801,14 @@ mod tests {
                 .iter()
                 .find(|v| v.variant_name == name)
                 .unwrap_or_else(|| panic!("{name} should be in report"));
-            assert!(
-                entry.status.has_vc_generation(),
-                "{name} should have overflow VC generation"
-            );
+            assert!(entry.status.has_vc_generation(), "{name} should have overflow VC generation");
         }
     }
 
     #[test]
     fn test_binop_comparisons_are_formula_only() {
         let report = coverage_report();
-        for name in [
-            "BinOp::Eq",
-            "BinOp::Ne",
-            "BinOp::Lt",
-            "BinOp::Le",
-            "BinOp::Gt",
-            "BinOp::Ge",
-        ] {
+        for name in ["BinOp::Eq", "BinOp::Ne", "BinOp::Lt", "BinOp::Le", "BinOp::Gt", "BinOp::Ge"] {
             let entry = report
                 .binop_coverage
                 .iter()

@@ -92,7 +92,7 @@ impl<'a, 'ra, 'tcx> UnusedImportCheckVisitor<'a, 'ra, 'tcx> {
         } else {
             // This trait import is definitely used, in a way other than
             // method resolution.
-            // NOTE: swap_remove is correct here - ordering doesn't matter for this collection.
+            // FIXME(#120456) - is `swap_remove` correct?
             self.r.maybe_unused_trait_imports.swap_remove(&def_id);
             if let Some(i) = self.unused_imports.get_mut(&self.base_id) {
                 i.unused.remove(&id);
@@ -117,7 +117,7 @@ impl<'a, 'ra, 'tcx> UnusedImportCheckVisitor<'a, 'ra, 'tcx> {
 
     fn unused_import(&mut self, id: ast::NodeId) -> &mut UnusedImport {
         let use_tree_id = self.base_id;
-        let use_tree = self.base_use_tree.expect("invariant: value is present").clone();
+        let use_tree = self.base_use_tree.unwrap().clone();
         let item_span = self.item_span;
 
         self.unused_imports.entry(id).or_insert_with(|| UnusedImport {
@@ -349,7 +349,7 @@ fn calc_unused_spans(
                     // Try to collapse adjacent spans into a single one. This prevents all cases of
                     // overlapping removals, which are not supported by rustfix
                     if previous_unused && !to_remove.is_empty() {
-                        let previous = to_remove.pop().expect("invariant: non-empty collection");
+                        let previous = to_remove.pop().unwrap();
                         to_remove.push(previous.to(remove_span));
                     } else {
                         to_remove.push(remove_span);
@@ -379,11 +379,11 @@ fn calc_unused_spans(
                 if used_children == 1 && !contains_self {
                     // Left brace, from the start of the nested group to the first item.
                     to_remove.push(
-                        tree_span.shrink_to_lo().to(nested.first().expect("invariant: non-empty collection").0.span.shrink_to_lo()),
+                        tree_span.shrink_to_lo().to(nested.first().unwrap().0.span.shrink_to_lo()),
                     );
                     // Right brace, from the end of the last item to the end of the nested group.
                     to_remove.push(
-                        nested.last().expect("invariant: non-empty collection").0.span.shrink_to_hi().to(tree_span.shrink_to_hi()),
+                        nested.last().unwrap().0.span.shrink_to_hi().to(tree_span.shrink_to_hi()),
                     );
                 }
 

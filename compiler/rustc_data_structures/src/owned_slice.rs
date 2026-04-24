@@ -122,8 +122,6 @@ impl Deref for OwnedSlice {
         // Safety:
         // `self.bytes` is valid per the construction in `slice_owned`
         // (which is the only constructor)
-        // SAFETY: `self.bytes` was derived from `owner` in `slice_owned`, and
-        // `self.owner` keeps that backing allocation alive for `self`.
         unsafe { &*self.bytes }
     }
 }

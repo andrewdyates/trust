@@ -441,7 +441,7 @@ pub enum RegionVariableOrigin<'tcx> {
 
     /// Region variables created as the values for early-bound regions.
     ///
-    /// tRust: known issue —(@lcnr): This should also store a `DefId`, similar to
+    /// FIXME(@lcnr): This should also store a `DefId`, similar to
     /// `TypeVariableOrigin`.
     RegionParameterDefinition(Span, Symbol),
 
@@ -645,7 +645,7 @@ impl<'tcx> InferCtxt<'tcx> {
     }
 
     /// Returns the origin of the const variable identified by `vid`
-    // tRust: known issue —: We should store origins separately from the unification table
+    // FIXME: We should store origins separately from the unification table
     // so this doesn't need to be optional.
     pub fn const_var_origin(&self, vid: ConstVid) -> Option<ConstVariableOrigin> {
         match self.inner.borrow_mut().const_unification_table().probe_value(vid) {
@@ -1043,7 +1043,7 @@ impl<'tcx> InferCtxt<'tcx> {
             | TypingMode::Borrowck { defining_opaque_types } => {
                 id.into().as_local().is_some_and(|def_id| defining_opaque_types.contains(&def_id))
             }
-            // tRust: known issue —(#132279): This function is quite weird in post-analysis
+            // FIXME(#132279): This function is quite weird in post-analysis
             // and post-borrowck analysis mode. We may need to modify its uses
             // to support PostBorrowckAnalysis in the old solver as well.
             TypingMode::Coherence
@@ -1309,7 +1309,6 @@ impl<'tcx> InferCtxt<'tcx> {
         match resolve::fully_resolve(self, value) {
             Ok(value) => {
                 if value.has_non_region_infer() {
-                    // tRust: invariant — value must be fully resolved (no remaining inference variables)
                     bug!("`{value:?}` is not fully resolved");
                 }
                 if value.has_infer_regions() {
@@ -1401,7 +1400,6 @@ impl<'tcx> InferCtxt<'tcx> {
         let unresolved_kind_ty = match *closure_ty.kind() {
             ty::Closure(_, args) => args.as_closure().kind_ty(),
             ty::CoroutineClosure(_, args) => args.as_coroutine_closure().kind_ty(),
-            // tRust: invariant — closure_ty must be a Closure or CoroutineClosure type
             _ => bug!("unexpected type {closure_ty}"),
         };
         let closure_kind_ty = self.shallow_resolve(unresolved_kind_ty);
@@ -1426,7 +1424,7 @@ impl<'tcx> InferCtxt<'tcx> {
     /// using canonicalization or carrying this inference context around.
     pub fn typing_env(&self, param_env: ty::ParamEnv<'tcx>) -> ty::TypingEnv<'tcx> {
         let typing_mode = match self.typing_mode() {
-            // tRust: known issue —(#132279): This erases the `defining_opaque_types` as it isn't possible
+            // FIXME(#132279): This erases the `defining_opaque_types` as it isn't possible
             // to handle them without proper canonicalization. This means we may cause cycle
             // errors and fail to reveal opaques while inside of bodies. We should rename this
             // function and require explicit comments on all use-sites in the future.
@@ -1717,7 +1715,6 @@ impl<'tcx> RegionVariableOrigin<'tcx> {
             | RegionVariableOrigin::RegionParameterDefinition(a, ..)
             | RegionVariableOrigin::BoundRegion(a, ..)
             | RegionVariableOrigin::UpvarRegion(_, a) => a,
-            // tRust: invariant — NLL region variables do not carry a span; use NLL diagnostics instead
             RegionVariableOrigin::Nll(..) => bug!("NLL variable used with `span`"),
         }
     }

@@ -93,12 +93,13 @@ impl TranslationValidator {
         let vcs = validation.vcs;
 
         if let ValidationVerdict::Unknown { reason } = &verdict
-            && vcs.is_empty() {
-                return Ok(SmtValidationResult::Inconclusive {
-                    reason: reason.clone(),
-                    partial_results: Vec::new(),
-                });
-            }
+            && vcs.is_empty()
+        {
+            return Ok(SmtValidationResult::Inconclusive {
+                reason: reason.clone(),
+                partial_results: Vec::new(),
+            });
+        }
 
         let mut prepared = if vcs.is_empty() {
             vec![PreparedVc::new(structural_vc(
@@ -165,7 +166,7 @@ impl TranslationValidator {
                 pass: "user-property".to_string(),
                 check: "property".to_string(),
             },
-            function: func.name.clone(),
+            function: func.name.clone().into(),
             location: func.span.clone(),
             formula: Formula::Not(Box::new(property.clone())),
             contract_metadata: None,
@@ -402,7 +403,7 @@ fn structural_vc(
 ) -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::TranslationValidation { pass: "refinement".to_string(), check },
-        function: func.name.clone(),
+        function: func.name.clone().into(),
         location: func.span.clone(),
         formula,
         contract_metadata: None,

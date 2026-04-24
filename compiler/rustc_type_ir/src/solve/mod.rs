@@ -18,7 +18,7 @@ pub type CanonicalInput<I, T = <I as Interner>::Predicate> =
 pub type CanonicalResponse<I> = Canonical<I, Response<I>>;
 /// The result of evaluating a canonical query.
 ///
-/// tRust: known issue -- We use a different type than the existing canonical queries. This is because
+/// FIXME: We use a different type than the existing canonical queries. This is because
 /// we need to add a `Certainty` for `overflow` and may want to restructure this code without
 /// having to worry about changes to currently used code. Once we've made progress on this
 /// solver, merge the two responses again.
@@ -193,7 +193,7 @@ pub enum CandidateSource<I: Interner> {
     /// A candidate that is registered only during coherence to represent some
     /// yet-unknown impl that could be produced downstream without violating orphan
     /// rules.
-    // tRust: known issue -- Merge this with the forced ambiguity candidates, so those don't use `Misc`.
+    // FIXME: Merge this with the forced ambiguity candidates, so those don't use `Misc`.
     CoherenceUnknowable,
 }
 

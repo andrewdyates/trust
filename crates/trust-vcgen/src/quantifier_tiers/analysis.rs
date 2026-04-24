@@ -110,7 +110,7 @@ pub fn skolemize(formula: &Formula) -> Formula {
 
 fn skolemize_rec(
     formula: &Formula,
-    enclosing_universals: &[(String, Sort)],
+    enclosing_universals: &[(trust_types::Symbol, Sort)],
     counter: &mut usize,
 ) -> Formula {
     match formula {
@@ -133,16 +133,14 @@ fn skolemize_rec(
                 } else {
                     // Skolem function: we represent it as a fresh variable
                     // whose name encodes the dependency on universals.
-                    let arg_names: Vec<&str> = enclosing_universals
-                        .iter()
-                        .map(|(n, _)| n.as_str())
-                        .collect();
+                    let arg_names: Vec<&str> =
+                        enclosing_universals.iter().map(|(n, _)| n.as_str()).collect();
                     Formula::Var(
                         format!("{skolem_name}({})", arg_names.join(",")),
                         var_sort.clone(),
                     )
                 };
-                current_body = substitute(&current_body, var_name, &skolem_term);
+                current_body = substitute(&current_body, var_name.as_str(), &skolem_term);
             }
             // Continue skolemizing in the (now existential-free) body.
             skolemize_rec(&current_body, enclosing_universals, counter)
@@ -151,12 +149,12 @@ fn skolemize_rec(
         Formula::Not(inner) => {
             Formula::Not(Box::new(skolemize_rec(inner, enclosing_universals, counter)))
         }
-        Formula::And(cs) => {
-            Formula::And(cs.iter().map(|c| skolemize_rec(c, enclosing_universals, counter)).collect())
-        }
-        Formula::Or(cs) => {
-            Formula::Or(cs.iter().map(|c| skolemize_rec(c, enclosing_universals, counter)).collect())
-        }
+        Formula::And(cs) => Formula::And(
+            cs.iter().map(|c| skolemize_rec(c, enclosing_universals, counter)).collect(),
+        ),
+        Formula::Or(cs) => Formula::Or(
+            cs.iter().map(|c| skolemize_rec(c, enclosing_universals, counter)).collect(),
+        ),
         Formula::Implies(a, b) => Formula::Implies(
             Box::new(skolemize_rec(a, enclosing_universals, counter)),
             Box::new(skolemize_rec(b, enclosing_universals, counter)),
@@ -187,7 +185,7 @@ pub fn instantiate_universal(formula: &Formula, terms: &[Formula]) -> Formula {
             let instantiation_count = bindings.len().min(terms.len());
 
             for i in 0..instantiation_count {
-                result = substitute(&result, &bindings[i].0, &terms[i]);
+                result = substitute(&result, bindings[i].0.as_str(), &terms[i]);
             }
 
             if instantiation_count < bindings.len() {
@@ -217,19 +215,17 @@ pub fn simplify_quantified(formula: &Formula) -> Formula {
         Formula::Not(inner) => Formula::Not(Box::new(simplify_quantified(inner))),
         Formula::And(cs) => Formula::And(cs.iter().map(simplify_quantified).collect()),
         Formula::Or(cs) => Formula::Or(cs.iter().map(simplify_quantified).collect()),
-        Formula::Implies(a, b) => Formula::Implies(
-            Box::new(simplify_quantified(a)),
-            Box::new(simplify_quantified(b)),
-        ),
+        Formula::Implies(a, b) => {
+            Formula::Implies(Box::new(simplify_quantified(a)), Box::new(simplify_quantified(b)))
+        }
         Formula::Ite(c, t, e) => Formula::Ite(
             Box::new(simplify_quantified(c)),
             Box::new(simplify_quantified(t)),
             Box::new(simplify_quantified(e)),
         ),
-        Formula::Eq(a, b) => Formula::Eq(
-            Box::new(simplify_quantified(a)),
-            Box::new(simplify_quantified(b)),
-        ),
+        Formula::Eq(a, b) => {
+            Formula::Eq(Box::new(simplify_quantified(a)), Box::new(simplify_quantified(b)))
+        }
         Formula::Forall(bindings, body) => {
             Formula::Forall(bindings.clone(), Box::new(simplify_quantified(body)))
         }
@@ -241,28 +237,21 @@ pub fn simplify_quantified(formula: &Formula) -> Formula {
 
     // Now apply quantifier-specific simplifications at this level.
     match &simplified_children {
-        Formula::Forall(bindings, body) => {
-            simplify_forall(bindings, body)
-        }
-        Formula::Exists(bindings, body) => {
-            simplify_exists(bindings, body)
-        }
+        Formula::Forall(bindings, body) => simplify_forall(bindings, body),
+        Formula::Exists(bindings, body) => simplify_exists(bindings, body),
         other => other.clone(),
     }
 }
 
 /// Simplify a `Forall` node after children are already simplified.
-fn simplify_forall(bindings: &[(String, Sort)], body: &Formula) -> Formula {
+fn simplify_forall(bindings: &[(trust_types::Symbol, Sort)], body: &Formula) -> Formula {
     if bindings.is_empty() {
         return body.clone();
     }
 
     let body_free = free_vars(body);
-    let non_vacuous: Vec<(String, Sort)> = bindings
-        .iter()
-        .filter(|(name, _)| body_free.contains(name))
-        .cloned()
-        .collect();
+    let non_vacuous: Vec<(trust_types::Symbol, Sort)> =
+        bindings.iter().filter(|(name, _)| body_free.contains(name.as_str())).cloned().collect();
 
     if non_vacuous.is_empty() {
         return body.clone();
@@ -283,17 +272,14 @@ fn simplify_forall(bindings: &[(String, Sort)], body: &Formula) -> Formula {
 }
 
 /// Simplify an `Exists` node after children are already simplified.
-fn simplify_exists(bindings: &[(String, Sort)], body: &Formula) -> Formula {
+fn simplify_exists(bindings: &[(trust_types::Symbol, Sort)], body: &Formula) -> Formula {
     if bindings.is_empty() {
         return body.clone();
     }
 
     let body_free = free_vars(body);
-    let non_vacuous: Vec<(String, Sort)> = bindings
-        .iter()
-        .filter(|(name, _)| body_free.contains(name))
-        .cloned()
-        .collect();
+    let non_vacuous: Vec<(trust_types::Symbol, Sort)> =
+        bindings.iter().filter(|(name, _)| body_free.contains(name.as_str())).cloned().collect();
 
     if non_vacuous.is_empty() {
         return body.clone();

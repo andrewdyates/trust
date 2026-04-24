@@ -28,12 +28,6 @@ impl StateMachineAdapter {
     pub fn new(machine: StateMachine) -> Self {
         Self { machine }
     }
-
-    /// Access the underlying state machine.
-    #[must_use]
-    pub(crate) fn machine(&self) -> &StateMachine {
-        &self.machine
-    }
 }
 
 impl TransitionSystem for StateMachineAdapter {
@@ -87,15 +81,13 @@ pub fn check_deadlock_freedom(machine: &StateMachine) -> bool {
 ///
 /// Returns a list of `StateId`s that are reachable and have no outgoing
 /// transitions.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn find_deadlock_states(machine: &StateMachine) -> Vec<StateId> {
+fn find_deadlock_states(machine: &StateMachine) -> Vec<StateId> {
     match explore(machine) {
         Ok(outcome) => {
             let reachable = machine.reachable_states(outcome.states_discovered);
-            reachable
-                .into_iter()
-                .filter(|id| machine.is_deadlock_state(*id))
-                .collect()
+            reachable.into_iter().filter(|id| machine.is_deadlock_state(*id)).collect()
         }
         Err(_) => Vec::new(),
     }
@@ -108,9 +100,8 @@ mod tests {
 
     #[test]
     fn adapter_initial_states() {
-        let machine = StateMachineBuilder::new(StateId(0))
-            .add_state(State::new(StateId(0), "Start"))
-            .build();
+        let machine =
+            StateMachineBuilder::new(StateId(0)).add_state(State::new(StateId(0), "Start")).build();
         let adapter = StateMachineAdapter::new(machine);
         assert_eq!(adapter.initial_states(), vec![0]);
     }

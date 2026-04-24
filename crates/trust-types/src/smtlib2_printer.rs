@@ -52,9 +52,7 @@ impl SmtLib2Printer {
     /// Create a printer with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            config: SmtLib2Config::default(),
-        }
+        Self { config: SmtLib2Config::default() }
     }
 
     /// Create a printer with the given configuration.
@@ -192,10 +190,7 @@ impl SmtLib2Printer {
         }
         let indent = " ".repeat((depth + 1) * self.config.indent_width);
         let head = &parts[0];
-        let rest: Vec<String> = parts[1..]
-            .iter()
-            .map(|p| self.indent_sexp(p, depth + 1))
-            .collect();
+        let rest: Vec<String> = parts[1..].iter().map(|p| self.indent_sexp(p, depth + 1)).collect();
         format!("({head}\n{indent}{})", rest.join(&format!("\n{indent}")))
     }
 }
@@ -250,8 +245,22 @@ pub fn is_valid_smt_identifier(s: &str) -> bool {
         b.is_ascii_alphanumeric()
             || matches!(
                 b,
-                b'~' | b'!' | b'@' | b'$' | b'%' | b'^' | b'&' | b'*' | b'_' | b'-' | b'+'
-                    | b'=' | b'<' | b'>' | b'.' | b'?' | b'/'
+                b'~' | b'!'
+                    | b'@'
+                    | b'$'
+                    | b'%'
+                    | b'^'
+                    | b'&'
+                    | b'*'
+                    | b'_'
+                    | b'-'
+                    | b'+'
+                    | b'='
+                    | b'<'
+                    | b'>'
+                    | b'.'
+                    | b'?'
+                    | b'/'
             )
     })
 }
@@ -307,7 +316,7 @@ pub fn operator_to_smt(op: &str) -> String {
         "^" => "bvxor".to_string(),
         "~" => "bvnot".to_string(),
         "<<" => "bvshl".to_string(),
-        ">>" => "bvashr".to_string(),  // signed (arithmetic) right shift
+        ">>" => "bvashr".to_string(), // signed (arithmetic) right shift
         ">>>" => "bvlshr".to_string(), // unsigned (logical) right shift — tRust #751
         _ => op.to_string(),
     }
@@ -381,10 +390,7 @@ mod tests {
 
     #[test]
     fn test_formula_to_smt_long_breaks_lines() {
-        let config = SmtLib2Config {
-            line_width: 15,
-            ..Default::default()
-        };
+        let config = SmtLib2Config { line_width: 15, ..Default::default() };
         let p = SmtLib2Printer::with_config(config);
         let result = p.formula_to_smt("(and (> x 0) (< y 100) (= z 42))");
         assert!(result.contains('\n'), "Long expression should be broken across lines");
@@ -403,10 +409,7 @@ mod tests {
     #[test]
     fn test_emit_declare_const_rust_type() {
         let p = printer();
-        assert_eq!(
-            p.emit_declare_const("count", "u32"),
-            "(declare-const count (_ BitVec 32))"
-        );
+        assert_eq!(p.emit_declare_const("count", "u32"), "(declare-const count (_ BitVec 32))");
     }
 
     #[test]
@@ -468,10 +471,7 @@ mod tests {
     #[test]
     fn test_emit_full_query_basic() {
         let p = printer();
-        let result = p.emit_full_query(
-            &[("x", "Int"), ("y", "Int")],
-            &["(> x 0)", "(< y 10)"],
-        );
+        let result = p.emit_full_query(&[("x", "Int"), ("y", "Int")], &["(> x 0)", "(< y 10)"]);
         assert!(result.contains("(set-logic ALL)"));
         assert!(result.contains("(declare-const x Int)"));
         assert!(result.contains("(declare-const y Int)"));
@@ -482,10 +482,7 @@ mod tests {
 
     #[test]
     fn test_emit_full_query_no_logic() {
-        let config = SmtLib2Config {
-            include_logic: false,
-            ..Default::default()
-        };
+        let config = SmtLib2Config { include_logic: false, ..Default::default() };
         let p = SmtLib2Printer::with_config(config);
         let result = p.emit_full_query(&[("x", "bool")], &["x"]);
         assert!(!result.contains("set-logic"));
@@ -494,10 +491,7 @@ mod tests {
 
     #[test]
     fn test_emit_full_query_named_asserts() {
-        let config = SmtLib2Config {
-            use_named_asserts: true,
-            ..Default::default()
-        };
+        let config = SmtLib2Config { use_named_asserts: true, ..Default::default() };
         let p = SmtLib2Printer::with_config(config);
         let result = p.emit_full_query(&[], &["(= x 1)", "(= y 2)"]);
         assert!(result.contains("(assert (! (= x 1) :named a0))"));
@@ -514,10 +508,8 @@ mod tests {
     #[test]
     fn test_emit_full_query_rust_types() {
         let p = printer();
-        let result = p.emit_full_query(
-            &[("a", "i32"), ("b", "u64"), ("flag", "bool")],
-            &["(bvadd a b)"],
-        );
+        let result =
+            p.emit_full_query(&[("a", "i32"), ("b", "u64"), ("flag", "bool")], &["(bvadd a b)"]);
         assert!(result.contains("(declare-const a (_ BitVec 32))"));
         assert!(result.contains("(declare-const b (_ BitVec 64))"));
         assert!(result.contains("(declare-const flag Bool)"));
@@ -665,11 +657,7 @@ mod tests {
 
     #[test]
     fn test_indent_preserves_structure() {
-        let config = SmtLib2Config {
-            line_width: 20,
-            indent_width: 4,
-            ..Default::default()
-        };
+        let config = SmtLib2Config { line_width: 20, indent_width: 4, ..Default::default() };
         let p = SmtLib2Printer::with_config(config);
         let result = p.formula_to_smt("(and (> x 0) (< y 100) (= z 42))");
         // Should break into multiple lines

@@ -80,7 +80,7 @@ impl<'hir> Crate<'hir> {
 impl<HirCtx: HashStableContext> HashStable<HirCtx> for Crate<'_> {
     fn hash_stable(&self, hcx: &mut HirCtx, hasher: &mut StableHasher) {
         let Crate { opt_hir_hash, .. } = self;
-        opt_hir_hash.expect("invariant: HIR hash is computed").hash_stable(hcx, hasher)
+        opt_hir_hash.unwrap().hash_stable(hcx, hasher)
     }
 }
 
@@ -439,7 +439,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 local_id: self
                     .hir_crate(())
                     .owner(self, parent_owner_id.def_id)
-                    .expect("invariant: body owner has a body")
+                    .unwrap()
                     .parenting
                     .get(&owner_id.def_id)
                     .copied()
@@ -475,7 +475,6 @@ pub fn provide(providers: &mut Providers) {
     providers.local_def_id_to_hir_id = |tcx, def_id| match tcx.hir_crate(()).owner(tcx, def_id) {
         MaybeOwner::Owner(_) => HirId::make_owner(def_id),
         MaybeOwner::NonOwner(hir_id) => hir_id,
-        // tRust: invariant: No HirId for <...>
         MaybeOwner::Phantom => bug!("No HirId for {:?}", def_id),
     };
     providers.opt_hir_owner_nodes =
@@ -495,7 +494,6 @@ pub fn provide(providers: &mut Providers) {
         let node = tcx.hir_node_by_def_id(def_id);
         match node.ty() {
             Some(ty) => ty.span,
-            // tRust: invariant: <...> doesn't have a type: <...>
             None => bug!("{def_id:?} doesn't have a type: {node:#?}"),
         }
     };
@@ -514,7 +512,6 @@ pub fn provide(providers: &mut Providers) {
         {
             idents
         } else {
-            // tRust: invariant: unexpected state in provide
             span_bug!(
                 tcx.hir_span(tcx.local_def_id_to_hir_id(def_id)),
                 "fn_arg_idents: unexpected item {:?}",

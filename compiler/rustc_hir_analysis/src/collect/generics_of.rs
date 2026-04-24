@@ -78,7 +78,7 @@ pub(super) fn generics_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Generics {
             let parent_id = tcx.hir_get_parent_item(hir_id);
             Some(parent_id.def_id)
         }
-        // tRust: known issue — (#43408) always enable this once `lazy_normalization` is
+        // FIXME(#43408) always enable this once `lazy_normalization` is
         // stable enough and does not need a feature gate anymore.
         Node::AnonConst(_) => {
             let parent_did = tcx.local_parent(def_id);
@@ -112,7 +112,7 @@ pub(super) fn generics_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Generics {
                 // GCE anon consts as a default for a generic parameter should have their provided generics
                 // "truncated" up to whatever generic parameter this anon const is within the default of.
                 //
-                // tRust: known issue — (generic_const_exprs): This only handles `const N: usize = /*defid*/` but not type
+                // FIXME(generic_const_exprs): This only handles `const N: usize = /*defid*/` but not type
                 // parameter defaults, e.g. `T = Foo</*defid*/>`.
                 ty::AnonConstKind::GCE
                     if let Some(param_id) =
@@ -211,13 +211,11 @@ pub(super) fn generics_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Generics {
         // Params don't really have generics, but we use it when instantiating their value paths.
         Node::GenericParam(_) => None,
 
-        // tRust: invariant — synthetic nodes should not reach generics_of
         Node::Synthetic => span_bug!(
             tcx.def_span(def_id),
             "synthetic HIR should have its `generics_of` explicitly fed"
         ),
 
-        // tRust: invariant — all valid node kinds for generics_of handled above
         _ => span_bug!(tcx.def_span(def_id), "generics_of: unexpected node kind {node:?}"),
     };
 

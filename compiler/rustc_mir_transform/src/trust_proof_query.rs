@@ -1,15 +1,15 @@
-// tRust: Query providers for trust_proof_results and trust_proof_telemetry.
-//
-// Author: Andrew Yates <andrew@andrewdyates.com>
-// Copyright 2026 Andrew Yates | License: Apache 2.0
-//
-// Stub providers that return None. The real implementation will be added
-// when the verification pipeline is wired into the query system (Epic #1).
-//
-// Gated: returns None immediately unless -Z trust-verify is enabled.
-// Follows the coverage_ids_info provider pattern in coverage/query.rs.
-//
-// Design: designs/2026-03-27-proof-carrying-mir.md
+//! tRust: Query providers for trust_proof_results and trust_proof_telemetry.
+//!
+//! Author: Andrew Yates <andrew@andrewdyates.com>
+//! Copyright 2026 Andrew Yates | License: Apache 2.0
+//!
+//! Stub providers that return None. The real implementation will be added
+//! when the verification pipeline is wired into the query system (Epic #1).
+//!
+//! Gated: returns None immediately unless -Z trust-verify is enabled.
+//! Follows the coverage_ids_info provider pattern in coverage/query.rs.
+//!
+//! Design: designs/2026-03-27-proof-carrying-mir.md
 
 use rustc_middle::mir::trust_proof::{TrustProofResults, TrustProofTelemetry};
 use rustc_middle::ty::{self, TyCtxt};

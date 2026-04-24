@@ -415,7 +415,7 @@ fn compute_access_time<N: Idx>(
         e.start = m;
         e.end = m;
     }
-    let mut node = IndexVec::from_elem_n(Idx::new(0), m.try_into().expect("invariant: dominator tree size must fit in index type")); // tRust: unwrap -> expect
+    let mut node = IndexVec::from_elem_n(Idx::new(0), m.try_into().unwrap());
     for (i, &idom) in immediate_dominators.iter_enumerated() {
         if let Some(idom) = idom {
             edges[idom].start -= 1;

@@ -45,7 +45,7 @@ impl<S: Stage> AttributeParser<S> for ConfusablesParser {
 
         Some(AttributeKind::RustcConfusables {
             symbols: self.confusables,
-            first_span: self.first_span.expect("invariant: confusables is non-empty so first_span was set"), // tRust: unwrap -> expect
+            first_span: self.first_span.unwrap(),
         })
     }
 }

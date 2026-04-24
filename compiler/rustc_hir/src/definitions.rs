@@ -221,7 +221,7 @@ impl DefPath {
         let mut index = Some(start_index);
         loop {
             debug!("DefPath::make: krate={:?} index={:?}", krate, index);
-            let p = index.expect("invariant: DefPath traversal must reach CrateRoot before running out of parent indices"); // tRust: unwrap -> expect
+            let p = index.unwrap();
             let key = get_key(p);
             debug!("DefPath::make: key={:?}", key);
             match key.disambiguated_data.data {
@@ -246,7 +246,7 @@ impl DefPath {
         let mut s = String::with_capacity(self.data.len() * 16);
 
         for component in &self.data {
-            write!(s, "::{}", component.as_sym(true)).expect("invariant: writing to String never fails"); // tRust: unwrap -> expect
+            write!(s, "::{}", component.as_sym(true)).unwrap();
         }
 
         s
@@ -262,7 +262,7 @@ impl DefPath {
         for component in &self.data {
             s.extend(opt_delimiter);
             opt_delimiter = Some('-');
-            write!(s, "{}", component.as_sym(true)).expect("invariant: writing to String never fails"); // tRust: unwrap -> expect
+            write!(s, "{}", component.as_sym(true)).unwrap();
         }
 
         s
@@ -526,7 +526,7 @@ impl fmt::Display for DefPathData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.name() {
             DefPathDataName::Named(name) => f.write_str(name.as_str()),
-            // tRust: known issue — (#70334) this will generate legacy {{closure}}, {{impl}}, etc
+            // FIXME(#70334): this will generate legacy {{closure}}, {{impl}}, etc
             DefPathDataName::Anon { namespace } => write!(f, "{{{{{namespace}}}}}"),
         }
     }

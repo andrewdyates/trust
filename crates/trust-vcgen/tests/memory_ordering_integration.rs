@@ -14,10 +14,9 @@
 
 use trust_types::*;
 use trust_vcgen::{
-    AccessKind, DataRaceDetector, HappensBefore, MemoryModelChecker, MemoryOrdering,
-    SharedAccess, detect_potential_races, generate_race_vcs,
-    check_ordering_sufficient, generate_ordering_vcs,
-    AtomicAccessEntry, AtomicAccessLog, OrderingRequirement,
+    AccessKind, AtomicAccessEntry, AtomicAccessLog, DataRaceDetector, HappensBefore,
+    MemoryModelChecker, MemoryOrdering, OrderingRequirement, SharedAccess,
+    check_ordering_sufficient, detect_potential_races, generate_ordering_vcs, generate_race_vcs,
 };
 
 // ===========================================================================
@@ -107,10 +106,16 @@ fn test_atomic_ordering_is_at_least_consistent_with_partial_cmp() {
             let cmp = a.partial_cmp(&b);
             match cmp {
                 Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal) => {
-                    assert!(at_least, "{a}.is_at_least({b}) should be true when partial_cmp says >= ");
+                    assert!(
+                        at_least,
+                        "{a}.is_at_least({b}) should be true when partial_cmp says >= "
+                    );
                 }
                 Some(std::cmp::Ordering::Less) => {
-                    assert!(!at_least, "{a}.is_at_least({b}) should be false when partial_cmp says < ");
+                    assert!(
+                        !at_least,
+                        "{a}.is_at_least({b}) should be false when partial_cmp says < "
+                    );
                 }
                 None => {
                     // Incomparable: is_at_least should be false
@@ -183,9 +188,15 @@ fn test_access_kind_atomic_rmw_serialization_roundtrip() {
 fn test_access_kind_atomic_rmw_all_ops() {
     // Verify all RmwOp variants work with AccessKind.
     let ops = [
-        AtomicRmwOp::Xchg, AtomicRmwOp::Add, AtomicRmwOp::Sub,
-        AtomicRmwOp::And, AtomicRmwOp::Or, AtomicRmwOp::Xor,
-        AtomicRmwOp::Nand, AtomicRmwOp::Min, AtomicRmwOp::Max,
+        AtomicRmwOp::Xchg,
+        AtomicRmwOp::Add,
+        AtomicRmwOp::Sub,
+        AtomicRmwOp::And,
+        AtomicRmwOp::Or,
+        AtomicRmwOp::Xor,
+        AtomicRmwOp::Nand,
+        AtomicRmwOp::Min,
+        AtomicRmwOp::Max,
     ];
     for op in ops {
         let kind = AccessKind::AtomicRmw(MemoryOrdering::Relaxed, op);
@@ -315,7 +326,8 @@ fn test_integration_race_when_ordering_too_weak() {
     let races = detect_potential_races(&accesses);
     let data_races: Vec<_> = races.iter().filter(|r| r.variable == "data").collect();
     assert_eq!(
-        data_races.len(), 1,
+        data_races.len(),
+        1,
         "weak ordering (Relaxed instead of Release) should allow race on data"
     );
 }
@@ -324,7 +336,12 @@ fn test_integration_race_when_ordering_too_weak() {
 #[test]
 fn test_integration_atomic_rmw_no_race_with_atomic() {
     let accesses = vec![
-        make_access("counter", AccessKind::AtomicRmw(MemoryOrdering::Relaxed, AtomicRmwOp::Add), "t1", vec![]),
+        make_access(
+            "counter",
+            AccessKind::AtomicRmw(MemoryOrdering::Relaxed, AtomicRmwOp::Add),
+            "t1",
+            vec![],
+        ),
         make_access("counter", AccessKind::AtomicRead(MemoryOrdering::Relaxed), "t2", vec![]),
     ];
 
@@ -336,7 +353,12 @@ fn test_integration_atomic_rmw_no_race_with_atomic() {
 #[test]
 fn test_integration_atomic_rmw_races_with_non_atomic() {
     let accesses = vec![
-        make_access("counter", AccessKind::AtomicRmw(MemoryOrdering::SeqCst, AtomicRmwOp::Add), "t1", vec![]),
+        make_access(
+            "counter",
+            AccessKind::AtomicRmw(MemoryOrdering::SeqCst, AtomicRmwOp::Add),
+            "t1",
+            vec![],
+        ),
         make_access("counter", AccessKind::Read, "t2", vec![]),
     ];
 
@@ -377,11 +399,21 @@ fn test_integration_detector_release_acquire_sync() {
 
     // Producer thread: write data, then release-store flag
     let w = det.add_access("data", AccessKind::Write, "producer", SourceSpan::default());
-    let rel = det.add_access("flag", AccessKind::AtomicWrite(MemoryOrdering::Release), "producer", SourceSpan::default());
+    let rel = det.add_access(
+        "flag",
+        AccessKind::AtomicWrite(MemoryOrdering::Release),
+        "producer",
+        SourceSpan::default(),
+    );
     det.add_happens_before(w, rel);
 
     // Consumer thread: acquire-load flag, then read data
-    let acq = det.add_access("flag", AccessKind::AtomicRead(MemoryOrdering::Acquire), "consumer", SourceSpan::default());
+    let acq = det.add_access(
+        "flag",
+        AccessKind::AtomicRead(MemoryOrdering::Acquire),
+        "consumer",
+        SourceSpan::default(),
+    );
     let r = det.add_access("data", AccessKind::Read, "consumer", SourceSpan::default());
     det.add_happens_before(acq, r);
 
@@ -399,10 +431,20 @@ fn test_integration_detector_missing_sync_race() {
     let mut det = DataRaceDetector::new();
 
     let w = det.add_access("data", AccessKind::Write, "producer", SourceSpan::default());
-    let _rel = det.add_access("flag", AccessKind::AtomicWrite(MemoryOrdering::Relaxed), "producer", SourceSpan::default());
+    let _rel = det.add_access(
+        "flag",
+        AccessKind::AtomicWrite(MemoryOrdering::Relaxed),
+        "producer",
+        SourceSpan::default(),
+    );
     det.add_happens_before(w, _rel);
 
-    let _acq = det.add_access("flag", AccessKind::AtomicRead(MemoryOrdering::Acquire), "consumer", SourceSpan::default());
+    let _acq = det.add_access(
+        "flag",
+        AccessKind::AtomicRead(MemoryOrdering::Acquire),
+        "consumer",
+        SourceSpan::default(),
+    );
     let r = det.add_access("data", AccessKind::Read, "consumer", SourceSpan::default());
     det.add_happens_before(_acq, r);
 
@@ -465,7 +507,11 @@ fn test_integration_legality_all_valid_operations() {
     let ops = [
         make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None),
         make_op(AtomicOpKind::Store, AtomicOrdering::Release, None),
-        make_op(AtomicOpKind::CompareExchange, AtomicOrdering::AcqRel, Some(AtomicOrdering::Acquire)),
+        make_op(
+            AtomicOpKind::CompareExchange,
+            AtomicOrdering::AcqRel,
+            Some(AtomicOrdering::Acquire),
+        ),
         make_op(AtomicOpKind::Fence, AtomicOrdering::SeqCst, None),
         make_op(AtomicOpKind::FetchAdd, AtomicOrdering::Relaxed, None),
     ];
@@ -480,11 +526,11 @@ fn test_integration_legality_all_valid_operations() {
 #[test]
 fn test_integration_legality_mixed_violations() {
     let ops = [
-        make_op(AtomicOpKind::Load, AtomicOrdering::Release, None),      // L1 violation
-        make_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None),      // L2 violation
-        make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None),       // valid
-        make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),      // L5 violation
-        make_op(AtomicOpKind::Store, AtomicOrdering::Release, None),      // valid
+        make_op(AtomicOpKind::Load, AtomicOrdering::Release, None), // L1 violation
+        make_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None), // L2 violation
+        make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None), // valid
+        make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None), // L5 violation
+        make_op(AtomicOpKind::Store, AtomicOrdering::Release, None), // valid
     ];
 
     let vcs = MemoryModelChecker::check_operation_legality(&ops, "buggy_function");
@@ -511,22 +557,11 @@ fn test_integration_legality_cas_double_violation() {
     )];
 
     let vcs = MemoryModelChecker::check_operation_legality(&ops, "cas_double_bug");
-    assert!(
-        vcs.len() >= 2,
-        "should fire both L3 and L4, got {} VCs", vcs.len()
-    );
+    assert!(vcs.len() >= 2, "should fire both L3 and L4, got {} VCs", vcs.len());
 
-    let vc_texts: Vec<String> = vcs.iter()
-        .map(|vc| vc.kind.to_string())
-        .collect();
-    assert!(
-        vc_texts.iter().any(|t| t.contains("L3")),
-        "should have L3 violation"
-    );
-    assert!(
-        vc_texts.iter().any(|t| t.contains("L4")),
-        "should have L4 violation"
-    );
+    let vc_texts: Vec<String> = vcs.iter().map(|vc| vc.kind.to_string()).collect();
+    assert!(vc_texts.iter().any(|t| t.contains("L3")), "should have L3 violation");
+    assert!(vc_texts.iter().any(|t| t.contains("L4")), "should have L4 violation");
 }
 
 /// Integration test: CompareExchangeWeak follows the same rules.
@@ -592,7 +627,12 @@ fn test_integration_legality_compiler_fence_relaxed() {
 /// Integration test: fence with all valid orderings.
 #[test]
 fn test_integration_legality_fence_valid_orderings() {
-    for ordering in [AtomicOrdering::Acquire, AtomicOrdering::Release, AtomicOrdering::AcqRel, AtomicOrdering::SeqCst] {
+    for ordering in [
+        AtomicOrdering::Acquire,
+        AtomicOrdering::Release,
+        AtomicOrdering::AcqRel,
+        AtomicOrdering::SeqCst,
+    ] {
         let ops = [make_op(AtomicOpKind::Fence, ordering, None)];
         let vcs = MemoryModelChecker::check_operation_legality(&ops, "fence_test");
         assert!(vcs.is_empty(), "fence with {ordering} should be valid");
@@ -615,9 +655,9 @@ fn test_integration_ordering_sufficiency_and_vc_generation() {
     // Requirements: flag needs Acquire, counter needs Release (SeqCst >= Release, OK),
     // data needs SeqCst (Acquire < SeqCst, violation).
     let requirements = vec![
-        (0, MemoryOrdering::Acquire),  // Relaxed < Acquire => VC
-        (1, MemoryOrdering::Release),  // SeqCst >= Release => no VC
-        (2, MemoryOrdering::SeqCst),   // Acquire < SeqCst => VC
+        (0, MemoryOrdering::Acquire), // Relaxed < Acquire => VC
+        (1, MemoryOrdering::Release), // SeqCst >= Release => no VC
+        (2, MemoryOrdering::SeqCst),  // Acquire < SeqCst => VC
     ];
 
     // Verify individual checks

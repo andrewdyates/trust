@@ -198,7 +198,6 @@ impl<'a, 'b, 'tcx, Bx: BuilderMethods<'b, 'tcx>> Visitor<'tcx> for LocalAnalyzer
                 let TerminatorKind::Call { target, .. } =
                     self.fx.mir.basic_blocks[call].terminator().kind
                 else {
-                    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                     bug!()
                 };
                 self.define(local, DefLocation::CallReturn { call, target });
@@ -257,7 +256,6 @@ impl<'a, 'b, 'tcx, Bx: BuilderMethods<'b, 'tcx>> Visitor<'tcx> for LocalAnalyzer
                 }
             }
 
-            // tRust: invariant: structural invariant — codegen analysis requires well-formed MIR input
             PlaceContext::MutatingUse(MutatingUseContext::Yield) => bug!(),
         }
     }
@@ -334,7 +332,6 @@ pub(crate) fn cleanup_kinds(mir: &mir::Body<'_>) -> IndexVec<mir::BasicBlock, Cl
             }
             Some(s) => {
                 if s != succ {
-                    // tRust: invariant: structural invariant — codegen analysis requires well-formed MIR input
                     span_bug!(
                         mir.span,
                         "funclet {:?} has 2 parents - {:?} and {:?}",

@@ -10,8 +10,9 @@
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
+pub mod binary;
 pub(crate) mod boundary;
 pub(crate) mod calling_convention;
 pub mod cfg;
@@ -23,6 +24,10 @@ pub(crate) mod ssa;
 #[cfg(feature = "z4-verify")]
 pub(crate) mod validation;
 
+pub use binary::{
+    BinaryFunctionSelection, BinaryLiftOptions, LiftedBinary, LiftedFunctionFailure,
+    lift_binary_to_tmir,
+};
 pub use boundary::FunctionBoundary;
 pub use calling_convention::{CallingConvention, FunctionSignature};
 pub use cfg::LiftedFunction;

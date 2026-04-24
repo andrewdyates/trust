@@ -101,7 +101,6 @@ fn build_fixed_size_array_di_node<'ll, 'tcx>(
     span: Span,
 ) -> DINodeCreationResult<'ll> {
     let ty::Array(element_type, len) = array_type.kind() else {
-        // tRust: invariant — the fixed-size array debuginfo helper must only be called for `ty::Array` types
         bug!("build_fixed_size_array_di_node() called with non-ty::Array type `{:?}`", array_type)
     };
 
@@ -115,11 +114,9 @@ fn build_fixed_size_array_di_node<'ll, 'tcx>(
         .try_to_target_usize(cx.tcx)
         .expect("expected monomorphic const in codegen") as c_longlong;
 
-    // SAFETY: The `DIBuilder` is valid, and the subrange bounds are valid.
     let subrange = unsafe { llvm::LLVMDIBuilderGetOrCreateSubrange(DIB(cx), 0, upper_bound) };
     let subscripts = &[subrange];
 
-    // SAFETY: The `DIBuilder` is valid, and the element type and subscript references are valid.
     let di_node = unsafe {
         llvm::LLVMDIBuilderCreateArrayType(
             DIB(cx),
@@ -197,7 +194,7 @@ fn build_pointer_or_reference_di_node<'ll, 'tcx>(
                     DIFlags::FlagZero,
                 ),
                 |cx, owner| {
-                    // tRust: known issue — If this wide pointer is a `Box` then we don't want to use its
+                    // FIXME: If this wide pointer is a `Box` then we don't want to use its
                     //        type layout and instead use the layout of the raw pointer inside
                     //        of it.
                     //        The proper way to handle this is to not treat Box as a pointer
@@ -328,7 +325,6 @@ pub(super) fn create_subroutine_type<'ll>(
     cx: &CodegenCx<'ll, '_>,
     signature: &[Option<&'ll llvm::Metadata>],
 ) -> &'ll DICompositeType {
-    // SAFETY: The `DIBuilder` is valid, and all parameter type references are valid.
     unsafe {
         llvm::LLVMDIBuilderCreateSubroutineType(
             DIB(cx),
@@ -347,7 +343,6 @@ fn create_pointer_type<'ll>(
     align: Align,
     name: &str,
 ) -> &'ll llvm::Metadata {
-    // SAFETY: The `DIBuilder` is valid, and the pointee type reference is valid.
     unsafe {
         llvm::LLVMDIBuilderCreatePointerType(
             DIB(cx),
@@ -386,7 +381,6 @@ fn build_dyn_type_di_node<'ll, 'tcx>(
             NO_GENERICS,
         )
     } else {
-        // tRust: invariant — the dynamic-type debuginfo helper must only be called for `ty::Dynamic` types
         bug!(
             "Only ty::Dynamic is valid for build_dyn_type_di_node(). Found {:?} instead.",
             dyn_type
@@ -420,7 +414,6 @@ fn build_slice_type_di_node<'ll, 'tcx>(
         ty::Slice(element_type) => *element_type,
         ty::Str => cx.tcx.types.u8,
         _ => {
-            // tRust: invariant — the slice debuginfo helper must only be called for `ty::Slice` or `ty::Str` types
             bug!(
                 "Only ty::Slice is valid for build_slice_type_di_node(). Found {:?} instead.",
                 slice_type
@@ -495,7 +488,6 @@ pub(crate) fn spanned_type_di_node<'ll, 'tcx>(
         | ty::Placeholder(_)
         | ty::CoroutineWitness(..)
         | ty::Error(_) => {
-            // tRust: invariant — type debuginfo emission must only see fully resolved types with a defined debuginfo lowering
             bug!("debuginfo: unexpected type in type_di_node(): {:?}", t)
         }
     };
@@ -507,7 +499,6 @@ pub(crate) fn spanned_type_di_node<'ll, 'tcx>(
                 match debug_context(cx).type_map.di_node_for_unique_id(unique_type_id) {
                     Some(di_node) => di_node,
                     None => {
-                        // tRust: invariant — a builder that reports `already_stored_in_typemap` must have inserted the DI node for this unique type ID
                         bug!(
                             "expected type debuginfo node for unique \
                                type ID '{:?}' to already be in \
@@ -527,7 +518,7 @@ pub(crate) fn spanned_type_di_node<'ll, 'tcx>(
     di_node
 }
 
-// tRust: known issue — (mw): Cache this via a regular UniqueTypeId instead of an extra field in the debug context.
+// FIXME(mw): Cache this via a regular UniqueTypeId instead of an extra field in the debug context.
 fn recursion_marker_type_di_node<'ll, 'tcx>(cx: &CodegenCx<'ll, 'tcx>) -> &'ll DIType {
     *debug_context(cx).recursion_marker_type.get_or_init(move || {
         // The choice of type here is pretty arbitrary -
@@ -535,10 +526,10 @@ fn recursion_marker_type_di_node<'ll, 'tcx>(cx: &CodegenCx<'ll, 'tcx>) -> &'ll D
         // type is going to see *something* weird - the only
         // question is what exactly it will see.
         //
-        // tRust: known issue — the name `<recur_type>` does not fit the naming scheme
+        // FIXME: the name `<recur_type>` does not fit the naming scheme
         //        of other types.
         //
-        // tRust: known issue — it might make sense to use an actual pointer type here
+        // FIXME: it might make sense to use an actual pointer type here
         //        so that debuggers can show the address.
         create_basic_type(
             cx,
@@ -552,7 +543,7 @@ fn recursion_marker_type_di_node<'ll, 'tcx>(cx: &CodegenCx<'ll, 'tcx>) -> &'ll D
 fn hex_encode(data: &[u8]) -> String {
     let mut hex_string = String::with_capacity(data.len() * 2);
     for byte in data.iter() {
-        write!(&mut hex_string, "{byte:02x}").expect("invariant: write to string/buffer succeeds");
+        write!(&mut hex_string, "{byte:02x}").unwrap();
     }
     hex_string
 }
@@ -636,7 +627,6 @@ fn create_file<'ll>(
     hash_kind: llvm::ChecksumKind,
     source: Option<&Arc<String>>,
 ) -> &'ll DIFile {
-    // SAFETY: The `DIBuilder` is valid, and the filename, directory, hash, and source string buffers are valid with correct lengths.
     unsafe {
         llvm::LLVMRustDIBuilderCreateFile(
             builder,
@@ -685,11 +675,10 @@ impl MsvcBasicName for ty::UintTy {
 
 impl MsvcBasicName for ty::FloatTy {
     fn msvc_basic_name(self) -> &'static str {
-        // tRust: known issue — (f128): `f128` has no MSVC representation. We could improve the debuginfo.
+        // FIXME(f128): `f128` has no MSVC representation. We could improve the debuginfo.
         // See: <https://github.com/rust-lang/rust/issues/121837>
         match self {
             ty::FloatTy::F16 => {
-                // tRust: invariant — `build_basic_type_di_node` must handle `f16` before MSVC basic-name selection is reached
                 bug!("`f16` should have been handled in `build_basic_type_di_node`")
             }
             ty::FloatTy::F32 => "float",
@@ -781,9 +770,7 @@ fn build_basic_type_di_node<'ll, 'tcx>(
         ty::Int(int_ty) => (int_ty.name_str(), DW_ATE_signed),
         ty::Uint(uint_ty) => (uint_ty.name_str(), DW_ATE_unsigned),
         ty::Float(float_ty) => (float_ty.name_str(), DW_ATE_float),
-        _ =>
-            // tRust: invariant — basic-type debuginfo must only be requested for primitive scalar types or unit
-            bug!("debuginfo::build_basic_type_di_node - `t` is invalid type"),
+        _ => bug!("debuginfo::build_basic_type_di_node - `t` is invalid type"),
     };
 
     let ty_di_node = create_basic_type(cx, name, cx.size_of(t), encoding);
@@ -799,7 +786,6 @@ fn build_basic_type_di_node<'ll, 'tcx>(
         _ => return DINodeCreationResult::new(ty_di_node, false),
     };
 
-    // SAFETY: The `DIBuilder` is valid, and the underlying type, scope, and file references are valid.
     let typedef_di_node = unsafe {
         llvm::LLVMDIBuilderCreateTypedef(
             DIB(cx),
@@ -822,7 +808,6 @@ fn create_basic_type<'ll, 'tcx>(
     size: Size,
     encoding: u32,
 ) -> &'ll DIBasicType {
-    // SAFETY: The `DIBuilder` is valid, and the name buffer and length are valid.
     unsafe {
         llvm::LLVMDIBuilderCreateBasicType(
             DIB(cx),
@@ -843,7 +828,6 @@ fn build_foreign_type_di_node<'ll, 'tcx>(
     debug!("build_foreign_type_di_node: {:?}", t);
 
     let &ty::Foreign(def_id) = unique_type_id.expect_ty().kind() else {
-        // tRust: invariant — the foreign-type debuginfo helper must only be called for `ty::Foreign` types
         bug!(
             "build_foreign_type_di_node() called with unexpected type: {:?}",
             unique_type_id.expect_ty()
@@ -900,7 +884,7 @@ pub(crate) fn build_compile_unit_di_node<'ll, 'tcx>(
 
     debug!("build_compile_unit_di_node: {:?}", name_in_debuginfo);
     let rustc_producer = format!("rustc version {}", tcx.sess.cfg_version);
-    // tRust: known issue — (#41252) Remove "clang LLVM" if we can get GDB and LLVM to play nice.
+    // FIXME(#41252) Remove "clang LLVM" if we can get GDB and LLVM to play nice.
     let producer = format!("clang LLVM ({rustc_producer})");
 
     let name_in_debuginfo = name_in_debuginfo.to_string_lossy();
@@ -935,7 +919,6 @@ pub(crate) fn build_compile_unit_di_node<'ll, 'tcx>(
         DebugNameTableKind::Default
     };
 
-    // SAFETY: The `DIBuilder` is valid, the file reference is valid, and all string parameters have valid buffers and lengths.
     unsafe {
         let compile_unit_file = create_file(
             debug_context.builder.as_ref(),
@@ -1011,7 +994,6 @@ fn create_member_type<'ll, 'tcx>(
     flags: DIFlags,
     type_di_node: &'ll DIType,
 ) -> &'ll DIType {
-    // SAFETY: The `DIBuilder` is valid, the scope and type references are valid, and the name buffer and length are valid.
     unsafe {
         llvm::LLVMDIBuilderCreateMemberType(
             DIB(cx),
@@ -1058,7 +1040,6 @@ fn build_struct_type_di_node<'ll, 'tcx>(
 ) -> DINodeCreationResult<'ll> {
     let struct_type = unique_type_id.expect_ty();
     let ty::Adt(adt_def, _) = struct_type.kind() else {
-        // tRust: invariant — the struct debuginfo helper must only be called for ADT struct types
         bug!("build_struct_type_di_node() called with non-struct-type: {:?}", struct_type);
     };
     assert!(adt_def.is_struct());
@@ -1136,7 +1117,6 @@ fn build_upvar_field_di_nodes<'ll, 'tcx>(
         ty::Closure(def_id, args) => (def_id, args.as_closure().upvar_tys()),
         ty::CoroutineClosure(def_id, args) => (def_id, args.as_coroutine_closure().upvar_tys()),
         _ => {
-            // tRust: invariant — upvar field debuginfo must only be built for closure or coroutine environment types
             bug!(
                 "build_upvar_field_di_nodes() called with non-closure-or-coroutine-type: {:?}",
                 closure_or_coroutine_ty
@@ -1175,7 +1155,6 @@ fn build_tuple_type_di_node<'ll, 'tcx>(
 ) -> DINodeCreationResult<'ll> {
     let tuple_type = unique_type_id.expect_ty();
     let &ty::Tuple(component_types) = tuple_type.kind() else {
-        // tRust: invariant — the tuple debuginfo helper must only be called for tuple types
         bug!("build_tuple_type_di_node() called with non-tuple-type: {:?}", tuple_type)
     };
 
@@ -1225,7 +1204,6 @@ fn build_closure_env_di_node<'ll, 'tcx>(
     let closure_env_type = unique_type_id.expect_ty();
     let &(ty::Closure(def_id, _) | ty::CoroutineClosure(def_id, _)) = closure_env_type.kind()
     else {
-        // tRust: invariant — the closure-environment debuginfo helper must only be called for closure or coroutine-closure types
         bug!("build_closure_env_di_node() called with non-closure-type: {:?}", closure_env_type)
     };
     let containing_scope = get_namespace_for_item(cx, def_id);
@@ -1264,9 +1242,7 @@ fn build_union_type_di_node<'ll, 'tcx>(
     let union_type = unique_type_id.expect_ty();
     let (union_def_id, variant_def) = match union_type.kind() {
         ty::Adt(def, _) => (def.did(), def.non_enum_variant()),
-        _ =>
-            // tRust: invariant — the union debuginfo helper must only be called for union ADT types
-            bug!("build_union_type_di_node on a non-ADT"),
+        _ => bug!("build_union_type_di_node on a non-ADT"),
     };
     let containing_scope = get_namespace_for_item(cx, union_def_id);
     let union_ty_and_layout = cx.spanned_layout_of(union_type, span);
@@ -1380,10 +1356,7 @@ pub(crate) fn build_global_var_di_node<'ll>(
 
     let is_local_to_unit = is_node_local_to_unit(cx, def_id);
 
-    let DefKind::Static { nested, .. } = cx.tcx.def_kind(def_id) else {
-        // tRust: invariant — global-variable debuginfo emission here must only be requested for static items
-        bug!()
-    };
+    let DefKind::Static { nested, .. } = cx.tcx.def_kind(def_id) else { bug!() };
     if nested {
         return;
     }
@@ -1526,7 +1499,6 @@ fn build_unsafe_binder_type_di_node<'ll, 'tcx>(
     unique_type_id: UniqueTypeId<'tcx>,
 ) -> DINodeCreationResult<'ll> {
     let ty::UnsafeBinder(inner) = binder_type.kind() else {
-        // tRust: invariant — the unsafe-binder debuginfo helper must only be called for `ty::UnsafeBinder` types
         bug!(
             "Only ty::UnsafeBinder is valid for build_unsafe_binder_type_di_node. Found {:?} instead.",
             binder_type
@@ -1575,11 +1547,10 @@ fn build_unsafe_binder_type_di_node<'ll, 'tcx>(
 /// the cast is returned.
 fn find_vtable_behind_cast<'ll>(vtable: &'ll Value) -> &'ll Value {
     // The vtable is a global variable, which may be behind an addrspacecast.
-    // SAFETY: The value is a valid LLVM reference. `LLVMIsAConstantExpr` returns null if not a constant expression, which is handled by the `if let`.
     unsafe {
         if let Some(c) = llvm::LLVMIsAConstantExpr(vtable) {
             if llvm::LLVMGetConstOpcode(c) == llvm::Opcode::AddrSpaceCast {
-                return llvm::LLVMGetOperand(c, 0).expect("invariant: LLVM operand exists");
+                return llvm::LLVMGetOperand(c, 0).unwrap();
             }
         }
     }
@@ -1592,7 +1563,7 @@ pub(crate) fn apply_vcall_visibility_metadata<'ll, 'tcx>(
     trait_ref: Option<ExistentialTraitRef<'tcx>>,
     vtable: &'ll Value,
 ) {
-    // tRust: known issue — (flip1995): The virtual function elimination optimization only works with full LTO in
+    // FIXME(flip1995): The virtual function elimination optimization only works with full LTO in
     // LLVM at the moment.
     if !cx.sess().opts.unstable_opts.virtual_function_elimination || cx.sess().lto() != Lto::Fat {
         return;
@@ -1626,7 +1597,7 @@ pub(crate) fn apply_vcall_visibility_metadata<'ll, 'tcx>(
         | (Lto::No, Visibility::Restricted(_), false) => VCallVisibility::Public,
         // With LTO and a quasi-public visibility, the usages of the functions of the vtable are
         // all known by the `LinkageUnit`.
-        // tRust: known issue — LLVM only supports this optimization for `Lto::Fat` currently. Once it also
+        // FIXME: LLVM only supports this optimization for `Lto::Fat` currently. Once it also
         // supports `Lto::Thin` the `VCallVisibility` may have to be adjusted for those.
         (Lto::Fat | Lto::Thin, Visibility::Public, _)
         | (Lto::ThinLocal | Lto::Thin | Lto::Fat, Visibility::Restricted(_), false) => {
@@ -1699,7 +1670,6 @@ pub(crate) fn extend_scope_to_file<'ll>(
     file: &SourceFile,
 ) -> &'ll DILexicalBlock {
     let file_metadata = file_metadata(cx, file);
-    // SAFETY: The `DIBuilder` is valid, and the scope and file references are valid.
     unsafe {
         llvm::LLVMDIBuilderCreateLexicalBlockFile(
             DIB(cx),

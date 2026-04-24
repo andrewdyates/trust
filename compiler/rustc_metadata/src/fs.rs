@@ -14,7 +14,7 @@ use crate::errors::{
 };
 use crate::{EncodedMetadata, encode_metadata};
 
-// tRust: known issue — maybe include the crate name in this? (upstream FIXME by eddyb)
+// FIXME(eddyb) maybe include the crate name in this?
 pub const METADATA_FILENAME: &str = "lib.rmeta";
 
 /// We use a temp directory here to avoid races between concurrent rustc processes,

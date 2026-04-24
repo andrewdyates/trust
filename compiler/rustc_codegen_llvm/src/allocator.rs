@@ -26,7 +26,6 @@ pub(crate) unsafe fn codegen(
         16 => cx.type_i16(),
         32 => cx.type_i32(),
         64 => cx.type_i64(),
-        // tRust: invariant — allocator codegen only runs on targets with 16-, 32-, or 64-bit pointers
         tws => bug!("Unsupported target word size for int: {}", tws),
     };
     let i8p = cx.type_ptr();
@@ -137,7 +136,6 @@ fn create_wrapper_function(
         None
     };
 
-    // SAFETY: `llcx` is a valid LLVM context, `llfn` is a valid function value in that context, and the name is a valid C string.
     let llbb = unsafe { llvm::LLVMAppendBasicBlockInContext(cx.llcx, llfn, c"entry".as_ptr()) };
     let mut bx = SBuilder::build(&cx, llbb);
 

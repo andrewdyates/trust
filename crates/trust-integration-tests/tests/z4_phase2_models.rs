@@ -1,4 +1,3 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/z4_phase2_models.rs: Phase 2 z4 function verification models
 //
 // Self-hosting showcase: tRust verifies real z4 solver functions by building
@@ -18,7 +17,7 @@
 
 use std::process::Command;
 
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_types::{
     AssertMessage, BasicBlock, BinOp, BlockId, ConstValue, LocalDecl, Operand, Place, Rvalue,
@@ -32,20 +31,16 @@ use trust_types::{
 
 /// Check whether the z4 binary is available on PATH.
 fn z4_available() -> bool {
-    Command::new("z4")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Command::new("z4").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn require_z4() -> SmtLibBackend {
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH — install z4 to run these tests"),
     }
@@ -98,11 +93,7 @@ fn build_literal_positive_model() -> VerifiableFunction {
             locals: vec![
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("var_id".into()) },
-                LocalDecl {
-                    index: 2,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 2, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 // bb0: _2 = CheckedAdd(_1, _1); assert(!_2.1, overflow) -> bb1
@@ -185,11 +176,7 @@ fn build_literal_negative_model() -> VerifiableFunction {
             locals: vec![
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("var_id".into()) },
-                LocalDecl {
-                    index: 2,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 2, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 3, ty: Ty::u32(), name: None },
                 LocalDecl { index: 4, ty: Ty::u32(), name: None },
             ],
@@ -312,11 +299,7 @@ fn build_leb128_shift_model() -> VerifiableFunction {
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("byte".into()) },
                 LocalDecl { index: 3, ty: Ty::u32(), name: None }, // byte & 0x7f
                 LocalDecl { index: 4, ty: Ty::u64(), name: None }, // cast to u64
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                }, // checked shl result
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None }, // checked shl result
                 LocalDecl { index: 6, ty: Ty::u64(), name: None }, // shifted value
             ],
             blocks: vec![
@@ -343,10 +326,7 @@ fn build_leb128_shift_model() -> VerifiableFunction {
                         // Cast u32 -> u64 (u64::from)
                         Statement::Assign {
                             place: Place::local(4),
-                            rvalue: Rvalue::Cast(
-                                Operand::Copy(Place::local(3)),
-                                Ty::u64(),
-                            ),
+                            rvalue: Rvalue::Cast(Operand::Copy(Place::local(3)), Ty::u64()),
                             span: SourceSpan::default(),
                         },
                         // Checked shift left
@@ -454,23 +434,11 @@ fn build_vsids_bump_score_model() -> VerifiableFunction {
         body: VerifiableBody {
             locals: vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                LocalDecl {
-                    index: 1,
-                    ty: Ty::f64_ty(),
-                    name: Some("activity".into()),
-                },
-                LocalDecl {
-                    index: 2,
-                    ty: Ty::f64_ty(),
-                    name: Some("increment".into()),
-                },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::f64_ty(), Ty::Bool]),
-                    name: None,
-                }, // checked add result
+                LocalDecl { index: 1, ty: Ty::f64_ty(), name: Some("activity".into()) },
+                LocalDecl { index: 2, ty: Ty::f64_ty(), name: Some("increment".into()) },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::f64_ty(), Ty::Bool]), name: None }, // checked add result
                 LocalDecl { index: 4, ty: Ty::f64_ty(), name: None }, // new_activity
-                LocalDecl { index: 5, ty: Ty::Bool, name: None }, // rescale guard
+                LocalDecl { index: 5, ty: Ty::Bool, name: None },     // rescale guard
                 LocalDecl { index: 6, ty: Ty::f64_ty(), name: None }, // rescaled value
             ],
             blocks: vec![
@@ -553,11 +521,7 @@ fn build_vsids_bump_score_model() -> VerifiableFunction {
                     terminator: Terminator::Return,
                 },
                 // bb3: return (no rescale needed)
-                BasicBlock {
-                    id: BlockId(3),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 2,
             return_ty: Ty::Unit,
@@ -695,10 +659,7 @@ fn test_real_z4_literal_positive_shift_overflow() {
             continue;
         }
         let result = z4.verify(vc);
-        eprintln!(
-            "z4 result for literal_positive {:?}: {:?}",
-            vc.kind, result
-        );
+        eprintln!("z4 result for literal_positive {:?}: {:?}", vc.kind, result);
 
         // The unguarded shift CAN overflow — z4 should find a counterexample
         // where var_id has bit 31 set (e.g., var_id = 2^31 = 2147483648).
@@ -707,21 +668,11 @@ fn test_real_z4_literal_positive_shift_overflow() {
             "z4 must find shift overflow in unguarded literal_positive. Got: {result:?}"
         );
 
-        if let VerificationResult::Failed {
-            counterexample: Some(cex),
-            solver,
-            time_ms,
-        } = &result
-        {
+        if let VerificationResult::Failed { counterexample: Some(cex), solver, time_ms } = &result {
             assert_eq!(solver, "z4-smtlib");
             assert!(*time_ms < 30_000, "should complete in under 30s");
-            assert!(
-                !cex.assignments.is_empty(),
-                "counterexample must have assignments"
-            );
-            eprintln!(
-                "  Counterexample for literal encoding overflow: {cex}"
-            );
+            assert!(!cex.assignments.is_empty(), "counterexample must have assignments");
+            eprintln!("  Counterexample for literal encoding overflow: {cex}");
         }
     }
 }
@@ -749,21 +700,14 @@ fn test_real_z4_literal_negative_shift_overflow() {
             continue;
         }
         let result = z4.verify(vc);
-        eprintln!(
-            "z4 result for literal_negative {:?}: {:?}",
-            vc.kind, result
-        );
+        eprintln!("z4 result for literal_negative {:?}: {:?}", vc.kind, result);
 
         assert!(
             result.is_failed(),
             "z4 must find shift overflow in unguarded literal_negative. Got: {result:?}"
         );
 
-        if let VerificationResult::Failed {
-            counterexample: Some(cex),
-            ..
-        } = &result
-        {
+        if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             eprintln!("  Counterexample: {cex}");
         }
     }
@@ -800,10 +744,7 @@ fn test_real_z4_leb128_shift_without_guard() {
             continue;
         }
         let result = z4.verify(vc);
-        eprintln!(
-            "z4 result for leb128 shift (no guard) {:?}: {:?}",
-            vc.kind, result
-        );
+        eprintln!("z4 result for leb128 shift (no guard) {:?}: {:?}", vc.kind, result);
 
         // Without the guard, shift can be >= 64, causing overflow
         assert!(
@@ -811,14 +752,8 @@ fn test_real_z4_leb128_shift_without_guard() {
             "z4 must find shift overflow when shift is unconstrained. Got: {result:?}"
         );
 
-        if let VerificationResult::Failed {
-            counterexample: Some(cex),
-            ..
-        } = &result
-        {
-            eprintln!(
-                "  Counterexample (shift >= 64 causes overflow): {cex}"
-            );
+        if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
+            eprintln!("  Counterexample (shift >= 64 causes overflow): {cex}");
         }
     }
 }
@@ -846,10 +781,7 @@ fn test_real_z4_vsids_bump_score_overflow() {
             continue;
         }
         let result = z4.verify(vc);
-        eprintln!(
-            "z4 result for vsids_bump_score {:?}: {:?}",
-            vc.kind, result
-        );
+        eprintln!("z4 result for vsids_bump_score {:?}: {:?}", vc.kind, result);
 
         // Float addition overflow depends on the z4 float encoding.
         // Log the result regardless — this is the stretch goal target.
@@ -859,11 +791,7 @@ fn test_real_z4_vsids_bump_score_overflow() {
                     "  PROVED safe by {solver} in {time_ms}ms (float abstraction may be conservative)"
                 );
             }
-            VerificationResult::Failed {
-                counterexample,
-                solver,
-                time_ms,
-            } => {
+            VerificationResult::Failed { counterexample, solver, time_ms } => {
                 eprintln!("  FAILED: {solver} found violation in {time_ms}ms");
                 if let Some(cex) = counterexample {
                     eprintln!("  Counterexample: {cex}");

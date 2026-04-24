@@ -159,7 +159,7 @@ struct BlockContext(Vec<BlockFrame>);
 
 struct Builder<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
-    // tRust: known issue — Why does this use an `infcx`, there should be (upstream FIXME by @lcnr)
+    // FIXME(@lcnr): Why does this use an `infcx`, there should be
     // no shared type inference going on here. I feel like it would
     // clearer to manually construct one where necessary or to provide
     // a nice API for non-type inference trait system checks.
@@ -356,7 +356,7 @@ struct GuardFrame {
     ///      P1(id1) if (... (match E2 { P2(id2) if ... => B2 })) => B1,
     /// }
     ///
-    /// here, when building for tRust: known issue —.
+    /// here, when building for FIXME.
     locals: Vec<GuardFrameLocal>,
 }
 
@@ -383,7 +383,6 @@ impl LocalsForNode {
             }
 
             (&LocalsForNode::One(_), ForGuard::RefWithinGuard) => {
-                // tRust: invariant — `RefWithinGuard` is only valid for bindings split into separate guard and arm-body locals.
                 bug!("anything with one local should never be within a guard.")
             }
         }
@@ -467,14 +466,13 @@ fn construct_fn<'tcx>(
     let span_with_body = tcx.hir_span_with_body(fn_id);
     let return_ty_span = tcx
         .hir_fn_decl_by_hir_id(fn_id)
-        // tRust: invariant — `construct_fn` only runs for HIR owners that have a function declaration to query.
         .unwrap_or_else(|| span_bug!(span, "can't build MIR for {:?}", fn_def))
         .output
         .span();
 
     let mut abi = fn_sig.abi;
     if let DefKind::Closure = tcx.def_kind(fn_def) {
-        // tRust: known issue — Avoid having RustCall on closures, (upstream HACK by eddyb)
+        // HACK(eddyb) Avoid having RustCall on closures,
         // as it adds unnecessary (and wrong) auto-tupling.
         abi = ExternAbi::Rust;
     }
@@ -484,12 +482,11 @@ fn construct_fn<'tcx>(
     let return_ty = fn_sig.output();
     let coroutine = match tcx.type_of(fn_def).instantiate_identity().kind() {
         ty::Coroutine(_, args) => Some(Box::new(CoroutineInfo::initial(
-            tcx.coroutine_kind(fn_def).expect("invariant: function is a coroutine"), // tRust: unwrap -> expect
+            tcx.coroutine_kind(fn_def).unwrap(),
             args.as_coroutine().yield_ty(),
             args.as_coroutine().resume_ty(),
         ))),
         ty::Closure(..) | ty::CoroutineClosure(..) | ty::FnDef(..) => None,
-        // tRust: invariant — MIR bodies lowered through `construct_fn` must have a `FnDef`, `Closure`, `CoroutineClosure`, or `Coroutine` type.
         ty => span_bug!(span_with_body, "unexpected type of body: {ty:?}"),
     };
 
@@ -511,7 +508,7 @@ fn construct_fn<'tcx>(
         );
     }
 
-    // tRust: known issue — This should be able to reveal opaque (upstream #132279)
+    // FIXME(#132279): This should be able to reveal opaque
     // types defined during HIR typeck.
     let infcx = tcx.infer_ctxt().build(TypingMode::non_body_analysis());
     let mut builder = Builder::new(
@@ -590,11 +587,10 @@ fn construct_const<'a, 'tcx>(
             (span, span)
         }
         Node::Item(hir::Item { kind: hir::ItemKind::GlobalAsm { .. }, span, .. }) => (*span, *span),
-        // tRust: invariant — `construct_const` is only called for const-like HIR owners, anon consts, const blocks, or global asm.
         _ => span_bug!(tcx.def_span(def), "can't build MIR for {:?}", def),
     };
 
-    // tRust: known issue — We likely want to be able to use the hidden types of (upstream #132279)
+    // FIXME(#132279): We likely want to be able to use the hidden types of
     // opaques used by this function here.
     let infcx = tcx.infer_ctxt().build(TypingMode::non_body_analysis());
     let mut builder =
@@ -664,7 +660,7 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
                         vec![closure_ty, resume_ty],
                         return_ty,
                         Some(Box::new(CoroutineInfo::initial(
-                            tcx.coroutine_kind(def_id).expect("invariant: function is a coroutine"), // tRust: unwrap -> expect
+                            tcx.coroutine_kind(def_id).unwrap(),
                             yield_ty,
                             resume_ty,
                         ))),
@@ -699,7 +695,6 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
                 }
                 ty::Error(_) => (vec![closure_ty, closure_ty], closure_ty, None),
                 kind => {
-                    // tRust: invariant — a closure body with type errors may only have a closure, coroutine, coroutine-closure, or error type here.
                     span_bug!(
                         span,
                         "expected type of closure body to be a closure or coroutine, got {kind:?}"
@@ -707,7 +702,6 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
                 }
             }
         }
-        // tRust: invariant — `construct_error` only accepts body owners whose `DefKind` actually carries executable MIR.
         dk => span_bug!(span, "{:?} is not a body: {:?}", def_id, dk),
     };
 
@@ -825,7 +819,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         body.coverage_info_hi = self.coverage_info.as_ref().map(|b| b.as_done());
 
         let writer = pretty::MirWriter::new(self.tcx);
-        writer.write_mir_fn(&body, &mut std::io::stdout()).expect("invariant: MIR write to stdout cannot fail"); // tRust: unwrap -> expect
+        writer.write_mir_fn(&body, &mut std::io::stdout()).unwrap();
     }
 
     fn lint_and_remove_uninhabited(&mut self) {
@@ -959,8 +953,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let writer = pretty::MirWriter::new(self.tcx);
         for (index, block) in body.basic_blocks.iter().enumerate() {
             if block.terminator.is_none() {
-                writer.write_mir_fn(&body, &mut std::io::stdout()).expect("invariant: MIR write to stdout cannot fail"); // tRust: unwrap -> expect
-                // tRust: invariant — MIR construction must leave every basic block with a terminator before `finish` returns.
+                writer.write_mir_fn(&body, &mut std::io::stdout()).unwrap();
                 span_bug!(self.fn_span, "no terminator on block {:?}", index);
             }
         }
@@ -1005,7 +998,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let capture = captured_place.info.capture_kind;
                 let var_id = match captured_place.place.base {
                     HirPlaceBase::Upvar(upvar_id) => upvar_id.var_path.hir_id,
-                    // tRust: invariant — `closure_captures(self.def_id)` only yields captured upvars, so each captured place base must be `Upvar`.
                     _ => bug!("Expected an upvar"),
                 };
                 let upvar_base = upvar_owner.get_or_insert(var_id.owner);
@@ -1206,7 +1198,7 @@ pub(crate) fn parse_float_into_scalar(
 ) -> Option<ScalarInt> {
     let num = num.as_str();
     match float_ty {
-        // tRust: known issue — When available, compare to the library parser as with `f32` and `f64` (upstream FIXME by f16_f128)
+        // FIXME(f16_f128): When available, compare to the library parser as with `f32` and `f64`
         ty::FloatTy::F16 => {
             let mut f = num.parse::<Half>().ok()?;
             if neg {
@@ -1260,7 +1252,7 @@ pub(crate) fn parse_float_into_scalar(
 
             Some(ScalarInt::from(f))
         }
-        // tRust: known issue — When available, compare to the library parser as with `f32` and `f64` (upstream FIXME by f16_f128)
+        // FIXME(f16_f128): When available, compare to the library parser as with `f32` and `f64`
         ty::FloatTy::F128 => {
             let mut f = num.parse::<Quad>().ok()?;
             if neg {

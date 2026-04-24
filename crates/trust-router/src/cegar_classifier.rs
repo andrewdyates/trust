@@ -8,8 +8,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::{Formula, VcKind, VerificationCondition};
 use trust_types::fx::FxHashSet;
+use trust_types::{Formula, VcKind, VerificationCondition};
 
 /// Score threshold above which a VC should be dispatched to CEGAR.
 const CEGAR_THRESHOLD: u32 = 30;
@@ -65,10 +65,7 @@ pub fn classify_with_threshold(vc: &VerificationCondition, threshold: u32) -> Ce
     if depth >= 4 {
         let contribution = (depth - 3) * 5;
         score += contribution;
-        reasons.push(CegarReason::DeepNesting {
-            depth,
-            score_contribution: contribution,
-        });
+        reasons.push(CegarReason::DeepNesting { depth, score_contribution: contribution });
     }
 
     // 3. Count distinct variables for dimensionality.
@@ -76,44 +73,32 @@ pub fn classify_with_threshold(vc: &VerificationCondition, threshold: u32) -> Ce
     if var_count >= 6 {
         let contribution = (var_count - 5) * 3;
         score += contribution;
-        reasons.push(CegarReason::HighDimensionality {
-            var_count,
-            score_contribution: contribution,
-        });
+        reasons
+            .push(CegarReason::HighDimensionality { var_count, score_contribution: contribution });
     }
 
     // 4. Detect loop patterns in the formula.
     if has_loop_pattern(&vc.formula) {
         let contribution = 20;
         score += contribution;
-        reasons.push(CegarReason::LoopPattern {
-            score_contribution: contribution,
-        });
+        reasons.push(CegarReason::LoopPattern { score_contribution: contribution });
     }
 
     // 5. Detect recursion patterns (function name referencing itself in formula).
-    if has_recursion_pattern(&vc.formula, &vc.function) {
+    if has_recursion_pattern(&vc.formula, vc.function.as_str()) {
         let contribution = 25;
         score += contribution;
-        reasons.push(CegarReason::RecursionPattern {
-            score_contribution: contribution,
-        });
+        reasons.push(CegarReason::RecursionPattern { score_contribution: contribution });
     }
 
     // 6. Detect quantifier-like patterns (Implies with universally-quantified feel).
     if has_quantifier_pattern(&vc.formula) {
         let contribution = 15;
         score += contribution;
-        reasons.push(CegarReason::Quantified {
-            score_contribution: contribution,
-        });
+        reasons.push(CegarReason::Quantified { score_contribution: contribution });
     }
 
-    CegarClassification {
-        score,
-        should_use_cegar: score >= threshold,
-        reasons,
-    }
+    CegarClassification { score, should_use_cegar: score >= threshold, reasons }
 }
 
 impl CegarReason {
@@ -142,7 +127,9 @@ fn kind_score(kind: &VcKind) -> Option<CegarReason> {
         //   - tla2 (liveness checking via Buchi automata)
         VcKind::NonTermination { .. } => None,
         // Loop invariant assertions benefit from refinement.
-        VcKind::Assertion { message } if message.contains("loop") || message.contains("invariant") => {
+        VcKind::Assertion { message }
+            if message.contains("loop") || message.contains("invariant") =>
+        {
             Some(CegarReason::BeneficialKind {
                 kind_desc: "loop/invariant assertion".to_string(),
                 score_contribution: 25,
@@ -285,9 +272,8 @@ fn has_loop_pattern(formula: &Formula) -> bool {
     collect_variables(formula, &mut vars);
 
     // Primed variable convention: x' or x_next or _next_x.
-    let has_primed = vars.iter().any(|v| {
-        v.ends_with('\'') || v.contains("_next_") || v.starts_with("next_")
-    });
+    let has_primed =
+        vars.iter().any(|v| v.ends_with('\'') || v.contains("_next_") || v.starts_with("next_"));
 
     if has_primed {
         return true;
@@ -329,7 +315,7 @@ mod tests {
     fn make_vc(kind: VcKind, formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -349,10 +335,7 @@ mod tests {
         // tRust #194: NonTermination VCs must NOT be routed to CEGAR/IC3/PDR.
         // PDR proves safety (AG !bad), not termination.
         let vc = make_vc(
-            VcKind::NonTermination {
-                context: "loop".to_string(),
-                measure: "n".to_string(),
-            },
+            VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() },
             Formula::Bool(false),
         );
         let result = classify(&vc);
@@ -393,9 +376,8 @@ mod tests {
 
     #[test]
     fn test_classify_many_variables_adds_dimensionality() {
-        let vars: Vec<Formula> = (0..10)
-            .map(|i| Formula::Var(format!("v{i}"), Sort::Int))
-            .collect();
+        let vars: Vec<Formula> =
+            (0..10).map(|i| Formula::Var(format!("v{i}"), Sort::Int)).collect();
         let formula = Formula::And(
             vars.windows(2)
                 .map(|w| Formula::Lt(Box::new(w[0].clone()), Box::new(w[1].clone())))
@@ -403,10 +385,8 @@ mod tests {
         );
         let vc = make_vc(VcKind::DivisionByZero, formula);
         let result = classify(&vc);
-        let dim_reason = result
-            .reasons
-            .iter()
-            .find(|r| matches!(r, CegarReason::HighDimensionality { .. }));
+        let dim_reason =
+            result.reasons.iter().find(|r| matches!(r, CegarReason::HighDimensionality { .. }));
         assert!(dim_reason.is_some());
     }
 
@@ -473,10 +453,8 @@ mod tests {
 
     #[test]
     fn test_formula_depth_nested() {
-        let inner = Formula::Add(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(1)),
-        );
+        let inner =
+            Formula::Add(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(1)));
         assert_eq!(formula_depth(&inner), 1);
 
         let outer = Formula::Gt(Box::new(inner), Box::new(Formula::Int(10)));
@@ -504,10 +482,8 @@ mod tests {
 
     #[test]
     fn test_kind_score_overflow_small() {
-        let kind = VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        };
+        let kind =
+            VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::i32(), Ty::i32()) };
         let reason = kind_score(&kind);
         assert!(reason.is_some());
         assert_eq!(reason.unwrap().contribution(), 5);
@@ -515,9 +491,7 @@ mod tests {
 
     #[test]
     fn test_kind_score_assertion_with_loop() {
-        let kind = VcKind::Assertion {
-            message: "loop invariant violated".to_string(),
-        };
+        let kind = VcKind::Assertion { message: "loop invariant violated".to_string() };
         let reason = kind_score(&kind);
         assert!(reason.is_some());
         assert_eq!(reason.unwrap().contribution(), 25);
@@ -528,9 +502,7 @@ mod tests {
         // tRust #194: Build a VC that hits multiple CEGAR indicators.
         // Use a loop-invariant assertion (not NonTermination) since NonTermination
         // is excluded from CEGAR scoring.
-        let vars: Vec<Formula> = (0..8)
-            .map(|i| Formula::Var(format!("v{i}"), Sort::Int))
-            .collect();
+        let vars: Vec<Formula> = (0..8).map(|i| Formula::Var(format!("v{i}"), Sort::Int)).collect();
         let primed = Formula::Var("v0_next_step".into(), Sort::Int);
         let inner = Formula::Implies(
             Box::new(Formula::Gt(Box::new(vars[0].clone()), Box::new(Formula::Int(0)))),
@@ -546,10 +518,8 @@ mod tests {
         ]);
 
         let vc = VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "loop invariant: counter decreases".to_string(),
-            },
-            function: "test_fn".to_string(),
+            kind: VcKind::Assertion { message: "loop invariant: counter decreases".to_string() },
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,

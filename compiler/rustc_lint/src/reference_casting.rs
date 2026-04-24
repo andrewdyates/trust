@@ -17,7 +17,6 @@ declare_lint! {
     ///
     /// ```rust,compile_fail
     /// fn x(r: &i32) {
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe {
     ///         *(r as *const i32 as *mut i32) += 1;
     ///     }

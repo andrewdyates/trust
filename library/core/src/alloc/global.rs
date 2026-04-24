@@ -95,6 +95,7 @@ use crate::{cmp, ptr};
 ///   this trait are allowed to rely on the contracts defined on each method,
 ///   and implementors must ensure such contracts remain true.
 ///
+
 ///   heap allocations in the source. The optimizer may detect unused allocations that it can either
 ///   eliminate entirely or move to the stack and thus never invoke the allocator. The
 ///   optimizer may further assume that allocation is infallible, so code that used to fail due

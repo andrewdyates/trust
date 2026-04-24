@@ -9,9 +9,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use trust_types::BinOp;
+
 use crate::analyzer::{FailureAnalysis, FailurePattern};
 use crate::source_reader::{self, SourceContext};
-use trust_types::BinOp;
 
 /// A proposed specification or code change.
 #[derive(Debug, Clone)]
@@ -38,10 +39,7 @@ pub enum ProposalKind {
     /// Add a loop invariant: `#[invariant("expr")]`.
     AddInvariant { spec_body: String },
     /// Replace an operation with a safe variant.
-    SafeArithmetic {
-        original: String,
-        replacement: String,
-    },
+    SafeArithmetic { original: String, replacement: String },
     /// Add a bounds check before an indexing operation.
     AddBoundsCheck { check_expr: String },
     /// Add a non-zero check before division.
@@ -94,15 +92,11 @@ fn propose_for_failure(
         FailurePattern::IndexOutOfBounds => {
             propose_oob_fix(function_path, function_name, source_ctx)
         }
-        FailurePattern::CastOverflow => {
-            propose_cast_overflow_fix(function_path, function_name)
-        }
+        FailurePattern::CastOverflow => propose_cast_overflow_fix(function_path, function_name),
         FailurePattern::NegationOverflow => {
             propose_negation_overflow_fix(function_path, function_name)
         }
-        FailurePattern::ShiftOverflow => {
-            propose_shift_overflow_fix(function_path, function_name)
-        }
+        FailurePattern::ShiftOverflow => propose_shift_overflow_fix(function_path, function_name),
         FailurePattern::AssertionFailure { message } => {
             propose_assertion_fix(function_path, function_name, message)
         }
@@ -112,15 +106,9 @@ fn propose_for_failure(
         FailurePattern::PostconditionViolation => {
             propose_postcondition_fix(function_path, function_name)
         }
-        FailurePattern::UnreachableReached => {
-            propose_unreachable_fix(function_path, function_name)
-        }
-        FailurePattern::Temporal => {
-            propose_temporal_fix(function_path, function_name)
-        }
-        FailurePattern::Unknown => {
-            propose_unknown_fix(function_path, function_name)
-        }
+        FailurePattern::UnreachableReached => propose_unreachable_fix(function_path, function_name),
+        FailurePattern::Temporal => propose_temporal_fix(function_path, function_name),
+        FailurePattern::Unknown => propose_unknown_fix(function_path, function_name),
     }
 }
 
@@ -188,9 +176,7 @@ fn propose_overflow_fix(
 
     // Build context-aware checked arithmetic replacement
     let original = format!("{left} {sym} {right}", sym = op_symbol(op));
-    let replacement = format!(
-        "{left}.{checked_method}({right}).expect(\"{op_name} overflow\")"
-    );
+    let replacement = format!("{left}.{checked_method}({right}).expect(\"{op_name} overflow\")");
 
     vec![
         Proposal {
@@ -205,14 +191,9 @@ fn propose_overflow_fix(
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::SafeArithmetic {
-                original,
-                replacement,
-            },
+            kind: ProposalKind::SafeArithmetic { original, replacement },
             confidence: 0.75,
-            rationale: format!(
-                "Replace raw {op_name} with {checked_method}() for safe arithmetic"
-            ),
+            rationale: format!("Replace raw {op_name} with {checked_method}() for safe arithmetic"),
         },
     ]
 }
@@ -234,9 +215,7 @@ fn propose_div_zero_fix(
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: format!("{divisor_name} != 0"),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: format!("{divisor_name} != 0") },
             confidence: 0.95,
             rationale: format!("Division by zero possible -- require {divisor_name} != 0"),
         },
@@ -244,9 +223,7 @@ fn propose_div_zero_fix(
             function_path: function_path.into(),
             function_name: function_name.into(),
             kind: ProposalKind::AddNonZeroCheck {
-                check_expr: format!(
-                    "assert!({divisor_name} != 0, \"division by zero\")"
-                ),
+                check_expr: format!("assert!({divisor_name} != 0, \"division by zero\")"),
             },
             confidence: 0.8,
             rationale: "Add runtime non-zero check before division".into(),
@@ -298,17 +275,12 @@ fn propose_oob_fix(
     ]
 }
 
-fn propose_cast_overflow_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_cast_overflow_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "value >= 0 && value <= MAX".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "value >= 0 && value <= MAX".into() },
             confidence: 0.7,
             rationale: "Cast may overflow -- add TryFrom-based range check".into(),
         },
@@ -335,17 +307,12 @@ fn propose_cast_overflow_fix(
     ]
 }
 
-fn propose_negation_overflow_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_negation_overflow_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "x != MIN".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "x != MIN".into() },
             confidence: 0.9,
             rationale: "Negation of MIN overflows -- require x != MIN".into(),
         },
@@ -362,17 +329,12 @@ fn propose_negation_overflow_fix(
     ]
 }
 
-fn propose_shift_overflow_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_shift_overflow_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "shift < bit_width".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "shift < bit_width".into() },
             confidence: 0.9,
             rationale: "Shift amount must be less than bit width".into(),
         },
@@ -380,9 +342,8 @@ fn propose_shift_overflow_fix(
             function_path: function_path.into(),
             function_name: function_name.into(),
             kind: ProposalKind::AddBoundsCheck {
-                check_expr:
-                    "assert!(shift < std::mem::size_of::<T>() * 8, \"shift overflow\")"
-                        .into(),
+                check_expr: "assert!(shift < std::mem::size_of::<T>() * 8, \"shift overflow\")"
+                    .into(),
             },
             confidence: 0.8,
             rationale: "Add explicit shift amount bounds check".into(),
@@ -392,8 +353,7 @@ fn propose_shift_overflow_fix(
             function_name: function_name.into(),
             kind: ProposalKind::SafeArithmetic {
                 original: "value << shift".into(),
-                replacement: "value.checked_shl(shift as u32).expect(\"shift overflow\")"
-                    .into(),
+                replacement: "value.checked_shl(shift as u32).expect(\"shift overflow\")".into(),
             },
             confidence: 0.7,
             rationale: "Replace raw shift with checked_shl() for safe shifting".into(),
@@ -401,29 +361,19 @@ fn propose_shift_overflow_fix(
     ]
 }
 
-fn propose_assertion_fix(
-    function_path: &str,
-    function_name: &str,
-    message: &str,
-) -> Vec<Proposal> {
+fn propose_assertion_fix(function_path: &str, function_name: &str, message: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: message.to_string(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: message.to_string() },
             confidence: 0.8,
-            rationale: format!(
-                "Assertion `{message}` can fail -- propagate as precondition"
-            ),
+            rationale: format!("Assertion `{message}` can fail -- propagate as precondition"),
         },
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPostcondition {
-                spec_body: message.to_string(),
-            },
+            kind: ProposalKind::AddPostcondition { spec_body: message.to_string() },
             confidence: 0.5,
             rationale: format!(
                 "Assertion `{message}` should hold -- add as postcondition to strengthen spec"
@@ -441,9 +391,7 @@ fn propose_precondition_fix(
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: format!("{callee}_pre != false"),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: format!("{callee}_pre != false") },
             confidence: 0.7,
             rationale: format!(
                 "Call to {callee} violates its precondition -- propagate requirement to caller"
@@ -465,10 +413,7 @@ fn propose_precondition_fix(
     ]
 }
 
-fn propose_postcondition_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_postcondition_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
@@ -500,17 +445,12 @@ fn propose_postcondition_fix(
     ]
 }
 
-fn propose_unreachable_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_unreachable_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "input >= 0 && input <= MAX".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "input >= 0 && input <= MAX".into() },
             confidence: 0.7,
             rationale: "Unreachable code reached -- add precondition for enum exhaustiveness"
                 .into(),
@@ -528,10 +468,7 @@ fn propose_unreachable_fix(
     ]
 }
 
-fn propose_temporal_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_temporal_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
@@ -545,29 +482,21 @@ fn propose_temporal_fix(
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPrecondition {
-                spec_body: "state >= 0".into(),
-            },
+            kind: ProposalKind::AddPrecondition { spec_body: "state >= 0".into() },
             confidence: 0.5,
             rationale: "Temporal liveness may require initial state precondition".into(),
         },
         Proposal {
             function_path: function_path.into(),
             function_name: function_name.into(),
-            kind: ProposalKind::AddPostcondition {
-                spec_body: "result >= 0".into(),
-            },
+            kind: ProposalKind::AddPostcondition { spec_body: "result >= 0".into() },
             confidence: 0.4,
-            rationale:
-                "Add postcondition to encode the expected temporal behavior".into(),
+            rationale: "Add postcondition to encode the expected temporal behavior".into(),
         },
     ]
 }
 
-fn propose_unknown_fix(
-    function_path: &str,
-    function_name: &str,
-) -> Vec<Proposal> {
+fn propose_unknown_fix(function_path: &str, function_name: &str) -> Vec<Proposal> {
     vec![
         Proposal {
             function_path: function_path.into(),
@@ -577,9 +506,8 @@ fn propose_unknown_fix(
                     .into(),
             },
             confidence: 0.2,
-            rationale:
-                "Unknown failure pattern -- needs manual investigation or LLM analysis"
-                    .into(),
+            rationale: "Unknown failure pattern -- needs manual investigation or LLM analysis"
+                .into(),
         },
         Proposal {
             function_path: function_path.into(),
@@ -589,8 +517,7 @@ fn propose_unknown_fix(
                     .into(),
             },
             confidence: 0.15,
-            rationale: "Unknown failure -- may need postcondition after investigation"
-                .into(),
+            rationale: "Unknown failure -- may need postcondition after investigation".into(),
         },
     ]
 }
@@ -632,11 +559,11 @@ fn op_symbol(op: &BinOp) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use trust_types::{Ty, VcKind};
+
     use super::*;
     use crate::analyzer::FailureAnalysis;
     use crate::source_reader::extract_function;
-    use trust_types::Ty;
-    use trust_types::VcKind;
 
     // --- Existing tests (backward compatibility, no source context) ---
 
@@ -645,7 +572,10 @@ mod tests {
         let analysis = FailureAnalysis {
             vc_kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "get_midpoint".into(),
             pattern: FailurePattern::ArithmeticOverflow { op: BinOp::Add },
@@ -734,19 +664,18 @@ mod tests {
         let analysis = FailureAnalysis {
             vc_kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "get_midpoint".into(),
             pattern: FailurePattern::ArithmeticOverflow { op: BinOp::Add },
             solver: Some("z4".into()),
         };
 
-        let proposals = strengthen_with_context(
-            "test::get_midpoint",
-            "get_midpoint",
-            &[analysis],
-            &ctx,
-        );
+        let proposals =
+            strengthen_with_context("test::get_midpoint", "get_midpoint", &[analysis], &ctx);
 
         assert_eq!(proposals.len(), 2);
 
@@ -765,11 +694,7 @@ mod tests {
         }
 
         // SafeArithmetic should use real variable names
-        if let ProposalKind::SafeArithmetic {
-            ref original,
-            ref replacement,
-        } = proposals[1].kind
-        {
+        if let ProposalKind::SafeArithmetic { ref original, ref replacement } = proposals[1].kind {
             assert!(
                 original.contains("a") && original.contains("b"),
                 "original should use real names: got '{original}'"
@@ -795,12 +720,8 @@ mod tests {
             solver: None,
         };
 
-        let proposals = strengthen_with_context(
-            "test::safe_divide",
-            "safe_divide",
-            &[analysis],
-            &ctx,
-        );
+        let proposals =
+            strengthen_with_context("test::safe_divide", "safe_divide", &[analysis], &ctx);
 
         assert_eq!(proposals.len(), 2);
 
@@ -833,21 +754,14 @@ mod tests {
             solver: None,
         };
 
-        let proposals = strengthen_with_context(
-            "test::get_element",
-            "get_element",
-            &[analysis],
-            &ctx,
-        );
+        let proposals =
+            strengthen_with_context("test::get_element", "get_element", &[analysis], &ctx);
 
         assert_eq!(proposals.len(), 2);
 
         // Should use real index name "i" and array name "arr"
         if let ProposalKind::AddPrecondition { ref spec_body } = proposals[0].kind {
-            assert_eq!(
-                spec_body, "i < arr.len()",
-                "should identify i as index and arr as array"
-            );
+            assert_eq!(spec_body, "i < arr.len()", "should identify i as index and arr as array");
         } else {
             panic!("expected AddPrecondition");
         }
@@ -871,15 +785,17 @@ mod tests {
         let analysis = FailureAnalysis {
             vc_kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "noop".into(),
             pattern: FailurePattern::ArithmeticOverflow { op: BinOp::Add },
             solver: None,
         };
 
-        let proposals =
-            strengthen_with_context("test::noop", "noop", &[analysis], &ctx);
+        let proposals = strengthen_with_context("test::noop", "noop", &[analysis], &ctx);
 
         assert_eq!(proposals.len(), 2);
         // Falls back to generic formula with placeholder var names
@@ -903,8 +819,7 @@ mod tests {
             solver: None,
         };
 
-        let proposals =
-            strengthen_with_context("test::half", "half", &[analysis], &ctx);
+        let proposals = strengthen_with_context("test::half", "half", &[analysis], &ctx);
 
         // Falls back to generic "divisor"
         if let ProposalKind::AddPrecondition { ref spec_body } = proposals[0].kind {

@@ -3,7 +3,7 @@ use crate::spec::{Cc, CfgAbi, LinkArgs, LinkerFlavor, Lld, TargetOptions, add_li
 pub(crate) fn opts() -> TargetOptions {
     let base = base::windows_gnu::opts();
 
-    // tRust: known issue — This should be updated for the exception machinery changes from #67502
+    // FIXME: This should be updated for the exception machinery changes from #67502
     // and inherit from `windows_gnu_base`, at least partially.
     let mingw_libs = &[
         "-lwinstorecompat",
@@ -18,7 +18,7 @@ pub(crate) fn opts() -> TargetOptions {
     let mut late_link_args =
         TargetOptions::link_args(LinkerFlavor::Gnu(Cc::No, Lld::No), mingw_libs);
     add_link_args(&mut late_link_args, LinkerFlavor::Gnu(Cc::Yes, Lld::No), mingw_libs);
-    // Reset the flags back to empty until the known issue above is addressed.
+    // Reset the flags back to empty until the FIXME above is addressed.
     let late_link_args_dynamic = LinkArgs::new();
     let late_link_args_static = LinkArgs::new();
 

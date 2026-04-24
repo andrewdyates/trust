@@ -944,8 +944,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
     }
 
     fn scalable_alloca(&mut self, _elt: u64, _align: Align, _element_ty: Ty<'_>) -> RValue<'gcc> {
-        // tRust: Scalable vectors are not yet supported in rustc_codegen_gcc
-        bug!("unimplemented: scalable_alloca is not yet supported in rustc_codegen_gcc")
+        todo!()
     }
 
     fn load(&mut self, pointee_ty: Type<'gcc>, ptr: RValue<'gcc>, align: Align) -> RValue<'gcc> {
@@ -1770,8 +1769,6 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         _instance: Option<Instance<'tcx>>,
     ) -> RValue<'gcc> {
         // FIXME(antoyo): remove when having a proper API.
-        // SAFETY: The source and target types have the same size and
-        // compatible memory layouts, so the transmute is well-defined.
         let gcc_func = unsafe { std::mem::transmute::<RValue<'gcc>, Function<'gcc>>(func) };
         let call = if self.functions.borrow().values().any(|value| *value == gcc_func) {
             // FIXME(antoyo): remove when the API supports a different type for functions.

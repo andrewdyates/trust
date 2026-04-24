@@ -37,7 +37,7 @@ pub fn incremental_verify_ich<'tcx, V>(
 fn incremental_verify_ich_not_green<'tcx>(tcx: TyCtxt<'tcx>, prev_index: SerializedDepNodeIndex) {
     panic!(
         "fingerprint for green query instance not loaded from cache: {:?}",
-        tcx.dep_graph.data().expect("invariant: data returned a valid value").prev_node_of(prev_index)
+        tcx.dep_graph.data().unwrap().prev_node_of(prev_index)
     )
 }
 
@@ -72,7 +72,7 @@ fn incremental_verify_ich_failed<'tcx>(
             "`cargo clean`".to_string()
         };
 
-        let dep_node = tcx.dep_graph.data().expect("invariant: data returned a valid value").prev_node_of(prev_index);
+        let dep_node = tcx.dep_graph.data().unwrap().prev_node_of(prev_index);
         tcx.dcx().emit_err(crate::error::IncrementCompilation {
             run_cmd,
             dep_node: format!("{dep_node:?}"),

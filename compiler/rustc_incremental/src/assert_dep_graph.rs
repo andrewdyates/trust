@@ -222,9 +222,9 @@ fn dump_graph(graph: &RetainedDepGraph) {
     {
         // dump a .txt file with just the edges:
         let txt_path = format!("{path}.txt");
-        let mut file = File::create_buffered(&txt_path).expect("invariant: dep graph txt file must be creatable"); // tRust: unwrap -> expect
+        let mut file = File::create_buffered(&txt_path).unwrap();
         for (source, target) in &edges {
-            write!(file, "{source:?} -> {target:?}\n").expect("invariant: write to open file must succeed"); // tRust: unwrap -> expect
+            write!(file, "{source:?} -> {target:?}\n").unwrap();
         }
     }
 
@@ -232,8 +232,8 @@ fn dump_graph(graph: &RetainedDepGraph) {
         // dump a .dot file in graphviz format:
         let dot_path = format!("{path}.dot");
         let mut v = Vec::new();
-        dot::render(&GraphvizDepGraph(nodes, edges), &mut v).expect("invariant: dot render to Vec must succeed"); // tRust: unwrap -> expect
-        fs::write(dot_path, v).expect("invariant: dep graph dot file must be writable"); // tRust: unwrap -> expect
+        dot::render(&GraphvizDepGraph(nodes, edges), &mut v).unwrap();
+        fs::write(dot_path, v).unwrap();
     }
 }
 
@@ -262,7 +262,7 @@ impl<'a> dot::Labeller<'a> for GraphvizDepGraph {
     type Node = DepKind;
     type Edge = (DepKind, DepKind);
     fn graph_id(&self) -> dot::Id<'_> {
-        dot::Id::new("DependencyGraph").expect("invariant: 'DependencyGraph' is a valid dot::Id") // tRust: unwrap -> expect
+        dot::Id::new("DependencyGraph").unwrap()
     }
     fn node_id(&self, n: &DepKind) -> dot::Id<'_> {
         let s: String = format!("{n:?}")
@@ -270,7 +270,7 @@ impl<'a> dot::Labeller<'a> for GraphvizDepGraph {
             .map(|c| if c == '_' || c.is_alphanumeric() { c } else { '_' })
             .collect();
         debug!("n={:?} s={:?}", n, s);
-        dot::Id::new(s).expect("invariant: sanitized DepKind name is a valid dot::Id") // tRust: unwrap -> expect
+        dot::Id::new(s).unwrap()
     }
     fn node_label(&self, n: &DepKind) -> dot::LabelText<'_> {
         dot::LabelText::label(format!("{n:?}"))

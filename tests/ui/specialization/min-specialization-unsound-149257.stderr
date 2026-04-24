@@ -1,0 +1,14 @@
+error: cannot specialize on trait `NotAlwaysApplicable`
+  --> $DIR/min-specialization-unsound-149257.rs:29:9
+   |
+LL | impl<T: NotAlwaysApplicable> MyTrait for T {
+   |         ^^^^^^^^^^^^^^^^^^^
+
+error: cannot specialize on associated type `<T as Assoc>::Item == u32`
+  --> $DIR/min-specialization-unsound-149257.rs:46:12
+   |
+LL | impl<T: Assoc<Item = u32>> Dispatch for T {
+   |            ^^^^^^^^^^^^
+
+error: aborting due to 2 previous errors
+

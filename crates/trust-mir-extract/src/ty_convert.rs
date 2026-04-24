@@ -8,6 +8,10 @@
 use rustc_middle::ty::{self, TyCtxt, TyKind};
 use trust_types::Ty as TrustTy;
 
+fn trust_tuple_or_unit(fields: Vec<TrustTy>) -> TrustTy {
+    if fields.is_empty() { TrustTy::Unit } else { TrustTy::Tuple(fields) }
+}
+
 /// Convert a rustc Ty to our simplified Ty.
 pub(crate) fn convert_ty<'tcx>(tcx: TyCtxt<'tcx>, ty: ty::Ty<'tcx>) -> TrustTy {
     match ty.kind() {
@@ -47,7 +51,7 @@ pub(crate) fn convert_ty<'tcx>(tcx: TyCtxt<'tcx>, ty: ty::Ty<'tcx>) -> TrustTy {
 
         TyKind::Tuple(fields) => {
             let field_tys: Vec<TrustTy> = fields.iter().map(|f| convert_ty(tcx, f)).collect();
-            TrustTy::Tuple(field_tys)
+            trust_tuple_or_unit(field_tys)
         }
 
         TyKind::Adt(adt_def, args) => {
@@ -109,4 +113,22 @@ pub(crate) fn uint_width_from_uint_ty(uint_ty: &rustc_ast_ir::UintTy, tcx: TyCtx
 /// Get the pointer width in bits for the target.
 fn pointer_width(tcx: TyCtxt<'_>) -> u32 {
     tcx.data_layout.pointer_size().bits() as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trust_tuple_or_unit_maps_empty_tuple_to_unit() {
+        assert_eq!(trust_tuple_or_unit(vec![]), TrustTy::Unit);
+    }
+
+    #[test]
+    fn trust_tuple_or_unit_preserves_non_empty_tuple() {
+        assert_eq!(
+            trust_tuple_or_unit(vec![TrustTy::Bool, TrustTy::Int { width: 32, signed: true }]),
+            TrustTy::Tuple(vec![TrustTy::Bool, TrustTy::Int { width: 32, signed: true }]),
+        );
+    }
 }

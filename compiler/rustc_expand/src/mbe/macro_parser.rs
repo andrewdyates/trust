@@ -279,7 +279,7 @@ impl MatcherPos {
                 let mut curr = &mut matches[metavar_idx];
                 for _ in 0..seq_depth - 1 {
                     match curr {
-                        MatchedSeq(seq) => curr = seq.last_mut().expect("invariant: sequence is non-empty at current depth"), // tRust: unwrap -> expect
+                        MatchedSeq(seq) => curr = seq.last_mut().unwrap(),
                         _ => unreachable!(),
                     }
                 }
@@ -600,7 +600,7 @@ impl TtParser {
                 EofMatcherPositions::One(mut eof_mp) => {
                     // Need to take ownership of the matches from within the `Rc`.
                     Rc::make_mut(&mut eof_mp.matches);
-                    let matches = Rc::try_unwrap(eof_mp.matches).expect("invariant: Rc is unique after make_mut").into_iter(); // tRust: unwrap -> expect
+                    let matches = Rc::try_unwrap(eof_mp.matches).unwrap().into_iter();
                     self.nameize(matcher, matches)
                 }
                 EofMatcherPositions::Multiple => {
@@ -676,7 +676,7 @@ impl TtParser {
 
                 (0, 1) => {
                     // We need to call the black-box parser to get some nonterminal.
-                    let mut mp = self.bb_mps.pop().expect("invariant: bb_mps has exactly 1 element per match arm"); // tRust: unwrap -> expect
+                    let mut mp = self.bb_mps.pop().unwrap();
                     let loc = &matcher[mp.idx];
                     if let &MatcherLoc::MetaVarDecl {
                         span, kind, next_metavar, seq_depth, ..
@@ -756,7 +756,7 @@ impl TtParser {
         for loc in matcher {
             if let &MatcherLoc::MetaVarDecl { span, bind, .. } = loc {
                 match ret_val.entry(MacroRulesNormalizedIdent::new(bind)) {
-                    Vacant(spot) => spot.insert(res.next().expect("invariant: result iterator has one entry per metavar decl")), // tRust: unwrap -> expect
+                    Vacant(spot) => spot.insert(res.next().unwrap()),
                     Occupied(..) => {
                         return Error(span, format!("duplicated bind name: {bind}"));
                     }

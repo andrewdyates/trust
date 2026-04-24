@@ -162,15 +162,15 @@ fn build_function_reports(
     // Group by function name, preserving insertion order.
     let mut by_function: Vec<(String, Vec<(&VerificationCondition, &VerificationResult)>)> =
         Vec::new();
-    let mut index_map: FxHashMap<String, usize> = FxHashMap::default();
+    let mut index_map: FxHashMap<Symbol, usize> = FxHashMap::default(); // tRust: FxHashMap OK — lookup only, no iteration (#827)
 
     for (vc, result) in results {
         if let Some(&idx) = index_map.get(&vc.function) {
             by_function[idx].1.push((vc, result));
         } else {
             let idx = by_function.len();
-            index_map.insert(vc.function.clone(), idx);
-            by_function.push((vc.function.clone(), vec![(vc, result)]));
+            index_map.insert(vc.function, idx);
+            by_function.push((vc.function.as_str().to_string(), vec![(vc, result)]));
         }
     }
 
@@ -295,7 +295,9 @@ fn raw_result_to_outcome(result: &VerificationResult) -> ObligationOutcome {
         VerificationResult::Timeout { timeout_ms, .. } => {
             ObligationOutcome::Timeout { timeout_ms: *timeout_ms }
         }
-        _ => ObligationOutcome::Unknown { reason: "unhandled verification result variant".to_string() },
+        _ => ObligationOutcome::Unknown {
+            reason: "unhandled verification result variant".to_string(),
+        },
     }
 }
 
@@ -326,7 +328,9 @@ fn disposition_to_outcome(
         RuntimeDisposition::Unknown { reason } => ObligationOutcome::Unknown { reason },
         RuntimeDisposition::Timeout { timeout_ms } => ObligationOutcome::Timeout { timeout_ms },
         RuntimeDisposition::CompileError { reason } => ObligationOutcome::Unknown { reason },
-        _ => ObligationOutcome::Unknown { reason: "unhandled verification result variant".to_string() },
+        _ => ObligationOutcome::Unknown {
+            reason: "unhandled verification result variant".to_string(),
+        },
     }
 }
 
@@ -395,10 +399,12 @@ pub(crate) fn vc_kind_tag(kind: &VcKind) -> String {
         VcKind::FloatOverflowToInfinity { .. } => "float_overflow_to_infinity".to_string(),
         // tRust #438: Rvalue safety VC tags.
         VcKind::InvalidDiscriminant { .. } => "invalid_discriminant".to_string(),
-        VcKind::AggregateArrayLengthMismatch { .. } => "aggregate_array_length_mismatch".to_string(),
-// tRust #463: Unsafe operation tag.
+        VcKind::AggregateArrayLengthMismatch { .. } => {
+            "aggregate_array_length_mismatch".to_string()
+        }
+        // tRust #463: Unsafe operation tag.
         VcKind::UnsafeOperation { .. } => "unsafe_operation".to_string(),
-_ => "unknown".to_string(),
+        _ => "unknown".to_string(),
     }
 }
 

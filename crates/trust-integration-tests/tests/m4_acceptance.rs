@@ -46,16 +46,12 @@ fn buggy_midpoint() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::usize(), name: None },        // _0: return
+                LocalDecl { index: 0, ty: Ty::usize(), name: None }, // _0: return
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("lo".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("hi".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },                                                            // _3: checked add
-                LocalDecl { index: 4, ty: Ty::usize(), name: None },        // _4: sum
-                LocalDecl { index: 5, ty: Ty::usize(), name: None },        // _5: mid
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None }, // _3: checked add
+                LocalDecl { index: 4, ty: Ty::usize(), name: None }, // _4: sum
+                LocalDecl { index: 5, ty: Ty::usize(), name: None }, // _5: mid
             ],
             blocks: vec![
                 // bb0: _3 = CheckedAdd(lo, hi); assert(!_3.1, overflow) -> bb1
@@ -162,12 +158,12 @@ fn safe_midpoint() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::usize(), name: None },        // _0: return
+                LocalDecl { index: 0, ty: Ty::usize(), name: None }, // _0: return
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("lo".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("hi".into()) },
-                LocalDecl { index: 3, ty: Ty::usize(), name: None },        // _3: hi - lo
-                LocalDecl { index: 4, ty: Ty::usize(), name: None },        // _4: (hi-lo)/2
-                LocalDecl { index: 5, ty: Ty::usize(), name: None },        // _5: lo + _4
+                LocalDecl { index: 3, ty: Ty::usize(), name: None }, // _3: hi - lo
+                LocalDecl { index: 4, ty: Ty::usize(), name: None }, // _4: (hi-lo)/2
+                LocalDecl { index: 5, ty: Ty::usize(), name: None }, // _5: lo + _4
             ],
             blocks: vec![
                 // bb0: _3 = hi - lo; _4 = _3 / 2; _5 = lo + _4; _0 = _5; return
@@ -184,8 +180,7 @@ fn safe_midpoint() -> VerifiableFunction {
                                 Operand::Copy(Place::local(1)), // lo
                             ),
                             span: SourceSpan {
-                                file: "examples/showcase/m4_binary_search_demo.rs"
-                                    .to_string(),
+                                file: "examples/showcase/m4_binary_search_demo.rs".to_string(),
                                 line_start: 52,
                                 col_start: 24,
                                 line_end: 52,
@@ -209,8 +204,7 @@ fn safe_midpoint() -> VerifiableFunction {
                                 Operand::Copy(Place::local(4)), // (hi-lo)/2
                             ),
                             span: SourceSpan {
-                                file: "examples/showcase/m4_binary_search_demo.rs"
-                                    .to_string(),
+                                file: "examples/showcase/m4_binary_search_demo.rs".to_string(),
                                 line_start: 52,
                                 col_start: 19,
                                 line_end: 52,
@@ -246,10 +240,7 @@ fn test_m4_buggy_binary_search_overflow_detected() {
 
     // Step 1: VCGen produces an ArithmeticOverflow VC for (lo + hi).
     let vcs = trust_vcgen::generate_vcs(&func);
-    assert!(
-        !vcs.is_empty(),
-        "buggy binary search midpoint should produce at least 1 VC"
-    );
+    assert!(!vcs.is_empty(), "buggy binary search midpoint should produce at least 1 VC");
 
     // Verify the overflow VC exists.
     let overflow_vcs: Vec<_> = vcs
@@ -276,11 +267,7 @@ fn test_m4_buggy_binary_search_overflow_detected() {
     // Step 2: Route through the pipeline.
     let router = trust_router::Router::new();
     let results = router.verify_all(&vcs);
-    assert_eq!(
-        results.len(),
-        vcs.len(),
-        "router should return one result per VC"
-    );
+    assert_eq!(results.len(), vcs.len(), "router should return one result per VC");
 
     // The mock backend returns Unknown for variable-containing formulas.
     // In production with z4, this VC would return Failed with a counterexample
@@ -289,20 +276,14 @@ fn test_m4_buggy_binary_search_overflow_detected() {
     assert_eq!(vc.function, "binary_search_buggy_midpoint");
     // Mock returns Unknown for variable formulas — a real solver would return Failed.
     assert!(
-        matches!(
-            result,
-            VerificationResult::Unknown { .. } | VerificationResult::Failed { .. }
-        ),
+        matches!(result, VerificationResult::Unknown { .. } | VerificationResult::Failed { .. }),
         "overflow VC should be Unknown (mock) or Failed (real solver), got: {result:?}"
     );
 
     // Step 3: Build the proof report.
     let report = trust_report::build_json_report("m4-binary-search-buggy", &results);
     assert!(!report.functions.is_empty(), "report should have function entries");
-    assert!(
-        report.summary.total_obligations >= 1,
-        "report should have at least 1 obligation"
-    );
+    assert!(report.summary.total_obligations >= 1, "report should have at least 1 obligation");
 
     eprintln!("=== M4 Buggy Binary Search: Overflow Detected ===");
     eprintln!("  VCs generated: {}", vcs.len());
@@ -327,10 +308,8 @@ fn test_m4_safe_binary_search_overflow_provably_safe() {
     let vcs = trust_vcgen::generate_vcs(&func);
 
     // The safe version should have overflow VCs for Sub and Add.
-    let overflow_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. }))
-        .collect();
+    let overflow_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. })).collect();
     assert!(
         !overflow_vcs.is_empty(),
         "safe midpoint should produce overflow VCs for integer arithmetic"
@@ -343,11 +322,7 @@ fn test_m4_safe_binary_search_overflow_provably_safe() {
     // Step 2: Route through the pipeline.
     let router = trust_router::Router::new();
     let results = router.verify_all(&vcs);
-    assert_eq!(
-        results.len(),
-        vcs.len(),
-        "router should return one result per VC"
-    );
+    assert_eq!(results.len(), vcs.len(), "router should return one result per VC");
 
     // Step 3: Build the proof report.
     let report = trust_report::build_json_report("m4-binary-search-safe", &results);
@@ -378,10 +353,8 @@ fn test_m4_binary_search_end_to_end_comparison() {
         .iter()
         .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }))
         .count();
-    let safe_overflow_count = safe_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. }))
-        .count();
+    let safe_overflow_count =
+        safe_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. })).count();
 
     assert_eq!(buggy_overflow_count, 1, "buggy version must have 1 overflow(Add) VC");
     assert!(safe_overflow_count >= 1, "safe version produces overflow VCs for integer ops");
@@ -399,8 +372,7 @@ fn test_m4_binary_search_end_to_end_comparison() {
     let report = trust_report::build_json_report("m4-binary-search-demo", &all_results);
 
     // Report should cover both functions.
-    let function_names: Vec<&str> =
-        report.functions.iter().map(|f| f.function.as_str()).collect();
+    let function_names: Vec<&str> = report.functions.iter().map(|f| f.function.as_str()).collect();
     assert!(
         function_names.contains(&"binary_search_buggy_midpoint"),
         "report should include buggy function, got: {function_names:?}"
@@ -437,7 +409,7 @@ fn test_m4_counterexample_demonstrates_overflow() {
     ]);
 
     let simulated_failed = VerificationResult::Failed {
-        solver: "z4".to_string(),
+        solver: "z4".into(),
         time_ms: 42,
         counterexample: Some(simulated_cex),
     };
@@ -451,10 +423,7 @@ fn test_m4_counterexample_demonstrates_overflow() {
     let report = trust_report::build_json_report("m4-simulated-z4", &results);
 
     // The report should show a violation.
-    assert_eq!(
-        report.summary.total_failed, 1,
-        "report should show 1 failed obligation"
-    );
+    assert_eq!(report.summary.total_failed, 1, "report should show 1 failed obligation");
     assert!(
         matches!(report.summary.verdict, trust_types::CrateVerdict::HasViolations),
         "verdict should be HasViolations, got: {:?}",
@@ -489,10 +458,11 @@ fn test_m4_safe_version_proof_structure() {
         .iter()
         .map(|vc| {
             let proved = VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 3,
                 strength: ProofStrength::smt_unsat(),
-                proof_certificate: None, solver_warnings: None,
+                proof_certificate: None,
+                solver_warnings: None,
             };
             (vc.clone(), proved)
         })
@@ -510,8 +480,7 @@ fn test_m4_safe_version_proof_structure() {
     assert_eq!(
         report.summary.total_proved, report.summary.total_obligations,
         "all obligations should be proved: {} proved out of {}",
-        report.summary.total_proved,
-        report.summary.total_obligations
+        report.summary.total_proved, report.summary.total_obligations
     );
     assert_eq!(report.summary.total_failed, 0, "no obligations should fail");
 

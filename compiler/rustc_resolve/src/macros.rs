@@ -423,7 +423,7 @@ impl<'ra, 'tcx> ResolverExpand for Resolver<'ra, 'tcx> {
                     ) {
                         Ok((Some(ext), _)) => {
                             if !ext.helper_attrs.is_empty() {
-                                let span = resolution.path.segments.last().expect("invariant: non-empty collection").ident.span;
+                                let span = resolution.path.segments.last().unwrap().ident.span;
                                 let ctxt = Macros20NormalizedSyntaxContext::new(span.ctxt());
                                 entry.helper_attrs.extend(
                                     ext.helper_attrs
@@ -461,7 +461,7 @@ impl<'ra, 'tcx> ResolverExpand for Resolver<'ra, 'tcx> {
         // `#[derive(Copy)] #[derive(Clone)]`. We do this because the code generated for
         // `derive(Clone)` changes if `derive(Copy)` is also present.
         //
-        // NOTE(#124794): unfortunately this doesn't work with `#[derive(Clone)] #[derive(Copy)]`.
+        // FIXME(#124794): unfortunately this doesn't work with `#[derive(Clone)] #[derive(Copy)]`.
         // When the `Clone` impl is generated the `#[derive(Copy)]` hasn't been processed and
         // `has_derive_copy` hasn't been set yet.
         if entry.has_derive_copy || self.has_derive_copy(parent_scope.expansion) {
@@ -535,7 +535,7 @@ impl<'ra, 'tcx> ResolverExpand for Resolver<'ra, 'tcx> {
         if !target_trait.unexpanded_invocations.borrow().is_empty() {
             return Err(Indeterminate);
         }
-        // NOTE: instead of waiting try generating all trait methods, and pruning
+        // FIXME: Instead of waiting try generating all trait methods, and pruning
         // the shadowed ones a bit later, e.g. when all macro expansion completes.
         // Pros: expansion will be stuck less (but only in exotic cases), the implementation may be
         // less hacky.
@@ -549,7 +549,7 @@ impl<'ra, 'tcx> ResolverExpand for Resolver<'ra, 'tcx> {
 
         let mut idents = Vec::new();
         target_trait.for_each_child(self, |this, ident, orig_ident_span, ns, _binding| {
-            // NOTE: adjust hygiene for idents from globs, like for glob imports.
+            // FIXME: Adjust hygiene for idents from globs, like for glob imports.
             if let Some(overriding_keys) = this.impl_binding_keys.get(&impl_def_id)
                 && overriding_keys.contains(&BindingKey::new(ident, ns))
             {
@@ -787,7 +787,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                 | PathResult::Indeterminate
                 | PathResult::Failed { .. } => Err(Determinacy::Determined),
                 PathResult::Module(ModuleOrUniformRoot::Module(module)) => {
-                    Ok(module.res().expect("invariant: module has resolution"))
+                    Ok(module.res().unwrap())
                 }
                 PathResult::Module(..) => unreachable!(),
             };
@@ -888,7 +888,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
 
         let macro_resolutions = self.multi_segment_macro_resolutions.take(self);
         for (mut path, path_span, kind, parent_scope, initial_res, ns) in macro_resolutions {
-            // NOTE: path resolution will ICE if segment IDs present.
+            // FIXME: Path resolution will ICE if segment IDs present.
             for seg in &mut path {
                 seg.id = None;
             }
@@ -910,7 +910,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                     path_span,
                     kind,
                     initial_res,
-                    module.res().expect("invariant: module has resolution"),
+                    module.res().unwrap(),
                 ),
                 path_res @ (PathResult::NonModule(..) | PathResult::Failed { .. }) => {
                     let mut suggestion = None;
@@ -969,7 +969,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                                     ),
                                 },
                                 None,
-                                path.last().map(|segment| segment.ident.name).expect("invariant: value is present"),
+                                path.last().map(|segment| segment.ident.name).unwrap(),
                             )
                         }
                         _ => unreachable!(),
@@ -1240,7 +1240,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                     return Ok(true);
                 }
                 PathResult::NonModule(..) |
-                // tRust: known issue — (Urgau) This shouldn't be necessary
+                // HACK(Urgau): This shouldn't be necessary
                 PathResult::Failed { is_error_from_last_segment: false, .. } => {
                     self.dcx()
                         .emit_err(errors::CfgAccessibleUnsure { span });

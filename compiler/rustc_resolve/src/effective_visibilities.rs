@@ -65,7 +65,7 @@ impl Resolver<'_, '_> {
 
 impl<'a, 'ra, 'tcx> EffectiveVisibilitiesVisitor<'a, 'ra, 'tcx> {
     /// Fills the `Resolver::effective_visibilities` table with public & exported items
-    /// For now, this doesn't resolve macros and cannot resolve Impl, as we
+    /// For now, this doesn't resolve macros (FIXME) and cannot resolve Impl, as we
     /// need access to a TyCtxt for that. Returns the set of ambiguous re-exports.
     pub(crate) fn compute_effective_visibilities<'c>(
         r: &'a mut Resolver<'ra, 'tcx>,

@@ -29,10 +29,7 @@ impl HappensBefore {
     /// Create a new empty happens-before relation with `n` events.
     #[must_use]
     pub fn new(event_count: usize) -> Self {
-        Self {
-            edges: FxHashMap::default(),
-            event_count,
-        }
+        Self { edges: FxHashMap::default(), event_count }
     }
 
     /// Add a direct happens-before edge: `from` -> `to`.
@@ -104,10 +101,7 @@ impl HappensBefore {
     /// Return all direct successors of an event.
     #[must_use]
     pub fn successors(&self, event: usize) -> Vec<usize> {
-        self.edges
-            .get(&event)
-            .map(|s| s.iter().copied().collect())
-            .unwrap_or_default()
+        self.edges.get(&event).map(|s| s.iter().copied().collect()).unwrap_or_default()
     }
 
     /// Return the number of events in the relation.

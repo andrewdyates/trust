@@ -15,7 +15,7 @@
 
 use trust_disasm::Instruction;
 use trust_disasm::opcode::Opcode;
-use trust_disasm::operand::{Condition, MemoryOperand, Operand, RegKind};
+use trust_disasm::operand::{MemoryOperand, Operand, RegKind};
 use trust_types::Formula;
 
 use crate::effect::Effect;
@@ -995,32 +995,6 @@ fn load_le_bytes(
         }
     }
     result
-}
-
-/// Convert an x86_64 condition code to a boolean Formula based on EFLAGS.
-///
-/// x86_64 reuses the AArch64 Condition enum values:
-/// - Eq = ZF (JE/JZ)
-/// - Ne = !ZF (JNE/JNZ)
-/// - Cs = CF (JB/JNAE/JC)
-/// - Cc = !CF (JAE/JNB/JNC)
-/// - Mi = SF (JS)
-/// - Pl = !SF (JNS)
-/// - Vs = OF (JO)
-/// - Vc = !OF (JNO)
-/// - Hi = CF && !ZF (JA/JNBE) — unsigned above
-/// - Ls = !CF || ZF (JBE/JNA) — unsigned below-or-equal
-/// - Ge = SF == OF (JGE/JNL) — signed greater-or-equal
-/// - Lt = SF != OF (JL/JNGE) — signed less
-/// - Gt = !ZF && (SF == OF) (JG/JNLE) — signed greater
-/// - Le = ZF || (SF != OF) (JLE/JNG) — signed less-or-equal
-///
-/// The mapping is identical to AArch64's condition_to_formula because both
-/// architectures share the same flag semantics (N=SF, Z=ZF, C=CF, V=OF).
-#[must_use]
-pub(crate) fn x86_64_condition_to_formula(state: &MachineState, cond: Condition) -> Formula {
-    // Reuse the AArch64 implementation since the flag semantics match.
-    crate::aarch64::condition_to_formula(state, cond)
 }
 
 // ===========================================================================

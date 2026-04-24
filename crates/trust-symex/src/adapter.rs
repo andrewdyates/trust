@@ -10,9 +10,7 @@
 use trust_types::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
-use trust_types::{
-    BasicBlock, Counterexample, CounterexampleValue, VerificationCondition,
-};
+use trust_types::{BasicBlock, Counterexample, CounterexampleValue, VerificationCondition};
 
 use crate::engine::{BlockResult, SymbolicExecutor};
 use crate::error::SymexError;
@@ -53,11 +51,7 @@ pub struct AdapterConfig {
 
 impl Default for AdapterConfig {
     fn default() -> Self {
-        Self {
-            depth_limit: 1000,
-            entry_block: 0,
-            capture_per_statement: true,
-        }
+        Self { depth_limit: 1000, entry_block: 0, capture_per_statement: true }
     }
 }
 
@@ -91,9 +85,7 @@ pub fn replay_with_trace(
     config: &AdapterConfig,
 ) -> Result<AdapterResult, SymexError> {
     if blocks.is_empty() {
-        return Err(SymexError::UnsupportedOperation(
-            "no basic blocks provided for replay".into(),
-        ));
+        return Err(SymexError::UnsupportedOperation("no basic blocks provided for replay".into()));
     }
     if config.entry_block >= blocks.len() {
         return Err(SymexError::UnsupportedOperation(format!(
@@ -179,10 +171,7 @@ pub fn replay_with_trace(
                         trace.push(TraceStep {
                             block_idx: current_block,
                             stmt_idx: None,
-                            description: format!(
-                                "branch taken -> bb{}",
-                                fork.next_block
-                            ),
+                            description: format!("branch taken -> bb{}", fork.next_block),
                             state_snapshot: snapshot_state(&fork.state),
                         });
                         let next = fork.next_block;
@@ -250,19 +239,14 @@ pub fn replay_with_trace(
 
 /// Seed the symbolic state with concrete values from the counterexample.
 /// Returns a map of the initial variable names for diffing later.
-fn seed_state(
-    state: &mut SymbolicState,
-    cex: &Counterexample,
-) -> FxHashMap<String, SymbolicValue> {
+fn seed_state(state: &mut SymbolicState, cex: &Counterexample) -> FxHashMap<String, SymbolicValue> {
     let mut initial = FxHashMap::default();
     for (name, value) in &cex.assignments {
         let concrete = match value {
             CounterexampleValue::Bool(b) => SymbolicValue::Concrete(i128::from(*b)),
             CounterexampleValue::Int(n) => SymbolicValue::Concrete(*n),
             CounterexampleValue::Uint(n) => SymbolicValue::Concrete(*n as i128),
-            CounterexampleValue::Float(_) => {
-                SymbolicValue::Symbol(format!("float_{name}"))
-            }
+            CounterexampleValue::Float(_) => SymbolicValue::Symbol(format!("float_{name}")),
             _ => SymbolicValue::Symbol(format!("unknown_{name}")),
         };
         state.set(name.clone(), concrete.clone());
@@ -277,10 +261,7 @@ fn snapshot_state(state: &SymbolicState) -> FxHashMap<String, ValueSnapshot> {
     for (name, val) in state.iter() {
         snap.insert(
             name.to_owned(),
-            ValueSnapshot {
-                symbolic: format!("{val:?}"),
-                concrete: eval(state, val),
-            },
+            ValueSnapshot { symbolic: format!("{val:?}"), concrete: eval(state, val) },
         );
     }
     snap
@@ -312,10 +293,7 @@ fn find_concrete_fork<'a>(
 }
 
 /// Check whether a fork's path constraints are satisfiable under concrete state.
-fn is_fork_feasible(
-    state: &SymbolicState,
-    fork: &crate::engine::ExecutionFork,
-) -> bool {
+fn is_fork_feasible(state: &SymbolicState, fork: &crate::engine::ExecutionFork) -> bool {
     for decision in fork.path.decisions() {
         match eval(state, &decision.condition) {
             Some(v) => {
@@ -344,10 +322,7 @@ fn compute_modified(
         if changed {
             modified.insert(
                 name.to_owned(),
-                ValueSnapshot {
-                    symbolic: format!("{val:?}"),
-                    concrete: eval(final_state, val),
-                },
+                ValueSnapshot { symbolic: format!("{val:?}"), concrete: eval(final_state, val) },
             );
         }
     }
@@ -359,9 +334,8 @@ mod tests {
     use crate::error::SymexError;
 
     use trust_types::{
-        BasicBlock, BinOp, BlockId, ConstValue, Counterexample, CounterexampleValue,
-        Formula, Operand, Place, Rvalue, SourceSpan, Statement, Terminator,
-        VerificationCondition, VcKind,
+        BasicBlock, BinOp, BlockId, ConstValue, Counterexample, CounterexampleValue, Formula,
+        Operand, Place, Rvalue, SourceSpan, Statement, Terminator, VcKind, VerificationCondition,
     };
 
     use super::*;
@@ -392,10 +366,7 @@ mod tests {
             terminator: Terminator::Return,
         }];
 
-        let cex = Counterexample::new(vec![(
-            "_local0".into(),
-            CounterexampleValue::Int(10),
-        )]);
+        let cex = Counterexample::new(vec![("_local0".into(), CounterexampleValue::Int(10))]);
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &AdapterConfig::default())
             .expect("replay should succeed");
@@ -419,22 +390,11 @@ mod tests {
                     span: span(),
                 },
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
         ];
 
-        let cex = Counterexample::new(vec![(
-            "_local0".into(),
-            CounterexampleValue::Int(1),
-        )]);
+        let cex = Counterexample::new(vec![("_local0".into(), CounterexampleValue::Int(1))]);
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &AdapterConfig::default())
             .expect("replay should succeed");
@@ -459,11 +419,7 @@ mod tests {
                 }],
                 terminator: Terminator::Goto(BlockId(1)),
             },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
         ];
 
         let cex = Counterexample::new(vec![
@@ -485,16 +441,8 @@ mod tests {
     #[test]
     fn test_adapter_unreachable_spurious() {
         let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Unreachable,
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Unreachable },
         ];
 
         let cex = Counterexample::new(vec![]);
@@ -516,20 +464,15 @@ mod tests {
     fn test_adapter_modified_vars_tracked() {
         let blocks = vec![BasicBlock {
             id: BlockId(0),
-            stmts: vec![
-                Statement::Assign {
-                    place: Place::local(1),
-                    rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(99))),
-                    span: span(),
-                },
-            ],
+            stmts: vec![Statement::Assign {
+                place: Place::local(1),
+                rvalue: Rvalue::Use(Operand::Constant(ConstValue::Int(99))),
+                span: span(),
+            }],
             terminator: Terminator::Return,
         }];
 
-        let cex = Counterexample::new(vec![(
-            "_local0".into(),
-            CounterexampleValue::Int(5),
-        )]);
+        let cex = Counterexample::new(vec![("_local0".into(), CounterexampleValue::Int(5))]);
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &AdapterConfig::default())
             .expect("replay should succeed");
@@ -542,16 +485,10 @@ mod tests {
 
     #[test]
     fn test_adapter_entry_block_out_of_range() {
-        let blocks = vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }];
+        let blocks =
+            vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }];
         let cex = Counterexample::new(vec![]);
-        let config = AdapterConfig {
-            entry_block: 1,
-            ..AdapterConfig::default()
-        };
+        let config = AdapterConfig { entry_block: 1, ..AdapterConfig::default() };
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &config);
 
@@ -565,34 +502,16 @@ mod tests {
     #[test]
     fn test_adapter_depth_limit() {
         let blocks = vec![
-            BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(2)),
-            },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Goto(BlockId(2)) },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
         ];
         let cex = Counterexample::new(vec![]);
-        let config = AdapterConfig {
-            depth_limit: 1,
-            ..AdapterConfig::default()
-        };
+        let config = AdapterConfig { depth_limit: 1, ..AdapterConfig::default() };
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &config);
 
-        assert!(matches!(
-            result,
-            Err(SymexError::DepthLimitExceeded { depth: 1, limit: 1 })
-        ));
+        assert!(matches!(result, Err(SymexError::DepthLimitExceeded { depth: 1, limit: 1 })));
     }
 
     #[test]
@@ -612,10 +531,7 @@ mod tests {
             &cex,
             &simple_vc(),
             &blocks,
-            &AdapterConfig {
-                capture_per_statement: true,
-                ..AdapterConfig::default()
-            },
+            &AdapterConfig { capture_per_statement: true, ..AdapterConfig::default() },
         )
         .expect("per-statement capture should succeed");
 
@@ -623,10 +539,7 @@ mod tests {
             &cex,
             &simple_vc(),
             &blocks,
-            &AdapterConfig {
-                capture_per_statement: false,
-                ..AdapterConfig::default()
-            },
+            &AdapterConfig { capture_per_statement: false, ..AdapterConfig::default() },
         )
         .expect("block-only capture should succeed");
 
@@ -637,24 +550,14 @@ mod tests {
 
     #[test]
     fn test_adapter_float_counterexample() {
-        let blocks = vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }];
-        let cex = Counterexample::new(vec![(
-            "_local0".into(),
-            CounterexampleValue::Float(3.5),
-        )]);
+        let blocks =
+            vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }];
+        let cex = Counterexample::new(vec![("_local0".into(), CounterexampleValue::Float(3.5))]);
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &AdapterConfig::default())
             .expect("float counterexample should replay");
 
-        match result
-            .final_state
-            .get("_local0")
-            .expect("seeded float should be present")
-        {
+        match result.final_state.get("_local0").expect("seeded float should be present") {
             SymbolicValue::Symbol(name) => {
                 assert!(name.starts_with("float_"));
                 assert!(name.ends_with("_local0"));
@@ -665,24 +568,15 @@ mod tests {
 
     #[test]
     fn test_adapter_uint_counterexample() {
-        let blocks = vec![BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        }];
-        let cex = Counterexample::new(vec![(
-            "_local1".into(),
-            CounterexampleValue::Uint(7),
-        )]);
+        let blocks =
+            vec![BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return }];
+        let cex = Counterexample::new(vec![("_local1".into(), CounterexampleValue::Uint(7))]);
 
         let result = replay_with_trace(&cex, &simple_vc(), &blocks, &AdapterConfig::default())
             .expect("uint counterexample should replay");
 
         assert_eq!(
-            result
-                .final_state
-                .get("_local1")
-                .expect("seeded uint should be present"),
+            result.final_state.get("_local1").expect("seeded uint should be present"),
             &SymbolicValue::Concrete(7)
         );
     }

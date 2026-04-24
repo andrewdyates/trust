@@ -376,8 +376,8 @@ fn merge_codegen_units<'tcx>(
 
         // Record that `cgu_dst` now contains all the stuff that was in
         // `cgu_src` before.
-        let mut consumed_cgu_names = cgu_contents.remove(&cgu_src.name()).expect("invariant: source CGU must exist in contents map"); // tRust: unwrap -> expect
-        cgu_contents.get_mut(&cgu_dst.name()).expect("invariant: destination CGU must exist in contents map").append(&mut consumed_cgu_names); // tRust: unwrap -> expect
+        let mut consumed_cgu_names = cgu_contents.remove(&cgu_src.name()).unwrap();
+        cgu_contents.get_mut(&cgu_dst.name()).unwrap().append(&mut consumed_cgu_names);
     }
 
     // Having multiple CGUs can drastically speed up compilation. But for
@@ -404,8 +404,8 @@ fn merge_codegen_units<'tcx>(
         // Sort small cgus to the back.
         codegen_units.sort_by_key(|cgu| cmp::Reverse(cgu.size_estimate()));
 
-        let mut smallest = codegen_units.pop().expect("invariant: codegen_units.len() > 1 checked by while condition"); // tRust: unwrap -> expect
-        let second_smallest = codegen_units.last_mut().expect("invariant: codegen_units.len() > 0 after pop since original len > 1"); // tRust: unwrap -> expect
+        let mut smallest = codegen_units.pop().unwrap();
+        let second_smallest = codegen_units.last_mut().unwrap();
 
         // Move the items from `smallest` to `second_smallest`. Some of them
         // may be duplicate inlined items, in which case the destination CGU is
@@ -605,7 +605,7 @@ fn mark_code_coverage_dead_code_cgu<'tcx>(codegen_units: &mut [CodegenUnit<'tcx>
     // Find the smallest CGU that has exported symbols and put the dead
     // function stubs in that CGU. We look for exported symbols to increase
     // the likelihood the linker won't throw away the dead functions.
-    // tRust: known issue (#92165) -- In order to truly resolve this, we need to make sure
+    // FIXME(#92165): In order to truly resolve this, we need to make sure
     // the object file (CGU) containing the dead function stubs is included
     // in the final binary. This will probably require forcing these
     // function symbols to be included via `-u` or `/include` linker args.
@@ -718,7 +718,7 @@ fn compute_codegen_unit_name(
         current_def_id = tcx.parent(current_def_id);
     }
 
-    let cgu_def_id = cgu_def_id.expect("invariant: loop must find a module-like parent def_id"); // tRust: unwrap -> expect
+    let cgu_def_id = cgu_def_id.unwrap();
 
     *cache.entry((cgu_def_id, volatile)).or_insert_with(|| {
         let def_path = tcx.def_path(cgu_def_id);
@@ -823,7 +823,7 @@ fn mono_item_visibility<'tcx>(
     // don't know anything about during partitioning/collection. As a result we
     // forcibly keep this symbol out of the `internalization_candidates` set.
     //
-    // tRust: known issue -- eventually we don't want to always force this symbol to have
+    // FIXME: eventually we don't want to always force this symbol to have
     //        hidden visibility, it should indeed be a candidate for
     //        internalization, but we have to understand that it's referenced
     //        from the `main` symbol we'll generate later.

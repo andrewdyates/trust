@@ -294,13 +294,15 @@ impl ConcurrencyModel {
         for m in &mutexes {
             let var = sanitize_tla_name(&m.id.0);
             let action_name = format!("Lock_{var}");
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "{action_name}(t) ==\n    /\\ held_{var} = \"none\"\n    /\\ held_{var}' = t\n    /\\ UNCHANGED << {} >>\n\n",
                 unchanged_except(&vars, &[&format!("held_{var}")])
             );
 
             let unlock_name = format!("Unlock_{var}");
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "{unlock_name}(t) ==\n    /\\ held_{var} = t\n    /\\ held_{var}' = \"none\"\n    /\\ UNCHANGED << {} >>\n\n",
                 unchanged_except(&vars, &[&format!("held_{var}")])
             );
@@ -312,13 +314,15 @@ impl ConcurrencyModel {
         for rw in &rwlocks {
             let var = sanitize_tla_name(&rw.id.0);
             let read_name = format!("ReadLock_{var}");
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "{read_name}(t) ==\n    /\\ writer_{var} = \"none\"\n    /\\ readers_{var}' = readers_{var} \\union {{t}}\n    /\\ UNCHANGED << {} >>\n\n",
                 unchanged_except(&vars, &[&format!("readers_{var}")])
             );
 
             let write_name = format!("WriteLock_{var}");
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "{write_name}(t) ==\n    /\\ writer_{var} = \"none\"\n    /\\ readers_{var} = {{}}\n    /\\ writer_{var}' = t\n    /\\ UNCHANGED << {} >>\n\n",
                 unchanged_except(&vars, &[&format!("writer_{var}")])
             );
@@ -330,13 +334,15 @@ impl ConcurrencyModel {
         for ch in &channels {
             let var = sanitize_tla_name(&ch.id.0);
             let send_name = format!("Send_{var}");
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "{send_name}(t, msg) ==\n    /\\ buffer_{var}' = Append(buffer_{var}, msg)\n    /\\ UNCHANGED << {} >>\n\n",
                 unchanged_except(&vars, &[&format!("buffer_{var}")])
             );
 
             let recv_name = format!("Recv_{var}");
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "{recv_name}(t) ==\n    /\\ Len(buffer_{var}) > 0\n    /\\ buffer_{var}' = Tail(buffer_{var})\n    /\\ UNCHANGED << {} >>\n\n",
                 unchanged_except(&vars, &[&format!("buffer_{var}")])
             );
@@ -366,7 +372,8 @@ impl ConcurrencyModel {
         // Mutual exclusion for mutexes
         for m in &mutexes {
             let var = sanitize_tla_name(&m.id.0);
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "\\* Mutual exclusion for {var}\nMutualExclusion_{var} == \\A t1, t2 \\in Threads: (held_{var} = t1 /\\ held_{var} = t2) => t1 = t2\n\n"
             );
         }
@@ -374,7 +381,8 @@ impl ConcurrencyModel {
         // Channel liveness
         for ch in &channels {
             let var = sanitize_tla_name(&ch.id.0);
-            let _ = write!(tla, 
+            let _ = write!(
+                tla,
                 "\\* Channel liveness: messages eventually consumed\nChannelLiveness_{var} == [](Len(buffer_{var}) > 0 => <>(Len(buffer_{var}) = 0))\n\n"
             );
         }
@@ -428,49 +436,33 @@ pub const CONCURRENCY_PATTERNS: &[(&str, ConcurrencyPrimitive, ConcurrencyOperat
     // std::sync::RwLock
     ("std::sync::RwLock::read", ConcurrencyPrimitive::RwLock, ConcurrencyOperation::ReadLock),
     ("std::sync::RwLock::write", ConcurrencyPrimitive::RwLock, ConcurrencyOperation::Lock),
-    (
-        "std::sync::RwLock::try_read",
-        ConcurrencyPrimitive::RwLock,
-        ConcurrencyOperation::TryLock,
-    ),
-    (
-        "std::sync::RwLock::try_write",
-        ConcurrencyPrimitive::RwLock,
-        ConcurrencyOperation::TryLock,
-    ),
+    ("std::sync::RwLock::try_read", ConcurrencyPrimitive::RwLock, ConcurrencyOperation::TryLock),
+    ("std::sync::RwLock::try_write", ConcurrencyPrimitive::RwLock, ConcurrencyOperation::TryLock),
     // std::sync::mpsc
-    (
-        "std::sync::mpsc::Sender::send",
-        ConcurrencyPrimitive::Channel,
-        ConcurrencyOperation::Send,
-    ),
+    ("std::sync::mpsc::Sender::send", ConcurrencyPrimitive::Channel, ConcurrencyOperation::Send),
     (
         "std::sync::mpsc::SyncSender::send",
         ConcurrencyPrimitive::Channel,
         ConcurrencyOperation::Send,
     ),
-    (
-        "std::sync::mpsc::Receiver::recv",
-        ConcurrencyPrimitive::Channel,
-        ConcurrencyOperation::Recv,
-    ),
+    ("std::sync::mpsc::Receiver::recv", ConcurrencyPrimitive::Channel, ConcurrencyOperation::Recv),
     (
         "std::sync::mpsc::Receiver::try_recv",
         ConcurrencyPrimitive::Channel,
         ConcurrencyOperation::Recv,
     ),
-    ("std::sync::mpsc::channel", ConcurrencyPrimitive::Channel, ConcurrencyOperation::ChannelCreate),
+    (
+        "std::sync::mpsc::channel",
+        ConcurrencyPrimitive::Channel,
+        ConcurrencyOperation::ChannelCreate,
+    ),
     (
         "std::sync::mpsc::sync_channel",
         ConcurrencyPrimitive::Channel,
         ConcurrencyOperation::ChannelCreate,
     ),
     // std::sync::Condvar
-    (
-        "std::sync::Condvar::wait",
-        ConcurrencyPrimitive::Condvar,
-        ConcurrencyOperation::CondvarWait,
-    ),
+    ("std::sync::Condvar::wait", ConcurrencyPrimitive::Condvar, ConcurrencyOperation::CondvarWait),
     (
         "std::sync::Condvar::notify_one",
         ConcurrencyPrimitive::Condvar,
@@ -507,11 +499,7 @@ pub const CONCURRENCY_PATTERNS: &[(&str, ConcurrencyPrimitive, ConcurrencyOperat
         ConcurrencyPrimitive::Atomic,
         ConcurrencyOperation::AtomicCas,
     ),
-    (
-        "std::sync::atomic::fence",
-        ConcurrencyPrimitive::Atomic,
-        ConcurrencyOperation::AtomicFence,
-    ),
+    ("std::sync::atomic::fence", ConcurrencyPrimitive::Atomic, ConcurrencyOperation::AtomicFence),
     // tokio::sync::Mutex
     ("tokio::sync::Mutex::lock", ConcurrencyPrimitive::Mutex, ConcurrencyOperation::Lock),
     ("tokio::sync::Mutex::try_lock", ConcurrencyPrimitive::Mutex, ConcurrencyOperation::TryLock),
@@ -541,11 +529,7 @@ pub const CONCURRENCY_PATTERNS: &[(&str, ConcurrencyPrimitive, ConcurrencyOperat
         ConcurrencyOperation::NotifyWait,
     ),
     // tokio::spawn
-    (
-        "tokio::task::spawn",
-        ConcurrencyPrimitive::AsyncSpawn,
-        ConcurrencyOperation::Spawn,
-    ),
+    ("tokio::task::spawn", ConcurrencyPrimitive::AsyncSpawn, ConcurrencyOperation::Spawn),
     ("tokio::spawn", ConcurrencyPrimitive::AsyncSpawn, ConcurrencyOperation::Spawn),
     // crossbeam channels
     (
@@ -558,22 +542,14 @@ pub const CONCURRENCY_PATTERNS: &[(&str, ConcurrencyPrimitive, ConcurrencyOperat
         ConcurrencyPrimitive::Channel,
         ConcurrencyOperation::ChannelCreate,
     ),
-    (
-        "crossbeam::channel::Sender::send",
-        ConcurrencyPrimitive::Channel,
-        ConcurrencyOperation::Send,
-    ),
+    ("crossbeam::channel::Sender::send", ConcurrencyPrimitive::Channel, ConcurrencyOperation::Send),
     (
         "crossbeam::channel::Receiver::recv",
         ConcurrencyPrimitive::Channel,
         ConcurrencyOperation::Recv,
     ),
     // std::thread::spawn
-    (
-        "std::thread::spawn",
-        ConcurrencyPrimitive::AsyncSpawn,
-        ConcurrencyOperation::Spawn,
-    ),
+    ("std::thread::spawn", ConcurrencyPrimitive::AsyncSpawn, ConcurrencyOperation::Spawn),
 ];
 
 // ---------------------------------------------------------------------------
@@ -702,11 +678,7 @@ impl ConcurrencyPoint {
     /// Create a new program point.
     #[must_use]
     pub fn new(function: impl Into<String>, block: BlockId, thread_id: impl Into<String>) -> Self {
-        Self {
-            function: function.into(),
-            block,
-            thread_id: thread_id.into(),
-        }
+        Self { function: function.into(), block, thread_id: thread_id.into() }
     }
 }
 
@@ -721,29 +693,17 @@ impl std::fmt::Display for ConcurrencyPoint {
 /// These patterns identify thread creation and join operations in addition
 /// to the existing concurrency patterns. Used by the HB graph builder to
 /// establish spawn/join HB edges.
-pub const THREAD_SPAWN_PATTERNS: &[&str] = &[
-    "std::thread::spawn",
-    "std::thread::Builder::spawn",
-];
+pub const THREAD_SPAWN_PATTERNS: &[&str] = &["std::thread::spawn", "std::thread::Builder::spawn"];
 
 /// Thread join detection patterns.
-pub const THREAD_JOIN_PATTERNS: &[&str] = &[
-    "std::thread::JoinHandle::join",
-];
+pub const THREAD_JOIN_PATTERNS: &[&str] = &["std::thread::JoinHandle::join"];
 
 /// Rayon parallel patterns (for future extension).
-pub const RAYON_SPAWN_PATTERNS: &[&str] = &[
-    "rayon::spawn",
-    "rayon::scope",
-    "rayon::join",
-];
+pub const RAYON_SPAWN_PATTERNS: &[&str] = &["rayon::spawn", "rayon::scope", "rayon::join"];
 
 /// Tokio task spawn patterns (for future extension).
-pub const TOKIO_SPAWN_PATTERNS: &[&str] = &[
-    "tokio::spawn",
-    "tokio::task::spawn",
-    "tokio::task::spawn_blocking",
-];
+pub const TOKIO_SPAWN_PATTERNS: &[&str] =
+    &["tokio::spawn", "tokio::task::spawn", "tokio::task::spawn_blocking"];
 
 /// Check whether a MIR Call func path is a thread spawn operation.
 ///
@@ -773,16 +733,17 @@ pub fn detect_thread_spawns(func: &crate::VerifiableFunction) -> Vec<ThreadSpawn
 
     for block in &func.body.blocks {
         if let crate::Terminator::Call { func: func_name, args, dest, span, .. } = &block.terminator
-            && is_thread_spawn(func_name) {
-                let spawn_target = resolve_spawn_target(args);
-                sites.push(ThreadSpawnSite {
-                    caller_function: func.def_path.clone(),
-                    block: block.id,
-                    spawn_target,
-                    join_handle_local: Some(dest.local),
-                    span: span.clone(),
-                });
-            }
+            && is_thread_spawn(func_name)
+        {
+            let spawn_target = resolve_spawn_target(args);
+            sites.push(ThreadSpawnSite {
+                caller_function: func.def_path.clone(),
+                block: block.id,
+                spawn_target,
+                join_handle_local: Some(dest.local),
+                span: span.clone(),
+            });
+        }
     }
 
     sites
@@ -794,22 +755,24 @@ pub fn detect_thread_joins(func: &crate::VerifiableFunction) -> Vec<JoinSite> {
 
     for block in &func.body.blocks {
         if let crate::Terminator::Call { func: func_name, args, span, .. } = &block.terminator
-            && is_thread_join(func_name) {
-                // The first argument to JoinHandle::join is the handle itself.
-                let handle_local = args.first().and_then(|arg| match arg {
-                    crate::Operand::Copy(place) | crate::Operand::Move(place) => {
-                        Some(place.local)
-                    }
+            && is_thread_join(func_name)
+        {
+            // The first argument to JoinHandle::join is the handle itself.
+            let handle_local = args
+                .first()
+                .and_then(|arg| match arg {
+                    crate::Operand::Copy(place) | crate::Operand::Move(place) => Some(place.local),
                     _ => None,
-                }).unwrap_or(0);
+                })
+                .unwrap_or(0);
 
-                sites.push(JoinSite {
-                    caller_function: func.def_path.clone(),
-                    block: block.id,
-                    handle_local,
-                    span: span.clone(),
-                });
-            }
+            sites.push(JoinSite {
+                caller_function: func.def_path.clone(),
+                block: block.id,
+                handle_local,
+                span: span.clone(),
+            });
+        }
     }
 
     sites
@@ -822,9 +785,7 @@ fn resolve_spawn_target(args: &[crate::Operand]) -> SpawnTarget {
         Some(crate::Operand::Copy(place) | crate::Operand::Move(place)) => {
             // A simple local — likely a closure capture or function item.
             // Without type info, we record it as a closure with the local as a capture.
-            SpawnTarget::Closure {
-                captures: vec![place.local],
-            }
+            SpawnTarget::Closure { captures: vec![place.local] }
         }
         _ => SpawnTarget::Unknown,
     }
@@ -871,32 +832,33 @@ pub fn extract_concurrency_model(func: &crate::VerifiableFunction) -> Concurrenc
 
     for block in &func.body.blocks {
         if let crate::Terminator::Call { func: func_name, dest, span, .. } = &block.terminator
-            && let Some((primitive, operation)) = match_concurrency_call(func_name) {
-                // Generate a resource ID from the destination place and primitive type.
-                // For channel create operations, use the dest local as the resource.
-                // For lock/send/recv, use the first arg (the self receiver) local.
-                let resource_key = format!("{:?}_{}", primitive, dest.local);
+            && let Some((primitive, operation)) = match_concurrency_call(func_name)
+        {
+            // Generate a resource ID from the destination place and primitive type.
+            // For channel create operations, use the dest local as the resource.
+            // For lock/send/recv, use the first arg (the self receiver) local.
+            let resource_key = format!("{:?}_{}", primitive, dest.local);
 
-                let count = resource_counter.entry(primitive).or_insert(0);
-                let resource_id = ResourceId(resource_key.clone());
+            let count = resource_counter.entry(primitive).or_insert(0);
+            let resource_id = ResourceId(resource_key.clone());
 
-                model.add_resource(SharedResource {
-                    id: resource_id.clone(),
-                    primitive,
-                    name: None, // Name resolution requires debug info lookup
-                    guarded_type: None,
-                });
+            model.add_resource(SharedResource {
+                id: resource_id.clone(),
+                primitive,
+                name: None, // Name resolution requires debug info lookup
+                guarded_type: None,
+            });
 
-                model.add_event(ConcurrencyEvent {
-                    operation,
-                    resource_id,
-                    block: block.id,
-                    span: span.clone(),
-                    call_path: func_name.clone(),
-                });
+            model.add_event(ConcurrencyEvent {
+                operation,
+                resource_id,
+                block: block.id,
+                span: span.clone(),
+                call_path: func_name.clone(),
+            });
 
-                *count += 1;
-            }
+            *count += 1;
+        }
     }
 
     model
@@ -1334,7 +1296,7 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Unit, name: None },  // return
+                    LocalDecl { index: 0, ty: Ty::Unit, name: None }, // return
                     LocalDecl { index: 1, ty: Ty::usize(), name: Some("amount".into()) },
                     LocalDecl { index: 2, ty: Ty::Unit, name: Some("guard_a".into()) }, // lock result
                     LocalDecl { index: 3, ty: Ty::Unit, name: Some("guard_b".into()) }, // lock result
@@ -1350,7 +1312,13 @@ mod tests {
                             args: vec![Operand::Copy(Place::local(1))],
                             dest: Place::local(2),
                             target: Some(BlockId(1)),
-                            span: SourceSpan { file: "bank.rs".into(), line_start: 10, col_start: 4, line_end: 10, col_end: 30 },
+                            span: SourceSpan {
+                                file: "bank.rs".into(),
+                                line_start: 10,
+                                col_start: 4,
+                                line_end: 10,
+                                col_end: 30,
+                            },
                             atomic: None,
                         },
                     },
@@ -1363,7 +1331,13 @@ mod tests {
                             args: vec![Operand::Copy(Place::local(1))],
                             dest: Place::local(3),
                             target: Some(BlockId(2)),
-                            span: SourceSpan { file: "bank.rs".into(), line_start: 11, col_start: 4, line_end: 11, col_end: 30 },
+                            span: SourceSpan {
+                                file: "bank.rs".into(),
+                                line_start: 11,
+                                col_start: 4,
+                                line_end: 11,
+                                col_end: 30,
+                            },
                             atomic: None,
                         },
                     },
@@ -1376,16 +1350,18 @@ mod tests {
                             args: vec![Operand::Copy(Place::local(4))],
                             dest: Place::local(0),
                             target: Some(BlockId(3)),
-                            span: SourceSpan { file: "bank.rs".into(), line_start: 15, col_start: 4, line_end: 15, col_end: 40 },
+                            span: SourceSpan {
+                                file: "bank.rs".into(),
+                                line_start: 15,
+                                col_start: 4,
+                                line_end: 15,
+                                col_end: 40,
+                            },
                             atomic: None,
                         },
                     },
                     // bb3: return
-                    BasicBlock {
-                        id: BlockId(3),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 1,
                 return_ty: Ty::Unit,
@@ -1408,14 +1384,12 @@ mod tests {
         // Should detect 2 mutex locks and 1 channel send
         assert_eq!(model.events.len(), 3);
 
-        let mutex_events: Vec<_> = model.events.iter()
-            .filter(|e| e.operation == ConcurrencyOperation::Lock)
-            .collect();
+        let mutex_events: Vec<_> =
+            model.events.iter().filter(|e| e.operation == ConcurrencyOperation::Lock).collect();
         assert_eq!(mutex_events.len(), 2, "should detect two mutex lock operations");
 
-        let send_events: Vec<_> = model.events.iter()
-            .filter(|e| e.operation == ConcurrencyOperation::Send)
-            .collect();
+        let send_events: Vec<_> =
+            model.events.iter().filter(|e| e.operation == ConcurrencyOperation::Send).collect();
         assert_eq!(send_events.len(), 1, "should detect one channel send");
 
         // Should have resources for mutex and channel
@@ -1448,9 +1422,7 @@ mod tests {
             def_path: "math::simple_add".to_string(),
             span: SourceSpan::default(),
             body: VerifiableBody {
-                locals: vec![
-                    LocalDecl { index: 0, ty: Ty::usize(), name: None },
-                ],
+                locals: vec![LocalDecl { index: 0, ty: Ty::usize(), name: None }],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![],
@@ -1524,11 +1496,7 @@ mod tests {
                             atomic: None,
                         },
                     },
-                    BasicBlock {
-                        id: BlockId(3),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 0,
                 return_ty: Ty::Unit,
@@ -1602,15 +1570,17 @@ mod tests {
                             args: vec![Operand::Move(Place::local(1))],
                             dest: Place::local(2),
                             target: Some(BlockId(1)),
-                            span: SourceSpan { file: "main.rs".into(), line_start: 5, col_start: 4, line_end: 5, col_end: 30 },
+                            span: SourceSpan {
+                                file: "main.rs".into(),
+                                line_start: 5,
+                                col_start: 4,
+                                line_end: 5,
+                                col_end: 30,
+                            },
                             atomic: None,
                         },
                     },
-                    BasicBlock {
-                        id: BlockId(1),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 0,
                 return_ty: Ty::Unit,
@@ -1626,7 +1596,9 @@ mod tests {
         assert_eq!(spawns[0].caller_function, "my_mod::spawner");
         assert_eq!(spawns[0].block, BlockId(0));
         assert_eq!(spawns[0].join_handle_local, Some(2));
-        assert!(matches!(spawns[0].spawn_target, SpawnTarget::Closure { ref captures } if captures == &[1]));
+        assert!(
+            matches!(spawns[0].spawn_target, SpawnTarget::Closure { ref captures } if captures == &[1])
+        );
     }
 
     #[test]
@@ -1651,15 +1623,17 @@ mod tests {
                             args: vec![Operand::Move(Place::local(1))],
                             dest: Place::local(2),
                             target: Some(BlockId(1)),
-                            span: SourceSpan { file: "main.rs".into(), line_start: 10, col_start: 4, line_end: 10, col_end: 30 },
+                            span: SourceSpan {
+                                file: "main.rs".into(),
+                                line_start: 10,
+                                col_start: 4,
+                                line_end: 10,
+                                col_end: 30,
+                            },
                             atomic: None,
                         },
                     },
-                    BasicBlock {
-                        id: BlockId(1),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 0,
                 return_ty: Ty::Unit,
@@ -1685,9 +1659,7 @@ mod tests {
             def_path: "math::add".to_string(),
             span: SourceSpan::default(),
             body: VerifiableBody {
-                locals: vec![
-                    LocalDecl { index: 0, ty: Ty::usize(), name: None },
-                ],
+                locals: vec![LocalDecl { index: 0, ty: Ty::usize(), name: None }],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![],

@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-cegar: Counterexample-guided abstraction refinement for tRust
 //!
 //! Ports CPAchecker's CEGAR approach into the tRust verification pipeline.
@@ -38,15 +38,11 @@ pub(crate) mod chc_cegar; // tRust: CHC/Spacer integration with CEGAR loop (#147
 pub(crate) mod cpa; // tRust: CPA framework for composable analysis (#103)
 pub(crate) mod error;
 pub(crate) mod ic3;
-pub(crate) mod ic3_cegar;
 pub(crate) mod interpolation;
-pub(crate) mod interpolation_refine; // tRust: interpolation-based CEGAR refinement (#287)
 pub(crate) mod invariant_extract; // tRust: loop invariant extraction from Spacer (#147)
 pub(crate) mod lazy;
 pub(crate) mod lazy_abstraction; // tRust: Lazy abstraction refinement with ART (#311)
-pub(crate) mod lattice;
 pub(crate) mod pdr_certificates;
-pub(crate) mod widening; // tRust: Widening strategy selection (#273)
 pub(crate) mod portfolio; // tRust: Adaptive verification portfolio (#179)
 pub(crate) mod predicate;
 pub(crate) mod predicate_abstraction; // tRust: Bitvector-based predicate abstraction domain (#240)
@@ -62,29 +58,25 @@ pub(crate) mod z4_bridge;
 
 // tRust: Abstract domain lattice operations (#330)
 pub use abstract_lattice::{
-    LatticeElement, SignValue,
-    join as lattice_join, meet as lattice_meet,
-    widen as lattice_widen, narrow as lattice_narrow,
-    includes as lattice_includes,
-    is_bottom as lattice_is_bottom, is_top as lattice_is_top,
-    sign_join, sign_meet, sign_from_interval,
-    interval_join, interval_widen, interval_add, interval_mul,
+    LatticeElement, SignValue, includes as lattice_includes, interval_add, interval_join,
+    interval_mul, interval_widen, is_bottom as lattice_is_bottom, is_top as lattice_is_top,
+    join as lattice_join, meet as lattice_meet, narrow as lattice_narrow, sign_from_interval,
+    sign_join, sign_meet, widen as lattice_widen,
 };
 pub use abstraction::{
-    AbstractDomain, BooleanAbstraction, CartesianAbstraction, CartesianValue,
-    PredicateAbstraction, abstract_state, bottom_sentinel, concretize, is_bottom,
+    AbstractDomain, BooleanAbstraction, CartesianAbstraction, CartesianValue, PredicateAbstraction,
+    abstract_state, bottom_sentinel, concretize, is_bottom,
 };
 pub use cpa::{
-    CompositeCpa, CompositeState, Cpa, CpaConfig, CpaResult,
-    MergeStrategy, ReachedSet, cpa_analyze,
+    CompositeCpa, CompositeState, Cpa, CpaConfig, CpaResult, MergeStrategy, ReachedSet, cpa_analyze,
 };
 pub use error::CegarError;
 pub use interpolation::{UnsatCore, craig_interpolant, formula_variables};
 pub use lazy::LazyRefiner;
 pub use predicate::{AbstractState, CmpOp, Predicate, abstract_block};
 pub use predicate_abstraction::{
-    BitVecState, BlockTransfer, PredicateDiscovery,
-    abstract_state_from_concrete, abstract_transfer, common_variables,
+    BitVecState, BlockTransfer, PredicateDiscovery, abstract_state_from_concrete,
+    abstract_transfer, common_variables,
 };
 pub use predicate_discovery::{
     AnnotatedPredicate, PredicateSet, PredicateSource, discover_predicates, rank_predicates,
@@ -92,38 +84,41 @@ pub use predicate_discovery::{
 pub use refinement::{CegarConfig, CegarLoop, CegarOutcome};
 // tRust: Full CEGAR loop driver (#228)
 pub use cegar_loop::{
-    AbstractChecker, CegarDriver, FeasibilityChecker, FeasibilityResult,
-    InterpolatingRefiner, LoopConfig, LoopOutcome, PredicateRefiner,
+    AbstractChecker, FeasibilityChecker, FeasibilityResult, InterpolatingRefiner, LoopConfig,
+    LoopOutcome, PredicateRefiner,
+};
+pub use ic3::{Cube, Frame, Ic3Config, Ic3Engine, Ic3Result, TransitionSystem, ic3_check};
+pub use pdr_certificates::{
+    CertificateVerification, InvariantStrength, PdrCertificate, PdrJustification, PdrProofStep,
+    certificate_to_proof_steps, interpolants_from_pdr, minimize_invariant,
+    pretty_print_certificate, verify_certificate,
 };
 pub use strategy::{
     RefinementStrategy, StrategyConfig, formula_nesting_depth, select_strategy,
     select_strategy_with_config,
 };
-pub use ic3::{Cube, Frame, Ic3Config, Ic3Engine, Ic3Result, TransitionSystem, ic3_check};
-pub use pdr_certificates::{
-    CertificateVerification, InvariantStrength, PdrCertificate, PdrJustification, PdrProofStep,
-    certificate_to_proof_steps, interpolants_from_pdr, minimize_invariant, pretty_print_certificate,
-    verify_certificate,
-};
 pub use z4_bridge::{UnsatCoreRequest, parse_unsat_core_response};
 // tRust: CHC/Spacer re-exports (#147)
-pub use chc::{ChcPredicate, ChcSystem, ClauseKind, HornClause, LoopEncoding, PredicateApp, encode_loop};
-pub use spacer::{PredicateInterpretation, SpacerConfig, SpacerResult, chc_to_smtlib2, parse_spacer_response};
-pub use invariant_extract::{LoopInvariant, extract_invariants, parse_smtlib_expr};
+pub use chc::{
+    ChcPredicate, ChcSystem, ClauseKind, HornClause, LoopEncoding, PredicateApp, encode_loop,
+};
 pub use chc_cegar::{
-    ChcCegarConfig, ChcRefinementResult, LoopStrategy, bounded_unroll,
-    generate_chc_script, get_chc_system, refine_with_chc,
+    ChcCegarConfig, ChcRefinementResult, LoopStrategy, bounded_unroll, generate_chc_script,
+    get_chc_system, refine_with_chc,
+};
+pub use invariant_extract::{LoopInvariant, extract_invariants, parse_smtlib_expr};
+pub use spacer::{
+    PredicateInterpretation, SpacerConfig, SpacerResult, chc_to_smtlib2, parse_spacer_response,
 };
 // tRust: Rust-specific abstraction domains (#200)
 pub use rust_abstraction::{
-    BorrowCheckPredicate, IntervalAbstraction, LifetimeAbstraction,
-    OwnershipAbstraction, OwnershipPredicate, OwnershipState, RustAbstractionDomain,
-    TypeAbstraction, combined_abstraction, refine_with_rust_semantics,
+    BorrowCheckPredicate, IntervalAbstraction, LifetimeAbstraction, OwnershipAbstraction,
+    OwnershipPredicate, OwnershipState, RustAbstractionDomain, TypeAbstraction,
+    combined_abstraction, refine_with_rust_semantics,
 };
 // tRust: Adaptive verification portfolio (#179)
 pub use portfolio::{
-    AdaptivePortfolio, AttemptOutcome, EngineAttempt, EngineId, PortfolioConfig,
-    PortfolioOutcome,
+    AdaptivePortfolio, AttemptOutcome, EngineAttempt, EngineId, PortfolioConfig, PortfolioOutcome,
 };
 // tRust: Lazy abstraction refinement with ART (#311)
 pub use lazy_abstraction::{
@@ -131,12 +126,12 @@ pub use lazy_abstraction::{
 };
 // tRust: Predicate abstraction refinement (#335)
 pub use predicate_refinement::{
-    AbstractionState as RefinementAbstractionState, PredicateDiscovery as RefinementDiscovery,
-    Predicate as RefinementPredicate, PredicateSet as RefinementPredicateSet,
+    AbstractionState as RefinementAbstractionState, Predicate as RefinementPredicate,
+    PredicateDiscovery as RefinementDiscovery, PredicateSet as RefinementPredicateSet,
     RefinementResult, SpuriousCex,
 };
 // tRust: Spurious counterexample refinement inner loop (#362)
 pub use spurious_refine::{
-    CexCheckResult, CounterexampleChecker, InnerLoopConfig, InnerLoopOutcome,
-    InnerLoopStats, InnerRefinementStrategy, SpuriousRefinementLoop,
+    CexCheckResult, CounterexampleChecker, InnerLoopConfig, InnerLoopOutcome, InnerLoopStats,
+    InnerRefinementStrategy, SpuriousRefinementLoop,
 };

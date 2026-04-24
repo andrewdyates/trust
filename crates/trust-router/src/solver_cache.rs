@@ -13,11 +13,13 @@
 use std::fmt::Write as FmtWrite;
 use std::sync::Mutex;
 
-use trust_types::{VerificationCondition, VerificationResult, ProofStrength};
+use trust_types::{ProofStrength, VerificationCondition, VerificationResult};
 
 // tRust #527: Import from trust-cache (canonical location) instead of crate re-export.
-use trust_cache::result_cache::{CachePolicy, CacheStats, CachedResult, ResultCache, ResultCacheKey, hash_formula};
 use crate::Router;
+use trust_cache::result_cache::{
+    CachePolicy, CacheStats, CachedResult, ResultCache, ResultCacheKey, hash_formula,
+};
 
 /// Compute a deterministic SHA-256 hash of a `VerificationCondition`'s formula.
 ///
@@ -45,9 +47,7 @@ fn verdict_string(result: &VerificationResult) -> &'static str {
 /// Convert a `VerificationResult` to an optional model string for cache storage.
 fn model_string(result: &VerificationResult) -> Option<String> {
     match result {
-        VerificationResult::Failed { counterexample: Some(cex), .. } => {
-            Some(format!("{cex:?}"))
-        }
+        VerificationResult::Failed { counterexample: Some(cex), .. } => Some(format!("{cex:?}")),
         _ => None,
     }
 }
@@ -58,9 +58,7 @@ fn model_string(result: &VerificationResult) -> Option<String> {
 /// instead of always defaulting to `smt_unsat()`.
 fn strength_json(result: &VerificationResult) -> Option<String> {
     match result {
-        VerificationResult::Proved { strength, .. } => {
-            serde_json::to_string(strength).ok()
-        }
+        VerificationResult::Proved { strength, .. } => serde_json::to_string(strength).ok(),
         _ => None,
     }
 }
@@ -76,11 +74,13 @@ fn result_from_cached(entry: &CachedResult) -> VerificationResult {
     match entry.verdict.as_str() {
         "proved" => {
             // tRust #755: Restore original ProofStrength from cache if available.
-            let strength = entry.strength_json.as_deref()
+            let strength = entry
+                .strength_json
+                .as_deref()
                 .and_then(|json| serde_json::from_str::<ProofStrength>(json).ok())
                 .unwrap_or_else(ProofStrength::smt_unsat);
             VerificationResult::Proved {
-                solver: format!("cached:{}", entry.key.solver_name),
+                solver: format!("cached:{}", entry.key.solver_name).into(),
                 time_ms: 0,
                 strength,
                 proof_certificate: None,
@@ -88,16 +88,16 @@ fn result_from_cached(entry: &CachedResult) -> VerificationResult {
             }
         }
         "failed" => VerificationResult::Failed {
-            solver: format!("cached:{}", entry.key.solver_name),
+            solver: format!("cached:{}", entry.key.solver_name).into(),
             time_ms: 0,
             counterexample: None,
         },
         "timeout" => VerificationResult::Timeout {
-            solver: format!("cached:{}", entry.key.solver_name),
+            solver: format!("cached:{}", entry.key.solver_name).into(),
             timeout_ms: entry.time_ms,
         },
         _ => VerificationResult::Unknown {
-            solver: format!("cached:{}", entry.key.solver_name),
+            solver: format!("cached:{}", entry.key.solver_name).into(),
             time_ms: 0,
             reason: format!("cached result: {}", entry.verdict),
         },
@@ -122,19 +122,13 @@ impl SolverCachedRouter {
     /// Create a new solver-cached router wrapping the given router.
     #[must_use]
     pub fn new(router: Router, policy: CachePolicy) -> Self {
-        Self {
-            router,
-            cache: Mutex::new(ResultCache::new(policy)),
-        }
+        Self { router, cache: Mutex::new(ResultCache::new(policy)) }
     }
 
     /// Create with a pre-populated cache (e.g., loaded from disk).
     #[must_use]
     pub fn with_cache(router: Router, cache: ResultCache) -> Self {
-        Self {
-            router,
-            cache: Mutex::new(cache),
-        }
+        Self { router, cache: Mutex::new(cache) }
     }
 
     /// Access the underlying router.
@@ -191,13 +185,11 @@ impl SolverCachedRouter {
         let solver_name = plan
             .iter()
             .find(|entry| entry.can_handle)
-            .map(|entry| entry.name.clone())
+            .map(|entry| entry.name.to_string())
             .unwrap_or_else(|| "none".to_string());
 
-        let cache_key = ResultCacheKey {
-            formula_hash: formula_hash.clone(),
-            solver_name: solver_name.clone(),
-        };
+        let cache_key =
+            ResultCacheKey { formula_hash: formula_hash.clone(), solver_name: solver_name.clone() };
 
         // Check cache.
         {
@@ -266,23 +258,23 @@ impl SolverCachedRouter {
                 let solver_name = plan
                     .iter()
                     .find(|entry| entry.can_handle)
-                    .map(|entry| entry.name.clone())
+                    .map(|entry| entry.name.to_string())
                     .unwrap_or_else(|| "none".to_string());
 
-                let cache_key = ResultCacheKey {
-                    formula_hash,
-                    solver_name,
-                };
+                let cache_key = ResultCacheKey { formula_hash, solver_name };
 
                 if let Some(cached) = cache.replay_result(&cache_key) {
                     results.push((vc.clone(), result_from_cached(cached)));
                 } else {
                     // Placeholder — will be replaced after parallel dispatch.
-                    results.push((vc.clone(), VerificationResult::Unknown {
-                        solver: "pending".to_string(),
-                        time_ms: 0,
-                        reason: "cache miss, pending dispatch".to_string(),
-                    }));
+                    results.push((
+                        vc.clone(),
+                        VerificationResult::Unknown {
+                            solver: "pending".into(),
+                            time_ms: 0,
+                            reason: "cache miss, pending dispatch".to_string(),
+                        },
+                    ));
                     cache_miss_indices.push(i);
                     cache_miss_vcs.push(vc.clone());
                 }
@@ -291,27 +283,19 @@ impl SolverCachedRouter {
 
         // Phase 2: Dispatch cache misses in parallel.
         if !cache_miss_vcs.is_empty() {
-            let fresh_results =
-                self.router.verify_all_parallel(&cache_miss_vcs, max_threads);
+            let fresh_results = self.router.verify_all_parallel(&cache_miss_vcs, max_threads);
 
             // Phase 3: Store results and fill in placeholders.
             let mut cache = self.cache.lock().expect("cache mutex poisoned");
-            for (miss_idx, (_, fresh_result)) in
-                cache_miss_indices.iter().zip(fresh_results.into_iter())
-            {
+            for (miss_idx, (_, fresh_result)) in cache_miss_indices.iter().zip(fresh_results) {
                 let vc = &vcs[*miss_idx];
                 let formula_hash = vc_formula_hash(vc);
                 let solver_name = fresh_result.solver_name().to_string();
                 // Strip "cached:" prefix if present (shouldn't be for fresh results).
-                let solver_name = solver_name
-                    .strip_prefix("cached:")
-                    .unwrap_or(&solver_name)
-                    .to_string();
+                let solver_name =
+                    solver_name.strip_prefix("cached:").unwrap_or(&solver_name).to_string();
 
-                let cache_key = ResultCacheKey {
-                    formula_hash,
-                    solver_name,
-                };
+                let cache_key = ResultCacheKey { formula_hash, solver_name };
 
                 cache.cache_result(
                     cache_key,
@@ -339,7 +323,7 @@ mod tests {
     fn make_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -436,10 +420,7 @@ mod tests {
         let router = Router::with_backends(vec![Box::new(MockBackend)]);
         let cached_router = SolverCachedRouter::new(router, CachePolicy::AlwaysCache);
 
-        let vcs = vec![
-            make_vc(Formula::Bool(false)),
-            make_vc(Formula::Bool(true)),
-        ];
+        let vcs = vec![make_vc(Formula::Bool(false)), make_vc(Formula::Bool(true))];
 
         // First pass: all miss.
         let results1 = cached_router.verify_all(&vcs);
@@ -466,9 +447,7 @@ mod tests {
         let router = Router::with_backends(vec![Box::new(MockBackend)]);
         let cached_router = SolverCachedRouter::new(router, CachePolicy::AlwaysCache);
 
-        let vcs: Vec<_> = (0..4)
-            .map(|i| make_vc(Formula::Bool(i % 2 == 0)))
-            .collect();
+        let vcs: Vec<_> = (0..4).map(|i| make_vc(Formula::Bool(i % 2 == 0))).collect();
 
         // First pass: 2 unique formulas = 2 misses + 2 hits (duplicates).
         let results1 = cached_router.verify_all_parallel(&vcs, 2);

@@ -87,7 +87,7 @@ impl<'tcx> InferCtxt<'tcx> {
 
         // Finally, relate `generalized_ty` to `source_ty`, as described in previous comment.
         //
-        // tRust: known issue —(#16847): This code is non-ideal because all these subtype
+        // FIXME(#16847): This code is non-ideal because all these subtype
         // relations wind up attributed to the same spans. We need
         // to associate causes/spans with each of the relations in
         // the stack to get this right.
@@ -115,7 +115,7 @@ impl<'tcx> InferCtxt<'tcx> {
             } else {
                 match source_ty.kind() {
                     &ty::Alias(ty::Projection, data) => {
-                        // tRust: known issue —: This does not handle subtyping correctly, we could
+                        // FIXME: This does not handle subtyping correctly, we could
                         // instead create a new inference variable `?normalized_source`, emitting
                         // `Projection(normalized_source, ?ty_normalized)` and
                         // `?normalized_source <: generalized_ty`.
@@ -128,7 +128,6 @@ impl<'tcx> InferCtxt<'tcx> {
                     ty::Alias(ty::Inherent | ty::Free | ty::Opaque, _) => {
                         return Err(TypeError::CyclicTy(source_ty));
                     }
-                    // tRust: invariant — generalization of a non-alias source type to infer is invalid
                     _ => bug!("generalized `{source_ty:?} to infer, not an alias"),
                 }
             }
@@ -203,7 +202,7 @@ impl<'tcx> InferCtxt<'tcx> {
         target_vid: ty::ConstVid,
         source_ct: ty::Const<'tcx>,
     ) -> RelateResult<'tcx, ()> {
-        // tRust: known issue —(generic_const_exprs): Occurs check failures for unevaluated
+        // FIXME(generic_const_exprs): Occurs check failures for unevaluated
         // constants and generic expressions are not yet handled correctly.
         let Generalization { value_may_be_infer: generalized_ct } = self.generalize(
             relation.span(),
@@ -499,7 +498,6 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for Generalizer<'_, 'tcx> {
         // us from creating infinitely sized types.
         let g = match *t.kind() {
             ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant — fresh inference types must not appear during generalization
                 bug!("unexpected infer type: {t}")
             }
 
@@ -694,10 +692,10 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for Generalizer<'_, 'tcx> {
                     }
                 }
             }
-            // tRust: known issue —: Unevaluated constants are also not rigid, so the current
+            // FIXME: Unevaluated constants are also not rigid, so the current
             // approach of always relating them structurally is incomplete.
             //
-            // tRust: known issue —: remove this branch once `structurally_relate_consts` is fully
+            // FIXME: remove this branch once `structurally_relate_consts` is fully
             // structural.
             ty::ConstKind::Unevaluated(ty::UnevaluatedConst { def, args }) => {
                 let args = self.relate_with_variance(

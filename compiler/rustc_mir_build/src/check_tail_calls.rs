@@ -27,7 +27,7 @@ pub(crate) fn check_tail_calls(tcx: TyCtxt<'_>, def: LocalDefId) -> Result<(), E
         tcx,
         thir,
         found_errors: Ok(()),
-        // tRust: known issue — we're clearly in a body here. (upstream #132279)
+        // FIXME(#132279): we're clearly in a body here.
         typing_env: ty::TypingEnv::non_body_analysis(tcx, def),
         is_closure,
         caller_ty,
@@ -59,7 +59,6 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
         }
 
         let BodyTy::Fn(caller_sig) = self.thir.body_type else {
-            // tRust: invariant — `hir_typeck` only permits `become` in function bodies, so THIR body type here must be `BodyTy::Fn`.
             span_bug!(
                 call.span,
                 "`become` outside of functions should have been disallowed by hir_typeck"
@@ -71,7 +70,6 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
         let caller_sig = self.tcx.erase_and_anonymize_regions(caller_sig);
 
         let ExprKind::Scope { value, .. } = call.kind else {
-            // tRust: invariant — the operand of a THIR `Become` expression is always wrapped in a `Scope` node before tail-call checking.
             span_bug!(call.span, "expected scope, found: {call:?}")
         };
         let value = &self.thir[value];
@@ -106,7 +104,7 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
                 && let Some(this) = this.as_type()
             {
                 if this.is_closure() {
-                    self.report_calling_closure(&self.thir[fun], args[1].as_type().expect("invariant: node is a type"), expr); // tRust: unwrap -> expect
+                    self.report_calling_closure(&self.thir[fun], args[1].as_type().unwrap(), expr);
                 } else {
                     // This can happen when tail calling `Box` that wraps a function
                     self.report_nonfn_callee(fn_span, self.thir[fun].span, this);
@@ -141,7 +139,7 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
             self.report_unsupported_abi(expr.span, callee_sig.abi);
         }
 
-        // tRust: known issue — this currently fails for cases where opaques are used. (upstream FIXME by explicit_tail_calls)
+        // FIXME(explicit_tail_calls): this currently fails for cases where opaques are used.
         // e.g.
         // ```
         // fn a() -> impl Sized { become b() } // ICE
@@ -263,7 +261,6 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
                         Applicability::MaybeIncorrect,
                     );
                 }
-                // tRust: invariant — overloaded operator calls originate from unary or binary trait methods, so `args` has length 1 or 2.
                 _ => span_bug!(expr.span, "operator with more than 2 args? {args:?}"),
             }
         }
@@ -333,7 +330,7 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
         let mut ty = ty;
         let mut refs = 0;
         while ty.is_box() || ty.is_ref() {
-            ty = ty.builtin_deref(false).expect("invariant: type is a reference/pointer"); // tRust: unwrap -> expect
+            ty = ty.builtin_deref(false).unwrap();
             refs += 1;
         }
 
@@ -409,7 +406,7 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
         let err = self
             .tcx
             .dcx()
-            // tRust: known issue — highlight the `...` (upstream FIXME by explicit_tail_calls)
+            // FIXME(explicit_tail_calls): highlight the `...`
             .struct_span_err(sp, "tail-calls are not allowed in c-variadic functions")
             .emit();
 
@@ -420,7 +417,7 @@ impl<'tcx> TailCallCkVisitor<'_, 'tcx> {
         let err = self
             .tcx
             .dcx()
-            // tRust: known issue — highlight the function or something... (upstream FIXME by explicit_tail_calls)
+            // FIXME(explicit_tail_calls): highlight the function or something...
             .struct_span_err(sp, "c-variadic functions can't be tail-called")
             .emit();
 

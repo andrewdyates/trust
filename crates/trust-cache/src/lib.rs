@@ -4,53 +4,43 @@
 //! functions are not re-verified on subsequent compilations. Also provides:
 //! - Solver query caching (query_cache.rs) — KLEE-inspired exact-match cache
 //! - Constraint independence splitting (independence.rs) — variable-based splitting
-//! - Counterexample reuse (counterexample_cache.rs) — subsumption-based reuse
 //! - Subsumption-based proof caching (query_cache.rs) — stronger proofs subsume weaker
-//! - Constraint independence partitioning (independence.rs) — KLEE-style splitting
 //!
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
 // tRust: Allow std HashMap/HashSet — FxHash lint only applies to compiler internals
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
 
 use trust_types::fx::FxHashSet;
 
 pub mod alpha_normalize;
-pub(crate) mod analytics;
-pub(crate) mod bloom_filter;
-pub(crate) mod compression;
-pub(crate) mod distributed;
-pub(crate) mod distributed_cache;
-pub(crate) mod counterexample_cache;
-pub(crate) mod eviction;
-pub(crate) mod fingerprint;
-pub(crate) mod impact_analysis;
+// tRust #884: File-based cache coordination for concurrent compilations.
+pub mod coordination;
+pub(crate) mod independence;
 // tRust #725: HMAC-SHA256 integrity protection for cache files on disk.
 pub(crate) mod integrity;
-pub(crate) mod incremental;
-pub(crate) mod independence;
 // tRust #479: MIR structural hashing and per-function incremental cache.
-pub(crate) mod mir_hash;
 pub(crate) mod invalidation;
 pub mod invalidation_strategy;
-pub(crate) mod pattern_match;
+pub(crate) mod mir_hash;
 pub mod proof_replay;
 pub(crate) mod query_cache;
 // tRust #527: Solver result caching consolidated from trust-router.
 pub mod result_cache;
-pub(crate) mod reuse;
-pub(crate) mod semantic_cache;
-pub(crate) mod sharding;
 pub mod spec_aware_cache;
 pub mod spec_change_detector;
 pub(crate) mod sub_query_splitter;
-pub(crate) mod vc_cache;
-pub(crate) mod warming;
 // tRust #666: Property-based idempotency and serialization roundtrip tests.
 #[cfg(test)]
 mod proptest_roundtrip;
+
+// tRust #884: Re-export cache coordination types.
+pub use coordination::{
+    CacheLockGuard, CoordinationConfig, CoordinationError, acquire_exclusive_lock,
+    acquire_shared_lock, coordinated_read, coordinated_write, file_content_hash,
+    try_exclusive_lock, try_shared_lock, validate_content_hash,
+};
 
 // Re-export key types from independence and query_cache for convenience.
 pub use alpha_normalize::{SubFormulaCache, alpha_normalize, alpha_normalized_hash};
@@ -79,11 +69,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use trust_types::{FunctionVerdict, VerifiableFunction};
+use trust_types::{FunctionVerdict, TransportObligationResult, VerifiableFunction};
 
 /// Current cache schema version. Bump when CacheEntry format changes.
 /// v2: Added spec_hash field. v3: Added HMAC integrity protection (#725).
-const CACHE_VERSION: u32 = 3;
+/// v4: Persisted per-obligation transport results for stable cached reporting.
+const CACHE_VERSION: u32 = 4;
 
 /// Errors from cache operations.
 #[derive(Debug, Error)]
@@ -107,7 +98,7 @@ pub fn compute_content_hash(func: &VerifiableFunction) -> String {
 }
 
 /// A single cached entry for one function.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CacheEntry {
     /// The SHA-256 content hash of the function body + contracts at verification time.
     pub content_hash: String,
@@ -134,6 +125,9 @@ pub struct CacheEntry {
     /// matches. Absent (empty) for entries created before spec tracking was added.
     #[serde(default)]
     pub spec_hash: String,
+    /// Cached per-obligation transport results for stable human/json reporting on cache hits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub obligation_results: Vec<TransportObligationResult>,
 }
 
 /// On-disk cache format.
@@ -157,7 +151,7 @@ impl Default for CacheFile {
 }
 
 /// Result of a cache lookup.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CacheLookup {
     /// Cache hit: the function body has not changed since last verification.
     Hit(CacheEntry),
@@ -170,11 +164,20 @@ pub enum CacheLookup {
 /// Stores verification results keyed by function def_path and content hash.
 /// When a function's content hash matches the cached entry, verification can
 /// be skipped.
+///
+/// Supports coordinated access for concurrent compilations (#884):
+/// use [`VerificationCache::load_coordinated`] and [`VerificationCache::save_coordinated`]
+/// for file-locking and content-hash validation. The original [`load`] and [`save`]
+/// methods remain available for single-process use or backward compatibility.
 pub struct VerificationCache {
     path: PathBuf,
     data: CacheFile,
     hits: usize,
     misses: usize,
+    /// SHA-256 hash of the cache file contents at load time.
+    /// Used for content-hash-based invalidation in coordinated mode.
+    /// Empty if the cache was created in-memory or loaded without coordination.
+    content_hash_at_load: String,
 }
 
 impl VerificationCache {
@@ -190,8 +193,7 @@ impl VerificationCache {
             match serde_json::from_str::<CacheFile>(&contents) {
                 Ok(cf) if cf.version == CACHE_VERSION => {
                     // Verify HMAC integrity (#725).
-                    let entries_json = serde_json::to_string(&cf.entries)
-                        .unwrap_or_default();
+                    let entries_json = serde_json::to_string(&cf.entries).unwrap_or_default();
                     let key = integrity::derive_cache_key();
                     if cf.hmac.is_empty()
                         || !integrity::verify_hmac(&key, entries_json.as_bytes(), &cf.hmac)
@@ -208,12 +210,117 @@ impl VerificationCache {
         } else {
             CacheFile::default()
         };
-        Ok(VerificationCache { path, data, hits: 0, misses: 0 })
+        Ok(VerificationCache {
+            path,
+            data,
+            hits: 0,
+            misses: 0,
+            content_hash_at_load: String::new(),
+        })
     }
 
     /// Create an empty in-memory cache (no file backing).
     pub fn in_memory() -> Self {
-        VerificationCache { path: PathBuf::new(), data: CacheFile::default(), hits: 0, misses: 0 }
+        VerificationCache {
+            path: PathBuf::new(),
+            data: CacheFile::default(),
+            hits: 0,
+            misses: 0,
+            content_hash_at_load: String::new(),
+        }
+    }
+
+    /// Load or create a cache at the given path with file locking (#884).
+    ///
+    /// Acquires a shared (read) lock on the cache file before reading.
+    /// The lock is released after loading. Records the content hash at
+    /// load time for use by [`save_coordinated`].
+    ///
+    /// If the file does not exist, returns an empty cache (no lock needed).
+    pub fn load_coordinated(
+        path: impl AsRef<Path>,
+        config: &coordination::CoordinationConfig,
+    ) -> Result<Self, CacheError> {
+        let path = path.as_ref().to_path_buf();
+        if !path.exists() {
+            return Ok(VerificationCache {
+                path,
+                data: CacheFile::default(),
+                hits: 0,
+                misses: 0,
+                content_hash_at_load: String::new(),
+            });
+        }
+
+        let (contents, content_hash, _guard) = coordination::coordinated_read(&path, config)
+            .map_err(|e| CacheError::Io(std::io::Error::other(e.to_string())))?;
+        // _guard is dropped here, releasing the shared lock.
+
+        let data = match serde_json::from_str::<CacheFile>(&contents) {
+            Ok(cf) if cf.version == CACHE_VERSION => {
+                let entries_json = serde_json::to_string(&cf.entries).unwrap_or_default();
+                let key = integrity::derive_cache_key();
+                if cf.hmac.is_empty()
+                    || !integrity::verify_hmac(&key, entries_json.as_bytes(), &cf.hmac)
+                {
+                    CacheFile::default()
+                } else {
+                    cf
+                }
+            }
+            _ => CacheFile::default(),
+        };
+
+        Ok(VerificationCache { path, data, hits: 0, misses: 0, content_hash_at_load: content_hash })
+    }
+
+    /// Write the cache to disk with file locking and content-hash validation (#884).
+    ///
+    /// Acquires an exclusive (write) lock before writing. If `validate` is true
+    /// and the cache was loaded with [`load_coordinated`], verifies that the
+    /// file has not been modified by another process since load time. If another
+    /// process wrote to the cache, returns an error (the caller should reload).
+    ///
+    /// Uses atomic write (write to temp, then rename) to prevent readers from
+    /// seeing partial data.
+    pub fn save_coordinated(
+        &self,
+        config: &coordination::CoordinationConfig,
+    ) -> Result<(), CacheError> {
+        if self.path.as_os_str().is_empty() {
+            return Ok(()); // in-memory cache
+        }
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // Validate content hash if enabled and we have a prior hash
+        if config.validate_content_hash && !self.content_hash_at_load.is_empty() {
+            coordination::validate_content_hash(&self.path, &self.content_hash_at_load)
+                .map_err(|e| CacheError::Io(std::io::Error::other(e.to_string())))?;
+        }
+
+        // Serialize with HMAC
+        let entries_json = serde_json::to_string(&self.data.entries)?;
+        let key = integrity::derive_cache_key();
+        let tag = integrity::compute_hmac(&key, entries_json.as_bytes());
+
+        let file =
+            CacheFile { version: CACHE_VERSION, entries: self.data.entries.clone(), hmac: tag };
+        let json = serde_json::to_string_pretty(&file)?;
+
+        // Write with exclusive lock and atomic rename
+        coordination::coordinated_write(&self.path, &json, config)
+            .map_err(|e| CacheError::Io(std::io::Error::other(e.to_string())))?;
+        Ok(())
+    }
+
+    /// The content hash of the cache file at load time.
+    ///
+    /// Empty if loaded without coordination or created in-memory.
+    #[must_use]
+    pub fn content_hash_at_load(&self) -> &str {
+        &self.content_hash_at_load
     }
 
     /// Look up a function by def_path, content hash, and spec hash.
@@ -252,16 +359,40 @@ impl VerificationCache {
         self.lookup(&func.def_path, &hash, &spec_fp.hash)
     }
 
+    fn entries_equivalent(existing: &CacheEntry, new_entry: &CacheEntry) -> bool {
+        existing.content_hash == new_entry.content_hash
+            && existing.verdict == new_entry.verdict
+            && existing.total_obligations == new_entry.total_obligations
+            && existing.proved == new_entry.proved
+            && existing.failed == new_entry.failed
+            && existing.unknown == new_entry.unknown
+            && existing.runtime_checked == new_entry.runtime_checked
+            && existing.spec_hash == new_entry.spec_hash
+    }
+
     /// Store a verification result for a function.
-    pub fn store(&mut self, def_path: &str, entry: CacheEntry) {
+    ///
+    /// Returns `true` when the cache contents changed and `false` when the new
+    /// entry is semantically identical to the existing one.
+    pub fn store(&mut self, def_path: &str, entry: CacheEntry) -> bool {
+        if self
+            .data
+            .entries
+            .get(def_path)
+            .is_some_and(|existing| Self::entries_equivalent(existing, &entry))
+        {
+            return false;
+        }
+
         self.data.entries.insert(def_path.to_string(), entry);
+        true
     }
 
     /// Store a verification result computed from a VerifiableFunction.
     ///
     /// Builds a CacheEntry with the SHA-256 content hash and current timestamp.
     /// The spec_hash is computed from the function's contracts for cross-session
-    /// spec change detection.
+    /// spec change detection. Returns `true` when the cached entry changed.
     #[allow(clippy::too_many_arguments)]
     pub fn store_function(
         &mut self,
@@ -272,7 +403,7 @@ impl VerificationCache {
         failed: usize,
         unknown: usize,
         runtime_checked: usize,
-    ) {
+    ) -> bool {
         let spec_fp = crate::spec_change_detector::SpecFingerprint::from_contracts(
             &func.def_path,
             &func.contracts,
@@ -287,8 +418,9 @@ impl VerificationCache {
             runtime_checked,
             cached_at: now_unix_secs(),
             spec_hash: spec_fp.hash,
+            obligation_results: vec![],
         };
-        self.store(&func.def_path, entry);
+        self.store(&func.def_path, entry)
     }
 
     /// Remove a cached entry (e.g., when a callee spec changes).
@@ -327,11 +459,8 @@ impl VerificationCache {
         let tag = integrity::compute_hmac(&key, entries_json.as_bytes());
 
         // Build the on-disk structure with the computed HMAC.
-        let file = CacheFile {
-            version: CACHE_VERSION,
-            entries: self.data.entries.clone(),
-            hmac: tag,
-        };
+        let file =
+            CacheFile { version: CACHE_VERSION, entries: self.data.entries.clone(), hmac: tag };
         let json = serde_json::to_string_pretty(&file)?;
         std::fs::write(&self.path, json)?;
         Ok(())
@@ -389,6 +518,7 @@ mod tests {
             runtime_checked: 0,
             cached_at: 0,
             spec_hash: String::new(),
+            obligation_results: vec![],
         }
     }
 
@@ -595,6 +725,31 @@ mod tests {
     }
 
     #[test]
+    fn test_store_function_is_noop_when_entry_is_unchanged() {
+        let func = make_function("bar");
+        let mut cache = VerificationCache::in_memory();
+
+        assert!(cache.store_function(&func, FunctionVerdict::Verified, 5, 4, 0, 1, 0));
+
+        let cached_at = match cache.lookup_function(&func) {
+            CacheLookup::Hit(entry) => entry.cached_at,
+            CacheLookup::Miss => panic!("expected cache hit after initial store_function"),
+        };
+
+        assert!(
+            !cache.store_function(&func, FunctionVerdict::Verified, 5, 4, 0, 1, 0),
+            "identical store_function call should be a no-op"
+        );
+
+        match cache.lookup_function(&func) {
+            CacheLookup::Hit(entry) => {
+                assert_eq!(entry.cached_at, cached_at, "no-op store should preserve timestamp");
+            }
+            CacheLookup::Miss => panic!("expected cache hit after no-op store_function"),
+        }
+    }
+
+    #[test]
     fn test_store_function_detects_body_change() {
         let func_v1 = make_function("baz");
         let mut cache = VerificationCache::in_memory();
@@ -692,8 +847,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("create tempdir");
         let cache_path = dir.path().join("trust-cache.json");
         // Old version 1 cache should be discarded
-        std::fs::write(&cache_path, r#"{"version": 1, "entries": {}}"#)
-            .expect("write old version");
+        std::fs::write(&cache_path, r#"{"version": 1, "entries": {}}"#).expect("write old version");
 
         let cache = VerificationCache::load(&cache_path).expect("should not fail on old version");
         assert!(cache.is_empty(), "old version cache should start fresh");
@@ -801,10 +955,7 @@ mod tests {
             hash.len(),
             hash
         );
-        assert!(
-            hash.chars().all(|c| c.is_ascii_hexdigit()),
-            "content_hash() must be valid hex"
-        );
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "content_hash() must be valid hex");
     }
 
     // -----------------------------------------------------------------------
@@ -840,6 +991,7 @@ mod tests {
                 runtime_checked: 0,
                 cached_at: 0,
                 spec_hash: "spec_v1".to_string(),
+                obligation_results: vec![],
             })
         );
     }
@@ -931,10 +1083,7 @@ mod tests {
         let cache_path = dir.path().join("no-hmac.json");
 
         // Write a v3 cache with no HMAC (simulating legacy upgrade)
-        let json = format!(
-            r#"{{"version": {}, "entries": {{}}, "hmac": ""}}"#,
-            CACHE_VERSION
-        );
+        let json = format!(r#"{{"version": {}, "entries": {{}}, "hmac": ""}}"#, CACHE_VERSION);
         std::fs::write(&cache_path, json).expect("write no-hmac file");
 
         let cache = VerificationCache::load(&cache_path).expect("load no-hmac");
@@ -955,12 +1104,10 @@ mod tests {
 
         // Verify the on-disk file has an hmac field
         let contents = std::fs::read_to_string(&cache_path).expect("read cache");
-        let parsed: serde_json::Value =
-            serde_json::from_str(&contents).expect("parse saved JSON");
+        let parsed: serde_json::Value = serde_json::from_str(&contents).expect("parse saved JSON");
         let hmac_val = parsed.get("hmac").expect("hmac field must exist");
         let hmac_str = hmac_val.as_str().expect("hmac must be string");
         assert_eq!(hmac_str.len(), 64, "HMAC-SHA256 hex is 64 chars");
         assert!(hmac_str.chars().all(|c| c.is_ascii_hexdigit()));
     }
-
 }

@@ -29,7 +29,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
         Some(ty::ImplTraitInTraitData::Impl { fn_def_id }) => {
             match tcx.collect_return_position_impl_trait_in_trait_tys(fn_def_id) {
                 Ok(map) => {
-                    let trait_item_def_id = tcx.trait_item_of(def_id).expect("invariant: item is a trait item");
+                    let trait_item_def_id = tcx.trait_item_of(def_id).unwrap();
                     return map[&trait_item_def_id];
                 }
                 Err(_) => {
@@ -79,7 +79,6 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
                 .unwrap_or_else(|| icx.lower_ty(ty)),
             TraitItemKind::Type(_, Some(ty)) => icx.lower_ty(ty),
             TraitItemKind::Type(_, None) => {
-                // tRust: invariant — associated type items in impl blocks must have a default type
                 span_bug!(item.span, "associated type missing default");
             }
         },
@@ -179,7 +178,6 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
             | ItemKind::ForeignMod { .. }
             | ItemKind::ExternCrate(..)
             | ItemKind::Use(..) => {
-                // tRust: invariant — all valid item kinds for compute_type_of_item handled above
                 span_bug!(item.span, "compute_type_of_item: unexpected item type: {:?}", item.kind);
             }
         },
@@ -231,12 +229,10 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
         Node::GenericParam(param) => match &param.kind {
             GenericParamKind::Type { default: Some(ty), .. }
             | GenericParamKind::Const { ty, .. } => icx.lower_ty(ty),
-            // tRust: invariant — GenericParam nodes in type_of must be type parameters
             x => bug!("unexpected non-type Node::GenericParam: {:?}", x),
         },
 
         x => {
-            // tRust: invariant — all valid node kinds for type_of handled above
             bug!("unexpected sort of node in type_of(): {:?}", x);
         }
     };
@@ -272,7 +268,6 @@ pub(super) fn type_of_opaque(tcx: TyCtxt<'_>, def_id: DefId) -> ty::EarlyBinder<
                 if in_trait_or_impl == Some(hir::RpitContext::Trait)
                     && !tcx.defaultness(owner).has_value()
                 {
-                    // tRust: invariant — const param default type must match the parameter kind
                     span_bug!(
                         tcx.def_span(def_id),
                         "tried to get type of this RPITIT with no definition"
@@ -314,7 +309,6 @@ pub(super) fn type_of_opaque_hir_typeck(
             if in_trait_or_impl == Some(hir::RpitContext::Trait)
                 && !tcx.defaultness(owner).has_value()
             {
-                // tRust: invariant — array length const arg must have a valid type context
                 span_bug!(
                     tcx.def_span(def_id),
                     "tried to get type of this RPITIT with no definition"
@@ -338,7 +332,6 @@ fn anon_const_type_of<'tcx>(icx: &ItemCtxt<'tcx>, def_id: LocalDefId) -> Ty<'tcx
 
     let node = tcx.hir_node(hir_id);
     let Node::AnonConst(&AnonConst { span, .. }) = node else {
-        // tRust: invariant — all valid def kinds for type_of_opaque handled above
         span_bug!(
             tcx.def_span(def_id),
             "expected anon const in `anon_const_type_of`, got {node:?}"
@@ -396,7 +389,6 @@ fn const_arg_anon_type_of<'tcx>(icx: &ItemCtxt<'tcx>, arg_hir_id: HirId, span: S
                 Node::TyPat(p) => tcx.parent_hir_node(p.hir_id),
                 other => other,
             };
-            // tRust: invariant — pattern type node must have TyKind::Pat
             let hir::TyKind::Pat(ty, _) = node.expect_ty().kind else { bug!() };
             icx.lower_ty(ty)
         }
@@ -482,7 +474,7 @@ fn infer_placeholder_type<'tcx>(
             }
             let mut diag = bad_placeholder(cx, visitor.spans, kind);
 
-            // tRust: known issue — (#69396): Stashing and stealing diagnostics does not interact
+            // HACK(#69396): Stashing and stealing diagnostics does not interact
             // well with macros which may delay more than one diagnostic on the
             // same span. If this happens, we will fall through to this arm, so
             // we need to suppress the suggestion since it's invalid. Ideally we

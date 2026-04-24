@@ -213,7 +213,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::usize(), Ty::usize()),
                     },
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -225,7 +225,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: Some(Counterexample::new(vec![
                         ("a".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -236,7 +236,7 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan {
                         file: "src/midpoint.rs".to_string(),
                         line_start: 5,
@@ -248,21 +248,23 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::CastOverflow { from_ty: Ty::usize(), to_ty: Ty::u32() },
-                    function: "get_midpoint".to_string(),
+                    function: "get_midpoint".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Unknown {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 50,
                     reason: "nonlinear arithmetic".to_string(),
                 },
@@ -294,7 +296,7 @@ mod tests {
                 verdict: CrateVerdict::RuntimeChecked,
             },
             functions: vec![FunctionProofReport {
-                function: "dynamic_check".to_string(),
+                function: "dynamic_check".into(),
                 summary: FunctionSummary {
                     total_obligations: 1,
                     proved: 0,
@@ -319,7 +321,7 @@ mod tests {
                     outcome: ObligationOutcome::RuntimeChecked {
                         note: Some("validated by runtime instrumentation".to_string()),
                     },
-                    solver: "runtime".to_string(),
+                    solver: "runtime".into(),
                     time_ms: 11,
                     evidence: None,
                 }],
@@ -396,16 +398,18 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "f1".to_string(),
+                    function: "f1".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
@@ -413,27 +417,29 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::u32(), Ty::u32()),
                     },
-                    function: "f1".to_string(),
+                    function: "f1".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 2,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::IndexOutOfBounds,
-                    function: "f2".to_string(),
+                    function: "f2".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 5,
                     counterexample: None,
                 },
@@ -441,12 +447,12 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "f3".to_string(),
+                    function: "f3".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
-                VerificationResult::Timeout { solver: "z4".to_string(), timeout_ms: 5000 },
+                VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 },
             ),
         ];
         let report = build_json_report("counts", &results);

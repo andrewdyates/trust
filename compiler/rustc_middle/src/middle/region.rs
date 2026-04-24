@@ -76,7 +76,7 @@ use crate::ty::{self, TyCtxt};
 /// of each range is not really the important thing in the above
 /// picture, but rather the ending point.
 //
-// tRust: known issue (pnkfelix) — this currently derives `PartialOrd` and `Ord` to
+// FIXME(pnkfelix): this currently derives `PartialOrd` and `Ord` to
 // placate the same deriving in `ty::LateParamRegion`, but we may want to
 // actually attach a more meaningful ordering to scopes than the one
 // generated via deriving here.
@@ -337,7 +337,6 @@ impl ScopeTree {
             }
         }
 
-        // tRust: invariant: unexpected state in default_temporary_scope
         span_bug!(ty::tls::with(|tcx| inner.span(tcx, self)), "no enclosing temporary scope")
     }
 

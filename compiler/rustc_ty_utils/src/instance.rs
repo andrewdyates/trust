@@ -41,7 +41,7 @@ fn resolve_instance_raw<'tcx>(
                 debug!(" => nontrivial drop glue");
                 match *ty.kind() {
                     ty::Coroutine(coroutine_def_id, ..) => {
-                        // tRust: known issue — sync drop of coroutine with async drop (generate both versions?)
+                        // FIXME: sync drop of coroutine with async drop (generate both versions?)
                         // Currently just ignored
                         if tcx.optimized_mir(coroutine_def_id).coroutine_drop_async().is_some() {
                             ty::InstanceKind::DropGlue(def_id, None)
@@ -178,7 +178,7 @@ fn resolve_associated_item<'tcx>(
             );
             let args = infcx.tcx.erase_and_anonymize_regions(args);
 
-            // tRust: known issue — We may have overlapping `dyn Trait` built-in impls and
+            // HACK: We may have overlapping `dyn Trait` built-in impls and
             // user-provided blanket impls. Detect that case here, and return
             // ambiguity.
             //
@@ -261,7 +261,7 @@ fn resolve_associated_item<'tcx>(
         }
         traits::ImplSource::Builtin(BuiltinImplSource::Misc | BuiltinImplSource::Trivial, _) => {
             if tcx.is_lang_item(trait_ref.def_id, LangItem::Clone) {
-                // tRust: known issue (eddyb) — use lang items for methods instead of names.
+                // FIXME(eddyb) use lang items for methods instead of names.
                 let name = tcx.item_name(trait_item_id);
                 if name == sym::clone {
                     let self_ty = trait_ref.self_ty();
@@ -302,7 +302,7 @@ fn resolve_associated_item<'tcx>(
                     })
                 }
             } else if let Some(target_kind) = tcx.fn_trait_kind_from_def_id(trait_ref.def_id) {
-                // tRust: known issue — This doesn't check for malformed libcore that defines, e.g.,
+                // FIXME: This doesn't check for malformed libcore that defines, e.g.,
                 // `trait Fn { fn call_once(&self) { .. } }`. This is mostly for extension
                 // methods.
                 if cfg!(debug_assertions)
@@ -395,7 +395,7 @@ fn resolve_associated_item<'tcx>(
                     }
                     Some(Instance {
                         def: ty::InstanceKind::Item(
-                            tcx.lang_items().get(LangItem::FieldOffset).expect("invariant: FieldOffset lang item must be defined"), // tRust: unwrap -> expect
+                            tcx.lang_items().get(LangItem::FieldOffset).unwrap(),
                         ),
                         args: rcvr_args,
                     })

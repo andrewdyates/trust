@@ -87,10 +87,7 @@ impl TypeAnalyzer {
 
         // Parameters are locals 1..=arg_count (local 0 is the return place).
         for local in body.locals.iter().take(body.arg_count + 1).skip(1) {
-            let name = local
-                .name
-                .clone()
-                .unwrap_or_else(|| format!("_arg{}", local.index));
+            let name = local.name.clone().unwrap_or_else(|| format!("_arg{}", local.index));
             let patterns = match_patterns(&local.ty);
 
             let requires = self.generate_requires_for_param(&name, &local.ty, &patterns);
@@ -129,10 +126,7 @@ impl TypeAnalyzer {
                 TypePattern::Reference { mutable } if self.infer_lifetime => {
                     out.extend(infer_lifetime_hint(name, *mutable));
                 }
-                TypePattern::Collection {
-                    has_known_length,
-                    length,
-                } if self.infer_collection => {
+                TypePattern::Collection { has_known_length, length } if self.infer_collection => {
                     out.extend(infer_collection_hint(name, *has_known_length, *length));
                 }
                 _ => {}
@@ -142,11 +136,7 @@ impl TypeAnalyzer {
     }
 
     /// Generate postcondition hints for the return type.
-    fn generate_ensures_for_return(
-        &self,
-        _ty: &Ty,
-        patterns: &[TypePattern],
-    ) -> Vec<FormulaHint> {
+    fn generate_ensures_for_return(&self, _ty: &Ty, patterns: &[TypePattern]) -> Vec<FormulaHint> {
         let mut out = Vec::new();
         let name = "result";
 
@@ -159,10 +149,7 @@ impl TypeAnalyzer {
                     // For return types, note that the result may be None.
                     // This is informational rather than a constraint.
                 }
-                TypePattern::Collection {
-                    has_known_length,
-                    length,
-                } if self.infer_collection => {
+                TypePattern::Collection { has_known_length, length } if self.infer_collection => {
                     out.extend(infer_collection_hint(name, *has_known_length, *length));
                 }
                 _ => {}
@@ -182,29 +169,13 @@ pub fn match_patterns(ty: &Ty) -> Vec<TypePattern> {
     let mut patterns = Vec::new();
     match ty {
         Ty::Int { width, signed: false } => {
-            let max = if *width >= 128 {
-                i128::MAX
-            } else {
-                (1i128 << width) - 1
-            };
-            patterns.push(TypePattern::Numeric {
-                min: 0,
-                max,
-                width: *width,
-            });
+            let max = if *width >= 128 { i128::MAX } else { (1i128 << width) - 1 };
+            patterns.push(TypePattern::Numeric { min: 0, max, width: *width });
         }
         Ty::Int { width, signed: true } => {
-            let half = if *width >= 128 {
-                i128::MAX
-            } else {
-                (1i128 << (width - 1)) - 1
-            };
+            let half = if *width >= 128 { i128::MAX } else { (1i128 << (width - 1)) - 1 };
             let min = if *width >= 128 { i128::MIN } else { -(1i128 << (width - 1)) };
-            patterns.push(TypePattern::Numeric {
-                min,
-                max: half,
-                width: *width,
-            });
+            patterns.push(TypePattern::Numeric { min, max: half, width: *width });
         }
         Ty::Float { .. } => {
             // Floats don't have simple integer bounds — skip for now.
@@ -215,27 +186,16 @@ pub fn match_patterns(ty: &Ty) -> Vec<TypePattern> {
             patterns.extend(match_patterns(inner));
         }
         Ty::Slice { .. } => {
-            patterns.push(TypePattern::Collection {
-                has_known_length: false,
-                length: None,
-            });
+            patterns.push(TypePattern::Collection { has_known_length: false, length: None });
         }
         Ty::Array { len, .. } => {
-            patterns.push(TypePattern::Collection {
-                has_known_length: true,
-                length: Some(*len),
-            });
+            patterns.push(TypePattern::Collection { has_known_length: true, length: Some(*len) });
         }
         Ty::Adt { name, .. } if is_option_type(name) => {
-            patterns.push(TypePattern::Optional {
-                inner_name: extract_inner_type_name(name),
-            });
+            patterns.push(TypePattern::Optional { inner_name: extract_inner_type_name(name) });
         }
         Ty::Adt { name, .. } if is_collection_type(name) => {
-            patterns.push(TypePattern::Collection {
-                has_known_length: false,
-                length: None,
-            });
+            patterns.push(TypePattern::Collection { has_known_length: false, length: None });
         }
         Ty::Tuple(elems) => {
             // Each element may have patterns — not directly actionable at the tuple level.
@@ -282,10 +242,7 @@ pub fn infer_lifetime_constraints(params: &[LocalDecl]) -> Vec<Formula> {
     params
         .iter()
         .filter_map(|local| {
-            let name = local
-                .name
-                .as_deref()
-                .unwrap_or("_");
+            let name = local.name.as_deref().unwrap_or("_");
             if let Ty::Ref { mutable, .. } = &local.ty {
                 Some(infer_lifetime_hint(name, *mutable))
             } else {
@@ -302,11 +259,7 @@ pub fn infer_lifetime_constraints(params: &[LocalDecl]) -> Vec<Formula> {
 pub fn generate_requires_from_types(body: &VerifiableBody) -> Vec<SpecSuggestion> {
     let analyzer = TypeAnalyzer::new();
     let hints = analyzer.analyze(body);
-    hints
-        .requires
-        .into_iter()
-        .map(|h| hint_to_suggestion(&h, "requires"))
-        .collect()
+    hints.requires.into_iter().map(|h| hint_to_suggestion(&h, "requires")).collect()
 }
 
 /// Generate `#[ensures]` suggestions from return type (and optionally body analysis).
@@ -314,11 +267,7 @@ pub fn generate_requires_from_types(body: &VerifiableBody) -> Vec<SpecSuggestion
 pub fn generate_ensures_from_types(body: &VerifiableBody) -> Vec<SpecSuggestion> {
     let analyzer = TypeAnalyzer::new();
     let hints = analyzer.analyze(body);
-    hints
-        .ensures
-        .into_iter()
-        .map(|h| hint_to_suggestion(&h, "ensures"))
-        .collect()
+    hints.ensures.into_iter().map(|h| hint_to_suggestion(&h, "ensures")).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -326,12 +275,7 @@ pub fn generate_ensures_from_types(body: &VerifiableBody) -> Vec<SpecSuggestion>
 // ---------------------------------------------------------------------------
 
 /// Create bound formulas for a named variable with known numeric range.
-fn infer_bounds_from_type_inner(
-    name: &str,
-    min: i128,
-    max: i128,
-    width: u32,
-) -> Vec<FormulaHint> {
+fn infer_bounds_from_type_inner(name: &str, min: i128, max: i128, width: u32) -> Vec<FormulaHint> {
     let sort = Sort::BitVec(width);
     let var = Formula::Var(name.to_owned(), sort);
     let mut hints = Vec::new();
@@ -339,10 +283,7 @@ fn infer_bounds_from_type_inner(
     // Lower bound (interesting only if min >= 0 for unsigned)
     if min >= 0 {
         hints.push(FormulaHint {
-            formula: Formula::Ge(
-                Box::new(var.clone()),
-                Box::new(Formula::Int(min)),
-            ),
+            formula: Formula::Ge(Box::new(var.clone()), Box::new(Formula::Int(min))),
             reason: format!("{name} is unsigned {width}-bit: always >= {min}"),
             source: name.to_owned(),
         });
@@ -350,10 +291,7 @@ fn infer_bounds_from_type_inner(
 
     // Upper bound
     hints.push(FormulaHint {
-        formula: Formula::Le(
-            Box::new(var),
-            Box::new(Formula::Int(max)),
-        ),
+        formula: Formula::Le(Box::new(var), Box::new(Formula::Int(max))),
         reason: format!("{name} is {width}-bit: always <= {max}"),
         source: name.to_owned(),
     });
@@ -369,10 +307,7 @@ fn infer_nullability_hint(name: &str, ty: &Ty) -> Option<FormulaHint> {
             // Represented as: !(name == None) i.e., "name is Some"
             let var = Formula::Var(name.to_owned(), Sort::Bool);
             Some(FormulaHint {
-                formula: Formula::Or(vec![
-                    var.clone(),
-                    Formula::Not(Box::new(var)),
-                ]),
+                formula: Formula::Or(vec![var.clone(), Formula::Not(Box::new(var))]),
                 reason: format!("{name} is Option<_>: may be None"),
                 source: name.to_owned(),
             })
@@ -419,25 +354,18 @@ fn infer_collection_hint(
 
     // Length is always non-negative.
     hints.push(FormulaHint {
-        formula: Formula::Ge(
-            Box::new(len_var.clone()),
-            Box::new(Formula::Int(0)),
-        ),
+        formula: Formula::Ge(Box::new(len_var.clone()), Box::new(Formula::Int(0))),
         reason: format!("{name} collection length >= 0"),
         source: name.to_owned(),
     });
 
-    if has_known_length
-        && let Some(len) = length {
-            hints.push(FormulaHint {
-                formula: Formula::Eq(
-                    Box::new(len_var),
-                    Box::new(Formula::Int(len as i128)),
-                ),
-                reason: format!("{name} is a fixed-size array of length {len}"),
-                source: name.to_owned(),
-            });
-        }
+    if has_known_length && let Some(len) = length {
+        hints.push(FormulaHint {
+            formula: Formula::Eq(Box::new(len_var), Box::new(Formula::Int(len as i128))),
+            reason: format!("{name} is a fixed-size array of length {len}"),
+            source: name.to_owned(),
+        });
+    }
 
     hints
 }
@@ -505,26 +433,13 @@ mod tests {
 
     fn make_body(params: Vec<LocalDecl>, return_ty: Ty) -> VerifiableBody {
         let arg_count = params.len();
-        let mut locals = vec![LocalDecl {
-            index: 0,
-            ty: return_ty,
-            name: Some("_return".into()),
-        }];
+        let mut locals = vec![LocalDecl { index: 0, ty: return_ty, name: Some("_return".into()) }];
         locals.extend(params);
-        VerifiableBody {
-            locals,
-            blocks: vec![],
-            arg_count,
-            return_ty: Ty::Unit,
-        }
+        VerifiableBody { locals, blocks: vec![], arg_count, return_ty: Ty::Unit }
     }
 
     fn make_param(index: usize, name: &str, ty: Ty) -> LocalDecl {
-        LocalDecl {
-            index,
-            ty,
-            name: Some(name.into()),
-        }
+        LocalDecl { index, ty, name: Some(name.into()) }
     }
 
     // -- Pattern matching tests --
@@ -541,10 +456,7 @@ mod tests {
 
     #[test]
     fn test_match_patterns_signed_int() {
-        let patterns = match_patterns(&Ty::Int {
-            width: 16,
-            signed: true,
-        });
+        let patterns = match_patterns(&Ty::Int { width: 16, signed: true });
         assert_eq!(patterns.len(), 1);
         assert!(matches!(
             &patterns[0],
@@ -557,18 +469,12 @@ mod tests {
     fn test_match_patterns_u64() {
         let patterns = match_patterns(&Ty::usize());
         assert_eq!(patterns.len(), 1);
-        assert!(matches!(
-            &patterns[0],
-            TypePattern::Numeric { min: 0, .. }
-        ));
+        assert!(matches!(&patterns[0], TypePattern::Numeric { min: 0, .. }));
     }
 
     #[test]
     fn test_match_patterns_option_adt() {
-        let ty = Ty::Adt {
-            name: "Option<u32>".into(),
-            fields: vec![],
-        };
+        let ty = Ty::Adt { name: "Option<u32>".into(), fields: vec![] };
         let patterns = match_patterns(&ty);
         assert_eq!(patterns.len(), 1);
         assert!(matches!(
@@ -579,10 +485,7 @@ mod tests {
 
     #[test]
     fn test_match_patterns_reference() {
-        let ty = Ty::Ref {
-            mutable: true,
-            inner: Box::new(Ty::Int { width: 64, signed: false }),
-        };
+        let ty = Ty::Ref { mutable: true, inner: Box::new(Ty::Int { width: 64, signed: false }) };
         let patterns = match_patterns(&ty);
         assert_eq!(patterns.len(), 2);
         assert!(matches!(&patterns[0], TypePattern::Reference { mutable: true }));
@@ -591,51 +494,34 @@ mod tests {
 
     #[test]
     fn test_match_patterns_slice() {
-        let ty = Ty::Slice {
-            elem: Box::new(Ty::Bool),
-        };
+        let ty = Ty::Slice { elem: Box::new(Ty::Bool) };
         let patterns = match_patterns(&ty);
         assert_eq!(patterns.len(), 1);
         assert!(matches!(
             &patterns[0],
-            TypePattern::Collection {
-                has_known_length: false,
-                length: None,
-            }
+            TypePattern::Collection { has_known_length: false, length: None }
         ));
     }
 
     #[test]
     fn test_match_patterns_array() {
-        let ty = Ty::Array {
-            elem: Box::new(Ty::u32()),
-            len: 10,
-        };
+        let ty = Ty::Array { elem: Box::new(Ty::u32()), len: 10 };
         let patterns = match_patterns(&ty);
         assert_eq!(patterns.len(), 1);
         assert!(matches!(
             &patterns[0],
-            TypePattern::Collection {
-                has_known_length: true,
-                length: Some(10),
-            }
+            TypePattern::Collection { has_known_length: true, length: Some(10) }
         ));
     }
 
     #[test]
     fn test_match_patterns_vec_adt() {
-        let ty = Ty::Adt {
-            name: "Vec<i32>".into(),
-            fields: vec![],
-        };
+        let ty = Ty::Adt { name: "Vec<i32>".into(), fields: vec![] };
         let patterns = match_patterns(&ty);
         assert_eq!(patterns.len(), 1);
         assert!(matches!(
             &patterns[0],
-            TypePattern::Collection {
-                has_known_length: false,
-                length: None,
-            }
+            TypePattern::Collection { has_known_length: false, length: None }
         ));
     }
 
@@ -672,10 +558,7 @@ mod tests {
 
     #[test]
     fn test_infer_nullability_option() {
-        let ty = Ty::Adt {
-            name: "Option<String>".into(),
-            fields: vec![],
-        };
+        let ty = Ty::Adt { name: "Option<String>".into(), fields: vec![] };
         let formula = infer_nullability("val", &ty);
         assert!(formula.is_some());
     }
@@ -689,15 +572,17 @@ mod tests {
     #[test]
     fn test_infer_lifetime_constraints_mixed() {
         let params = vec![
-            make_param(1, "data", Ty::Ref {
-                mutable: false,
-                inner: Box::new(Ty::Int { width: 8, signed: false }),
-            }),
+            make_param(
+                1,
+                "data",
+                Ty::Ref { mutable: false, inner: Box::new(Ty::Int { width: 8, signed: false }) },
+            ),
             make_param(2, "count", Ty::Int { width: 32, signed: false }),
-            make_param(3, "out", Ty::Ref {
-                mutable: true,
-                inner: Box::new(Ty::Int { width: 64, signed: false }),
-            }),
+            make_param(
+                3,
+                "out",
+                Ty::Ref { mutable: true, inner: Box::new(Ty::Int { width: 64, signed: false }) },
+            ),
         ];
         let formulas = infer_lifetime_constraints(&params);
         // data: 1 non-null hint, out: 1 non-null + 1 exclusive access = 3 total
@@ -708,10 +593,8 @@ mod tests {
 
     #[test]
     fn test_analyzer_simple_unsigned_param() {
-        let body = make_body(
-            vec![make_param(1, "n", Ty::Int { width: 64, signed: false })],
-            Ty::Unit,
-        );
+        let body =
+            make_body(vec![make_param(1, "n", Ty::Int { width: 64, signed: false })], Ty::Unit);
         let analyzer = TypeAnalyzer::new();
         let hints = analyzer.analyze(&body);
 
@@ -723,10 +606,7 @@ mod tests {
     #[test]
     fn test_analyzer_option_param() {
         let body = make_body(
-            vec![make_param(1, "maybe", Ty::Adt {
-                name: "Option<u32>".into(),
-                fields: vec![],
-            })],
+            vec![make_param(1, "maybe", Ty::Adt { name: "Option<u32>".into(), fields: vec![] })],
             Ty::Unit,
         );
         let analyzer = TypeAnalyzer::new();
@@ -734,20 +614,16 @@ mod tests {
 
         assert!(!hints.requires.is_empty());
         // Should have an Optional pattern
-        assert!(hints.parameter_patterns[0]
-            .1
-            .iter()
-            .any(|p| matches!(p, TypePattern::Optional { .. })));
+        assert!(
+            hints.parameter_patterns[0].1.iter().any(|p| matches!(p, TypePattern::Optional { .. }))
+        );
     }
 
     #[test]
     fn test_analyzer_return_type_unsigned() {
         let body = make_body(vec![], Ty::Int { width: 32, signed: false });
         // Override return_ty properly
-        let body = VerifiableBody {
-            return_ty: Ty::Int { width: 32, signed: false },
-            ..body
-        };
+        let body = VerifiableBody { return_ty: Ty::Int { width: 32, signed: false }, ..body };
         let analyzer = TypeAnalyzer::new();
         let hints = analyzer.analyze(&body);
 
@@ -759,24 +635,22 @@ mod tests {
     fn test_analyzer_complex_signature() {
         let body = make_body(
             vec![
-                make_param(1, "data", Ty::Ref {
-                    mutable: false,
-                    inner: Box::new(Ty::Slice {
-                        elem: Box::new(Ty::Int { width: 8, signed: false }),
-                    }),
-                }),
+                make_param(
+                    1,
+                    "data",
+                    Ty::Ref {
+                        mutable: false,
+                        inner: Box::new(Ty::Slice {
+                            elem: Box::new(Ty::Int { width: 8, signed: false }),
+                        }),
+                    },
+                ),
                 make_param(2, "index", Ty::Int { width: 64, signed: false }),
-                make_param(3, "default", Ty::Adt {
-                    name: "Option<u8>".into(),
-                    fields: vec![],
-                }),
+                make_param(3, "default", Ty::Adt { name: "Option<u8>".into(), fields: vec![] }),
             ],
             Ty::Int { width: 8, signed: false },
         );
-        let body = VerifiableBody {
-            return_ty: Ty::Int { width: 8, signed: false },
-            ..body
-        };
+        let body = VerifiableBody { return_ty: Ty::Int { width: 8, signed: false }, ..body };
         let analyzer = TypeAnalyzer::new();
         let hints = analyzer.analyze(&body);
 
@@ -788,10 +662,8 @@ mod tests {
 
     #[test]
     fn test_analyzer_disabled_strategies() {
-        let body = make_body(
-            vec![make_param(1, "n", Ty::Int { width: 32, signed: false })],
-            Ty::Unit,
-        );
+        let body =
+            make_body(vec![make_param(1, "n", Ty::Int { width: 32, signed: false })], Ty::Unit);
         let analyzer = TypeAnalyzer {
             infer_unsigned_bounds: false,
             infer_nullability: false,
@@ -815,9 +687,7 @@ mod tests {
         );
         let suggestions = generate_requires_from_types(&body);
         assert!(!suggestions.is_empty());
-        assert!(suggestions
-            .iter()
-            .all(|s| s.id.contains("type_guided_requires")));
+        assert!(suggestions.iter().all(|s| s.id.contains("type_guided_requires")));
     }
 
     #[test]
@@ -834,9 +704,7 @@ mod tests {
         };
         let suggestions = generate_ensures_from_types(&body);
         assert!(!suggestions.is_empty());
-        assert!(suggestions
-            .iter()
-            .all(|s| s.id.contains("type_guided_ensures")));
+        assert!(suggestions.iter().all(|s| s.id.contains("type_guided_ensures")));
     }
 
     // -- Helper function tests --
@@ -867,10 +735,7 @@ mod tests {
     #[test]
     fn test_extract_inner_type_name() {
         assert_eq!(extract_inner_type_name("Option<u32>"), "u32");
-        assert_eq!(
-            extract_inner_type_name("std::option::Option<String>"),
-            "String"
-        );
+        assert_eq!(extract_inner_type_name("std::option::Option<String>"), "String");
         assert_eq!(extract_inner_type_name("Option"), "T");
     }
 
@@ -887,21 +752,13 @@ mod tests {
     fn test_match_patterns_nested_ref_slice() {
         let ty = Ty::Ref {
             mutable: false,
-            inner: Box::new(Ty::Slice {
-                elem: Box::new(Ty::Int { width: 8, signed: false }),
-            }),
+            inner: Box::new(Ty::Slice { elem: Box::new(Ty::Int { width: 8, signed: false }) }),
         };
         let patterns = match_patterns(&ty);
         // Reference + Collection (from inner slice)
         assert_eq!(patterns.len(), 2);
         assert!(matches!(&patterns[0], TypePattern::Reference { mutable: false }));
-        assert!(matches!(
-            &patterns[1],
-            TypePattern::Collection {
-                has_known_length: false,
-                ..
-            }
-        ));
+        assert!(matches!(&patterns[1], TypePattern::Collection { has_known_length: false, .. }));
     }
 
     #[test]
@@ -920,10 +777,7 @@ mod tests {
 
     #[test]
     fn test_i128_bounds() {
-        let patterns = match_patterns(&Ty::Int {
-            width: 128,
-            signed: true,
-        });
+        let patterns = match_patterns(&Ty::Int { width: 128, signed: true });
         assert_eq!(patterns.len(), 1);
         match &patterns[0] {
             TypePattern::Numeric { min, max, width } => {

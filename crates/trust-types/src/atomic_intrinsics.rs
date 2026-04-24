@@ -11,8 +11,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::{AtomicOpKind, AtomicOperation, AtomicOrdering, Operand, Place, SourceSpan};
 use crate::utils::strip_generics;
+use crate::{AtomicOpKind, AtomicOperation, AtomicOrdering, Operand, Place, SourceSpan};
 
 /// The prefix for all rustc atomic intrinsics in MIR.
 const INTRINSIC_PREFIX: &str = "core::intrinsics::atomic_";
@@ -190,11 +190,11 @@ fn parse_double_ordering(s: &str) -> Option<(AtomicOrdering, AtomicOrdering)> {
     for &first in ORDERINGS {
         if let Some(rest) = s.strip_prefix(first)
             && let Some(second_str) = rest.strip_prefix('_')
-                && let (Some(a), Some(b)) =
-                    (parse_ordering_suffix(first), parse_ordering_suffix(second_str))
-                {
-                    return Some((a, b));
-                }
+            && let (Some(a), Some(b)) =
+                (parse_ordering_suffix(first), parse_ordering_suffix(second_str))
+        {
+            return Some((a, b));
+        }
     }
     None
 }
@@ -255,10 +255,8 @@ fn parse_form_b(
     // Match the function name against known Form B patterns
     let op_kind = find_form_b_op(normalized)?;
     let is_fence = matches!(op_kind, AtomicOpKind::Fence | AtomicOpKind::CompilerFence);
-    let is_cas = matches!(
-        op_kind,
-        AtomicOpKind::CompareExchange | AtomicOpKind::CompareExchangeWeak
-    );
+    let is_cas =
+        matches!(op_kind, AtomicOpKind::CompareExchange | AtomicOpKind::CompareExchangeWeak);
 
     if is_cas {
         // CAS: args are (ptr, old, new, success_ordering, failure_ordering)
@@ -358,10 +356,7 @@ mod tests {
 
     /// Helper: create args for a store (ptr, value).
     fn store_args(ptr_local: usize, val_local: usize) -> Vec<Operand> {
-        vec![
-            Operand::Copy(Place::local(ptr_local)),
-            Operand::Copy(Place::local(val_local)),
-        ]
+        vec![Operand::Copy(Place::local(ptr_local)), Operand::Copy(Place::local(val_local))]
     }
 
     /// Helper: create args for CAS (ptr, old, new).
@@ -751,7 +746,7 @@ mod tests {
     fn test_form_b_store_release() {
         let args = vec![
             Operand::Copy(Place::local(1)),
-            Operand::Copy(Place::local(2)), // value
+            Operand::Copy(Place::local(2)),               // value
             Operand::Constant(crate::ConstValue::Int(1)), // 1 = Release
         ];
         let result = parse_atomic_intrinsic(
@@ -817,12 +812,8 @@ mod tests {
     #[test]
     fn test_form_b_fence_seqcst() {
         let args = vec![Operand::Constant(crate::ConstValue::Int(4))]; // SeqCst
-        let result = parse_atomic_intrinsic(
-            "atomic::fence",
-            &args,
-            &default_dest(),
-            &default_span(),
-        );
+        let result =
+            parse_atomic_intrinsic("atomic::fence", &args, &default_dest(), &default_span());
         let op = result.expect("should parse Form B fence");
         assert_eq!(op.op_kind, AtomicOpKind::Fence);
         assert_eq!(op.ordering, AtomicOrdering::SeqCst);
@@ -913,12 +904,8 @@ mod tests {
 
         for (suffix, expected_success, expected_failure) in combos {
             let path = format!("core::intrinsics::atomic_cxchg_{suffix}");
-            let result = parse_atomic_intrinsic(
-                &path,
-                &cas_args(1),
-                &default_dest(),
-                &default_span(),
-            );
+            let result =
+                parse_atomic_intrinsic(&path, &cas_args(1), &default_dest(), &default_span());
             let op = result.unwrap_or_else(|| panic!("should parse cxchg_{suffix}"));
             assert_eq!(op.ordering, expected_success, "success ordering for {suffix}");
             assert_eq!(
@@ -939,12 +926,8 @@ mod tests {
 
         for (suffix, expected) in orderings {
             let path = format!("core::intrinsics::atomic_load_{suffix}");
-            let result = parse_atomic_intrinsic(
-                &path,
-                &ptr_args(1),
-                &default_dest(),
-                &default_span(),
-            );
+            let result =
+                parse_atomic_intrinsic(&path, &ptr_args(1), &default_dest(), &default_span());
             let op = result.unwrap_or_else(|| panic!("should parse load_{suffix}"));
             assert_eq!(op.ordering, expected, "ordering for load_{suffix}");
         }

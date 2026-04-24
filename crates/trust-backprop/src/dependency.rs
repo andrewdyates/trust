@@ -188,12 +188,8 @@ pub fn topological_order(graph: &CallGraph) -> Vec<String> {
 
     // Append any remaining nodes (part of cycles) in sorted order.
     let in_result: FxHashSet<&str> = result.iter().map(String::as_str).collect();
-    let mut remaining: Vec<String> = graph
-        .nodes
-        .iter()
-        .filter(|n| !in_result.contains(n.as_str()))
-        .cloned()
-        .collect();
+    let mut remaining: Vec<String> =
+        graph.nodes.iter().filter(|n| !in_result.contains(n.as_str())).cloned().collect();
     remaining.sort();
     result.extend(remaining);
 
@@ -236,12 +232,7 @@ mod tests {
             name: name.to_string(),
             def_path: format!("crate::{name}"),
             span: SourceSpan::default(),
-            body: VerifiableBody {
-                locals: vec![],
-                blocks,
-                arg_count: 0,
-                return_ty: Ty::Unit,
-            },
+            body: VerifiableBody { locals: vec![], blocks, arg_count: 0, return_ty: Ty::Unit },
             contracts: vec![],
             preconditions: vec![],
             postconditions: vec![],
@@ -267,10 +258,7 @@ mod tests {
 
     #[test]
     fn test_build_call_graph_simple_call() {
-        let funcs = vec![
-            make_function("caller", &["callee"]),
-            make_function("callee", &[]),
-        ];
+        let funcs = vec![make_function("caller", &["callee"]), make_function("callee", &[])];
         let graph = build_call_graph(&funcs);
         assert_eq!(graph.len(), 2);
         assert!(graph.callees_or_empty("caller").contains("callee"));
@@ -280,10 +268,8 @@ mod tests {
     #[test]
     fn test_build_call_graph_qualified_name() {
         // Terminator::Call func is "crate::module::helper", should extract "helper".
-        let funcs = vec![
-            make_function("main", &["crate::module::helper"]),
-            make_function("helper", &[]),
-        ];
+        let funcs =
+            vec![make_function("main", &["crate::module::helper"]), make_function("helper", &[])];
         let graph = build_call_graph(&funcs);
         assert!(graph.callees_or_empty("main").contains("helper"));
     }
@@ -291,11 +277,8 @@ mod tests {
     #[test]
     fn test_build_call_graph_chain() {
         // a -> b -> c
-        let funcs = vec![
-            make_function("a", &["b"]),
-            make_function("b", &["c"]),
-            make_function("c", &[]),
-        ];
+        let funcs =
+            vec![make_function("a", &["b"]), make_function("b", &["c"]), make_function("c", &[])];
         let graph = build_call_graph(&funcs);
         assert!(graph.callees_or_empty("a").contains("b"));
         assert!(graph.callees_or_empty("b").contains("c"));
@@ -320,11 +303,8 @@ mod tests {
 
     #[test]
     fn test_callers() {
-        let funcs = vec![
-            make_function("a", &["c"]),
-            make_function("b", &["c"]),
-            make_function("c", &[]),
-        ];
+        let funcs =
+            vec![make_function("a", &["c"]), make_function("b", &["c"]), make_function("c", &[])];
         let graph = build_call_graph(&funcs);
         let callers = graph.callers("c");
         assert_eq!(callers.len(), 2);
@@ -356,28 +336,19 @@ mod tests {
 
     #[test]
     fn test_topological_order_callee_before_caller() {
-        let funcs = vec![
-            make_function("caller", &["callee"]),
-            make_function("callee", &[]),
-        ];
+        let funcs = vec![make_function("caller", &["callee"]), make_function("callee", &[])];
         let graph = build_call_graph(&funcs);
         let order = topological_order(&graph);
         let caller_pos = order.iter().position(|n| n == "caller").unwrap();
         let callee_pos = order.iter().position(|n| n == "callee").unwrap();
-        assert!(
-            callee_pos < caller_pos,
-            "callee should come before caller: {order:?}"
-        );
+        assert!(callee_pos < caller_pos, "callee should come before caller: {order:?}");
     }
 
     #[test]
     fn test_topological_order_chain() {
         // a -> b -> c: order should be c, b, a
-        let funcs = vec![
-            make_function("a", &["b"]),
-            make_function("b", &["c"]),
-            make_function("c", &[]),
-        ];
+        let funcs =
+            vec![make_function("a", &["b"]), make_function("b", &["c"]), make_function("c", &[])];
         let graph = build_call_graph(&funcs);
         let order = topological_order(&graph);
         assert_eq!(order, vec!["c", "b", "a"]);
@@ -409,10 +380,7 @@ mod tests {
     #[test]
     fn test_topological_order_cycle() {
         // a -> b -> a (mutual recursion): both should appear
-        let funcs = vec![
-            make_function("a", &["b"]),
-            make_function("b", &["a"]),
-        ];
+        let funcs = vec![make_function("a", &["b"]), make_function("b", &["a"])];
         let graph = build_call_graph(&funcs);
         let order = topological_order(&graph);
         assert_eq!(order.len(), 2);

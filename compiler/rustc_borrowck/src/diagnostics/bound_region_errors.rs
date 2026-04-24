@@ -71,7 +71,7 @@ impl<'tcx> UniverseInfo<'tcx> {
                 type_op_info.report_erroneous_element(mbcx, placeholder, error_element, cause);
             }
             UniverseInfo::Other => {
-                // // NOTE: This error message isn't great, but it doesn't show
+                // FIXME: This error message isn't great, but it doesn't show
                 // up in the existing UI tests. Consider investigating this
                 // some more.
                 mbcx.buffer_error(
@@ -172,7 +172,7 @@ pub(crate) trait TypeOpInfo<'tcx> {
             ty::PlaceholderRegion::new(adjusted_universe.into(), placeholder.bound),
         );
 
-        // // NOTE: one day this should just be error_element,,
+        // FIXME: one day this should just be error_element,
         // and this method shouldn't do anything.
         let error_region = error_element.and_then(|e| {
             let adjusted_universe = e.universe.as_u32().checked_sub(base_universe.as_u32());
@@ -268,7 +268,7 @@ where
             mbcx.infcx.tcx.infer_ctxt().build_with_canonical(cause.span, &self.canonical_query);
         let ocx = ObligationCtxt::new(&infcx);
 
-        // // NOTE(lqd): Unify and de-duplicate the following with the actual with the actual
+        // FIXME(lqd): Unify and de-duplicate the following with the actual
         // `rustc_traits::type_op::type_op_normalize` query to allow the span we need in the
         // `ObligationCause`. The normalization results are currently different between
         // `QueryNormalizeExt::query_normalize` used in the query and `normalize` called below:
@@ -342,7 +342,7 @@ struct AscribeUserTypeQuery<'tcx> {
 
 impl<'tcx> TypeOpInfo<'tcx> for AscribeUserTypeQuery<'tcx> {
     fn fallback_error(&self, tcx: TyCtxt<'tcx>, span: Span) -> Diag<'tcx> {
-        // // NOTE: This error message isn't great, but it doesn't show up in the existing UI tests,
+        // FIXME: This error message isn't great, but it doesn't show up in the existing UI tests,
         // and is only the fallback when the nice error fails. Consider improving this some more.
         tcx.dcx().create_err(HigherRankedLifetimeError { cause: None, span })
     }
@@ -375,13 +375,13 @@ impl<'tcx> TypeOpInfo<'tcx> for AscribeUserTypeQuery<'tcx> {
 
 impl<'tcx> TypeOpInfo<'tcx> for crate::type_check::InstantiateOpaqueType<'tcx> {
     fn fallback_error(&self, tcx: TyCtxt<'tcx>, span: Span) -> Diag<'tcx> {
-        // // NOTE: This error message isn't great, but it doesn't show up in the existing UI tests,
+        // FIXME: This error message isn't great, but it doesn't show up in the existing UI tests,
         // and is only the fallback when the nice error fails. Consider improving this some more.
         tcx.dcx().create_err(HigherRankedLifetimeError { cause: None, span })
     }
 
     fn base_universe(&self) -> ty::UniverseIndex {
-        self.base_universe.expect("invariant: base universe must be set")
+        self.base_universe.unwrap()
     }
 
     fn nice_error<'infcx>(
@@ -396,7 +396,7 @@ impl<'tcx> TypeOpInfo<'tcx> for crate::type_check::InstantiateOpaqueType<'tcx> {
             mbcx.mir_def_id(),
             placeholder_region,
             error_region,
-            self.region_constraints.as_ref().expect("invariant: region constraints must be set"),
+            self.region_constraints.as_ref().unwrap(),
             // We're using the original `InferCtxt` that we
             // started MIR borrowchecking with, so the region
             // constraints have already been taken. Use the data from

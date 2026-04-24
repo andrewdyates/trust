@@ -82,10 +82,7 @@ mod tests {
     fn test_solver_error() {
         let err = TransvalError::SolverError("z4 timed out after 30s".to_string());
         let msg = err.to_string();
-        assert!(
-            msg.contains("solver error"),
-            "error message should include variant prefix: {msg}"
-        );
+        assert!(msg.contains("solver error"), "error message should include variant prefix: {msg}");
         assert!(
             msg.contains("z4 timed out after 30s"),
             "error message should include detail: {msg}"
@@ -101,10 +98,7 @@ mod tests {
             msg.contains("unsupported optimization"),
             "error message should include variant prefix: {msg}"
         );
-        assert!(
-            msg.contains("loop_unrolling"),
-            "error message should include pass name: {msg}"
-        );
+        assert!(msg.contains("loop_unrolling"), "error message should include pass name: {msg}");
         assert!(
             matches!(err, TransvalError::UnsupportedOptimization(ref s) if s == "loop_unrolling")
         );
@@ -119,10 +113,7 @@ mod tests {
             msg.contains("unmapped source block"),
             "error message should include variant prefix: {msg}"
         );
-        assert!(
-            msg.contains("42"),
-            "error message should include block id: {msg}"
-        );
+        assert!(msg.contains("42"), "error message should include block id: {msg}");
         assert!(matches!(err, TransvalError::UnmappedBlock(BlockId(42))));
     }
 
@@ -172,10 +163,7 @@ mod tests {
         fn arb_transval_error() -> impl Strategy<Value = TransvalError> {
             prop_oneof![
                 (1..100usize, 1..100usize).prop_map(|(s, t)| {
-                    TransvalError::SignatureMismatch {
-                        source_args: s,
-                        target_args: t,
-                    }
+                    TransvalError::SignatureMismatch { source_args: s, target_args: t }
                 }),
                 any::<usize>().prop_map(|id| TransvalError::UnmappedBlock(BlockId(id))),
                 "[a-z ]{5,50}".prop_map(TransvalError::InvalidRelation),

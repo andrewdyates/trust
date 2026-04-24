@@ -1,7 +1,6 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/real_z4_verification.rs: Real z4 solver verification
 //
-// These tests call REAL z4 via the SmtLibBackend subprocess. They are the ground
+// These tests call REAL z4 via the IncrementalZ4Session subprocess. They are the ground
 // truth for "does tRust actually prove things?" — no mocks, no simulations.
 //
 // Requirements: z4 binary on PATH (checked at test start, skipped if absent).
@@ -13,26 +12,22 @@
 
 use std::process::Command;
 
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_types::*;
 
 /// Check whether the z4 binary is available on PATH.
 fn z4_available() -> bool {
-    Command::new("z4")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Command::new("z4").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn require_z4() -> SmtLibBackend {
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH — install z4 to run these tests"),
     }
@@ -311,8 +306,7 @@ fn test_real_z4_detects_midpoint_overflow() {
             "z4 must find the midpoint overflow (SAT = violation exists). Got: {result:?}"
         );
 
-        if let VerificationResult::Failed { counterexample: Some(cex), solver, time_ms } = &result
-        {
+        if let VerificationResult::Failed { counterexample: Some(cex), solver, time_ms } = &result {
             assert_eq!(solver, "z4-smtlib");
             assert!(*time_ms < 30_000, "should complete in under 30s");
             assert!(!cex.assignments.is_empty(), "counterexample must have assignments");
@@ -333,10 +327,8 @@ fn test_real_z4_proves_constant_division_safe() {
 
     eprintln!("Generated {} VCs for div_by_two", vcs.len());
 
-    let divzero_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let divzero_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
 
     for vc in &divzero_vcs {
         let result = z4.verify(vc);
@@ -361,10 +353,8 @@ fn test_real_z4_detects_division_by_variable() {
 
     eprintln!("Generated {} VCs for div_by_var", vcs.len());
 
-    let divzero_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let divzero_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
 
     assert!(
         !divzero_vcs.is_empty(),
@@ -495,7 +485,7 @@ fn test_real_z4_direct_overflow_formula() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "midpoint".to_string(),
+        function: "midpoint".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -523,7 +513,7 @@ fn test_real_z4_direct_divzero_constant_safe() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "div_by_two".to_string(),
+        function: "div_by_two".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,

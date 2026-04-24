@@ -241,10 +241,10 @@ where
     let cx = infcx.cx();
     let mut has_unconstrained_bivariant_arg = false;
     let args = iter::zip(a_args.iter(), b_args.iter()).enumerate().map(|(i, (a, b))| {
-        let variance = variances.get(i).expect("invariant: variance index matches args index"); // tRust: unwrap -> expect
+        let variance = variances.get(i).unwrap();
         let variance_info = match variance {
             ty::Invariant => {
-                VarianceDiagInfo::Invariant { ty: a_ty, param_index: i.try_into().expect("invariant: param index fits in u32") } // tRust: unwrap -> expect
+                VarianceDiagInfo::Invariant { ty: a_ty, param_index: i.try_into().unwrap() }
             }
             ty::Covariant | ty::Contravariant => VarianceDiagInfo::default(),
             ty::Bivariant => {

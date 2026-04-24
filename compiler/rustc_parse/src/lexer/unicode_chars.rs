@@ -301,7 +301,7 @@ pub(super) static UNICODE_ARRAY: &[(char, &str, &str)] = &[
     ('⩵', "Two Consecutive Equals Signs", "==")
 ];
 
-// tRust: known issue —: the lexer could be used to turn the ASCII version of unicode homoglyphs, instead of
+// FIXME: the lexer could be used to turn the ASCII version of unicode homoglyphs, instead of
 // keeping the substitution token in this table. Ideally, this should be inside `rustc_lexer`.
 // However, we should first remove compound tokens like `<<` from `rustc_lexer`, and then add
 // fancier error recovery to it, as there will be less overall work to do this way.
@@ -330,7 +330,7 @@ const ASCII_ARRAY: &[(&str, &str, Option<token::TokenKind>)] = &[
     ("=", "Equals Sign", Some(token::Eq)),
     ("==", "Double Equals Sign", Some(token::EqEq)),
     (">", "Greater-Than Sign", Some(token::Gt)),
-    // tRust: known issue —: Literals are already lexed by this point, so we can't recover gracefully just by
+    // FIXME: Literals are already lexed by this point, so we can't recover gracefully just by
     // spitting the correct token out.
     ("'", "Single Quote", None),
     ("\"", "Quotation Mark", None),

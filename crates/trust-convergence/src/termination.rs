@@ -127,15 +127,13 @@ impl ResourceBudget {
     /// Whether the solver time budget is exhausted.
     #[must_use]
     pub fn solver_time_exhausted(&self) -> bool {
-        self.max_solver_time
-            .is_some_and(|max| self.solver_time_used >= max)
+        self.max_solver_time.is_some_and(|max| self.solver_time_used >= max)
     }
 
     /// Whether the iteration budget is exhausted.
     #[must_use]
     pub fn iterations_exhausted(&self) -> bool {
-        self.max_iterations
-            .is_some_and(|max| self.iterations_used >= max)
+        self.max_iterations.is_some_and(|max| self.iterations_used >= max)
     }
 
     /// Whether any budget is exhausted.
@@ -159,15 +157,13 @@ impl ResourceBudget {
     /// Remaining solver time, or None if unlimited.
     #[must_use]
     pub fn remaining_solver_time(&self) -> Option<Duration> {
-        self.max_solver_time
-            .map(|max| max.saturating_sub(self.solver_time_used))
+        self.max_solver_time.map(|max| max.saturating_sub(self.solver_time_used))
     }
 
     /// Remaining iterations, or None if unlimited.
     #[must_use]
     pub fn remaining_iterations(&self) -> Option<usize> {
-        self.max_iterations
-            .map(|max| max.saturating_sub(self.iterations_used))
+        self.max_iterations.map(|max| max.saturating_sub(self.iterations_used))
     }
 }
 
@@ -215,10 +211,7 @@ impl TerminationAnalyzer {
     /// Evaluate all criteria against the current state. Returns `Some(reason)` if
     /// the loop should terminate, `None` if it should continue.
     #[must_use]
-    pub fn should_terminate(
-        &self,
-        history: &[IterationSnapshot],
-    ) -> Option<TerminationReason> {
+    pub fn should_terminate(&self, history: &[IterationSnapshot]) -> Option<TerminationReason> {
         // Check resource budget first.
         if let Some(resource) = self.budget.exhausted_resource() {
             return Some(TerminationReason::BudgetExhausted { resource });
@@ -243,9 +236,7 @@ impl TerminationAnalyzer {
         self.budget.record_solver_time(solver_time);
 
         let vcs_proved_delta = match previous {
-            Some(prev) => {
-                current.statically_proved() as i64 - prev.statically_proved() as i64
-            }
+            Some(prev) => current.statically_proved() as i64 - prev.statically_proved() as i64,
             None => current.statically_proved() as i64,
         };
 
@@ -335,17 +326,12 @@ impl TerminationAnalyzer {
         match criterion {
             TerminationCriterion::MaxIterations(limit) => {
                 if history.len() >= *limit {
-                    Some(TerminationReason::MaxIterations {
-                        limit: *limit,
-                        reached: history.len(),
-                    })
+                    Some(TerminationReason::MaxIterations { limit: *limit, reached: history.len() })
                 } else {
                     None
                 }
             }
-            TerminationCriterion::FixedPoint => {
-                check_fixed_point(history)
-            }
+            TerminationCriterion::FixedPoint => check_fixed_point(history),
             TerminationCriterion::StagnationTimeout(limit) => {
                 if self.stagnation_elapsed >= *limit {
                     Some(TerminationReason::StagnationTimeout {
@@ -362,9 +348,7 @@ impl TerminationAnalyzer {
             TerminationCriterion::Combined(inner) => {
                 for sub in inner {
                     if let Some(reason) = self.evaluate_criterion(sub, history) {
-                        return Some(TerminationReason::Combined {
-                            trigger: Box::new(reason),
-                        });
+                        return Some(TerminationReason::Combined { trigger: Box::new(reason) });
                     }
                 }
                 None
@@ -403,9 +387,7 @@ fn check_fixed_point(history: &[IterationSnapshot]) -> Option<TerminationReason>
                 break;
             }
         }
-        Some(TerminationReason::FixedPoint {
-            stable_iterations: stable,
-        })
+        Some(TerminationReason::FixedPoint { stable_iterations: stable })
     } else {
         None
     }
@@ -419,10 +401,7 @@ fn check_confidence_threshold(
     let last = history.last()?;
     let score = last.frontier.convergence_score()?;
     if score >= threshold {
-        Some(TerminationReason::ConfidenceThreshold {
-            achieved: score,
-            threshold,
-        })
+        Some(TerminationReason::ConfidenceThreshold { achieved: score, threshold })
     } else {
         None
     }
@@ -572,11 +551,7 @@ pub struct TerminationConfig {
 
 impl Default for TerminationConfig {
     fn default() -> Self {
-        Self {
-            max_ranking_attempts: 10,
-            use_lexicographic: true,
-            bound_synthesis: true,
-        }
+        Self { max_ranking_attempts: 10, use_lexicographic: true, bound_synthesis: true }
     }
 }
 
@@ -690,7 +665,10 @@ impl RankingAnalyzer {
     ///   - Polynomial (quadratic combinations)
     ///   - Structural recursion depth
     #[must_use]
-    pub fn find_ranking_function(&self, decreasing_vars: &[(&str, &str)]) -> Option<RankingFunction> {
+    pub fn find_ranking_function(
+        &self,
+        decreasing_vars: &[(&str, &str)],
+    ) -> Option<RankingFunction> {
         if decreasing_vars.is_empty() {
             return None;
         }
@@ -699,9 +677,10 @@ impl RankingAnalyzer {
             let candidate = self.generate_ranking_candidate(decreasing_vars, attempt);
 
             if let Some(rf) = candidate
-                && self.validate_ranking_candidate(&rf, decreasing_vars) {
-                    return Some(rf);
-                }
+                && self.validate_ranking_candidate(&rf, decreasing_vars)
+            {
+                return Some(rf);
+            }
         }
 
         None
@@ -742,7 +721,8 @@ impl RankingAnalyzer {
             })
         } else if attempt < 3 * n {
             // Strategy 3: Polynomial (quadratic) combination.
-            let idx = (attempt - if self.config.use_lexicographic && n > 1 { 2 * n } else { n }) % n;
+            let idx =
+                (attempt - if self.config.use_lexicographic && n > 1 { 2 * n } else { n }) % n;
             let (var, _delta) = decreasing_vars[idx.min(n - 1)];
             Some(RankingFunction {
                 name: format!("rank_poly_{var}"),
@@ -782,9 +762,10 @@ impl RankingAnalyzer {
 
             // All strategies require a strictly positive delta.
             if let Ok(d) = delta.parse::<f64>()
-                && d <= 0.0 {
-                    continue;
-                }
+                && d <= 0.0
+            {
+                continue;
+            }
 
             // Simple variable expression (Strategy 1): direct decrease check.
             if candidate.expression == *var {
@@ -799,9 +780,7 @@ impl RankingAnalyzer {
             if candidate.expression.starts_with('(') && candidate.expression.ends_with(')') {
                 // The expression contains the variable, so the tuple decreases
                 // lexicographically when that component decreases.
-                let after_expr = candidate
-                    .expression
-                    .replace(var, &format!("{var} - {delta}"));
+                let after_expr = candidate.expression.replace(var, &format!("{var} - {delta}"));
                 if after_expr != candidate.expression {
                     return true;
                 }
@@ -812,9 +791,7 @@ impl RankingAnalyzer {
             // If the base variable strictly decreases by a positive amount,
             // the polynomial also decreases for positive values.
             if candidate.expression.contains(" * ") {
-                let after_expr = candidate
-                    .expression
-                    .replace(var, &format!("({var} - {delta})"));
+                let after_expr = candidate.expression.replace(var, &format!("({var} - {delta})"));
                 if after_expr != candidate.expression {
                     return true;
                 }
@@ -823,9 +800,7 @@ impl RankingAnalyzer {
 
             // Structural recursion depth (Strategy 4): e.g. "depth(var)".
             if candidate.expression.starts_with("depth(") {
-                let after_expr = candidate
-                    .expression
-                    .replace(var, &format!("{var} - {delta}"));
+                let after_expr = candidate.expression.replace(var, &format!("{var} - {delta}"));
                 if after_expr != candidate.expression {
                     return true;
                 }
@@ -868,7 +843,11 @@ impl RankingAnalyzer {
     ///
     /// If the initial value can be parsed or estimated, returns the bound.
     #[must_use]
-    pub fn bounded_iteration_count(&self, _ranking: &RankingFunction, initial: &str) -> Option<u64> {
+    pub fn bounded_iteration_count(
+        &self,
+        _ranking: &RankingFunction,
+        initial: &str,
+    ) -> Option<u64> {
         if !self.config.bound_synthesis {
             return None;
         }
@@ -887,7 +866,11 @@ impl RankingAnalyzer {
     /// Examines the condition to determine what variable is being tested,
     /// and the body effect to determine how it changes.
     #[must_use]
-    pub fn synthesize_ranking(&self, loop_condition: &str, body_effect: &str) -> Option<RankingFunction> {
+    pub fn synthesize_ranking(
+        &self,
+        loop_condition: &str,
+        body_effect: &str,
+    ) -> Option<RankingFunction> {
         // Look for patterns like "i < n" or "i > 0" in the condition.
         // And "i += 1" or "i -= 1" in the body.
 
@@ -951,28 +934,21 @@ mod tests {
 
     #[test]
     fn test_max_iterations_not_reached() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::MaxIterations(5),
-        );
+        let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::MaxIterations(5));
         let history = vec![snap(0, frontier(1, 0, 0, 2, 0))];
         assert!(analyzer.should_terminate(&history).is_none());
     }
 
     #[test]
     fn test_max_iterations_reached() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::MaxIterations(3),
-        );
+        let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::MaxIterations(3));
         let history = vec![
             snap(0, frontier(1, 0, 0, 2, 0)),
             snap(1, frontier(2, 0, 0, 1, 0)),
             snap(2, frontier(3, 0, 0, 0, 0)),
         ];
         let reason = analyzer.should_terminate(&history).expect("should terminate");
-        assert!(matches!(
-            reason,
-            TerminationReason::MaxIterations { limit: 3, reached: 3 }
-        ));
+        assert!(matches!(reason, TerminationReason::MaxIterations { limit: 3, reached: 3 }));
     }
 
     // --- TerminationCriterion: FixedPoint ---
@@ -980,20 +956,14 @@ mod tests {
     #[test]
     fn test_fixed_point_not_reached() {
         let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::FixedPoint);
-        let history = vec![
-            snap(0, frontier(1, 0, 0, 2, 0)),
-            snap(1, frontier(2, 0, 0, 1, 0)),
-        ];
+        let history = vec![snap(0, frontier(1, 0, 0, 2, 0)), snap(1, frontier(2, 0, 0, 1, 0))];
         assert!(analyzer.should_terminate(&history).is_none());
     }
 
     #[test]
     fn test_fixed_point_reached() {
         let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::FixedPoint);
-        let history = vec![
-            snap(0, frontier(3, 0, 0, 1, 0)),
-            snap(1, frontier(3, 0, 0, 1, 0)),
-        ];
+        let history = vec![snap(0, frontier(3, 0, 0, 1, 0)), snap(1, frontier(3, 0, 0, 1, 0))];
         let reason = analyzer.should_terminate(&history).expect("should terminate");
         assert!(matches!(reason, TerminationReason::FixedPoint { stable_iterations: 2 }));
     }
@@ -1030,12 +1000,8 @@ mod tests {
         analyzer.record_iteration(Some(&f), &f, Duration::from_secs(4));
         analyzer.record_iteration(Some(&f), &f, Duration::from_secs(4));
 
-        let history = vec![
-            snap(0, f.clone()),
-            snap(1, f.clone()),
-            snap(2, f.clone()),
-            snap(3, f.clone()),
-        ];
+        let history =
+            vec![snap(0, f.clone()), snap(1, f.clone()), snap(2, f.clone()), snap(3, f.clone())];
         let reason = analyzer.should_terminate(&history).expect("should terminate");
         assert!(matches!(reason, TerminationReason::StagnationTimeout { .. }));
     }
@@ -1044,18 +1010,16 @@ mod tests {
 
     #[test]
     fn test_confidence_threshold_not_met() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::ConfidenceThreshold(0.9),
-        );
+        let analyzer =
+            TerminationAnalyzer::with_criterion(TerminationCriterion::ConfidenceThreshold(0.9));
         let history = vec![snap(0, frontier(1, 0, 0, 9, 0))]; // 10% proved
         assert!(analyzer.should_terminate(&history).is_none());
     }
 
     #[test]
     fn test_confidence_threshold_met() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::ConfidenceThreshold(0.8),
-        );
+        let analyzer =
+            TerminationAnalyzer::with_criterion(TerminationCriterion::ConfidenceThreshold(0.8));
         let history = vec![snap(0, frontier(8, 1, 0, 1, 0))]; // 90% proved
         let reason = analyzer.should_terminate(&history).expect("should terminate");
         match reason {
@@ -1069,9 +1033,8 @@ mod tests {
 
     #[test]
     fn test_confidence_threshold_empty_frontier() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::ConfidenceThreshold(0.5),
-        );
+        let analyzer =
+            TerminationAnalyzer::with_criterion(TerminationCriterion::ConfidenceThreshold(0.5));
         let history = vec![snap(0, frontier(0, 0, 0, 0, 0))];
         // convergence_score() returns None for empty frontier.
         assert!(analyzer.should_terminate(&history).is_none());
@@ -1081,16 +1044,11 @@ mod tests {
 
     #[test]
     fn test_combined_first_triggers() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::Combined(vec![
-                TerminationCriterion::MaxIterations(2),
-                TerminationCriterion::FixedPoint,
-            ]),
-        );
-        let history = vec![
-            snap(0, frontier(1, 0, 0, 2, 0)),
-            snap(1, frontier(2, 0, 0, 1, 0)),
-        ];
+        let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::Combined(vec![
+            TerminationCriterion::MaxIterations(2),
+            TerminationCriterion::FixedPoint,
+        ]));
+        let history = vec![snap(0, frontier(1, 0, 0, 2, 0)), snap(1, frontier(2, 0, 0, 1, 0))];
         let reason = analyzer.should_terminate(&history).expect("should terminate");
         match reason {
             TerminationReason::Combined { trigger } => {
@@ -1102,16 +1060,11 @@ mod tests {
 
     #[test]
     fn test_combined_second_triggers() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::Combined(vec![
-                TerminationCriterion::MaxIterations(10),
-                TerminationCriterion::FixedPoint,
-            ]),
-        );
-        let history = vec![
-            snap(0, frontier(3, 0, 0, 1, 0)),
-            snap(1, frontier(3, 0, 0, 1, 0)),
-        ];
+        let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::Combined(vec![
+            TerminationCriterion::MaxIterations(10),
+            TerminationCriterion::FixedPoint,
+        ]));
+        let history = vec![snap(0, frontier(3, 0, 0, 1, 0)), snap(1, frontier(3, 0, 0, 1, 0))];
         let reason = analyzer.should_terminate(&history).expect("should terminate");
         match reason {
             TerminationReason::Combined { trigger } => {
@@ -1123,16 +1076,11 @@ mod tests {
 
     #[test]
     fn test_combined_none_triggers() {
-        let analyzer = TerminationAnalyzer::with_criterion(
-            TerminationCriterion::Combined(vec![
-                TerminationCriterion::MaxIterations(10),
-                TerminationCriterion::FixedPoint,
-            ]),
-        );
-        let history = vec![
-            snap(0, frontier(1, 0, 0, 2, 0)),
-            snap(1, frontier(2, 0, 0, 1, 0)),
-        ];
+        let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::Combined(vec![
+            TerminationCriterion::MaxIterations(10),
+            TerminationCriterion::FixedPoint,
+        ]));
+        let history = vec![snap(0, frontier(1, 0, 0, 2, 0)), snap(1, frontier(2, 0, 0, 1, 0))];
         assert!(analyzer.should_terminate(&history).is_none());
     }
 
@@ -1198,7 +1146,10 @@ mod tests {
 
         let history = vec![snap(0, frontier(1, 0, 0, 2, 0))];
         let reason = analyzer.should_terminate(&history).expect("should terminate");
-        assert!(matches!(reason, TerminationReason::BudgetExhausted { resource: ResourceKind::Iterations }));
+        assert!(matches!(
+            reason,
+            TerminationReason::BudgetExhausted { resource: ResourceKind::Iterations }
+        ));
     }
 
     // --- ConvergenceRate + record_iteration ---
@@ -1618,10 +1569,7 @@ mod tests {
         let rf = analyzer.find_ranking_function(&[("flag", "0"), ("n", "1")]);
         assert!(rf.is_some(), "should find a ranking function on attempt > 0");
         let rf = rf.unwrap();
-        assert_eq!(
-            rf.expression, "n",
-            "should skip 'flag' (delta 0) and select 'n' (delta 1)"
-        );
+        assert_eq!(rf.expression, "n", "should skip 'flag' (delta 0) and select 'n' (delta 1)");
     }
 
     #[test]
@@ -1688,10 +1636,7 @@ mod tests {
 
     #[test]
     fn test_bounded_iteration_count_disabled() {
-        let config = TerminationConfig {
-            bound_synthesis: false,
-            ..TerminationConfig::default()
-        };
+        let config = TerminationConfig { bound_synthesis: false, ..TerminationConfig::default() };
         let analyzer = RankingAnalyzer::new(config);
         let rf = RankingFunction {
             name: "rank_n".to_string(),

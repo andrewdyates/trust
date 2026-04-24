@@ -74,6 +74,7 @@ pkg_type! {
     RustMingw = "rust-mingw",
     RustStd = "rust-std",
     Cargo = "cargo",
+    CargoTrust = "cargo-trust",
     HtmlDocs = "rust-docs",
     RustAnalysis = "rust-analysis",
     RustAnalyzer = "rust-analyzer"; preview = true,
@@ -126,6 +127,7 @@ impl PkgType {
             PkgType::RustMingw => true,
             PkgType::RustAnalysis => true,
             PkgType::LlvmBitcodeLinker => true,
+            PkgType::CargoTrust => true,
         }
     }
 
@@ -141,6 +143,7 @@ impl PkgType {
             ReproducibleArtifacts => HOSTS,
             RustcDocs => HOSTS,
             Cargo => HOSTS,
+            CargoTrust => HOSTS,
             RustcCodegenCranelift => HOSTS,
             RustcCodegenGcc => HOSTS,
             // Gcc is "special", because we need a separate libgccjit.so for each

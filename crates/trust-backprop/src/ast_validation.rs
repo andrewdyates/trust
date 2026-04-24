@@ -26,50 +26,31 @@ use trust_types::fx::FxHashMap;
 pub enum AstValidationError {
     /// A function signature was changed by the rewrite.
     #[error("signature changed for `{function}`: {detail}")]
-    SignatureChanged {
-        function: String,
-        detail: String,
-    },
+    SignatureChanged { function: String, detail: String },
 
     /// A new `unsafe` block was introduced by the rewrite.
     #[error("new unsafe block introduced in `{function}`")]
-    NewUnsafeBlock {
-        function: String,
-    },
+    NewUnsafeBlock { function: String },
 
     /// A type annotation on a local binding was changed.
     #[error("type annotation changed in `{function}`: `{original}` -> `{rewritten}`")]
-    TypeAnnotationChanged {
-        function: String,
-        original: String,
-        rewritten: String,
-    },
+    TypeAnnotationChanged { function: String, original: String, rewritten: String },
 
     /// Non-body modifications detected (e.g., visibility, attributes beyond specs).
     #[error("non-body modification in `{function}`: {detail}")]
-    NonBodyModification {
-        function: String,
-        detail: String,
-    },
+    NonBodyModification { function: String, detail: String },
 
     /// A function was removed by the rewrite.
     #[error("function `{function}` removed by rewrite")]
-    FunctionRemoved {
-        function: String,
-    },
+    FunctionRemoved { function: String },
 
     /// A function was added by the rewrite (unexpected structural change).
     #[error("unexpected new function `{function}` added by rewrite")]
-    FunctionAdded {
-        function: String,
-    },
+    FunctionAdded { function: String },
 
     /// Source failed to parse; falling back to heuristic validation.
     #[error("parse error ({which}): {message}")]
-    ParseError {
-        which: ParseTarget,
-        message: String,
-    },
+    ParseError { which: ParseTarget, message: String },
 }
 
 /// Which source failed to parse.
@@ -111,23 +92,17 @@ impl AstValidationResult {
     /// Create a passing result.
     #[must_use]
     pub fn ok(used_ast: bool) -> Self {
-        Self {
-            passed: true,
-            errors: Vec::new(),
-            warnings: Vec::new(),
-            used_ast,
-        }
+        Self { passed: true, errors: Vec::new(), warnings: Vec::new(), used_ast }
     }
 
     /// Create a result with errors.
     #[must_use]
-    pub fn with_errors(errors: Vec<AstValidationError>, warnings: Vec<String>, used_ast: bool) -> Self {
-        Self {
-            passed: errors.is_empty(),
-            errors,
-            warnings,
-            used_ast,
-        }
+    pub fn with_errors(
+        errors: Vec<AstValidationError>,
+        warnings: Vec<String>,
+        used_ast: bool,
+    ) -> Self {
+        Self { passed: errors.is_empty(), errors, warnings, used_ast }
     }
 }
 
@@ -174,10 +149,7 @@ pub fn validate_rewrite_ast(original: &str, rewritten: &str) -> AstValidationRes
             let rw_parseable = syn::parse_file(rewritten).is_ok();
             let target = if rw_parseable { ParseTarget::Original } else { ParseTarget::Both };
             return AstValidationResult::with_errors(
-                vec![AstValidationError::ParseError {
-                    which: target,
-                    message: e.to_string(),
-                }],
+                vec![AstValidationError::ParseError { which: target, message: e.to_string() }],
                 Vec::new(),
                 false,
             );
@@ -206,18 +178,14 @@ pub fn validate_rewrite_ast(original: &str, rewritten: &str) -> AstValidationRes
     // Check for removed functions.
     for name in orig_fns.keys() {
         if !rw_fns.contains_key(name) {
-            errors.push(AstValidationError::FunctionRemoved {
-                function: name.clone(),
-            });
+            errors.push(AstValidationError::FunctionRemoved { function: name.clone() });
         }
     }
 
     // Check for added functions.
     for name in rw_fns.keys() {
         if !orig_fns.contains_key(name) {
-            errors.push(AstValidationError::FunctionAdded {
-                function: name.clone(),
-            });
+            errors.push(AstValidationError::FunctionAdded { function: name.clone() });
         }
     }
 
@@ -228,10 +196,21 @@ pub fn validate_rewrite_ast(original: &str, rewritten: &str) -> AstValidationRes
             compare_signatures(name, &orig_info.sig, &rw_info.sig, &mut errors);
 
             // 2. No new unsafe blocks
-            check_no_new_unsafe(name, orig_info.unsafe_block_count, rw_info.unsafe_block_count, &mut errors);
+            check_no_new_unsafe(
+                name,
+                orig_info.unsafe_block_count,
+                rw_info.unsafe_block_count,
+                &mut errors,
+            );
 
             // 3. Type annotations on locals unchanged
-            check_type_annotations(name, &orig_info.local_types, &rw_info.local_types, &mut errors, &mut warnings);
+            check_type_annotations(
+                name,
+                &orig_info.local_types,
+                &rw_info.local_types,
+                &mut errors,
+                &mut warnings,
+            );
         }
     }
 
@@ -268,29 +247,27 @@ fn extract_functions(file: &syn::File) -> FxHashMap<String, FnInfo> {
 fn extract_signature(item_fn: &syn::ItemFn) -> FnSignature {
     let sig = &item_fn.sig;
 
-    let params: Vec<ParamInfo> = sig.inputs.iter().map(|arg| {
-        match arg {
-            syn::FnArg::Receiver(r) => ParamInfo {
-                name: "self".to_string(),
-                ty: quote_to_string(r),
-            },
+    let params: Vec<ParamInfo> = sig
+        .inputs
+        .iter()
+        .map(|arg| match arg {
+            syn::FnArg::Receiver(r) => {
+                ParamInfo { name: "self".to_string(), ty: quote_to_string(r) }
+            }
             syn::FnArg::Typed(pat_type) => ParamInfo {
                 name: quote_to_string(&pat_type.pat),
                 ty: quote_to_string(&pat_type.ty),
             },
-        }
-    }).collect();
+        })
+        .collect();
 
     let return_type = match &sig.output {
         syn::ReturnType::Default => String::new(),
         syn::ReturnType::Type(_, ty) => quote_to_string(ty),
     };
 
-    let generics = if sig.generics.params.is_empty() {
-        String::new()
-    } else {
-        quote_to_string(&sig.generics)
-    };
+    let generics =
+        if sig.generics.params.is_empty() { String::new() } else { quote_to_string(&sig.generics) };
 
     FnSignature {
         name: sig.ident.to_string(),
@@ -368,7 +345,7 @@ fn compare_signatures(
     // Parameter count
     if orig.params.len() != rewritten.params.len() {
         errors.push(AstValidationError::SignatureChanged {
-            function: fn_name.to_string(),
+            function: fn_name.into(),
             detail: format!(
                 "parameter count changed: {} -> {}",
                 orig.params.len(),
@@ -382,20 +359,14 @@ fn compare_signatures(
     for (i, (op, rp)) in orig.params.iter().zip(&rewritten.params).enumerate() {
         if op.ty != rp.ty {
             errors.push(AstValidationError::SignatureChanged {
-                function: fn_name.to_string(),
-                detail: format!(
-                    "parameter {} type changed: `{}` -> `{}`",
-                    i, op.ty, rp.ty
-                ),
+                function: fn_name.into(),
+                detail: format!("parameter {} type changed: `{}` -> `{}`", i, op.ty, rp.ty),
             });
         }
         if op.name != rp.name {
             errors.push(AstValidationError::SignatureChanged {
-                function: fn_name.to_string(),
-                detail: format!(
-                    "parameter {} name changed: `{}` -> `{}`",
-                    i, op.name, rp.name
-                ),
+                function: fn_name.into(),
+                detail: format!("parameter {} name changed: `{}` -> `{}`", i, op.name, rp.name),
             });
         }
     }
@@ -403,7 +374,7 @@ fn compare_signatures(
     // Return type
     if orig.return_type != rewritten.return_type {
         errors.push(AstValidationError::SignatureChanged {
-            function: fn_name.to_string(),
+            function: fn_name.into(),
             detail: format!(
                 "return type changed: `{}` -> `{}`",
                 orig.return_type, rewritten.return_type
@@ -414,27 +385,21 @@ fn compare_signatures(
     // Generics
     if orig.generics != rewritten.generics {
         errors.push(AstValidationError::SignatureChanged {
-            function: fn_name.to_string(),
-            detail: format!(
-                "generics changed: `{}` -> `{}`",
-                orig.generics, rewritten.generics
-            ),
+            function: fn_name.into(),
+            detail: format!("generics changed: `{}` -> `{}`", orig.generics, rewritten.generics),
         });
     }
 
     // Async / unsafe qualifiers
     if orig.is_async != rewritten.is_async {
         errors.push(AstValidationError::SignatureChanged {
-            function: fn_name.to_string(),
-            detail: format!(
-                "async qualifier changed: {} -> {}",
-                orig.is_async, rewritten.is_async
-            ),
+            function: fn_name.into(),
+            detail: format!("async qualifier changed: {} -> {}", orig.is_async, rewritten.is_async),
         });
     }
     if orig.is_unsafe != rewritten.is_unsafe {
         errors.push(AstValidationError::SignatureChanged {
-            function: fn_name.to_string(),
+            function: fn_name.into(),
             detail: format!(
                 "unsafe qualifier changed: {} -> {}",
                 orig.is_unsafe, rewritten.is_unsafe
@@ -445,7 +410,7 @@ fn compare_signatures(
     // Visibility
     if orig.visibility != rewritten.visibility {
         errors.push(AstValidationError::NonBodyModification {
-            function: fn_name.to_string(),
+            function: fn_name.into(),
             detail: format!(
                 "visibility changed: `{}` -> `{}`",
                 orig.visibility, rewritten.visibility
@@ -462,9 +427,7 @@ fn check_no_new_unsafe(
     errors: &mut Vec<AstValidationError>,
 ) {
     if rw_count > orig_count {
-        errors.push(AstValidationError::NewUnsafeBlock {
-            function: fn_name.to_string(),
-        });
+        errors.push(AstValidationError::NewUnsafeBlock { function: fn_name.into() });
     }
 }
 
@@ -488,23 +451,21 @@ fn check_type_annotations(
     // Check for changed type annotations on existing bindings.
     for (name, orig_ty) in &orig_map {
         if let Some(rw_ty) = rw_map.get(name)
-            && orig_ty != rw_ty {
-                errors.push(AstValidationError::TypeAnnotationChanged {
-                    function: fn_name.to_string(),
-                    original: format!("{name}: {orig_ty}"),
-                    rewritten: format!("{name}: {rw_ty}"),
-                });
-            }
+            && orig_ty != rw_ty
+        {
+            errors.push(AstValidationError::TypeAnnotationChanged {
+                function: fn_name.into(),
+                original: format!("{name}: {orig_ty}"),
+                rewritten: format!("{name}: {rw_ty}"),
+            });
+        }
         // If the binding is gone entirely, that's a body change -- we only
         // warn since the binding might have been inlined.
         if !rw_map.contains_key(name) {
-            warnings.push(format!(
-                "typed binding `{name}: {orig_ty}` in `{fn_name}` was removed"
-            ));
+            warnings.push(format!("typed binding `{name}: {orig_ty}` in `{fn_name}` was removed"));
         }
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -717,10 +678,12 @@ mod tests {
         let rw = "fn foo() { let x: i64 = 42; }\n";
         let result = validate_rewrite_ast(orig, rw);
         assert!(!result.passed);
-        assert!(result.errors.iter().any(|e| matches!(
-            e,
-            AstValidationError::TypeAnnotationChanged { .. }
-        )));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, AstValidationError::TypeAnnotationChanged { .. }))
+        );
     }
 
     // --- Function added / removed ---
@@ -823,9 +786,7 @@ mod tests {
 
     #[test]
     fn test_error_display_new_unsafe() {
-        let err = AstValidationError::NewUnsafeBlock {
-            function: "bar".into(),
-        };
+        let err = AstValidationError::NewUnsafeBlock { function: "bar".into() };
         assert!(err.to_string().contains("unsafe"));
     }
 
@@ -859,5 +820,4 @@ mod tests {
         assert!(restored.passed);
         assert!(restored.used_ast);
     }
-
 }

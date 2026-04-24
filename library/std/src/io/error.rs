@@ -616,6 +616,7 @@ impl Error {
     ///
     /// This function does not allocate.
     ///
+    
     /// macro: `io::const_error!(ErrorKind::Something, "some_message")`.
     ///
     /// This function should maybe change to `from_static_message<const MSG: &'static

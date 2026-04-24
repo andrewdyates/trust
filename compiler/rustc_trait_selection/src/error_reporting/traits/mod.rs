@@ -3,6 +3,7 @@ pub mod call_kind;
 pub mod fulfillment_errors;
 pub mod on_unimplemented;
 mod overflow;
+pub mod suggestions;
 
 use std::{fmt, iter};
 
@@ -483,7 +484,7 @@ pub(crate) fn to_pretty_impl_header(tcx: TyCtxt<'_>, impl_def_id: DefId) -> Opti
         trait_ref.print_only_trait_path(),
         tcx.type_of(impl_def_id).instantiate_identity()
     )
-    .expect("invariant: value is present");
+    .unwrap();
 
     let predicates = tcx.predicates_of(impl_def_id).predicates;
     let mut pretty_predicates = Vec::with_capacity(predicates.len());
@@ -528,7 +529,7 @@ pub(crate) fn to_pretty_impl_header(tcx: TyCtxt<'_>, impl_def_id: DefId) -> Opti
     }
 
     if !pretty_predicates.is_empty() {
-        write!(w, "\n  where {}", pretty_predicates.join(", ")).expect("invariant: write to string succeeds");
+        write!(w, "\n  where {}", pretty_predicates.join(", ")).unwrap();
     }
 
     w.push(';');

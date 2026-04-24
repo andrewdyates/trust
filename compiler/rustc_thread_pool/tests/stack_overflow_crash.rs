@@ -18,8 +18,6 @@ fn force_stack_overflow(depth: u32) {
 
 #[cfg(unix)]
 fn disable_core() {
-    // SAFETY: calling `libc::setrlimit` with a valid resource constant and a
-    // properly initialized `rlimit` struct to disable core dumps.
     unsafe {
         libc::setrlimit(libc::RLIMIT_CORE, &libc::rlimit { rlim_cur: 0, rlim_max: 0 });
     }

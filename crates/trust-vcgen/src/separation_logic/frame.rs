@@ -87,7 +87,9 @@ pub fn encode_framed_unsafe_block(
             }
         }
         let disjointness = if constraints.len() == 1 {
-            constraints.into_iter().next()
+            constraints
+                .into_iter()
+                .next()
                 .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
         } else {
             Formula::And(constraints)
@@ -99,7 +101,7 @@ pub fn encode_framed_unsafe_block(
                     "[unsafe:sep:frame] frame preservation for unsafe block in {func_name}"
                 ),
             },
-            function: func_name.to_string(),
+            function: func_name.into(),
             location: span.clone(),
             formula: Formula::Not(Box::new(disjointness)),
             contract_metadata: None,

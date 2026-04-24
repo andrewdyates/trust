@@ -30,7 +30,7 @@ impl RustcVersion {
 
     fn parse_str(value: &str) -> Option<Self> {
         // Ignore any suffixes such as "-dev" or "-nightly".
-        let mut components = value.split('-').next().expect("invariant: split always yields at least one element").splitn(3, '.'); // tRust: unwrap -> expect
+        let mut components = value.split('-').next().unwrap().splitn(3, '.');
         let major = components.next()?.parse().ok()?;
         let minor = components.next()?.parse().ok()?;
         let patch = components.next().unwrap_or("0").parse().ok()?;

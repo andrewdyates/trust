@@ -96,8 +96,9 @@ impl<'tcx> crate::MirPass<'tcx> for ReorderLocals {
 }
 
 fn permute<I: rustc_index::Idx + Ord, T>(data: &mut IndexVec<I, T>, map: &IndexSlice<I, I>) {
-    // NOTE: Manual permutation application; sort_by_cached_key has internal logic
-    // for this but it's not publicly accessible.
+    // FIXME: It would be nice to have a less-awkward way to apply permutations,
+    // but I don't know one that exists. `sort_by_cached_key` has logic for it
+    // internally, but not in a way that we're allowed to use here.
     let mut enumerated: Vec<_> = std::mem::take(data).into_iter_enumerated().collect();
     enumerated.sort_by_key(|p| map[p.0]);
     *data = enumerated.into_iter().map(|p| p.1).collect();

@@ -56,7 +56,7 @@ pub(super) fn check_fn<'a, 'tcx>(
     // C-variadic fns also have a `VaList` input that's not listed in `fn_sig`
     // (as it's created inside the body itself, not passed in from outside).
     let maybe_va_list = fn_sig.c_variadic.then(|| {
-        let span = body.params.last().expect("invariant: non-empty collection").span;
+        let span = body.params.last().unwrap().span;
         let va_list_did = tcx.require_lang_item(LangItem::VaList, span);
         let region = fcx.next_region_var(RegionVariableOrigin::Misc(span));
 
@@ -133,7 +133,7 @@ pub(super) fn check_fn<'a, 'tcx>(
     // we saw and assigning it to the expected return type. This isn't
     // really expected to fail, since the coercions would have failed
     // earlier when trying to find a LUB.
-    let coercion = fcx.ret_coercion.take().expect("invariant: value was present").into_inner();
+    let coercion = fcx.ret_coercion.take().unwrap().into_inner();
     let mut actual_return_ty = coercion.complete(fcx);
     debug!("actual_return_ty = {:?}", actual_return_ty);
     if let ty::Dynamic(..) = declared_ret_ty.kind() {
@@ -144,7 +144,7 @@ pub(super) fn check_fn<'a, 'tcx>(
         debug!("actual_return_ty replaced with {:?}", actual_return_ty);
     }
 
-    // tRust: known issue — We should be comparing this against (upstream HACK by oli-obk, compiler-errors)
+    // HACK(oli-obk, compiler-errors): We should be comparing this against
     // `declared_ret_ty`, but then anything uninferred would be inferred to
     // the opaque type itself. That again would cause writeback to assume
     // we have a recursive call site and do the sadly stabilized fallback to `()`.
@@ -220,7 +220,7 @@ fn check_lang_start_fn<'tcx>(tcx: TyCtxt<'tcx>, fn_sig: ty::FnSig<'tcx>, def_id:
     // build type `fn(main: fn() -> T, argc: isize, argv: *const *const u8, sigpipe: u8)`
 
     // make a Ty for the generic on the fn for diagnostics
-    // NOTE: lang item generic checks should check for the right generic *kind*
+    // FIXME: make the lang item generic checks check for the right generic *kind*
     // for example `start`'s generic should be a type parameter
     let generics = tcx.generics_of(def_id);
     let fn_generic = generics.param_at(0, tcx);

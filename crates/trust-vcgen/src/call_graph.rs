@@ -34,10 +34,8 @@ pub fn build_call_graph(functions: &[VerifiableFunction]) -> CallGraph {
 
     // Collect known def_paths for edge resolution
     let known: FxHashSet<&str> = functions.iter().map(|f| f.def_path.as_str()).collect();
-    let name_to_path: FxHashMap<&str, &str> = functions
-        .iter()
-        .map(|f| (f.name.as_str(), f.def_path.as_str()))
-        .collect();
+    let name_to_path: FxHashMap<&str, &str> =
+        functions.iter().map(|f| (f.name.as_str(), f.def_path.as_str())).collect();
 
     // Scan for call edges
     for func in functions {
@@ -104,9 +102,7 @@ pub fn detect_cycles(graph: &CallGraph) -> Vec<Scc> {
     }
     for edge in &graph.edges {
         if node_set.contains(edge.callee.as_str()) {
-            adj.entry(edge.caller.as_str())
-                .or_default()
-                .push(&edge.callee);
+            adj.entry(edge.caller.as_str()).or_default().push(&edge.callee);
         }
     }
 
@@ -189,10 +185,7 @@ pub fn detect_cycles(graph: &CallGraph) -> Vec<Scc> {
 /// Check if a specific function is self-recursive (calls itself directly).
 #[must_use]
 pub fn is_self_recursive(graph: &CallGraph, def_path: &str) -> bool {
-    graph
-        .edges
-        .iter()
-        .any(|e| e.caller == def_path && e.callee == def_path)
+    graph.edges.iter().any(|e| e.caller == def_path && e.callee == def_path)
 }
 
 /// Return the set of functions involved in any cycle (recursive functions).
@@ -233,11 +226,8 @@ mod tests {
         let mut blocks = Vec::new();
 
         for (i, callee) in calls.iter().enumerate() {
-            let target = if i + 1 < calls.len() {
-                Some(BlockId(i + 1))
-            } else {
-                Some(BlockId(calls.len()))
-            };
+            let target =
+                if i + 1 < calls.len() { Some(BlockId(i + 1)) } else { Some(BlockId(calls.len())) };
             blocks.push(BasicBlock {
                 id: BlockId(i),
                 stmts: vec![],
@@ -362,9 +352,7 @@ mod tests {
     #[test]
     fn test_detect_cycles_self_recursion() {
         // factorial calls itself
-        let funcs = vec![
-            make_func("factorial", "crate::factorial", &["crate::factorial"]),
-        ];
+        let funcs = vec![make_func("factorial", "crate::factorial", &["crate::factorial"])];
         let graph = build_call_graph(&funcs);
 
         assert!(is_self_recursive(&graph, "crate::factorial"));

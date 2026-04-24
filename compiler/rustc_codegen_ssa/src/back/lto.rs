@@ -1,6 +1,3 @@
-//! tRust: Link-Time Optimization support for collecting modules, coordinating ThinLTO,
-//! tRust: and resolving symbols across codegen units.
-
 use std::ffi::CString;
 use std::sync::Arc;
 
@@ -25,7 +22,7 @@ pub struct ThinModule<B: WriteBackendMethods> {
 
 impl<B: WriteBackendMethods> ThinModule<B> {
     pub fn name(&self) -> &str {
-        self.shared.module_names[self.idx].to_str().expect("invariant: path must be valid UTF-8")
+        self.shared.module_names[self.idx].to_str().unwrap()
     }
 
     pub fn cost(&self) -> u64 {

@@ -138,7 +138,7 @@ impl Target {
         }
     }
 
-    // tRust: known issue — For now, should only be used with def_kinds from ItemIds
+    // FIXME: For now, should only be used with def_kinds from ItemIds
     pub fn from_def_kind(def_kind: DefKind) -> Target {
         match def_kind {
             DefKind::ExternCrate => Target::ExternCrate,

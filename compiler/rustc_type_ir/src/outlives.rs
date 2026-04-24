@@ -82,7 +82,7 @@ impl<I: Interner> TypeVisitor<I> for OutlivesCollector<'_, I> {
         // projection).
         match ty.kind() {
             ty::FnDef(_, args) => {
-                // tRust: known upstream workaround (eddyb) -- ignore lifetimes found shallowly in `args`.
+                // HACK(eddyb) ignore lifetimes found shallowly in `args`.
                 // This is inconsistent with `ty::Adt` (including all args)
                 // and with `ty::Closure` (ignoring all args other than
                 // upvars, of which a `ty::FnDef` doesn't have any), but
@@ -100,24 +100,11 @@ impl<I: Interner> TypeVisitor<I> for OutlivesCollector<'_, I> {
             }
 
             ty::Closure(_, args) => {
-                let closure_args = args.as_closure();
-                closure_args.tupled_upvars_ty().visit_with(self);
-                // tRust: Fix rust-lang#84366 — a closure with no captures is trivially
-                // 'static, but its signature may reference non-'static lifetimes.
-                // We must also visit the signature type so that outlives analysis
-                // picks up any free regions in the closure's input/output types.
-                // Without this, `|| -> &'a str` is considered 'static even though
-                // its associated output type `&'a str` is not, enabling unsound
-                // lifetime laundering through trait associated types.
-                closure_args.sig_as_fn_ptr_ty().visit_with(self);
+                args.as_closure().tupled_upvars_ty().visit_with(self);
             }
 
             ty::CoroutineClosure(_, args) => {
-                let closure_args = args.as_coroutine_closure();
-                closure_args.tupled_upvars_ty().visit_with(self);
-                // tRust: Fix rust-lang#84366 — same fix as Closure above.
-                // Coroutine closures also need signature lifetime checking.
-                closure_args.signature_parts_ty().visit_with(self);
+                args.as_coroutine_closure().tupled_upvars_ty().visit_with(self);
             }
 
             ty::Coroutine(_, args) => {
@@ -204,7 +191,7 @@ impl<I: Interner> TypeVisitor<I> for OutlivesCollector<'_, I> {
             }
 
             ty::Bound(_, _) => {
-                // tRust: known issue -- Bound vars matter here!
+                // FIXME: Bound vars matter here!
             }
 
             ty::Adt(_, _)

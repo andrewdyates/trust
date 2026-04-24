@@ -280,7 +280,7 @@ impl<'a> State<'a> {
                 self.bclose(item.span, empty, cb);
             }
             ast::ItemKind::GlobalAsm(asm) => {
-                // tRust: known issue — Print `builtin # global_asm` once macro `global_asm` uses `builtin_syntax`.
+                // FIXME: Print `builtin # global_asm` once macro `global_asm` uses `builtin_syntax`.
                 let (cb, ib) = self.head(visibility_qualified(&item.vis, "global_asm!"));
                 self.print_inline_asm(asm);
                 self.word(";");
@@ -550,7 +550,7 @@ impl<'a> State<'a> {
                         self.maybe_print_comment(field.span.lo());
                         self.print_outer_attributes(&field.attrs);
                         self.print_visibility(&field.vis);
-                        self.print_ident(field.ident.expect("invariant: struct fields have identifiers")); // tRust: unwrap -> expect
+                        self.print_ident(field.ident.unwrap());
                         self.word_nbsp(":");
                         self.print_type(&field.ty);
                         self.word(",");

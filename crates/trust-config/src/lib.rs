@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-config: Configuration file parser for tRust verification
 //!
 //! Parses `trust.toml` files following Rust ecosystem conventions (like
@@ -44,7 +44,6 @@ pub enum ReportFormat {
     /// Emit all formats: text + JSON + HTML.
     All,
 }
-
 
 impl ReportFormat {
     /// Parse a report format name from a string (case-insensitive).
@@ -185,6 +184,14 @@ pub struct TrustConfig {
     /// Default: None (uses "text"). Override with `TRUST_REPORT_FORMAT`.
     #[serde(default)]
     pub report_format: Option<String>,
+
+    /// tRust #882: Process memory limit (MB) for solver backends.
+    /// When set, the router checks RSS before each solver dispatch and
+    /// returns a MemoryGuard error if the limit is exceeded. 0 = unlimited.
+    /// Default: None (uses MemoryGuard's default of 1024 MB).
+    /// Override with `TRUST_SOLVER_MEMORY_LIMIT_MB`.
+    #[serde(default)]
+    pub solver_memory_limit_mb: Option<u64>,
 }
 
 fn default_true() -> bool {
@@ -216,6 +223,7 @@ impl Default for TrustConfig {
             certify: true,
             tv: true,
             report_format: None,
+            solver_memory_limit_mb: None,
         }
     }
 }
@@ -226,10 +234,7 @@ impl TrustConfig {
     /// Falls back to `ReportFormat::Text` if unset or unrecognized.
     #[must_use]
     pub fn resolved_report_format(&self) -> ReportFormat {
-        self.report_format
-            .as_deref()
-            .and_then(ReportFormat::from_name)
-            .unwrap_or_default()
+        self.report_format.as_deref().and_then(ReportFormat::from_name).unwrap_or_default()
     }
 
     /// tRust: Load configuration from `trust.toml` in the given directory.
@@ -338,14 +343,18 @@ mod tests {
             "TRUST_DISABLE_CERTIFY",
             "TRUST_DISABLE_TV",
             "TRUST_REPORT_FORMAT",
+            "TRUST_SOLVER_MEMORY_LIMIT_MB",
         ];
         let saved: Vec<_> = trust_vars.iter().map(|k| (*k, std::env::var(k).ok())).collect();
         for k in &trust_vars {
+            // SAFETY: test-only env var manipulation; tests are serialized via TEST_ENV_LOCK
+            // so no concurrent access to the environment occurs. // tRust:
             unsafe { std::env::remove_var(k) };
         }
         f();
         for (k, v) in &saved {
             if let Some(val) = v {
+                // SAFETY: test-only env var restoration; tests are serialized via TEST_ENV_LOCK // tRust:
                 unsafe { std::env::set_var(k, val) };
             }
         }
@@ -579,19 +588,13 @@ bogus_field = "oops"
 
     #[test]
     fn test_resolved_report_format_from_config() {
-        let config = TrustConfig {
-            report_format: Some("html".to_string()),
-            ..Default::default()
-        };
+        let config = TrustConfig { report_format: Some("html".to_string()), ..Default::default() };
         assert_eq!(config.resolved_report_format(), ReportFormat::Html);
     }
 
     #[test]
     fn test_resolved_report_format_invalid_falls_back() {
-        let config = TrustConfig {
-            report_format: Some("xml".to_string()),
-            ..Default::default()
-        };
+        let config = TrustConfig { report_format: Some("xml".to_string()), ..Default::default() };
         assert_eq!(config.resolved_report_format(), ReportFormat::Text);
     }
 
@@ -608,5 +611,29 @@ bogus_field = "oops"
         let toml = r#"report_format = "all""#;
         let config = TrustConfig::from_toml(toml).expect("should parse report_format");
         assert_eq!(config.resolved_report_format(), ReportFormat::All);
+    }
+
+    // -------------------------------------------------------------------
+    // #882: solver_memory_limit_mb tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_config_default_solver_memory_limit_none() {
+        let config = TrustConfig::default();
+        assert!(config.solver_memory_limit_mb.is_none());
+    }
+
+    #[test]
+    fn test_config_from_toml_solver_memory_limit() {
+        let toml = r#"solver_memory_limit_mb = 2048"#;
+        let config = TrustConfig::from_toml(toml).expect("should parse solver_memory_limit_mb");
+        assert_eq!(config.solver_memory_limit_mb, Some(2048));
+    }
+
+    #[test]
+    fn test_config_from_toml_solver_memory_limit_zero() {
+        let toml = r#"solver_memory_limit_mb = 0"#;
+        let config = TrustConfig::from_toml(toml).expect("should parse 0");
+        assert_eq!(config.solver_memory_limit_mb, Some(0));
     }
 }

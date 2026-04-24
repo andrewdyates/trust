@@ -259,7 +259,7 @@ impl ValueAbi {
             ValueAbi::Scalar(_)
             | ValueAbi::ScalarPair(..)
             | ValueAbi::Vector { .. }
-            // tRust: known issue (rustc_scalable_vector) — Scalable vectors are `Sized` while the
+            // FIXME(rustc_scalable_vector): Scalable vectors are `Sized` while the
             // `sized_hierarchy` feature is not yet fully implemented. After `sized_hierarchy` is
             // fully implemented, scalable vectors will remain `Sized`, they just won't be
             // `const Sized` - whether `is_unsized` continues to return `false` at that point will
@@ -293,7 +293,7 @@ impl Scalar {
     pub fn has_niche(&self, target: &MachineInfo) -> bool {
         match self {
             Scalar::Initialized { value, valid_range } => {
-                !valid_range.is_full(value.size(target)).expect("invariant: valid_range fits within value size") // tRust: unwrap -> expect
+                !valid_range.is_full(value.size(target)).unwrap()
             }
             Scalar::Union { .. } => false,
         }

@@ -8,8 +8,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::path::Path;
+use trust_types::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -548,9 +548,8 @@ mod tests {
 
     #[test]
     fn test_persistent_specdb_load_nonexistent_returns_empty() {
-        let loaded =
-            PersistentSpecDatabase::load("/tmp/trust-vcgen-nonexistent-12345.json")
-                .expect("should not error");
+        let loaded = PersistentSpecDatabase::load("/tmp/trust-vcgen-nonexistent-12345.json")
+            .expect("should not error");
         assert!(loaded.is_empty());
     }
 
@@ -703,10 +702,34 @@ mod tests {
     #[test]
     fn test_persistent_specdb_entries_by_min_confidence() {
         let mut db = PersistentSpecDatabase::new();
-        db.insert(SpecEntry::new("a", "m", FunctionSpec::default(), SpecSource::Heuristic, InferenceConfidence::Low));
-        db.insert(SpecEntry::new("b", "m", FunctionSpec::default(), SpecSource::Inferred, InferenceConfidence::Medium));
-        db.insert(SpecEntry::new("c", "m", FunctionSpec::default(), SpecSource::Inferred, InferenceConfidence::High));
-        db.insert(SpecEntry::new("d", "m", FunctionSpec::default(), SpecSource::User, InferenceConfidence::Certain));
+        db.insert(SpecEntry::new(
+            "a",
+            "m",
+            FunctionSpec::default(),
+            SpecSource::Heuristic,
+            InferenceConfidence::Low,
+        ));
+        db.insert(SpecEntry::new(
+            "b",
+            "m",
+            FunctionSpec::default(),
+            SpecSource::Inferred,
+            InferenceConfidence::Medium,
+        ));
+        db.insert(SpecEntry::new(
+            "c",
+            "m",
+            FunctionSpec::default(),
+            SpecSource::Inferred,
+            InferenceConfidence::High,
+        ));
+        db.insert(SpecEntry::new(
+            "d",
+            "m",
+            FunctionSpec::default(),
+            SpecSource::User,
+            InferenceConfidence::Certain,
+        ));
 
         assert_eq!(db.entries_by_min_confidence(InferenceConfidence::Low).len(), 4);
         assert_eq!(db.entries_by_min_confidence(InferenceConfidence::Medium).len(), 3);

@@ -802,12 +802,6 @@ pub struct GlobalCtxt<'tcx> {
     pub query_system: QuerySystem<'tcx>,
     pub(crate) dep_kind_vtables: &'tcx [DepKindVTable<'tcx>],
 
-    // tRust: Per-function verification results cache. Populated by the trust_verify
-    // MIR pass and readable by other passes (codegen, reporting). Thread-safe via Lock.
-    // Keyed by DefId (not InstanceKind) for simplicity; full query integration comes later.
-    pub trust_verification_results:
-        Lock<FxHashMap<DefId, crate::mir::trust_proof::TrustProofResults>>,
-
     // Internal caches for metadata decoding. No need to track deps on this.
     pub ty_rcache: Lock<FxHashMap<ty::CReaderCacheKey, Ty<'tcx>>>,
 
@@ -893,7 +887,7 @@ impl CurrentGcx {
 
     pub fn access<R>(&self, f: impl for<'tcx> FnOnce(&'tcx GlobalCtxt<'tcx>) -> R) -> R {
         let read_guard = self.value.read();
-        let gcx: *const GlobalCtxt<'_> = read_guard.expect("invariant: global context is set") as *const _;
+        let gcx: *const GlobalCtxt<'_> = read_guard.unwrap() as *const _;
         // SAFETY: We hold the read lock for the `GlobalCtxt` pointer. That prevents
         // `GlobalCtxt::enter` from returning as it would first acquire the write lock.
         // This ensures the `GlobalCtxt` is live during `f`.
@@ -927,7 +921,6 @@ impl<'tcx> TyCtxt<'tcx> {
         ) {
             CodegenFnAttrs::EMPTY
         } else {
-            // tRust: invariant: unexpected state in body_codegen_attrs
             bug!(
                 "body_codegen_fn_attrs called on unexpected definition: {:?} {:?}",
                 def_id,
@@ -998,7 +991,7 @@ impl<'tcx> TyCtxt<'tcx> {
 
     /// Returns a range of the start/end indices specified with the
     /// `rustc_layout_scalar_valid_range` attribute.
-    // tRust: known issue (eddyb) — this is an awkward spot for this method, maybe move it?
+    // FIXME(eddyb) this is an awkward spot for this method, maybe move it?
     pub fn layout_scalar_valid_range(self, def_id: DefId) -> (Bound<u128>, Bound<u128>) {
         let start = find_attr!(self, def_id, RustcLayoutScalarValidRangeStart(n, _) => Bound::Included(**n)).unwrap_or(Bound::Unbounded);
         let end =
@@ -1057,7 +1050,6 @@ impl<'tcx> TyCtxt<'tcx> {
             untracked,
             query_system,
             dep_kind_vtables,
-            trust_verification_results: Default::default(), // tRust: init verification results cache
             ty_rcache: Default::default(),
             selection_cache: Default::default(),
             evaluation_cache: Default::default(),
@@ -1085,7 +1077,7 @@ impl<'tcx> TyCtxt<'tcx> {
     #[track_caller]
     pub fn ty_ordering_enum(self, span: Span) -> Ty<'tcx> {
         let ordering_enum = self.require_lang_item(hir::LangItem::OrderingEnum, span);
-        self.type_of(ordering_enum).no_bound_vars().expect("invariant: no_bound_vars returned a valid value")
+        self.type_of(ordering_enum).no_bound_vars().unwrap()
     }
 
     /// Obtain the given diagnostic item's `DefId`. Use `is_diagnostic_item` if you just want to
@@ -1265,7 +1257,6 @@ impl<'tcx> TyCtxt<'tcx> {
                 .stable_crate_ids
                 .read()
                 .get(&stable_crate_id)
-                // tRust: invariant: expected value must exist: uninterned StableCrateId: {stable_crate_id:?}
                 .unwrap_or_else(|| bug!("uninterned StableCrateId: {stable_crate_id:?}"))
         }
     }
@@ -1519,7 +1510,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 | CrateType::Cdylib
                 | CrateType::Sdylib => false,
 
-                // tRust: known issue — rust-lang/rust#64319, rust-lang/rust#64872:
+                // FIXME rust-lang/rust#64319, rust-lang/rust#64872:
                 // We want to block export of generics from dylibs,
                 // but we must fix rust-lang/rust#65890 before we can
                 // do that robustly.
@@ -1557,7 +1548,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 // change the fn signature, but they may not be free to do so,
                 // since the signature must match the trait.
                 //
-                // tRust: known issue (#42706) — -- in some cases, we could do better here.
+                // FIXME(#42706) -- in some cases, we could do better here.
                 hir::ImplItemImplKind::Trait { .. } => true,
                 _ => false,
             },
@@ -1707,7 +1698,7 @@ impl<'tcx> TyCtxt<'tcx> {
             .enabled_features_iter_stable_order()
             .filter(|(f, _)| {
                 !used_features.contains_key(f)
-                // tRust: known issue — `restricted_std` is used to tell a standard library built
+                // FIXME: `restricted_std` is used to tell a standard library built
                 // for a platform that it doesn't know how to support. But it
                 // could only gate a private mod (see `__restricted_std_workaround`)
                 // with `cfg(not(restricted_std))`, so it cannot be recorded as used
@@ -1779,13 +1770,6 @@ macro_rules! nop_list_lift {
                 tcx.interners
                     .$set
                     .contains_pointer_to(&InternedInSet(self))
-                    // SAFETY: `self` is interned in `tcx.interners.$set` (confirmed by
-                    // `contains_pointer_to` returning `true`), so the pointer is valid for
-                    // the entire 'tcx lifetime. The transmute extends the lifetime from 'a
-                    // to 'tcx, which is sound because interned data lives as long as the
-                    // interner.
-                    // SAFETY: Membership in this interner means the referent lives for
-                    // `'tcx`, so extending the borrow from `'a` to `'tcx` is sound.
                     .then(|| unsafe { mem::transmute(self) })
             }
         }
@@ -2154,7 +2138,6 @@ impl<'tcx> TyCtxt<'tcx> {
         sig.map_bound(|s| {
             let params = match s.inputs()[0].kind() {
                 ty::Tuple(params) => *params,
-                // tRust: invariant: unexpected state reached in signature_unclosure
                 _ => bug!(),
             };
             self.mk_fn_sig(params, s.output(), s.c_variadic, safety, ExternAbi::Rust)
@@ -2251,7 +2234,6 @@ impl<'tcx> TyCtxt<'tcx> {
                         DefKind::Impl { of_trait: false }
                     );
             if is_inherent_assoc_ty || is_inherent_assoc_type_const {
-                // tRust: invariant: unexpected state in debug_assert_args_compatible
                 bug!(
                     "args not compatible with generics for {}: args={:#?}, generics={:#?}",
                     self.def_path_str(def_id),
@@ -2267,7 +2249,6 @@ impl<'tcx> TyCtxt<'tcx> {
                     )
                 );
             } else {
-                // tRust: invariant: unexpected state in debug_assert_args_compatible
                 bug!(
                     "args not compatible with generics for {}: args={:#?}, generics={:#?}",
                     self.def_path_str(def_id),
@@ -2380,14 +2361,14 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn mk_clauses(self, clauses: &[Clause<'tcx>]) -> Clauses<'tcx> {
-        // tRust: known issue — consider asking the input slice to be sorted to avoid
+        // FIXME consider asking the input slice to be sorted to avoid
         // re-interning permutations, in which case that would be asserted
         // here.
         self.interners.intern_clauses(clauses)
     }
 
     pub fn mk_local_def_ids(self, def_ids: &[LocalDefId]) -> &'tcx List<LocalDefId> {
-        // tRust: known issue — consider asking the input slice to be sorted to avoid
+        // FIXME consider asking the input slice to be sorted to avoid
         // re-interning permutations, in which case that would be asserted
         // here.
         self.intern_local_def_ids(def_ids)
@@ -2563,7 +2544,6 @@ impl<'tcx> TyCtxt<'tcx> {
     /// Find the appropriate span where `use` and outer attributes can be inserted at.
     pub fn crate_level_attribute_injection_span(self) -> Span {
         let node = self.hir_node(hir::CRATE_HIR_ID);
-        // tRust: invariant: unexpected state reached in crate_level_attribute_injection_span
         let hir::Node::Crate(m) = node else { bug!() };
         m.spans.inject_use_span.shrink_to_lo()
     }
@@ -2579,7 +2559,7 @@ impl<'tcx> TyCtxt<'tcx> {
 
         let span = self.crate_level_attribute_injection_span();
         for (desc, feature) in features {
-            // tRust: known issue — make this string translatable
+            // FIXME: make this string translatable
             let msg =
                 format!("add `#![feature({feature})]` to the crate attributes to enable{desc}");
             diag.span_suggestion_verbose(
@@ -2625,7 +2605,6 @@ impl<'tcx> TyCtxt<'tcx> {
                 .late_bound_vars_map(id.owner)
                 .get(&id.local_id)
                 .cloned()
-                // tRust: invariant: expected value must exist: No bound vars found for {}
                 .unwrap_or_else(|| bug!("No bound vars found for {}", self.hir_id_to_string(id))),
         )
     }
@@ -2635,7 +2614,7 @@ impl<'tcx> TyCtxt<'tcx> {
     /// lifetime of the function from which it originally as captured. If it is
     /// a late-bound lifetime, this will represent the liberated (`ReLateParam`) lifetime
     /// of the signature.
-    // tRust: known issue (RPITIT) — if we ever synthesize new lifetimes for RPITITs and not just
+    // FIXME(RPITIT): if we ever synthesize new lifetimes for RPITITs and not just
     // re-use the generics of the opaque, this function will need to be tweaked slightly.
     pub fn map_opaque_lifetime_to_parent_lifetime(
         self,
@@ -2655,7 +2634,6 @@ impl<'tcx> TyCtxt<'tcx> {
                 .iter()
                 .find(|(_, duplicated_param)| *duplicated_param == opaque_lifetime_param_def_id)
             else {
-                // tRust: invariant: duplicated lifetime param should be present
                 bug!("duplicated lifetime param should be present");
             };
 

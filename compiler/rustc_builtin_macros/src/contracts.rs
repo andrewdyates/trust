@@ -39,7 +39,7 @@ impl AttrProcMacro for ExpandEnsures {
 /// For that, we search for the body / where token, and invoke the `inject` callback to generate the
 /// contract clause in the right place.
 ///
-// tRust: known issue — this kind of manual token tree munging does not have significant precedent among
+// FIXME: this kind of manual token tree munging does not have significant precedent among
 // rustc builtin macros, probably because most builtin macros use direct AST manipulation to
 // accomplish similar goals. But since our attributes need to take arbitrary expressions, and
 // our attribute infrastructure does not yet support mixing a token-tree annotation with an AST

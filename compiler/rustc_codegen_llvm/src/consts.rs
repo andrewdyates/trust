@@ -215,19 +215,17 @@ fn check_and_apply_linkage<'ll, 'tcx>(
         cx.declare_global(&common::i686_decorated_name(dllimport, true, true, false), llty)
     } else {
         // Generate an external declaration.
-        // tRust: known issue — (nagisa): investigate whether it can be changed into define_global
+        // FIXME(nagisa): investigate whether it can be changed into define_global
         cx.declare_global(sym, llty)
     }
 }
 
 impl<'ll> CodegenCx<'ll, '_> {
     pub(crate) fn const_bitcast(&self, val: &'ll Value, ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `val` is a valid LLVM constant and `ty` is a valid target type with the same bit width.
         unsafe { llvm::LLVMConstBitCast(val, ty) }
     }
 
     pub(crate) fn const_pointercast(&self, val: &'ll Value, ty: &'ll Type) -> &'ll Value {
-        // SAFETY: `val` is a valid LLVM constant pointer value and `ty` is a valid pointer type.
         unsafe { llvm::LLVMConstPointerCast(val, ty) }
     }
 
@@ -245,13 +243,11 @@ impl<'ll> CodegenCx<'ll, '_> {
             Some(kind) if !self.tcx.sess.fewer_names() => {
                 let name = self.generate_local_symbol_name(kind);
                 let gv = self.define_global(&name, self.val_ty(cv)).unwrap_or_else(|| {
-                    // tRust: invariant — each synthesized local symbol name for a private global must be unique within the module
                     bug!("symbol `{}` is already defined", name);
                 });
                 gv
             }
             _ => self.define_global("", self.val_ty(cv)).unwrap_or_else(|| {
-                // tRust: invariant — creating a fresh anonymous private global must not collide with an existing symbol
                 bug!("anonymous global symbol is already defined");
             }),
         };
@@ -272,7 +268,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         kind: Option<&str>,
     ) -> &'ll Value {
         if let Some(&gv) = self.const_globals.borrow().get(&cv) {
-            // SAFETY: The value is a valid LLVM global, alloca, load, or store instruction, and the alignment is a valid power of two.
             unsafe {
                 // Upgrade the alignment in cases where the same constant is used with different
                 // alignment requirements
@@ -295,10 +290,7 @@ impl<'ll> CodegenCx<'ll, '_> {
         let instance = Instance::mono(self.tcx, def_id);
         trace!(?instance);
 
-        let DefKind::Static { nested, .. } = self.tcx.def_kind(def_id) else {
-            // tRust: invariant — `get_static` must only be called for items whose `DefKind` is `Static`
-            bug!()
-        };
+        let DefKind::Static { nested, .. } = self.tcx.def_kind(def_id) else { bug!() };
         // Nested statics do not have a type, so pick a dummy type and let `codegen_static` figure
         // out the llvm type from the actual evaluated initializer.
         let llty = if nested {
@@ -335,7 +327,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         let g = if def_id.is_local() && !self.tcx.is_foreign_item(def_id) {
             if let Some(g) = self.get_declared_value(sym) {
                 if self.val_ty(g) != self.type_ptr() {
-                    // tRust: invariant — a preexisting declaration for this static symbol must have the expected opaque-pointer LLVM type
                     span_bug!(self.tcx.def_span(def_id), "Conflicting types for static");
                 }
             }
@@ -419,7 +410,7 @@ impl<'ll> CodegenCx<'ll, '_> {
     fn codegen_static_item(&mut self, def_id: DefId) {
         assert!(
             llvm::LLVMGetInitializer(
-                self.instances.borrow().get(&Instance::mono(self.tcx, def_id)).expect("invariant: borrow succeeded")
+                self.instances.borrow().get(&Instance::mono(self.tcx, def_id)).unwrap()
             )
             .is_none()
         );
@@ -568,7 +559,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         let llty = self.val_ty(llval);
         let sym = self.generate_local_symbol_name("OBJC_CLASS_NAME_");
         let g = self.define_global(&sym, llty).unwrap_or_else(|| {
-            // tRust: invariant — each synthesized Objective-C class-name symbol must be unique within the module
             bug!("symbol `{}` is already defined", sym);
         });
         set_global_alignment(self, g, self.tcx.data_layout.i8_align);
@@ -627,7 +617,6 @@ impl<'ll> CodegenCx<'ll, '_> {
                 let llty = self.type_ptr();
                 let sym = self.generate_local_symbol_name("OBJC_CLASS_REFERENCES_");
                 let g = self.define_global(&sym, llty).unwrap_or_else(|| {
-                    // tRust: invariant — each synthesized Objective-C class-reference symbol must be unique within the module
                     bug!("symbol `{}` is already defined", sym);
                 });
                 set_global_alignment(self, g, self.tcx.data_layout.pointer_align().abi);
@@ -648,7 +637,6 @@ impl<'ll> CodegenCx<'ll, '_> {
                 let llty = self.type_ptr();
                 let sym = self.generate_local_symbol_name("OBJC_CLASSLIST_REFERENCES_$_");
                 let g = self.define_global(&sym, llty).unwrap_or_else(|| {
-                    // tRust: invariant — each synthesized Objective-C class-reference symbol must be unique within the module
                     bug!("symbol `{}` is already defined", sym);
                 });
                 set_global_alignment(self, g, self.tcx.data_layout.pointer_align().abi);
@@ -687,7 +675,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         let methname_llty = self.val_ty(methname_llval);
         let methname_sym = self.generate_local_symbol_name("OBJC_METH_VAR_NAME_");
         let methname_g = self.define_global(&methname_sym, methname_llty).unwrap_or_else(|| {
-            // tRust: invariant — each synthesized Objective-C selector-name symbol must be unique within the module
             bug!("symbol `{}` is already defined", methname_sym);
         });
         set_global_alignment(self, methname_g, self.tcx.data_layout.i8_align);
@@ -713,7 +700,6 @@ impl<'ll> CodegenCx<'ll, '_> {
         let selref_llty = self.type_ptr();
         let selref_sym = self.generate_local_symbol_name("OBJC_SELECTOR_REFERENCES_");
         let selref_g = self.define_global(&selref_sym, selref_llty).unwrap_or_else(|| {
-            // tRust: invariant — each synthesized Objective-C selector-reference symbol must be unique within the module
             bug!("symbol `{}` is already defined", selref_sym);
         });
         set_global_alignment(self, selref_g, self.tcx.data_layout.pointer_align().abi);
@@ -770,7 +756,6 @@ impl<'ll> CodegenCx<'ll, '_> {
 
         let sym = "OBJC_MODULES";
         let g = self.define_global(&sym, llty).unwrap_or_else(|| {
-            // tRust: invariant — the synthesized `OBJC_MODULES` global must be emitted at most once per module
             bug!("symbol `{}` is already defined", sym);
         });
         set_global_alignment(self, g, self.tcx.data_layout.pointer_align().abi);
@@ -788,7 +773,7 @@ impl<'ll> StaticCodegenMethods for CodegenCx<'ll, '_> {
     /// The pointer will always be in the default address space. If global variables default to a
     /// different address space, an addrspacecast is inserted.
     fn static_addr_of(&self, alloc: ConstAllocation<'_>, kind: Option<&str>) -> &'ll Value {
-        // tRust: known issue — should we cache `const_alloc_to_llvm` to avoid repeating this for the
+        // FIXME: should we cache `const_alloc_to_llvm` to avoid repeating this for the
         // same `ConstAllocation`?
         let cv = const_alloc_to_llvm(self, alloc.inner(), /*static*/ false);
 

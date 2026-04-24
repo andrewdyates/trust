@@ -167,7 +167,7 @@ trait UnusedDelimLint {
         // Check if LHS needs parens to prevent false-positives in cases like
         // `fn x() -> u8 { ({ 0 } + 1) }`.
         //
-        // tRust: known issue — https://github.com/rust-lang/rust/issues/119426
+        // FIXME: https://github.com/rust-lang/rust/issues/119426
         // The syntax tree in this code is from after macro expansion, so the
         // current implementation has both false negatives and false positives
         // related to expressions containing macros.
@@ -776,7 +776,7 @@ impl EarlyLintPass for UnusedParens {
             Ident(.., Some(p)) | Box(p) | Deref(p) | Guard(p, _) => self.check_unused_parens_pat(cx, p, true, false, keep_space),
             // Avoid linting on `&(mut x)` as `&mut x` has a different meaning, #55342.
             // Also avoid linting on `& mut? (p0 | .. | pn)`, #64106.
-            // tRust: known issue — (pin_ergonomics) check pinned patterns
+            // FIXME(pin_ergonomics): check pinned patterns
             Ref(p, _, m) => self.check_unused_parens_pat(cx, p, true, *m == Mutability::Not, keep_space),
         }
     }
@@ -1021,7 +1021,7 @@ impl UnusedDelimLint for UnusedBraces {
                 //      let _: A<{ 2 + 3 }>;
                 //      let _: A<{produces_literal!()}>;
                 //      ```
-                // tRust: known issue — (const_generics) handle paths when #67075 is fixed.
+                // FIXME(const_generics): handle paths when #67075 is fixed.
                 if let [stmt] = inner.stmts.as_slice()
                     && let ast::StmtKind::Expr(ref expr) = stmt.kind
                     && !Self::is_expr_delims_necessary(expr, ctx, followed_by_block)
@@ -1172,7 +1172,7 @@ impl UnusedImportBraces {
             // Trigger the lint if the nested item is a non-self single item
             let node_name = match tree.kind {
                 ast::UseTreeKind::Simple(rename) => {
-                    let orig_ident = tree.prefix.segments.last().expect("invariant: use tree prefix segments non-empty").ident; // tRust: unwrap -> expect
+                    let orig_ident = tree.prefix.segments.last().unwrap().ident;
                     if orig_ident.name == kw::SelfLower {
                         return;
                     }

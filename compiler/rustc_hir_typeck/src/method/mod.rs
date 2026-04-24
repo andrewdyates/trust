@@ -364,7 +364,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     assert_eq!(param.index, 1, "did not expect >1 param on operator trait");
                     rhs_ty.into()
                 } else {
-                    // NOTE: we should stop passing `None` for the failure case
+                    // FIXME: We should stop passing `None` for the failure case
                     // when probing for call exprs. I.e. `opt_rhs_ty` should always
                     // be set when it needs to be.
                     self.var_for_def(cause.span, param)
@@ -401,13 +401,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let Some(method_item) =
             self.associated_value(trait_def_id, Ident::with_dummy_span(method_name))
         else {
-            // tRust: invariant — every built-in operator trait lang item defines the queried associated method name
             bug!("expected associated item for operator trait")
         };
 
         let def_id = method_item.def_id;
         if !method_item.is_fn() {
-            // tRust: invariant — built-in operator trait methods are always associated functions, never other associated items
             span_bug!(
                 tcx.def_span(def_id),
                 "expected `{method_name}` to be an associated function"

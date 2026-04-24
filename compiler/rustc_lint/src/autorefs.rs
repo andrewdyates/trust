@@ -19,7 +19,6 @@ declare_lint! {
     ///
     /// ```rust,compile_fail
     /// unsafe fn fun(ptr: *mut [u8]) -> *mut [u8] {
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe { &raw mut (*ptr)[..16] }
     ///     //                      ^^^^^^ this calls `IndexMut::index_mut(&mut ..., ..16)`,
     ///     //                             implicitly creating a reference
@@ -39,7 +38,6 @@ declare_lint! {
     ///
     /// ```rust
     /// unsafe fn fun(ptr: *mut [u8]) -> *mut [u8] {
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe { &raw mut (&mut *ptr)[..16] }
     /// }
     /// ```

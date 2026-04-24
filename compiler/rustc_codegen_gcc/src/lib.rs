@@ -353,8 +353,6 @@ impl ExtraBackendMethods for GccCodegenBackend {
             temp_dir: None,
         };
 
-        // SAFETY: The layout matches the original allocation, and the
-        // pointer was allocated by the same allocator.
         unsafe {
             allocator::codegen(tcx, &mut mods, module_name, methods);
         }

@@ -84,7 +84,6 @@ pub(super) fn variances_of(tcx: TyCtxt<'_>, item_def_id: LocalDefId) -> &[ty::Va
     }
 
     // Variance not relevant.
-    // tRust: invariant — variance is only computed for items that can have generic parameters
     span_bug!(
         tcx.def_span(item_def_id),
         "asked to compute variance for {}",

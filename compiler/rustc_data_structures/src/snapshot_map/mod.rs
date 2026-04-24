@@ -20,7 +20,7 @@ pub struct SnapshotMap<K, V, M = FxHashMap<K, V>, L = VecLog<UndoLog<K, V>>> {
     _marker: PhantomData<(K, V)>,
 }
 
-// tRust: known issue — (eddyb) manual impl avoids `Default` bounds on `K` and `V`.
+// HACK(eddyb) manual impl avoids `Default` bounds on `K` and `V`.
 impl<K, V, M, L> Default for SnapshotMap<K, V, M, L>
 where
     M: Default,

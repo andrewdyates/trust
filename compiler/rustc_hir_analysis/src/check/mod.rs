@@ -136,7 +136,6 @@ fn adt_async_destructor(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Option<ty::Async
     let result = tcx.calculate_async_dtor(def_id, always_applicable::check_drop_impl);
     // Async drop in libstd/libcore would become insta-stable — catch that mistake.
     if result.is_some() && tcx.features().staged_api() {
-        // tRust: invariant — async drop should not be used in libstd (would become insta-stable)
         span_bug!(tcx.def_span(def_id), "don't use async drop in libstd, it becomes insta-stable");
     }
     result
@@ -260,7 +259,7 @@ fn missing_items_err(
     }
 
     tcx.dcx().emit_err(errors::MissingTraitItem {
-        span: tcx.span_of_impl(impl_def_id.to_def_id()).expect("invariant: value is present"),
+        span: tcx.span_of_impl(impl_def_id.to_def_id()).unwrap(),
         missing_items_msg,
         missing_trait_item_label,
         missing_trait_item,
@@ -495,7 +494,6 @@ fn fn_sig_suggestion<'tcx>(
                 }) {
             output
         } else {
-            // tRust: invariant — expected a well-formed primary body for this item kind
             span_bug!(
                 ident.span,
                 "expected async fn to have `impl Future` output, but it returns {output}"
@@ -511,7 +509,7 @@ fn fn_sig_suggestion<'tcx>(
     let safety = sig.safety.prefix_str();
     let (generics, where_clauses) = bounds_from_generic_predicates(tcx, predicates, assoc);
 
-    // tRust: known issue — this is not entirely correct, as the lifetimes from borrowed params will
+    // FIXME: this is not entirely correct, as the lifetimes from borrowed params will
     // not be present in the `fn` definition, nor will we account for renamed
     // lifetimes between the `impl` and the `trait`, but this should be good enough to
     // fill in a significant portion of the missing code, and other subsequent
@@ -570,7 +568,7 @@ fn bad_variant_count<'tcx>(tcx: TyCtxt<'tcx>, adt: ty::AdtDef<'tcx>, sp: Span, d
     let variant_spans: Vec<_> = adt
         .variants()
         .iter()
-        .map(|variant| tcx.hir_span_if_local(variant.def_id).expect("invariant: value is present"))
+        .map(|variant| tcx.hir_span_if_local(variant.def_id).unwrap())
         .collect();
     let (mut spans, mut many) = (Vec::new(), None);
     if let [start @ .., end] = &*variant_spans {
@@ -612,7 +610,7 @@ fn bad_non_zero_sized_fields<'tcx>(
     }
 }
 
-// tRust: known issue — Consider moving this method to a more fitting place.
+// FIXME: Consider moving this method to a more fitting place.
 pub fn potentially_plural_count(count: usize, word: &str) -> String {
     format!("{} {}{}", count, word, pluralize!(count))
 }
@@ -631,14 +629,13 @@ pub fn check_function_signature<'tcx>(
     ) -> rustc_span::Span {
         let mut args = {
             let node = tcx.expect_hir_owner_node(fn_id);
-            // tRust: invariant — node passed to check_fn must have a fn_decl
             let decl = node.fn_decl().unwrap_or_else(|| bug!("expected fn decl, found {:?}", node));
             decl.inputs.iter().map(|t| t.span).chain(std::iter::once(decl.output.span()))
         };
 
         match err {
             TypeError::ArgumentMutability(i)
-            | TypeError::ArgumentSorts(ExpectedFound { .. }, i) => args.nth(i).expect("invariant: value is present"),
+            | TypeError::ArgumentSorts(ExpectedFound { .. }, i) => args.nth(i).unwrap(),
             _ => cause.span,
         }
     }

@@ -334,7 +334,7 @@ fn associated_type_for_impl_trait_in_impl(
     impl_assoc_ty.defaultness(tcx.defaultness(impl_fn.owner_id));
 
     // Copy generics_of the trait's associated item but the impl as the parent.
-    // tRust: known issue — This may be detrimental to diagnostics, as we resolve the early-bound vars
+    // FIXME: This may be detrimental to diagnostics, as we resolve the early-bound vars
     // here to paramswhose parent are items in the trait. We could synthesize new params
     // here, but it seems overkill.
     impl_assoc_ty.generics_of({

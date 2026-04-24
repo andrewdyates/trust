@@ -76,7 +76,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let tupled_upvars_ty = self.next_ty_var(expr_span);
 
-        // NOTE: we could probably actually just unify this further --
+        // FIXME: We could probably actually just unify this further --
         // instead of having a `FnSig` and a `Option<CoroutineTypes>`,
         // we can have a `ClosureSignature { Coroutine { .. }, Closure { .. } }`,
         // similar to how `ty::GenSig` is a distinct data structure.
@@ -128,7 +128,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         );
                         yield_ty
                     }
-                    // tRust: known issue — In the *old* trait solver, we must eagerly (upstream HACK by -Ztrait-solver=next)
+                    // HACK(-Ztrait-solver=next): In the *old* trait solver, we must eagerly
                     // guide inference on the yield type so that we can handle `AsyncIterator`
                     // in this block in projection correctly. In the new trait solver, it is
                     // not a problem.
@@ -202,9 +202,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         (bound_sig.skip_binder().output(), tcx.types.unit)
                     }
                     hir::CoroutineDesugaring::AsyncGen => {
-                        // tRust: async gen closures are experimental and not yet supported
-                        // tRust: invariant — unsupported `AsyncGen` closures should be rejected before coroutine closure type checking reaches this arm
-                        bug!("unimplemented: `async gen` closures are not yet supported")
+                        todo!("`async gen` closures not supported yet")
                     }
                 };
                 // Compute all of the variables that will be used to populate the coroutine.
@@ -457,7 +455,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             if let Some(trait_def_id) = trait_def_id {
                 let found_kind = match closure_kind {
                     hir::ClosureKind::Closure
-                    // NOTE(iter_macro): someday we'll probably want iterator closures instead of
+                    // FIXME(iter_macro): Someday we'll probably want iterator closures instead of
                     // just using Fn* for iterators.
                     | hir::ClosureKind::CoroutineClosure(hir::CoroutineDesugaring::Gen) => {
                         self.tcx.fn_trait_kind_from_def_id(trait_def_id)
@@ -603,7 +601,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return None;
         };
 
-        // NOTE: we may want to elaborate here, though this is exceedingly rare.
+        // FIXME: We may want to elaborate here, though I assume this will be exceedingly rare.
         let mut return_ty = None;
         for bound in self.obligations_for_self_ty(return_vid) {
             if let Some(ret_projection) = bound.predicate.as_projection_clause()
@@ -627,7 +625,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // records the output of the *future*, and `return_vid` above is the type
         // variable of the future, not its output.
         //
-        // NOTE: we probably should store this signature inference output in a way
+        // FIXME: We probably should store this signature inference output in a way
         // that does not misuse a `FnSig` type, but that can be done separately.
         let return_ty =
             return_ty.unwrap_or_else(|| self.next_ty_var(cause_span.unwrap_or(DUMMY_SP)));
@@ -833,7 +831,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         debug!(?supplied_sig);
 
-        // NOTE(#45727): As discussed in [this comment][c1], naively
+        // FIXME(#45727): As discussed in [this comment][c1], naively
         // forcing equality here actually results in suboptimal error
         // messages in some cases. For now, if there would have been
         // an obvious error, we fallback to declaring the type of the
@@ -986,7 +984,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     #[instrument(skip(self), level = "debug", ret)]
     fn deduce_future_output_from_obligations(&self, body_def_id: LocalDefId) -> Option<Ty<'tcx>> {
         let ret_coercion = self.ret_coercion.as_ref().unwrap_or_else(|| {
-            // tRust: invariant — future-output deduction only runs while type checking an async fn body, which must have initialized ret_coercion
             span_bug!(self.tcx.def_span(body_def_id), "async fn coroutine outside of a fn")
         });
 
@@ -1034,7 +1031,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 .find_map(|(p, s)| get_future_output(p.as_predicate(), s))?,
             ty::Error(_) => return Some(ret_ty),
             _ => {
-                // tRust: invariant — an async fn coroutine return type should be the inferred future, its opaque alias, or an error by the time we deduce `Future::Output`
                 span_bug!(closure_span, "invalid async fn coroutine return type: {ret_ty:?}")
             }
         };
@@ -1087,7 +1083,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // so check that this is what we see.
         let output_assoc_item = self.tcx.associated_item_def_ids(trait_def_id)[0];
         if output_assoc_item != predicate.projection_term.def_id {
-            // tRust: invariant — projections from the `Future` lang item can only refer to its sole associated type, `Output`
             span_bug!(
                 cause_span,
                 "projecting associated item `{:?}` from future, which is not Output `{:?}`",

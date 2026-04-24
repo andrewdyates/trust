@@ -20,17 +20,13 @@
 
 // tRust: Allow std HashMap/HashSet -- FxHash lint only applies to compiler internals
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
-pub(crate) mod bisimulation;
 pub(crate) mod equivalence;
 pub(crate) mod error;
 pub(crate) mod optimization;
-pub(crate) mod property_check;
 pub(crate) mod refinement;
-pub(crate) mod refinement_types;
 pub(crate) mod simulation;
-pub(crate) mod simulation_check;
 // tRust #458: Core VC generation — authoritative implementation of generate_refinement_vcs.
 pub(crate) mod vc_core;
 pub(crate) mod z4_validator;

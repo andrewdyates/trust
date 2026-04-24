@@ -21,7 +21,6 @@ declare_lint! {
     /// # unsafe fn use_data(ptr: *const u8) { }
     /// fn gather_and_use(bytes: impl Iterator<Item = u8>) {
     ///     let x: *const u8 = bytes.collect::<Vec<u8>>().as_ptr();
-    ///     // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///     unsafe { use_data(x) }
     /// }
     /// ```
@@ -73,7 +72,7 @@ declare_lint! {
     "detects returning a pointer from a local variable"
 }
 
-/// tRust: known issue — false negatives (i.e. the lint is not emitted when it should be)
+/// FIXME: false negatives (i.e. the lint is not emitted when it should be)
 /// 1. Ways to get a temporary that are not recognized:
 ///    - `owning_temporary.field`
 ///    - `owning_temporary[index]`
@@ -301,13 +300,13 @@ fn is_temporary_rvalue(expr: &Expr<'_>) -> bool {
         // Inner blocks are rvalues.
         ExprKind::If(..) | ExprKind::Loop(..) | ExprKind::Match(..) | ExprKind::Block(..) => true,
 
-        // tRust: known issue — these should probably recurse and typecheck along the way.
+        // FIXME: these should probably recurse and typecheck along the way.
         //        Some false negatives are possible for now.
         ExprKind::Index(..) | ExprKind::Field(..) | ExprKind::Unary(..) => false,
 
         ExprKind::Struct(..) => true,
 
-        // tRust: known issue — this has false negatives, but I do not want to deal with 'static/const promotion just yet.
+        // FIXME: this has false negatives, but I do not want to deal with 'static/const promotion just yet.
         ExprKind::Array(..) => false,
 
         // These typecheck to `!`

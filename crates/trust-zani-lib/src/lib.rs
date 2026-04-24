@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 // trust-zani-lib: Library facade for zani bounded model checker
 //
 // Phase 1 of Pipeline v2 (#789, designs/2026-04-14-verification-pipeline-v2.md).
@@ -58,8 +58,8 @@ pub use zani_core::{BmcVc, ChcVc, PropertyKind, Violation};
 
 // Additional re-exports for lower-level access
 pub use zani_core::{
-    ArtifactMetadata, BmcQuery, ChcQuery, Constraints, Decl, HarnessId, PropertyId,
-    SourceLocation, VcArtifact, VerificationMode,
+    ArtifactMetadata, BmcQuery, ChcQuery, Constraints, Decl, HarnessId, PropertyId, SourceLocation,
+    VcArtifact, VerificationMode,
 };
 
 /// Verify a function using zani's bounded model checking.

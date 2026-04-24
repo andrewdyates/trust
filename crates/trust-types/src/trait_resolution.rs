@@ -15,10 +15,10 @@ use crate::fx::{FxHashMap, FxHashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::formula::{Formula, VerificationCondition, VcKind};
+use crate::formula::{Formula, VcKind, VerificationCondition};
 use crate::model::{BlockId, SourceSpan, Terminator, Ty, VerifiableBody};
 use crate::traits::{
-    ConcreteTarget, CoherenceError, MethodInfo, TraitBound, TraitConstraint, TraitImpl,
+    CoherenceError, ConcreteTarget, MethodInfo, TraitBound, TraitConstraint, TraitImpl,
     TraitResolver, VTable,
 };
 
@@ -42,10 +42,7 @@ impl WhereClause {
     /// Create a where clause with a single bound.
     #[must_use]
     pub fn single(type_param: impl Into<String>, bound: TraitBound) -> Self {
-        Self {
-            type_param: type_param.into(),
-            bounds: vec![bound],
-        }
+        Self { type_param: type_param.into(), bounds: vec![bound] }
     }
 
     /// Human-readable description (e.g., "T: Clone + Debug").
@@ -116,11 +113,8 @@ impl MonomorphizationRequest {
     /// Build a mangled name for the monomorphized instance.
     #[must_use]
     pub fn mangled_name(&self) -> String {
-        let subs: Vec<String> = self
-            .substitutions
-            .iter()
-            .map(|(param, ty)| format!("{param}={ty:?}"))
-            .collect();
+        let subs: Vec<String> =
+            self.substitutions.iter().map(|(param, ty)| format!("{param}={ty:?}")).collect();
         format!("{}<{}>", self.generic_def_path, subs.join(", "))
     }
 }
@@ -235,9 +229,7 @@ pub fn resolve_all_trait_calls(
                 // Build vtable for this trait if we haven't already.
                 for imp in &matching_impls {
                     if vtable_traits.insert(imp.trait_name.clone()) {
-                        result
-                            .vtables
-                            .push(resolver.build_vtable(&imp.trait_name));
+                        result.vtables.push(resolver.build_vtable(&imp.trait_name));
                     }
                 }
 
@@ -247,10 +239,7 @@ pub fn resolve_all_trait_calls(
                 let targets = TraitResolver::devirtualize(&vtable, method_name);
 
                 if let Some(first_impl) = matching_impls.first() {
-                    if let Some(method) = first_impl
-                        .methods
-                        .iter()
-                        .find(|m| m.name == method_name)
+                    if let Some(method) = first_impl.methods.iter().find(|m| m.name == method_name)
                     {
                         let method_info = MethodInfo {
                             containing_trait: Some(first_impl.trait_name.clone()),
@@ -375,10 +364,10 @@ pub fn generate_trait_vcs(
                     unresolved.callee_name, unresolved.reason
                 ),
             },
-            function: function_name.to_string(),
+            function: function_name.into(),
             location: unresolved.span.clone(),
             formula: Formula::Bool(false),
-                    contract_metadata: None,
+            contract_metadata: None,
         });
     }
 
@@ -392,10 +381,10 @@ pub fn generate_trait_vcs(
             kind: VcKind::Assertion {
                 message: format!("coherence violation: {}", error.description()),
             },
-            function: function_name.to_string(),
+            function: function_name.into(),
             location: span,
             formula: Formula::Bool(false),
-                    contract_metadata: None,
+            contract_metadata: None,
         });
     }
 
@@ -411,11 +400,11 @@ pub fn generate_trait_vcs(
                         call.concrete_targets.len()
                     ),
                 },
-                function: function_name.to_string(),
+                function: function_name.into(),
                 location: call.span.clone(),
                 // This is satisfiable — the VC records the dispatch enumeration.
                 formula: Formula::Bool(true),
-                    contract_metadata: None,
+                contract_metadata: None,
             });
         }
     }
@@ -481,10 +470,7 @@ mod tests {
 
     fn make_blanket_impl() -> TraitImpl {
         TraitImpl {
-            implementing_type: Ty::Adt {
-                name: "T".to_string(),
-                fields: vec![],
-            },
+            implementing_type: Ty::Adt { name: "T".to_string(), fields: vec![] },
             trait_name: "MyTrait".to_string(),
             methods: vec![],
             where_clauses: vec![],
@@ -494,10 +480,7 @@ mod tests {
 
     fn make_bounded_blanket_impl() -> TraitImpl {
         TraitImpl {
-            implementing_type: Ty::Adt {
-                name: "T".to_string(),
-                fields: vec![],
-            },
+            implementing_type: Ty::Adt { name: "T".to_string(), fields: vec![] },
             trait_name: "MyTrait".to_string(),
             methods: vec![],
             where_clauses: vec![TraitBound {
@@ -562,10 +545,7 @@ mod tests {
     #[test]
     fn test_specialization_bounded_blanket() {
         let imp = make_bounded_blanket_impl();
-        assert_eq!(
-            SpecializationLevel::classify(&imp),
-            SpecializationLevel::BoundedBlanket
-        );
+        assert_eq!(SpecializationLevel::classify(&imp), SpecializationLevel::BoundedBlanket);
     }
 
     #[test]
@@ -750,7 +730,7 @@ mod tests {
             },
         )];
 
-        let bindings = FxHashMap::from([("T".to_string(), Ty::i32())]);
+        let bindings: FxHashMap<_, _> = [("T".to_string(), Ty::i32())].into_iter().collect();
         let unsatisfied = check_where_clauses(&resolver, &clauses, &bindings);
         assert!(unsatisfied.is_empty());
     }
@@ -768,7 +748,7 @@ mod tests {
             },
         )];
 
-        let bindings = FxHashMap::from([("T".to_string(), Ty::i32())]);
+        let bindings: FxHashMap<_, _> = [("T".to_string(), Ty::i32())].into_iter().collect();
         let unsatisfied = check_where_clauses(&resolver, &clauses, &bindings);
         assert_eq!(unsatisfied.len(), 1);
         assert!(unsatisfied[0].reason.contains("does not implement"));
@@ -955,8 +935,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&result).expect("serialize");
-        let roundtrip: TraitResolutionResult =
-            serde_json::from_str(&json).expect("deserialize");
+        let roundtrip: TraitResolutionResult = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(roundtrip.resolved_count(), 1);
     }
 
@@ -998,11 +977,7 @@ mod tests {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(2),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,

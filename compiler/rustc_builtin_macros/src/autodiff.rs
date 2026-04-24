@@ -1,7 +1,7 @@
 //! This module contains the implementation of the `#[autodiff]` attribute.
 //! Currently our linter isn't smart enough to see that each import is used in one of the two
 //! configs (autodiff enabled or disabled), so we have to add cfg's to each import.
-//! tRust: known issue (ZuseZ4) — Remove this once we have a smarter linter.
+//! FIXME(ZuseZ4): Remove this once we have a smarter linter.
 
 mod llvm_enzyme {
     use std::str::FromStr;
@@ -55,7 +55,7 @@ mod llvm_enzyme {
             }
         }
 
-        let segments = &x.meta_item().expect("invariant: autodiff attribute must be a valid meta item").path.segments; // tRust: unwrap -> expect
+        let segments = &x.meta_item().unwrap().path.segments;
         assert!(segments.len() == 1);
         segments[0].ident
     }
@@ -200,7 +200,7 @@ mod llvm_enzyme {
     ///     std::intrinsics::autodiff(sin::<> as fn(..) -> .., cos_box::<>, (x, dx, dret))
     /// }
     /// ```
-    /// tRust: known issue (ZuseZ4) — Once autodiff is enabled by default, make this a doc comment which is checked
+    /// FIXME(ZuseZ4): Once autodiff is enabled by default, make this a doc comment which is checked
     /// in CI.
     pub(crate) fn expand_with_mode(
         ecx: &mut ExtCtxt<'_>,
@@ -565,10 +565,7 @@ mod llvm_enzyme {
                 .iter()
                 .map(|arg| match arg.pat.kind {
                     PatKind::Ident(_, ident, _) => ecx.expr_path(ecx.path_ident(span, ident)),
-                    // tRust: Non-ident patterns in autodiff arguments are not yet supported
-                    _ => {
-                        bug!("unimplemented: non-ident patterns in autodiff function arguments are not supported")
-                    }
+                    _ => todo!(),
                 })
                 .collect::<ThinVec<_>>()
                 .into(),
@@ -648,7 +645,7 @@ mod llvm_enzyme {
     //
     // Error handling: If the user provides an invalid configuration (incorrect numbers, types, or
     // both), we emit an error and return the original signature. This allows us to continue parsing.
-    // tRust: known issue (Sa4dUs) — make individual activities' span available so errors
+    // FIXME(Sa4dUs): make individual activities' span available so errors
     // can point to only the activity instead of the entire attribute
     fn gen_enzyme_decl(
         ecx: &ExtCtxt<'_>,

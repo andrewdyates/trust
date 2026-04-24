@@ -140,7 +140,7 @@ fn abstracted_waiters_of(job_map: &QueryJobMap<'_>, query: QueryJobId) -> Vec<Ab
 
     // Add the explicit waiters which use condvars and are resumable
     if let Some(latch) = job_map.latch_of(query) {
-        for (i, waiter) in latch.waiters.lock().as_ref().expect("invariant: latch waiters list is initialized when latch exists").iter().enumerate() { // tRust: unwrap -> expect
+        for (i, waiter) in latch.waiters.lock().as_ref().unwrap().iter().enumerate() {
             result.push(AbstractedWaiter {
                 span: waiter.span,
                 parent: waiter.parent,
@@ -243,7 +243,7 @@ fn remove_cycle<'tcx>(
     let mut stack = Vec::new();
     // Look for a cycle starting with the last query in `jobs`
     if let ControlFlow::Break(resumable) =
-        find_cycle(job_map, jobs.pop().expect("invariant: jobs is non-empty at loop entry"), DUMMY_SP, &mut stack, &mut visited) // tRust: unwrap -> expect
+        find_cycle(job_map, jobs.pop().unwrap(), DUMMY_SP, &mut stack, &mut visited)
     {
         // The stack is a vector of pairs of spans and queries; reverse it so that
         // the earlier entries require later entries
@@ -329,10 +329,10 @@ fn remove_cycle<'tcx>(
 
         // We unwrap `resumable` here since there must always be one
         // edge which is resumable / waited using a query latch
-        let (waitee_query, waiter_idx) = resumable.expect("invariant: cycle must have at least one resumable/latch-waited edge"); // tRust: unwrap -> expect
+        let (waitee_query, waiter_idx) = resumable.unwrap();
 
         // Extract the waiter we want to resume
-        let waiter = job_map.latch_of(waitee_query).expect("invariant: waitee query in cycle must have a latch").extract_waiter(waiter_idx); // tRust: unwrap -> expect
+        let waiter = job_map.latch_of(waitee_query).unwrap().extract_waiter(waiter_idx);
 
         // Set the cycle error so it will be picked up when resumed
         *waiter.cycle.lock() = Some(error);

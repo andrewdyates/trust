@@ -97,6 +97,7 @@ pub fn merge_configs(base: TrustConfig, overlay: TrustConfig) -> TrustConfig {
         certify: if overlay.certify != defaults.certify { overlay.certify } else { base.certify },
         tv: if overlay.tv != defaults.tv { overlay.tv } else { base.tv },
         report_format: overlay.report_format.or(base.report_format),
+        solver_memory_limit_mb: overlay.solver_memory_limit_mb.or(base.solver_memory_limit_mb),
     }
 }
 

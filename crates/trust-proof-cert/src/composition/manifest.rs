@@ -5,7 +5,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -67,22 +67,22 @@ pub enum ManifestError {
 /// conditions, signature hash, composability flags) so downstream crates
 /// can compose proofs without re-verifying dependencies.
 ///
-/// Designed for JSON serialization and transport alongside
-/// [`CertificateBundle`](crate::bundle::CertificateBundle).
+/// Designed for JSON serialization and transport alongside proof artifacts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompositionManifest {
     /// Crate identifier (name).
     pub crate_id: String,
     /// Crate version (semver).
     pub version: String,
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Function entries keyed by fully-qualified function name.
-    pub entries: FxHashMap<String, ManifestEntry>,
+    pub entries: BTreeMap<String, ManifestEntry>,
     /// Internal call graph edges: (caller, callee) within this crate.
     pub internal_edges: Vec<(String, String)>,
     /// External dependencies: (local_function, dep_crate, dep_function).
     pub external_deps: Vec<(String, String, String)>,
     /// Spec hashes for invalidation detection (function -> hash).
-    pub spec_hashes: FxHashMap<String, u64>,
+    pub spec_hashes: BTreeMap<String, u64>,
     /// Bundle hash for integrity verification (from the associated bundle).
     pub bundle_hash: Vec<u8>,
 }
@@ -94,10 +94,10 @@ impl CompositionManifest {
         CompositionManifest {
             crate_id: crate_id.into(),
             version: version.into(),
-            entries: FxHashMap::default(),
+            entries: BTreeMap::new(),
             internal_edges: Vec::new(),
             external_deps: Vec::new(),
-            spec_hashes: FxHashMap::default(),
+            spec_hashes: BTreeMap::new(),
             bundle_hash: Vec::new(),
         }
     }
@@ -124,12 +124,14 @@ impl CompositionManifest {
     /// This is a fast structural check; full semantic composability
     /// requires [`check_composability`](super::checkers::check_composability) on the underlying certificates.
     pub fn is_composable(&self, fn_a: &str, fn_b: &str) -> Result<bool, ManifestError> {
-        let entry_a = self.entries.get(fn_a).ok_or_else(|| ManifestError::FunctionNotFound {
-            function: fn_a.to_string(),
-        })?;
-        let entry_b = self.entries.get(fn_b).ok_or_else(|| ManifestError::FunctionNotFound {
-            function: fn_b.to_string(),
-        })?;
+        let entry_a = self
+            .entries
+            .get(fn_a)
+            .ok_or_else(|| ManifestError::FunctionNotFound { function: fn_a.into() })?;
+        let entry_b = self
+            .entries
+            .get(fn_b)
+            .ok_or_else(|| ManifestError::FunctionNotFound { function: fn_b.into() })?;
 
         if !entry_a.composable || !entry_b.composable {
             return Ok(false);
@@ -150,16 +152,15 @@ impl CompositionManifest {
     pub fn merge(&mut self, other: &CompositionManifest) -> Result<(), ManifestError> {
         for (fn_id, entry) in &other.entries {
             if let Some(existing) = self.entries.get(fn_id)
-                && existing.signature_hash != entry.signature_hash {
-                    return Err(ManifestError::MergeConflict {
-                        function: fn_id.clone(),
-                    });
-                }
+                && existing.signature_hash != entry.signature_hash
+            {
+                return Err(ManifestError::MergeConflict { function: fn_id.clone() });
+            }
             self.entries.insert(fn_id.clone(), entry.clone());
         }
 
         // Merge edges (deduplicate).
-        let existing_edges: FxHashSet<(String, String)> =
+        let existing_edges: BTreeSet<(String, String)> =
             self.internal_edges.iter().cloned().collect();
         for edge in &other.internal_edges {
             if !existing_edges.contains(edge) {
@@ -167,7 +168,7 @@ impl CompositionManifest {
             }
         }
 
-        let existing_ext: FxHashSet<(String, String, String)> =
+        let existing_ext: BTreeSet<(String, String, String)> =
             self.external_deps.iter().cloned().collect();
         for dep in &other.external_deps {
             if !existing_ext.contains(dep) {
@@ -244,9 +245,7 @@ pub fn generate_manifest(
                 .unwrap_or_else(trust_types::ProofStrength::smt_unsat),
         };
 
-        let signature_hash = cert
-            .map(|c| c.function_hash.0.clone())
-            .unwrap_or_default();
+        let signature_hash = cert.map(|c| c.function_hash.0.clone()).unwrap_or_default();
 
         let composable = node.status == CompositionNodeStatus::Valid;
 
@@ -261,9 +260,7 @@ pub fn generate_manifest(
 
         // Record internal edges from this function to its callees.
         for dep in &node.dependencies {
-            manifest
-                .internal_edges
-                .push((func_name.clone(), dep.clone()));
+            manifest.internal_edges.push((func_name.clone(), dep.clone()));
         }
     }
 

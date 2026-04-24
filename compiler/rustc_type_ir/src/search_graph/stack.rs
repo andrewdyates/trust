@@ -101,7 +101,7 @@ impl<X: Cx> Stack<X> {
     }
 
     pub(super) fn pop(&mut self) -> StackEntry<X> {
-        self.entries.pop().expect("invariant: pop from non-empty stack") // tRust: unwrap -> expect
+        self.entries.pop().unwrap()
     }
 
     pub(super) fn cycle_step_kinds(&self, head: StackDepth) -> impl Iterator<Item = PathKind> {

@@ -21,18 +21,24 @@ pub(crate) struct CargoCheckResult {
 ///
 /// Returns `Ok(CargoCheckResult)` with the check outcome, or `Err(String)`
 /// if the command cannot be spawned or times out.
-pub(crate) fn run_cargo_check(crate_path: &Path, timeout: Duration) -> Result<CargoCheckResult, String> {
+pub(crate) fn run_cargo_check(
+    crate_path: &Path,
+    timeout: Duration,
+) -> Result<CargoCheckResult, String> {
     if !crate_path.join("Cargo.toml").exists() {
-        return Err(format!(
-            "No Cargo.toml found at {}",
-            crate_path.display()
-        ));
+        return Err(format!("No Cargo.toml found at {}", crate_path.display()));
     }
 
+    // tRust: Use CARGO_SKIP_CACHE=1 and a per-invocation target dir to avoid
+    // hitting the cargo wrapper's serialization lock during validation (#810).
+    let target_dir =
+        std::env::temp_dir().join(format!("trust-backprop-check-{}", std::process::id()));
     let mut child = std::process::Command::new("cargo")
         .arg("check")
         .arg("--manifest-path")
         .arg(crate_path.join("Cargo.toml"))
+        .env("CARGO_SKIP_CACHE", "1")
+        .env("CARGO_TARGET_DIR", &target_dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -102,18 +108,24 @@ pub(crate) struct CargoTestResult {
 ///
 /// Returns `Ok(CargoTestResult)` with the test outcome, or `Err(String)`
 /// if the command cannot be spawned or times out.
-pub(crate) fn run_cargo_test(crate_path: &Path, timeout: Duration) -> Result<CargoTestResult, String> {
+pub(crate) fn run_cargo_test(
+    crate_path: &Path,
+    timeout: Duration,
+) -> Result<CargoTestResult, String> {
     if !crate_path.join("Cargo.toml").exists() {
-        return Err(format!(
-            "No Cargo.toml found at {}",
-            crate_path.display()
-        ));
+        return Err(format!("No Cargo.toml found at {}", crate_path.display()));
     }
 
+    // tRust: Use CARGO_SKIP_CACHE=1 and a per-invocation target dir to avoid
+    // hitting the cargo wrapper's serialization lock during validation (#810).
+    let target_dir =
+        std::env::temp_dir().join(format!("trust-backprop-test-{}", std::process::id()));
     let mut child = std::process::Command::new("cargo")
         .arg("test")
         .arg("--manifest-path")
         .arg(crate_path.join("Cargo.toml"))
+        .env("CARGO_SKIP_CACHE", "1")
+        .env("CARGO_TARGET_DIR", &target_dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()

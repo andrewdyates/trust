@@ -87,7 +87,7 @@ impl SubdiagnosticDerive {
 
         let diag = &self.diag;
 
-        // tRust: known issue (edition_2024) — Fix the `keyword_idents_2024` lint to not trigger here?
+        // FIXME(edition_2024): Fix the `keyword_idents_2024` lint to not trigger here?
         #[allow(keyword_idents_2024)]
         let ret = structure.gen_impl(quote! {
             gen impl rustc_errors::Subdiagnostic for @Self {
@@ -314,7 +314,7 @@ impl<'parent, 'a> SubdiagnosticDeriveVariantBuilder<'parent, 'a> {
                     report_error_if_not_applied_to_span(attr, &info)?;
 
                     let binding = info.binding.binding.clone();
-                    // tRust: known issue (#100717) — support `Option<Span>` on `primary_span` like in the
+                    // FIXME(#100717): support `Option<Span>` on `primary_span` like in the
                     // diagnostic derive
                     if !matches!(info.ty, FieldInnerTy::Plain(_)) {
                         throw_invalid_attr!(attr, |diag| {

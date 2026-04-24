@@ -70,7 +70,6 @@ pub(crate) fn remove_successors_from_switch<'tcx>(
     is_unreachable_block: impl Fn(BasicBlock) -> bool,
 ) -> bool {
     let terminator = body.basic_blocks[bb].terminator();
-    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
     let TerminatorKind::SwitchInt { discr, targets } = &terminator.kind else { bug!() };
     let source_info = terminator.source_info;
     let location = body.terminator_loc(bb);
@@ -95,11 +94,10 @@ pub(crate) fn remove_successors_from_switch<'tcx>(
 
     let discr_ty = discr.ty(body, tcx);
     let discr_size = Size::from_bits(match discr_ty.kind() {
-        ty::Uint(uint) => uint.normalize(tcx.sess.target.pointer_width).bit_width().expect("invariant: normalized uint must have a known bit width"), // tRust: unwrap elimination
-        ty::Int(int) => int.normalize(tcx.sess.target.pointer_width).bit_width().expect("invariant: normalized int must have a known bit width"), // tRust: unwrap elimination
+        ty::Uint(uint) => uint.normalize(tcx.sess.target.pointer_width).bit_width().unwrap(),
+        ty::Int(int) => int.normalize(tcx.sess.target.pointer_width).bit_width().unwrap(),
         ty::Char => 32,
         ty::Bool => 1,
-        // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
         other => bug!("unhandled type: {:?}", other),
     });
 
@@ -140,7 +138,7 @@ pub(crate) fn remove_successors_from_switch<'tcx>(
         (1, false) => TerminatorKind::Goto { target: otherwise },
         (2, true) => {
             // All targets are unreachable except one. Record the equality, and make it a goto.
-            let (value, target) = new_targets.iter().next().expect("invariant: switch must have at least one target when count is 2"); // tRust: unwrap elimination
+            let (value, target) = new_targets.iter().next().unwrap();
             add_assumption(BinOp::Eq, value);
             TerminatorKind::Goto { target }
         }

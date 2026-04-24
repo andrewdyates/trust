@@ -21,11 +21,11 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-mod formula;
-mod provenance;
 mod encoding;
-mod heap;
+mod formula;
 mod frame;
+mod heap;
+mod provenance;
 pub(crate) mod unsafe_ops;
 mod vc_gen;
 
@@ -33,12 +33,12 @@ mod vc_gen;
 mod tests;
 
 // Re-export all public API items to preserve the existing module interface.
-pub use formula::SepFormula;
-pub use provenance::{PointerPermission, ProvenanceId, SymbolicPointer};
 pub use encoding::{encode_heap_disjointness, encode_unsafe_block, sep_to_formula};
-pub use heap::{HeapCell, SymbolicHeap};
+pub use formula::SepFormula;
 pub use frame::{apply_frame_rule, encode_framed_unsafe_block};
-pub use unsafe_ops::{address_of_sep_vc, ffi_call_sep_vc, unsafe_fn_call_sep_vc};
-#[allow(unused_imports)]
+pub use heap::{HeapCell, SymbolicHeap};
+pub use provenance::{PointerPermission, ProvenanceId, SymbolicPointer};
+#[cfg(test)]
 pub(crate) use unsafe_ops::vcs_from_unsafe_op;
+pub use unsafe_ops::{address_of_sep_vc, ffi_call_sep_vc, unsafe_fn_call_sep_vc};
 pub use vc_gen::{deref_vc, raw_write_vc, transmute_vc};

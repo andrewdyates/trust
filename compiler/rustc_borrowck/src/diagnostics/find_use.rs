@@ -57,7 +57,7 @@ impl<'a, 'tcx> UseFinder<'a, 'tcx> {
             if is_statement {
                 visitor.visit_statement(&block_data.statements[p.statement_index], p);
             } else {
-                visitor.visit_terminator(block_data.terminator.as_ref().expect("invariant: basic block must have terminator"), p);
+                visitor.visit_terminator(block_data.terminator.as_ref().unwrap(), p);
             }
 
             match visitor.def_use_result {

@@ -122,11 +122,7 @@ impl PromptSection {
     #[must_use]
     pub fn new(priority: ContentPriority, content: String, safety_margin: f64) -> Self {
         let estimated_tokens = estimate_tokens(&content, safety_margin);
-        Self {
-            priority,
-            content,
-            estimated_tokens,
-        }
+        Self { priority, content, estimated_tokens }
     }
 }
 
@@ -368,11 +364,8 @@ mod tests {
 
     #[test]
     fn test_effective_budget_custom() {
-        let budget = TokenBudget {
-            max_prompt_tokens: 10_000,
-            tool_use_overhead: 500,
-            ..Default::default()
-        };
+        let budget =
+            TokenBudget { max_prompt_tokens: 10_000, tool_use_overhead: 500, ..Default::default() };
         assert_eq!(budget.effective_prompt_budget(true), 9_500);
         assert_eq!(budget.effective_prompt_budget(false), 10_000);
     }
@@ -402,11 +395,8 @@ mod tests {
 
     #[test]
     fn test_prompt_section_new() {
-        let section = PromptSection::new(
-            ContentPriority::OriginalSource,
-            "fn foo() {}".into(),
-            1.3,
-        );
+        let section =
+            PromptSection::new(ContentPriority::OriginalSource, "fn foo() {}".into(), 1.3);
         assert_eq!(section.priority, ContentPriority::OriginalSource);
         assert_eq!(section.content, "fn foo() {}");
         assert!(section.estimated_tokens > 0);
@@ -434,11 +424,7 @@ mod tests {
             PromptSection::new(ContentPriority::Signature, "sig".into(), 1.0),
             PromptSection::new(ContentPriority::OriginalSource, "a".repeat(300), 1.0),
             PromptSection::new(ContentPriority::MirText, "b".repeat(300), 1.0),
-            PromptSection::new(
-                ContentPriority::ReconstructedSource,
-                "c".repeat(300),
-                1.0,
-            ),
+            PromptSection::new(ContentPriority::ReconstructedSource, "c".repeat(300), 1.0),
         ];
 
         // Budget that fits signature + one section but not all
@@ -475,19 +461,11 @@ mod tests {
     fn test_truncate_removes_multiple_sections() {
         let sections = vec![
             PromptSection::new(ContentPriority::Signature, "fn f()".into(), 1.0),
-            PromptSection::new(
-                ContentPriority::FailureDescriptions,
-                "overflow".into(),
-                1.0,
-            ),
+            PromptSection::new(ContentPriority::FailureDescriptions, "overflow".into(), 1.0),
             PromptSection::new(ContentPriority::OriginalSource, "a".repeat(300), 1.0),
             PromptSection::new(ContentPriority::ExistingSpecs, "b".repeat(300), 1.0),
             PromptSection::new(ContentPriority::MirText, "c".repeat(300), 1.0),
-            PromptSection::new(
-                ContentPriority::ReconstructedSource,
-                "d".repeat(300),
-                1.0,
-            ),
+            PromptSection::new(ContentPriority::ReconstructedSource, "d".repeat(300), 1.0),
         ];
 
         // Very tight budget: only signature + failures fit
@@ -600,11 +578,8 @@ mod tests {
     fn test_large_mir_triggers_truncation() {
         // Simulate a large MIR dump that would exceed a small budget
         let large_mir = "bb0: {\n    _1 = Add(_2, _3);\n}\n".repeat(500);
-        let budget = TokenBudget {
-            max_prompt_tokens: 500,
-            safety_margin: 1.3,
-            ..Default::default()
-        };
+        let budget =
+            TokenBudget { max_prompt_tokens: 500, safety_margin: 1.3, ..Default::default() };
 
         let sections = vec![
             PromptSection::new(
@@ -622,11 +597,7 @@ mod tests {
                 "fn get_midpoint(a: u64, b: u64) -> u64 {\n    (a + b) / 2\n}".into(),
                 budget.safety_margin,
             ),
-            PromptSection::new(
-                ContentPriority::MirText,
-                large_mir,
-                budget.safety_margin,
-            ),
+            PromptSection::new(ContentPriority::MirText, large_mir, budget.safety_margin),
             PromptSection::new(
                 ContentPriority::ReconstructedSource,
                 "fn get_midpoint(a: u64, b: u64) -> u64 {\n    let _3 = a + b;\n    _3 / 2\n}"

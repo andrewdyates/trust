@@ -46,7 +46,9 @@ fn all_vckind_coverage() -> Vec<VcKindCoverage> {
                 operand_tys: (dummy_ty.clone(), dummy_ty.clone()),
             },
             "ArithmeticOverflow",
-            Coverage::Tested("error_detection.rs, pipeline.rs, self_verify.rs, z4_phase2_models.rs"),
+            Coverage::Tested(
+                "error_detection.rs, pipeline.rs, self_verify.rs, z4_phase2_models.rs",
+            ),
         ),
         (
             VcKind::ShiftOverflow {
@@ -115,13 +117,11 @@ fn all_vckind_coverage() -> Vec<VcKindCoverage> {
         (
             VcKind::Deadlock,
             "Deadlock",
-            Coverage::Tested("trust-strengthen/cegis.rs, trust-strengthen/cex_guided.rs, trust-debug/root_cause.rs"),
+            Coverage::Tested(
+                "trust-strengthen/cegis.rs, trust-strengthen/cex_guided.rs, trust-debug/root_cause.rs",
+            ),
         ),
-        (
-            VcKind::Temporal { property: String::new() },
-            "Temporal",
-            Coverage::Tested("pipeline.rs"),
-        ),
+        (VcKind::Temporal { property: String::new() }, "Temporal", Coverage::Tested("pipeline.rs")),
         (
             VcKind::Liveness {
                 property: LivenessProperty {
@@ -137,10 +137,7 @@ fn all_vckind_coverage() -> Vec<VcKindCoverage> {
         ),
         (
             VcKind::Fairness {
-                constraint: FairnessConstraint::Weak {
-                    action: String::new(),
-                    vars: vec![],
-                },
+                constraint: FairnessConstraint::Weak { action: String::new(), vars: vec![] },
             },
             "Fairness",
             Coverage::Tested("trust-cegar/strategy.rs"),
@@ -171,32 +168,44 @@ fn all_vckind_coverage() -> Vec<VcKindCoverage> {
         (
             VcKind::ProtocolViolation { protocol: String::new(), violation: String::new() },
             "ProtocolViolation",
-            Coverage::Documented("Protocol composition (#55); tested at trust-types description() level"),
+            Coverage::Documented(
+                "Protocol composition (#55); tested at trust-types description() level",
+            ),
         ),
         (
             VcKind::NonTermination { context: String::new(), measure: String::new() },
             "NonTermination",
-            Coverage::Tested("trust-cegar/strategy.rs, trust-debug/root_cause.rs, trust-cegar/portfolio.rs"),
+            Coverage::Tested(
+                "trust-cegar/strategy.rs, trust-debug/root_cause.rs, trust-cegar/portfolio.rs",
+            ),
         ),
         (
             VcKind::NeuralRobustness { epsilon: String::new() },
             "NeuralRobustness",
-            Coverage::Documented("Neural verification (#186); tested at trust-types description() level"),
+            Coverage::Documented(
+                "Neural verification (#186); tested at trust-types description() level",
+            ),
         ),
         (
             VcKind::NeuralOutputRange { lower: String::new(), upper: String::new() },
             "NeuralOutputRange",
-            Coverage::Documented("Neural verification (#186); tested at trust-types description() level"),
+            Coverage::Documented(
+                "Neural verification (#186); tested at trust-types description() level",
+            ),
         ),
         (
             VcKind::NeuralLipschitz { constant: String::new() },
             "NeuralLipschitz",
-            Coverage::Documented("Neural verification (#186); tested at trust-types description() level"),
+            Coverage::Documented(
+                "Neural verification (#186); tested at trust-types description() level",
+            ),
         ),
         (
             VcKind::NeuralMonotonicity { input_dim: 0 },
             "NeuralMonotonicity",
-            Coverage::Documented("Neural verification (#186); tested at trust-types description() level"),
+            Coverage::Documented(
+                "Neural verification (#186); tested at trust-types description() level",
+            ),
         ),
         (
             VcKind::DataRace {
@@ -284,7 +293,9 @@ fn all_vckind_coverage() -> Vec<VcKindCoverage> {
         (
             VcKind::FunctionalCorrectness { property: String::new(), context: String::new() },
             "FunctionalCorrectness",
-            Coverage::Tested("contract_e2e.rs, misc_vc_pipeline.rs (vcgen pipeline, partial Router bypass)"),
+            Coverage::Tested(
+                "contract_e2e.rs, misc_vc_pipeline.rs (vcgen pipeline, partial Router bypass)",
+            ),
         ),
         (
             VcKind::LoopInvariantInitiation { invariant: String::new(), header_block: 0 },
@@ -367,24 +378,18 @@ fn test_vckind_exhaustiveness_guard() {
     }
 
     // --- 3. Summary report. ---
-    let tested_count = coverage
-        .iter()
-        .filter(|e| matches!(e.coverage, Coverage::Tested(_)))
-        .count();
-    let documented_count = coverage
-        .iter()
-        .filter(|e| matches!(e.coverage, Coverage::Documented(_)))
-        .count();
+    let tested_count =
+        coverage.iter().filter(|e| matches!(e.coverage, Coverage::Tested(_))).count();
+    let documented_count =
+        coverage.iter().filter(|e| matches!(e.coverage, Coverage::Documented(_))).count();
 
     eprintln!("VcKind exhaustiveness guard: {EXPECTED_VARIANT_COUNT} variants");
     eprintln!("  Tested:     {tested_count}");
     eprintln!("  Documented: {documented_count}");
 
     // --- 4. Print uncovered variants for visibility. ---
-    let documented: Vec<_> = coverage
-        .iter()
-        .filter(|e| matches!(e.coverage, Coverage::Documented(_)))
-        .collect();
+    let documented: Vec<_> =
+        coverage.iter().filter(|e| matches!(e.coverage, Coverage::Documented(_))).collect();
     if !documented.is_empty() {
         eprintln!("\nVariants with documented justification (no direct e2e test):");
         for entry in &documented {
@@ -420,8 +425,15 @@ fn test_vckind_proof_level_completeness() {
 
     // Reconstruct a representative of each variant and call proof_level().
     let variants: Vec<VcKind> = vec![
-        VcKind::ArithmeticOverflow { op: dummy_op, operand_tys: (dummy_ty.clone(), dummy_ty.clone()) },
-        VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: dummy_ty.clone(), shift_ty: dummy_ty.clone() },
+        VcKind::ArithmeticOverflow {
+            op: dummy_op,
+            operand_tys: (dummy_ty.clone(), dummy_ty.clone()),
+        },
+        VcKind::ShiftOverflow {
+            op: BinOp::Shl,
+            operand_ty: dummy_ty.clone(),
+            shift_ty: dummy_ty.clone(),
+        },
         VcKind::DivisionByZero,
         VcKind::RemainderByZero,
         VcKind::IndexOutOfBounds,
@@ -447,9 +459,17 @@ fn test_vckind_proof_level_completeness() {
         VcKind::Fairness {
             constraint: FairnessConstraint::Weak { action: "test".into(), vars: vec![] },
         },
-        VcKind::TaintViolation { source_label: "user".into(), sink_kind: "sql".into(), path_length: 1 },
+        VcKind::TaintViolation {
+            source_label: "user".into(),
+            sink_kind: "sql".into(),
+            path_length: 1,
+        },
         VcKind::RefinementViolation { spec_file: "spec.tla".into(), action: "Next".into() },
-        VcKind::ResilienceViolation { service: "db".into(), failure_mode: "timeout".into(), reason: "no retry".into() },
+        VcKind::ResilienceViolation {
+            service: "db".into(),
+            failure_mode: "timeout".into(),
+            reason: "no retry".into(),
+        },
         VcKind::ProtocolViolation { protocol: "2pc".into(), violation: "abort".into() },
         VcKind::NonTermination { context: "loop".into(), measure: "n".into() },
         VcKind::NeuralRobustness { epsilon: "0.1".into() },
@@ -457,7 +477,11 @@ fn test_vckind_proof_level_completeness() {
         VcKind::NeuralLipschitz { constant: "1.0".into() },
         VcKind::NeuralMonotonicity { input_dim: 0 },
         VcKind::DataRace { variable: "x".into(), thread_a: "t0".into(), thread_b: "t1".into() },
-        VcKind::InsufficientOrdering { variable: "x".into(), actual: "Relaxed".into(), required: "Acquire".into() },
+        VcKind::InsufficientOrdering {
+            variable: "x".into(),
+            actual: "Relaxed".into(),
+            required: "Acquire".into(),
+        },
         VcKind::TranslationValidation { pass: "dce".into(), check: "output_equiv".into() },
         VcKind::FloatDivisionByZero,
         VcKind::FloatOverflowToInfinity { op: dummy_op, operand_ty: dummy_ty.clone() },
@@ -471,7 +495,10 @@ fn test_vckind_proof_level_completeness() {
         VcKind::LifetimeViolation,
         VcKind::SendViolation,
         VcKind::SyncViolation,
-        VcKind::FunctionalCorrectness { property: "result_correctness".into(), context: "sorted input".into() },
+        VcKind::FunctionalCorrectness {
+            property: "result_correctness".into(),
+            context: "sorted input".into(),
+        },
         VcKind::LoopInvariantInitiation { invariant: "i >= 0".into(), header_block: 0 },
         VcKind::LoopInvariantConsecution { invariant: "i >= 0".into(), header_block: 0 },
         VcKind::LoopInvariantSufficiency { invariant: "i >= 0".into(), header_block: 0 },
@@ -479,7 +506,11 @@ fn test_vckind_proof_level_completeness() {
         VcKind::FrameConditionViolation { variable: "y".into(), function: "foo".into() },
     ];
 
-    assert_eq!(variants.len(), 47, "proof_level variant list out of sync — update when adding VcKind variants");
+    assert_eq!(
+        variants.len(),
+        47,
+        "proof_level variant list out of sync — update when adding VcKind variants"
+    );
 
     for kind in &variants {
         let level = kind.proof_level();

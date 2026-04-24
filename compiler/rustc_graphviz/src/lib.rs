@@ -616,22 +616,22 @@ where
 
         let escaped = &g.node_label(n).to_dot_string();
 
-        write!(text, "{}", id.as_slice()).expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+        write!(text, "{}", id.as_slice()).unwrap();
 
         if !options.contains(&RenderOption::NoNodeLabels) {
-            write!(text, "[label={escaped}]").expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+            write!(text, "[label={escaped}]").unwrap();
         }
 
         let style = g.node_style(n);
         if !options.contains(&RenderOption::NoNodeStyles) && style != Style::None {
-            write!(text, "[style=\"{}\"]", style.as_slice()).expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+            write!(text, "[style=\"{}\"]", style.as_slice()).unwrap();
         }
 
         if let Some(s) = g.node_shape(n) {
-            write!(text, "[shape={}]", &s.to_dot_string()).expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+            write!(text, "[shape={}]", &s.to_dot_string()).unwrap();
         }
 
-        writeln!(text, ";").expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+        writeln!(text, ";").unwrap();
         w.write_all(&text)?;
 
         text.clear();
@@ -645,18 +645,18 @@ where
         let source_id = g.node_id(&source);
         let target_id = g.node_id(&target);
 
-        write!(text, "{} -> {}", source_id.as_slice(), target_id.as_slice()).expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+        write!(text, "{} -> {}", source_id.as_slice(), target_id.as_slice()).unwrap();
 
         if !options.contains(&RenderOption::NoEdgeLabels) {
-            write!(text, "[label={escaped_label}]").expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+            write!(text, "[label={escaped_label}]").unwrap();
         }
 
         let style = g.edge_style(e);
         if !options.contains(&RenderOption::NoEdgeStyles) && style != Style::None {
-            write!(text, "[style=\"{}\"]", style.as_slice()).expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+            write!(text, "[style=\"{}\"]", style.as_slice()).unwrap();
         }
 
-        writeln!(text, ";").expect("invariant: write to Vec<u8> never fails"); // tRust: unwrap -> expect
+        writeln!(text, ";").unwrap();
         w.write_all(&text)?;
 
         text.clear();

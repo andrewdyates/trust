@@ -84,7 +84,7 @@ impl<'tcx> WfCheckingCtxt<'_, 'tcx> {
     /// This function should be called in favor of `normalize` in cases where we will
     /// then check the well-formedness of the type, since we only use the normalized
     /// signature types for implied bounds when checking regions.
-    // tRust: known issue — (-Znext-solver): This should be removed when we compute implied outlives
+    // FIXME(-Znext-solver): This should be removed when we compute implied outlives
     // bounds using the unnormalized signature of the function we're checking.
     pub(super) fn deeply_normalize<T>(&self, span: Span, loc: Option<WellFormedLoc>, value: T) -> T
     where
@@ -203,7 +203,7 @@ where
     );
     let errors_compat = infcx_compat.resolve_regions_with_outlives_env(&outlives_env);
     if errors_compat.is_empty() {
-        // tRust: known issue — Once we fix bevy, this would be the place to insert a warning
+        // FIXME: Once we fix bevy, this would be the place to insert a warning
         // to upgrade bevy.
         Ok(())
     } else {
@@ -288,10 +288,9 @@ pub(super) fn check_item<'tcx>(
                     }
                     ty::ImplPolarity::Negative => {
                         let ast::ImplPolarity::Negative(span) = of_trait.polarity else {
-                            // tRust: invariant — impl_polarity query must agree with the HIR impl's polarity
                             bug!("impl_polarity query disagrees with impl's polarity in HIR");
                         };
-                        // tRust: known issue — (#27579): what amount of WF checking do we need for neg impls?
+                        // FIXME(#27579): what amount of WF checking do we need for neg impls?
                         if let hir::Defaultness::Default { .. } = of_trait.defaultness {
                             let mut spans = vec![span];
                             spans.extend(of_trait.defaultness_span);
@@ -305,7 +304,7 @@ pub(super) fn check_item<'tcx>(
                         }
                     }
                     ty::ImplPolarity::Reservation => {
-                        // tRust: known issue — what amount of WF checking do we need for reservation impls?
+                        // FIXME: what amount of WF checking do we need for reservation impls?
                     }
                 }
             } else {
@@ -353,13 +352,7 @@ pub(crate) fn check_trait_item<'tcx>(
         for &assoc_ty_def_id in
             tcx.associated_types_for_impl_traits_in_associated_fn(def_id.to_def_id())
         {
-            // tRust: fix for rust-lang#153375 — use as_local() instead of
-            // expect_local() to gracefully handle non-local DefIds that can
-            // arise with phantom-lifetime-heavy trait definitions involving
-            // external crate items.
-            if let Some(local_id) = assoc_ty_def_id.as_local() {
-                res = res.and(check_associated_item(tcx, local_id));
-            }
+            res = res.and(check_associated_item(tcx, assoc_ty_def_id.expect_local()));
         }
     }
     res
@@ -397,7 +390,7 @@ fn check_gat_where_clauses(tcx: TyCtxt<'_>, trait_def_id: LocalDefId) {
                 continue;
             }
             let gat_generics = tcx.generics_of(gat_def_id);
-            // tRust: known issue — (jackh726): we can also warn in the more general case
+            // FIXME(jackh726): we can also warn in the more general case
             if gat_generics.is_own_empty() {
                 continue;
             }
@@ -520,7 +513,6 @@ fn check_gat_where_clauses(tcx: TyCtxt<'_>, trait_def_id: LocalDefId) {
                 ty::ClauseKind::TypeOutlives(ty::OutlivesPredicate(a, b)) => {
                     !ty_known_to_outlive(tcx, gat_def_id, param_env, &FxIndexSet::default(), a, b)
                 }
-                // tRust: invariant — all valid ClauseKind variants for WF checking handled above
                 _ => bug!("Unexpected ClauseKind"),
             })
             .map(|clause| clause.to_string())
@@ -575,7 +567,7 @@ fn augment_param_env<'tcx>(
     let bounds = tcx.mk_clauses_from_iter(
         param_env.caller_bounds().iter().chain(new_predicates.iter().cloned()),
     );
-    // tRust: known issue — (compiler-errors): Perhaps there is a case where we need to normalize this
+    // FIXME(compiler-errors): Perhaps there is a case where we need to normalize this
     // i.e. traits::normalize_param_env_or_error
     ty::ParamEnv::new(bounds)
 }
@@ -814,13 +806,13 @@ fn lint_item_shadowing_supertrait_item<'tcx>(tcx: TyCtxt<'tcx>, trait_item_def_i
         let shadowee = if let [shadowed] = shadowed[..] {
             errors::SupertraitItemShadowee::Labeled {
                 span: tcx.def_span(shadowed.def_id),
-                supertrait: tcx.item_name(shadowed.trait_container(tcx).expect("invariant: value is present")),
+                supertrait: tcx.item_name(shadowed.trait_container(tcx).unwrap()),
             }
         } else {
             let (traits, spans): (Vec<_>, Vec<_>) = shadowed
                 .iter()
                 .map(|item| {
-                    (tcx.item_name(item.trait_container(tcx).expect("invariant: value is present")), tcx.def_span(item.def_id))
+                    (tcx.item_name(item.trait_container(tcx).unwrap()), tcx.def_span(item.def_id))
                 })
                 .unzip();
             errors::SupertraitItemShadowee::Several { traits: traits.into(), spans: spans.into() }
@@ -865,7 +857,6 @@ fn check_param_wf(tcx: TyCtxt<'_>, param: &ty::GenericParamDef) -> Result<(), Er
                     let hir::GenericParamKind::Const { ty: &hir::Ty { span, .. }, .. } =
                         tcx.hir_node_by_def_id(def_id).expect_generic_param().kind
                     else {
-                        // tRust: invariant — associated type with no default should not reach this branch
                         bug!()
                     };
                     span
@@ -1040,7 +1031,7 @@ fn check_type_defn<'tcx>(
                 if let Some(def_id) = field.value
                     && let Some(_ty) = tcx.type_of(def_id).no_bound_vars()
                 {
-                    // tRust: known issue — (generic_const_exprs, default_field_values): this is a hack and needs to
+                    // FIXME(generic_const_exprs, default_field_values): this is a hack and needs to
                     // be refactored to check the instantiate-ability of the code better.
                     if let Some(def_id) = def_id.as_local()
                         && let hir::Node::AnonConst(anon) = tcx.hir_node_by_def_id(def_id)
@@ -1119,7 +1110,6 @@ fn check_type_defn<'tcx>(
                                 ItemKind::Struct(..) => AdtKind::Struct,
                                 ItemKind::Union(..) => AdtKind::Union,
                                 ItemKind::Enum(..) => AdtKind::Enum,
-                                // tRust: invariant — all valid GenericParamKind variants for WF checked above
                                 kind => span_bug!(
                                     item.span,
                                     "should be wfchecking an ADT, got {kind:?}"
@@ -1141,7 +1131,6 @@ fn check_type_defn<'tcx>(
                     Ok(_) => {}
                     Err(ErrorHandled::Reported(..)) => {}
                     Err(ErrorHandled::TooGeneric(sp)) => {
-                        // tRust: invariant — enum variant discriminant must be evaluable (not too generic)
                         span_bug!(sp, "enum variant discr was too generic to eval")
                     }
                 }
@@ -1461,7 +1450,7 @@ pub(super) fn check_where_clauses<'tcx>(wfcx: &WfCheckingCtxt<'_, 'tcx>, def_id:
             // Ignore dependent defaults -- that is, where the default of one type
             // parameter includes another (e.g., `<T, U = T>`). In those cases, we can't
             // be sure if it will error or not as user might always specify the other.
-            // tRust: known issue — (generic_const_exprs): This is incorrect when dealing with unused const params.
+            // FIXME(generic_const_exprs): This is incorrect when dealing with unused const params.
             // E.g: `struct Foo<const N: usize, const M: usize = { 1 - 2 }>;`. Here, we should
             // eagerly error but we don't as we have `ConstKind::Unevaluated(.., [N, M])`.
             if !default.has_param() {
@@ -1469,7 +1458,7 @@ pub(super) fn check_where_clauses<'tcx>(wfcx: &WfCheckingCtxt<'_, 'tcx>, def_id:
                     tcx.def_span(param.def_id),
                     matches!(param.kind, GenericParamDefKind::Type { .. })
                         .then(|| WellFormedLoc::Ty(param.def_id.expect_local())),
-                    default.as_term().expect("invariant: value is present"),
+                    default.as_term().unwrap(),
                 );
             } else {
                 // If we've got a generic const parameter we still want to check its
@@ -2023,7 +2012,6 @@ pub(super) fn check_variances_for_type_defn<'tcx>(tcx: TyCtxt<'tcx>, def_id: Loc
                 "should not be computing variance of non-free type alias"
             );
         }
-        // tRust: invariant — variance computation is only applicable to items with type parameters
         kind => span_bug!(tcx.def_span(def_id), "cannot compute the variances of {kind:?}"),
     }
 
@@ -2045,7 +2033,7 @@ pub(super) fn check_variances_for_type_defn<'tcx>(tcx: TyCtxt<'tcx>, def_id: Loc
         let icx = crate::collect::ItemCtxt::new(tcx, def_id);
         tcx.hir_node_by_def_id(def_id)
             .generics()
-            .expect("invariant: value is present")
+            .unwrap()
             .predicates
             .iter()
             .filter_map(|predicate| match predicate.kind {
@@ -2069,7 +2057,7 @@ pub(super) fn check_variances_for_type_defn<'tcx>(tcx: TyCtxt<'tcx>, def_id: Loc
 
         let node = tcx.hir_node_by_def_id(def_id);
         let item = node.expect_item();
-        let hir_generics = node.generics().expect("invariant: value is present");
+        let hir_generics = node.generics().unwrap();
         let hir_param = &hir_generics.params[index];
 
         let ty_param = &tcx.generics_of(item.owner_id).own_params[index];
@@ -2171,7 +2159,6 @@ fn report_bivariance<'tcx>(
             }
         }
         ItemKind::TyAlias(..) => errors::UnusedGenericParameterHelp::TyAlias { param_name },
-        // tRust: invariant — bivariance reporting is only applicable to struct, union, enum, or assoc type items
         item_kind => bug!("report_bivariance: unexpected item kind: {item_kind:?}"),
     };
 

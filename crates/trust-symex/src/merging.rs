@@ -71,11 +71,7 @@ pub fn can_merge(a: &SymbolicState, b: &SymbolicState, policy: MergePolicy) -> b
 /// value (if available via `pre_branch`). Variables introduced mid-branch
 /// (not present pre-branch) get a fresh unconstrained symbolic variable.
 #[must_use]
-pub fn merge_states(
-    a: &SymbolicState,
-    b: &SymbolicState,
-    merge_id: usize,
-) -> SymbolicState {
+pub fn merge_states(a: &SymbolicState, b: &SymbolicState, merge_id: usize) -> SymbolicState {
     merge_states_with_pre_branch(a, b, None, merge_id)
 }
 
@@ -95,11 +91,8 @@ pub fn merge_states_with_pre_branch(
     let mut merged = SymbolicState::new();
 
     // Collect all variable names from both states.
-    let all_vars: FxHashSet<String> = a
-        .iter()
-        .map(|(k, _)| k.to_owned())
-        .chain(b.iter().map(|(k, _)| k.to_owned()))
-        .collect();
+    let all_vars: FxHashSet<String> =
+        a.iter().map(|(k, _)| k.to_owned()).chain(b.iter().map(|(k, _)| k.to_owned())).collect();
 
     // Counter for generating unique fresh symbolic variables within this merge.
     let mut fresh_counter: usize = 0;
@@ -120,10 +113,7 @@ pub fn merge_states_with_pre_branch(
             merged.set(var, eff_a);
         } else {
             // Divergent: merge with Ite(guard, a_val, b_val).
-            merged.set(
-                var,
-                SymbolicValue::ite(guard.clone(), eff_a, eff_b),
-            );
+            merged.set(var, SymbolicValue::ite(guard.clone(), eff_a, eff_b));
         }
     }
 
@@ -143,9 +133,10 @@ fn phi_default(
     fresh_counter: &mut usize,
 ) -> SymbolicValue {
     if let Some(pre) = pre_branch
-        && let Some(val) = pre.try_get(var) {
-            return val.clone();
-        }
+        && let Some(val) = pre.try_get(var)
+    {
+        return val.clone();
+    }
     // Fresh unconstrained symbolic variable for a variable introduced mid-branch.
     let id = *fresh_counter;
     *fresh_counter += 1;
@@ -164,11 +155,7 @@ fn phi_default(
 /// are silently dropped, which would cause false alarms in CEGAR.
 // tRust: #771 — preserve divergent path constraints at merge points
 #[must_use]
-pub fn merge_paths(
-    a: &PathConstraint,
-    b: &PathConstraint,
-    merge_id: usize,
-) -> PathConstraint {
+pub fn merge_paths(a: &PathConstraint, b: &PathConstraint, merge_id: usize) -> PathConstraint {
     let guard = SymbolicValue::Symbol(format!("merge_guard_{merge_id}"));
     let guard_formula = symbolic_to_formula(&guard);
 
@@ -304,11 +291,8 @@ fn common_prefix_len(
 /// code used `Concrete(0)` as a default for missing variables, which
 /// incorrectly treated absent variables as equal to 0-valued ones.
 fn count_differing_vars(a: &SymbolicState, b: &SymbolicState) -> usize {
-    let all_vars: FxHashSet<String> = a
-        .iter()
-        .map(|(k, _)| k.to_owned())
-        .chain(b.iter().map(|(k, _)| k.to_owned()))
-        .collect();
+    let all_vars: FxHashSet<String> =
+        a.iter().map(|(k, _)| k.to_owned()).chain(b.iter().map(|(k, _)| k.to_owned())).collect();
 
     all_vars
         .iter()
@@ -336,21 +320,13 @@ impl PathMerger {
     /// Create a new `PathMerger` with the given policy.
     #[must_use]
     pub fn new(policy: MergePolicy) -> Self {
-        Self {
-            policy,
-            next_merge_id: 0,
-            merge_count: 0,
-        }
+        Self { policy, next_merge_id: 0, merge_count: 0 }
     }
 
     /// Try to merge two states. Returns `Some(merged)` if the policy allows
     /// merging and the states are compatible; `None` otherwise.
     #[must_use]
-    pub fn try_merge(
-        &mut self,
-        a: &SymbolicState,
-        b: &SymbolicState,
-    ) -> Option<SymbolicState> {
+    pub fn try_merge(&mut self, a: &SymbolicState, b: &SymbolicState) -> Option<SymbolicState> {
         if !can_merge(a, b, self.policy) {
             return None;
         }
@@ -455,10 +431,7 @@ impl Interval {
     /// Join two intervals: the smallest interval containing both.
     #[must_use]
     pub fn join(self, other: Self) -> Self {
-        Self {
-            lo: self.lo.min(other.lo),
-            hi: self.hi.max(other.hi),
-        }
+        Self { lo: self.lo.min(other.lo), hi: self.hi.max(other.hi) }
     }
 
     /// Widen: if the other interval extends beyond self, push to extremes.
@@ -573,19 +546,12 @@ impl StateMerger for WideningMerger {
                 _ => {
                     // Fall back to Ite merge for non-concrete values.
                     let guard = SymbolicValue::Symbol(format!("merge_guard_{merge_id}"));
-                    merged.set(
-                        var.clone(),
-                        SymbolicValue::ite(guard, eff_a, eff_b),
-                    );
+                    merged.set(var.clone(), SymbolicValue::ite(guard, eff_a, eff_b));
                 }
             }
         }
 
-        MergedState {
-            state: merged,
-            path: merge_paths(a_path, b_path, merge_id),
-            merge_id,
-        }
+        MergedState { state: merged, path: merge_paths(a_path, b_path, merge_id), merge_id }
     }
 }
 
@@ -736,9 +702,7 @@ impl MergingExplorer {
         true_block: usize,
         false_block: usize,
     ) -> SplitResult {
-        let result =
-            self.splitter
-                .split(state, path, condition, true_block, false_block);
+        let result = self.splitter.split(state, path, condition, true_block, false_block);
         self.pending.push(result.true_state.clone());
         self.pending.push(result.false_state.clone());
         self.maybe_merge();
@@ -797,14 +761,13 @@ impl MergingExplorer {
             // Pairwise merge within each group.
             while forks.len() > 1 {
                 // SAFETY: while loop condition guarantees forks.len() > 1.
-                let b = forks.pop()
-                    .unwrap_or_else(|| unreachable!("forks empty despite len > 1"));
-                let a = forks.last()
+                let b = forks.pop().unwrap_or_else(|| unreachable!("forks empty despite len > 1"));
+                let a = forks
+                    .last()
                     .unwrap_or_else(|| unreachable!("forks empty after pop with len > 1"));
 
                 if let Some(merged_state) = self.merger.try_merge(&a.state, &b.state) {
-                    let merged_path =
-                        merge_paths(&a.path, &b.path, self.merger.merge_count());
+                    let merged_path = merge_paths(&a.path, &b.path, self.merger.merge_count());
                     let merged_fork = ExecutionFork {
                         state: merged_state,
                         path: merged_path,
@@ -1074,8 +1037,7 @@ mod tests {
         // No common prefix: just the merge guard.
         assert_eq!(merged.depth(), 1);
         // tRust #771: divergent constraints must be preserved as auxiliary.
-        assert!(!merged.auxiliary().is_empty(),
-            "divergent constraints should be preserved");
+        assert!(!merged.auxiliary().is_empty(), "divergent constraints should be preserved");
     }
 
     #[test]
@@ -1094,13 +1056,18 @@ mod tests {
 
         // The merged path has: prefix(c) + guard + auxiliary disjunction.
         assert_eq!(merged.depth(), 2); // c + guard
-        assert_eq!(merged.auxiliary().len(), 1,
-            "merge should add auxiliary formula for divergent constraints");
+        assert_eq!(
+            merged.auxiliary().len(),
+            1,
+            "merge should add auxiliary formula for divergent constraints"
+        );
 
         // The auxiliary formula should be an Or of the two arms.
         let aux = &merged.auxiliary()[0];
-        assert!(matches!(aux, Formula::Or(_)),
-            "auxiliary should be (guard AND d) OR (NOT guard AND NOT d), got {aux:?}");
+        assert!(
+            matches!(aux, Formula::Or(_)),
+            "auxiliary should be (guard AND d) OR (NOT guard AND NOT d), got {aux:?}"
+        );
     }
 
     #[test]
@@ -1112,8 +1079,7 @@ mod tests {
         b.add_constraint(SymbolicValue::Symbol("c".into()), true);
 
         let merged = merge_paths(&a, &b, 0);
-        assert!(merged.auxiliary().is_empty(),
-            "identical paths should produce no auxiliary");
+        assert!(merged.auxiliary().is_empty(), "identical paths should produce no auxiliary");
     }
 
     #[test]
@@ -1131,14 +1097,19 @@ mod tests {
         // The merge guard is the only decision.
         assert_eq!(merged.depth(), 1, "should have only the merge guard");
         // Divergent constraint from A must be preserved as auxiliary.
-        assert_eq!(merged.auxiliary().len(), 1,
-            "asymmetric merge must preserve A's divergent constraint");
+        assert_eq!(
+            merged.auxiliary().len(),
+            1,
+            "asymmetric merge must preserve A's divergent constraint"
+        );
 
         // The auxiliary should be an Implies (guard => a_constraints),
         // NOT a bare And(guard, a) which would kill the path when guard is false.
         let aux = &merged.auxiliary()[0];
-        assert!(matches!(aux, Formula::Implies(_, _)),
-            "asymmetric merge should use Implies, got {aux:?}");
+        assert!(
+            matches!(aux, Formula::Implies(_, _)),
+            "asymmetric merge should use Implies, got {aux:?}"
+        );
     }
 
     #[test]
@@ -1150,12 +1121,17 @@ mod tests {
 
         let merged = merge_paths(&a, &b, 0);
         assert_eq!(merged.depth(), 1);
-        assert_eq!(merged.auxiliary().len(), 1,
-            "asymmetric merge must preserve B's divergent constraint");
+        assert_eq!(
+            merged.auxiliary().len(),
+            1,
+            "asymmetric merge must preserve B's divergent constraint"
+        );
 
         let aux = &merged.auxiliary()[0];
-        assert!(matches!(aux, Formula::Implies(_, _)),
-            "asymmetric merge should use Implies for B-only case, got {aux:?}");
+        assert!(
+            matches!(aux, Formula::Implies(_, _)),
+            "asymmetric merge should use Implies for B-only case, got {aux:?}"
+        );
     }
 
     #[test]
@@ -1165,7 +1141,7 @@ mod tests {
         //   Or(And(guard, a_constr), And(Not(guard), b_constr))
         let mut a = PathConstraint::new();
         let mut b = PathConstraint::new();
-        a.add_constraint(SymbolicValue::Symbol("d".into()), true);  // d = true
+        a.add_constraint(SymbolicValue::Symbol("d".into()), true); // d = true
         b.add_constraint(SymbolicValue::Symbol("d".into()), false); // d = false
 
         let merged = merge_paths(&a, &b, 42);
@@ -1180,8 +1156,11 @@ mod tests {
                     Formula::And(clauses) => {
                         assert_eq!(clauses.len(), 2);
                         // First clause should reference merge_guard_42.
-                        assert!(matches!(&clauses[0], Formula::Var(v, _) if v == "merge_guard_42"),
-                            "first arm guard should be merge_guard_42, got {:?}", clauses[0]);
+                        assert!(
+                            matches!(&clauses[0], Formula::Var(v, _) if v == "merge_guard_42"),
+                            "first arm guard should be merge_guard_42, got {:?}",
+                            clauses[0]
+                        );
                     }
                     other => panic!("first arm should be And, got {other:?}"),
                 }
@@ -1191,10 +1170,15 @@ mod tests {
                         assert_eq!(clauses.len(), 2);
                         match &clauses[0] {
                             Formula::Not(inner) => {
-                                assert!(matches!(inner.as_ref(), Formula::Var(v, _) if v == "merge_guard_42"),
-                                    "second arm guard should be Not(merge_guard_42), got {:?}", clauses[0]);
+                                assert!(
+                                    matches!(inner.as_ref(), Formula::Var(v, _) if v == "merge_guard_42"),
+                                    "second arm guard should be Not(merge_guard_42), got {:?}",
+                                    clauses[0]
+                                );
                             }
-                            other => panic!("second arm first clause should be Not(guard), got {other:?}"),
+                            other => panic!(
+                                "second arm first clause should be Not(guard), got {other:?}"
+                            ),
                         }
                     }
                     other => panic!("second arm should be And, got {other:?}"),
@@ -1224,13 +1208,17 @@ mod tests {
         match &formula {
             Formula::And(clauses) => {
                 // At least 3 clauses: common prefix (c), merge guard, auxiliary.
-                assert!(clauses.len() >= 3,
+                assert!(
+                    clauses.len() >= 3,
                     "merged formula should have >= 3 clauses (prefix + guard + aux), got {}",
-                    clauses.len());
+                    clauses.len()
+                );
                 // The last clause should be the auxiliary (Or disjunction).
                 let has_or = clauses.iter().any(|c| matches!(c, Formula::Or(_)));
-                assert!(has_or,
-                    "merged formula must include Or disjunction for divergent constraints");
+                assert!(
+                    has_or,
+                    "merged formula must include Or disjunction for divergent constraints"
+                );
             }
             _ => panic!("merged formula should be And conjunction, got {formula:?}"),
         }
@@ -1364,10 +1352,7 @@ mod tests {
         let result = merger.merge(&a, &a_path, &b, &b_path, None, 0);
 
         // y should be preserved (same in both).
-        assert_eq!(
-            result.state.get("y").unwrap(),
-            &SymbolicValue::Concrete(20)
-        );
+        assert_eq!(result.state.get("y").unwrap(), &SymbolicValue::Concrete(20));
         // x should be an Ite (different in the two states).
         match result.state.get("x").unwrap() {
             SymbolicValue::Ite(_, then_val, else_val) => {
@@ -1395,10 +1380,7 @@ mod tests {
         let result = merger.merge(&a, &a_path, &b, &b_path, None, 0);
 
         // "same" should be preserved as concrete.
-        assert_eq!(
-            result.state.get("same").unwrap(),
-            &SymbolicValue::Concrete(42)
-        );
+        assert_eq!(result.state.get("same").unwrap(), &SymbolicValue::Concrete(42));
 
         // "x" should be widened: not a simple Concrete, should be an Ite with
         // a widened symbol representing the interval [0, 8].
@@ -1425,19 +1407,9 @@ mod tests {
         b.set("x", SymbolicValue::Concrete(5));
 
         let merger = WideningMerger;
-        let result = merger.merge(
-            &a,
-            &PathConstraint::new(),
-            &b,
-            &PathConstraint::new(),
-            None,
-            0,
-        );
+        let result = merger.merge(&a, &PathConstraint::new(), &b, &PathConstraint::new(), None, 0);
         // Same value: no widening needed.
-        assert_eq!(
-            result.state.get("x").unwrap(),
-            &SymbolicValue::Concrete(5)
-        );
+        assert_eq!(result.state.get("x").unwrap(), &SymbolicValue::Concrete(5));
     }
 
     #[test]
@@ -1448,14 +1420,7 @@ mod tests {
         b.set("x", SymbolicValue::Symbol("sym_b".into()));
 
         let merger = WideningMerger;
-        let result = merger.merge(
-            &a,
-            &PathConstraint::new(),
-            &b,
-            &PathConstraint::new(),
-            None,
-            0,
-        );
+        let result = merger.merge(&a, &PathConstraint::new(), &b, &PathConstraint::new(), None, 0);
         // Non-concrete values: falls back to Ite merge.
         match result.state.get("x").unwrap() {
             SymbolicValue::Ite(guard, then_val, else_val) => {
@@ -1530,11 +1495,7 @@ mod tests {
     fn make_fork(block: usize, var: &str, val: i128) -> ExecutionFork {
         let mut state = SymbolicState::new();
         state.set(var, SymbolicValue::Concrete(val));
-        ExecutionFork {
-            state,
-            path: PathConstraint::new(),
-            next_block: block,
-        }
+        ExecutionFork { state, path: PathConstraint::new(), next_block: block }
     }
 
     #[test]
@@ -1542,11 +1503,7 @@ mod tests {
         // With EagerMerge, two forks targeting the same block should be merged.
         let mut explorer = MergingExplorer::new(MergeStrategy::EagerMerge, MergePolicy::Always);
 
-        let forks = vec![
-            make_fork(5, "x", 1),
-            make_fork(5, "x", 2),
-            make_fork(5, "x", 3),
-        ];
+        let forks = vec![make_fork(5, "x", 1), make_fork(5, "x", 2), make_fork(5, "x", 3)];
         explorer.add_forks(forks);
 
         // Eager merge should reduce 3 forks to the same block into fewer.
@@ -1556,21 +1513,14 @@ mod tests {
             "eager merge should reduce path count, got {}",
             explorer.pending_count()
         );
-        assert!(
-            explorer.merges_applied() > 0,
-            "should have applied at least one merge"
-        );
+        assert!(explorer.merges_applied() > 0, "should have applied at least one merge");
     }
 
     #[test]
     fn test_explorer_no_merge_preserves_all_paths() {
         let mut explorer = MergingExplorer::new(MergeStrategy::NoMerge, MergePolicy::Always);
 
-        let forks = vec![
-            make_fork(5, "x", 1),
-            make_fork(5, "x", 2),
-            make_fork(5, "x", 3),
-        ];
+        let forks = vec![make_fork(5, "x", 1), make_fork(5, "x", 2), make_fork(5, "x", 3)];
         explorer.add_forks(forks);
 
         // NoMerge: all 3 paths preserved.
@@ -1609,14 +1559,12 @@ mod tests {
     #[test]
     fn test_explorer_selective_merge_respects_threshold() {
         // SelectiveMerge with threshold=5: 3 forks should NOT trigger merge.
-        let mut explorer =
-            MergingExplorer::new(MergeStrategy::SelectiveMerge { threshold: 5 }, MergePolicy::Always);
+        let mut explorer = MergingExplorer::new(
+            MergeStrategy::SelectiveMerge { threshold: 5 },
+            MergePolicy::Always,
+        );
 
-        let forks = vec![
-            make_fork(7, "x", 1),
-            make_fork(7, "x", 2),
-            make_fork(7, "x", 3),
-        ];
+        let forks = vec![make_fork(7, "x", 1), make_fork(7, "x", 2), make_fork(7, "x", 3)];
         explorer.add_forks(forks);
 
         // 3 forks, threshold 5: should not merge.
@@ -1627,8 +1575,10 @@ mod tests {
     #[test]
     fn test_explorer_selective_merge_triggers_above_threshold() {
         // SelectiveMerge with threshold=2: 4 forks should trigger merge.
-        let mut explorer =
-            MergingExplorer::new(MergeStrategy::SelectiveMerge { threshold: 2 }, MergePolicy::Always);
+        let mut explorer = MergingExplorer::new(
+            MergeStrategy::SelectiveMerge { threshold: 2 },
+            MergePolicy::Always,
+        );
 
         let forks = vec![
             make_fork(7, "x", 1),
@@ -1673,11 +1623,7 @@ mod tests {
         // Forks targeting different blocks should not be merged.
         let mut explorer = MergingExplorer::new(MergeStrategy::EagerMerge, MergePolicy::Always);
 
-        let forks = vec![
-            make_fork(1, "x", 10),
-            make_fork(2, "x", 20),
-            make_fork(3, "x", 30),
-        ];
+        let forks = vec![make_fork(1, "x", 10), make_fork(2, "x", 20), make_fork(3, "x", 30)];
         explorer.add_forks(forks);
 
         // Different blocks: no merging possible.

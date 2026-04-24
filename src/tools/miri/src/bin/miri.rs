@@ -33,6 +33,7 @@ extern crate rustc_span;
 ))]
 extern crate tikv_jemalloc_sys as _;
 
+mod log;
 
 use std::env;
 use std::num::{NonZero, NonZeroI32};

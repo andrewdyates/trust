@@ -98,7 +98,9 @@ impl ConstraintIndependence {
             .map(|group| {
                 if group.len() == 1 {
                     // SAFETY: len == 1 guarantees .next() returns Some.
-                    group.into_iter().next()
+                    group
+                        .into_iter()
+                        .next()
                         .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
                 } else {
                     Formula::And(group)
@@ -161,11 +163,7 @@ impl ConstraintIndependence {
 pub fn partition_constraints(formula: &Formula) -> Vec<Formula> {
     let ci = ConstraintIndependence::new(formula);
     let partitions = ci.partitions();
-    if partitions.is_empty() {
-        vec![formula.clone()]
-    } else {
-        partitions
-    }
+    if partitions.is_empty() { vec![formula.clone()] } else { partitions }
 }
 
 /// Project away constraints that don't mention any of the relevant variables.
@@ -197,7 +195,9 @@ pub fn simplify_query(formula: &Formula, relevant_vars: &FxHashSet<String>) -> F
     match relevant.len() {
         0 => Formula::Bool(true),
         // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-        1 => relevant.into_iter().next()
+        1 => relevant
+            .into_iter()
+            .next()
             .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
         _ => Formula::And(relevant),
     }
@@ -225,11 +225,10 @@ fn collect_free_vars(
         Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {}
 
         // Variable — add if not bound
-        Formula::Var(name, _) => {
-            if !bound.contains(name) {
-                vars.insert(name.clone());
-            }
+        Formula::Var(name, _) if !bound.contains(name) => {
+            vars.insert(name.clone());
         }
+        Formula::Var(_, _) => {}
 
         // Unary operators
         Formula::Not(inner) | Formula::Neg(inner) => {
@@ -304,83 +303,12 @@ fn collect_free_vars(
         Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
             let mut new_bound = bound.clone();
             for (name, _) in bindings {
-                new_bound.insert(name.clone());
+                new_bound.insert(name.to_string());
             }
             collect_free_vars(body, vars, &mut new_bound);
         }
-        _ => {},
+        _ => {}
     }
-}
-
-/// Split a formula into independent conjuncts.
-///
-/// Given a formula `F`, if `F` is a conjunction `A /\ B /\ C /\ ...`, find
-/// groups of conjuncts that share no free variables. Each group becomes a
-/// separate formula. If the groups are `{A, B}` and `{C}`, returns
-/// `[And(A, B), C]`.
-///
-/// Non-conjunction formulas are returned as a single-element vector.
-///
-/// This is sound because `(A /\ B)` is satisfiable iff both `A` and `B` are
-/// satisfiable independently (when they share no variables).
-#[must_use]
-pub(crate) fn find_independent_sets(formula: &Formula) -> Vec<Formula> {
-    // Flatten top-level conjuncts
-    let conjuncts = flatten_and(formula);
-    if conjuncts.len() <= 1 {
-        return vec![formula.clone()];
-    }
-
-    // Compute free variables for each conjunct
-    let var_sets: Vec<FxHashSet<String>> =
-        conjuncts.iter().map(free_variables).collect();
-
-    // Union-Find to group conjuncts that share variables
-    let n = conjuncts.len();
-    let mut parent: Vec<usize> = (0..n).collect();
-
-    // For each variable, track which conjuncts mention it
-    let mut var_to_conjuncts: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
-    for (i, vars) in var_sets.iter().enumerate() {
-        for v in vars {
-            var_to_conjuncts.entry(v.as_str()).or_default().push(i);
-        }
-    }
-
-    // Union conjuncts that share a variable
-    for indices in var_to_conjuncts.values() {
-        if indices.len() > 1 {
-            let first = indices[0];
-            for &other in &indices[1..] {
-                union(&mut parent, first, other);
-            }
-        }
-    }
-
-    // Group conjuncts by their root
-    let mut groups: FxHashMap<usize, Vec<Formula>> = FxHashMap::default();
-    for (i, conjunct) in conjuncts.into_iter().enumerate() {
-        let root = find(&mut parent, i);
-        groups.entry(root).or_default().push(conjunct);
-    }
-
-    // Build result: each group becomes an And (or single formula)
-    let mut result: Vec<Formula> = groups
-        .into_values()
-        .map(|group| {
-            if group.len() == 1 {
-                // SAFETY: len == 1 guarantees .next() returns Some.
-                    group.into_iter().next()
-                        .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
-            } else {
-                Formula::And(group)
-            }
-        })
-        .collect();
-
-    // Sort for deterministic output (by debug representation)
-    result.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
-    result
 }
 
 /// Flatten a top-level And into its conjuncts. Non-And formulas return as-is.
@@ -397,7 +325,7 @@ fn flatten_and(formula: &Formula) -> Vec<Formula> {
     }
 }
 
-// Simple union-find
+// Simple union-find (used by ConstraintIndependence)
 fn find(parent: &mut [usize], mut i: usize) -> usize {
     while parent[i] != i {
         parent[i] = parent[parent[i]]; // path compression
@@ -419,6 +347,76 @@ mod tests {
     use trust_types::Sort;
 
     use super::*;
+
+    // tRust: find_independent_sets and helpers moved here — only used in tests.
+
+    // Simple union-find
+    fn uf_find(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]]; // path compression
+            i = parent[i];
+        }
+        i
+    }
+
+    fn uf_union(parent: &mut [usize], a: usize, b: usize) {
+        let ra = uf_find(parent, a);
+        let rb = uf_find(parent, b);
+        if ra != rb {
+            parent[rb] = ra;
+        }
+    }
+
+    /// Split a formula into independent conjuncts (test-only legacy API).
+    fn find_independent_sets(formula: &Formula) -> Vec<Formula> {
+        let conjuncts = super::flatten_and(formula);
+        if conjuncts.len() <= 1 {
+            return vec![formula.clone()];
+        }
+
+        let var_sets: Vec<FxHashSet<String>> = conjuncts.iter().map(free_variables).collect();
+        let n = conjuncts.len();
+        let mut parent: Vec<usize> = (0..n).collect();
+
+        let mut var_to_conjuncts: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
+        for (i, vars) in var_sets.iter().enumerate() {
+            for v in vars {
+                var_to_conjuncts.entry(v.as_str()).or_default().push(i);
+            }
+        }
+
+        for indices in var_to_conjuncts.values() {
+            if indices.len() > 1 {
+                let first = indices[0];
+                for &other in &indices[1..] {
+                    uf_union(&mut parent, first, other);
+                }
+            }
+        }
+
+        let mut groups: FxHashMap<usize, Vec<Formula>> = FxHashMap::default();
+        for (i, conjunct) in conjuncts.into_iter().enumerate() {
+            let root = uf_find(&mut parent, i);
+            groups.entry(root).or_default().push(conjunct);
+        }
+
+        let mut result: Vec<Formula> = groups
+            .into_values()
+            .map(|group| {
+                if group.len() == 1 {
+                    group
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
+                } else {
+                    Formula::And(group)
+                }
+            })
+            .collect();
+
+        result.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        result
+    }
 
     fn var(name: &str) -> Formula {
         Formula::Var(name.to_string(), Sort::Int)
@@ -458,7 +456,7 @@ mod tests {
     #[test]
     fn test_free_variables_excludes_bound() {
         let f = Formula::Forall(
-            vec![("x".to_string(), Sort::Int)],
+            vec![("x".into(), Sort::Int)],
             Box::new(Formula::Eq(Box::new(var("x")), Box::new(var("y")))),
         );
         let fv = free_variables(&f);
@@ -470,7 +468,7 @@ mod tests {
     #[test]
     fn test_free_variables_exists_binding() {
         let f = Formula::Exists(
-            vec![("a".to_string(), Sort::Bool)],
+            vec![("a".into(), Sort::Bool)],
             Box::new(Formula::And(vec![var("a"), var("b")])),
         );
         let fv = free_variables(&f);
@@ -480,11 +478,7 @@ mod tests {
 
     #[test]
     fn test_free_variables_ite() {
-        let f = Formula::Ite(
-            Box::new(var("c")),
-            Box::new(var("t")),
-            Box::new(var("e")),
-        );
+        let f = Formula::Ite(Box::new(var("c")), Box::new(var("t")), Box::new(var("e")));
         let fv = free_variables(&f);
         assert_eq!(fv.len(), 3);
     }
@@ -711,7 +705,7 @@ mod tests {
             Formula::Gt(Box::new(var("y")), Box::new(Formula::Int(1))),
             Formula::Lt(Box::new(var("z")), Box::new(Formula::Int(2))),
         ]);
-        let relevant: FxHashSet<String> = ["x".to_string()].into();
+        let relevant: FxHashSet<String> = ["x".to_string()].into_iter().collect();
         let simplified = simplify_query(&f, &relevant);
         // Should keep only x==0
         let fv = free_variables(&simplified);
@@ -728,7 +722,7 @@ mod tests {
             Formula::Gt(Box::new(var("y")), Box::new(Formula::Int(1))),
             Formula::Lt(Box::new(var("z")), Box::new(Formula::Int(2))),
         ]);
-        let relevant: FxHashSet<String> = ["x".to_string(), "y".to_string()].into();
+        let relevant: FxHashSet<String> = ["x".to_string(), "y".to_string()].into_iter().collect();
         let simplified = simplify_query(&f, &relevant);
         let fv = free_variables(&simplified);
         assert!(fv.contains("x"));
@@ -745,7 +739,7 @@ mod tests {
             Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
             Formula::Gt(Box::new(var("y")), Box::new(Formula::Int(1))),
         ]);
-        let relevant: FxHashSet<String> = ["x".to_string()].into();
+        let relevant: FxHashSet<String> = ["x".to_string()].into_iter().collect();
         let simplified = simplify_query(&f, &relevant);
         // Should be And(true, x==0) since true has no vars (literal)
         match &simplified {
@@ -761,7 +755,7 @@ mod tests {
             Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
             Formula::Gt(Box::new(var("y")), Box::new(Formula::Int(1))),
         ]);
-        let relevant: FxHashSet<String> = ["z".to_string()].into();
+        let relevant: FxHashSet<String> = ["z".to_string()].into_iter().collect();
         let simplified = simplify_query(&f, &relevant);
         assert_eq!(simplified, Formula::Bool(true));
     }
@@ -769,7 +763,7 @@ mod tests {
     #[test]
     fn test_simplify_query_single_conjunct_passthrough() {
         let f = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)));
-        let relevant: FxHashSet<String> = ["z".to_string()].into();
+        let relevant: FxHashSet<String> = ["z".to_string()].into_iter().collect();
         // Single conjunct: returned as-is (no splitting possible)
         let simplified = simplify_query(&f, &relevant);
         assert_eq!(simplified, f);
@@ -781,7 +775,7 @@ mod tests {
             Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0))),
             Formula::Gt(Box::new(var("y")), Box::new(Formula::Int(1))),
         ]);
-        let relevant: FxHashSet<String> = ["x".to_string(), "y".to_string()].into();
+        let relevant: FxHashSet<String> = ["x".to_string(), "y".to_string()].into_iter().collect();
         let simplified = simplify_query(&f, &relevant);
         // All conjuncts are relevant: returned as full And
         let fv = free_variables(&simplified);

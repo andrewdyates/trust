@@ -12,8 +12,7 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use trust_types::{
-    Formula, FunctionSpec, VcKind, VerifiableFunction,
-    VerificationCondition, parse_spec_expr,
+    Formula, FunctionSpec, VcKind, VerifiableFunction, VerificationCondition, parse_spec_expr,
 };
 
 /// Generate verification conditions from a function's `FunctionSpec` field.
@@ -27,6 +26,7 @@ use trust_types::{
 /// violations: if UNSAT, the spec holds; if SAT, the model is a counterexample).
 ///
 /// Unparseable spec strings are silently skipped (the parser returns None).
+#[cfg_attr(feature = "pipeline-v2", allow(dead_code))]
 pub(crate) fn generate_spec_vcs(func: &VerifiableFunction) -> Vec<VerificationCondition> {
     let spec = &func.spec;
     if spec.is_empty() {
@@ -41,7 +41,7 @@ pub(crate) fn generate_spec_vcs(func: &VerifiableFunction) -> Vec<VerificationCo
         if let Some(formula) = parse_spec_expr(expr) {
             vcs.push(VerificationCondition {
                 kind: VcKind::Precondition { callee: func.name.clone() },
-                function: func.name.clone(),
+                function: func.name.as_str().into(),
                 location: func.span.clone(),
                 formula: Formula::Not(Box::new(formula)),
                 contract_metadata,
@@ -54,7 +54,7 @@ pub(crate) fn generate_spec_vcs(func: &VerifiableFunction) -> Vec<VerificationCo
         if let Some(formula) = parse_spec_expr(expr) {
             vcs.push(VerificationCondition {
                 kind: VcKind::Postcondition,
-                function: func.name.clone(),
+                function: func.name.as_str().into(),
                 location: func.span.clone(),
                 formula: Formula::Not(Box::new(formula)),
                 contract_metadata,
@@ -66,10 +66,8 @@ pub(crate) fn generate_spec_vcs(func: &VerifiableFunction) -> Vec<VerificationCo
     for expr in &spec.invariants {
         if let Some(formula) = parse_spec_expr(expr) {
             vcs.push(VerificationCondition {
-                kind: VcKind::Assertion {
-                    message: format!("invariant: {expr}"),
-                },
-                function: func.name.clone(),
+                kind: VcKind::Assertion { message: format!("invariant: {expr}") },
+                function: func.name.as_str().into(),
                 location: func.span.clone(),
                 formula: Formula::Not(Box::new(formula)),
                 contract_metadata,
@@ -98,8 +96,7 @@ pub fn has_spec_vcs(spec: &FunctionSpec) -> bool {
 mod tests {
     use super::*;
     use trust_types::{
-        BasicBlock, BlockId, Formula, LocalDecl, Sort, SourceSpan, Terminator, Ty,
-        VerifiableBody,
+        BasicBlock, BlockId, Formula, LocalDecl, Sort, SourceSpan, Terminator, Ty, VerifiableBody,
     };
 
     fn spec_test_function(spec: FunctionSpec) -> VerifiableFunction {
@@ -150,7 +147,7 @@ mod tests {
         assert_eq!(
             vcs[0].formula,
             Formula::Not(Box::new(Formula::Gt(
-                Box::new(Formula::Var("x".to_string(), Sort::Int)),
+                Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ))),
         );
@@ -172,7 +169,7 @@ mod tests {
         assert_eq!(
             vcs[0].formula,
             Formula::Not(Box::new(Formula::Ge(
-                Box::new(Formula::Var("_0".to_string(), Sort::Int)),
+                Box::new(Formula::Var("_0".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ))),
         );
@@ -189,7 +186,9 @@ mod tests {
         let vcs = generate_spec_vcs(&func);
 
         assert_eq!(vcs.len(), 1);
-        assert!(matches!(&vcs[0].kind, VcKind::Assertion { message } if message == "invariant: n > 0"));
+        assert!(
+            matches!(&vcs[0].kind, VcKind::Assertion { message } if message == "invariant: n > 0")
+        );
     }
 
     #[test]
@@ -204,7 +203,8 @@ mod tests {
 
         assert_eq!(vcs.len(), 4);
 
-        let pre_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Precondition { .. })).count();
+        let pre_count =
+            vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Precondition { .. })).count();
         let post_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Postcondition)).count();
         let inv_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Assertion { .. })).count();
 
@@ -343,7 +343,8 @@ mod tests {
         let func = spec_test_function(spec);
         let vcs = crate::generate_vcs(&func);
 
-        let pre_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Precondition { .. })).count();
+        let pre_count =
+            vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Precondition { .. })).count();
         let post_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Postcondition)).count();
 
         assert!(pre_count >= 1, "should have at least 1 precondition VC from spec");

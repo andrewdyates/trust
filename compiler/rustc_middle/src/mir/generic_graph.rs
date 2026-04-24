@@ -51,7 +51,7 @@ fn bb_to_graph_node(block: BasicBlock, body: &Body<'_>, dark_mode: bool) -> Node
 
     // add the terminator to the stmts, gsgdt can print it out separately
     let mut terminator_head = String::new();
-    data.terminator().kind.fmt_head(&mut terminator_head).expect("invariant: fmt_head returned a valid value");
+    data.terminator().kind.fmt_head(&mut terminator_head).unwrap();
     stmts.push(terminator_head);
 
     Node::new(stmts, label, title, style)

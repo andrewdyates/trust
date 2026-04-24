@@ -45,11 +45,12 @@ pub mod graphviz;
 pub mod interpret;
 pub mod mono;
 pub mod pretty;
+pub mod trust_proof;
 mod query;
 mod statement;
 mod syntax;
 mod terminator;
-pub mod trust_proof; // tRust: proof-carrying MIR type definitions
+pub mod trust_proof;
 
 pub mod loops;
 pub mod traversal;
@@ -418,7 +419,7 @@ impl<'tcx> Body<'tcx> {
 
     pub fn typing_env(&self, tcx: TyCtxt<'tcx>) -> TypingEnv<'tcx> {
         match self.phase {
-            // tRust: known issue (#132279) — we should reveal the opaques defined in the body during analysis.
+            // FIXME(#132279): we should reveal the opaques defined in the body during analysis.
             MirPhase::Built | MirPhase::Analysis(_) => TypingEnv {
                 typing_mode: ty::TypingMode::non_body_analysis(),
                 param_env: tcx.param_env(self.source.def_id()),
@@ -600,7 +601,7 @@ impl<'tcx> Body<'tcx> {
     ) -> Option<(u128, &'a SwitchTargets)> {
         // There are two places here we need to evaluate a constant.
         let eval_mono_const = |constant: &ConstOperand<'tcx>| {
-            // tRust: known issue (#132279) — what is this, why are we using an empty environment here.
+            // FIXME(#132279): what is this, why are we using an empty environment here.
             let typing_env = ty::TypingEnv::fully_monomorphized();
             let mono_literal = instance.instantiate_mir_and_normalize_erasing_regions(
                 tcx,
@@ -769,7 +770,6 @@ impl<T> ClearCrossCrate<T> {
 
     pub fn unwrap_crate_local(self) -> T {
         match self {
-            // tRust: invariant: unwrapping cross-crate data
             ClearCrossCrate::Clear => bug!("unwrapping cross-crate data"),
             ClearCrossCrate::Set(v) => v,
         }
@@ -1206,7 +1206,7 @@ pub struct VarDebugInfoFragment<'tcx> {
     /// At lower levels, this corresponds to a byte/bit range.
     ///
     /// This can only contain `PlaceElem::Field`.
-    // tRust: known issue — support this for `enum`s by either using DWARF's
+    // FIXME support this for `enum`s by either using DWARF's
     // more advanced control-flow features (unsupported by LLVM?)
     // to match on the discriminant, or by using custom type debuginfo
     // with non-overlapping variants for the composite variable.
@@ -1416,11 +1416,11 @@ impl SourceScope {
         source_scopes: &IndexSlice<SourceScope, SourceScopeData<'_>>,
     ) -> Option<HirId> {
         let mut data = &source_scopes[self];
-        // tRust: known issue (oli-obk) — we should be able to just walk the `inlined_parent_scope`, but it
+        // FIXME(oli-obk): we should be able to just walk the `inlined_parent_scope`, but it
         // does not work as I thought it would. Needs more investigation and documentation.
         while data.inlined.is_some() {
             trace!(?data);
-            data = &source_scopes[data.parent_scope.expect("invariant: non-root scope has parent")];
+            data = &source_scopes[data.parent_scope.unwrap()];
         }
         trace!(?data);
         match &data.local_data {
@@ -1439,7 +1439,7 @@ impl SourceScope {
         if let Some((inlined_instance, _)) = scope_data.inlined {
             Some(inlined_instance)
         } else if let Some(inlined_scope) = scope_data.inlined_parent_scope {
-            Some(source_scopes[inlined_scope].inlined.expect("invariant: inlined scope has inline data").0)
+            Some(source_scopes[inlined_scope].inlined.unwrap().0)
         } else {
             None
         }

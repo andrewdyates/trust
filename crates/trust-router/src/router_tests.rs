@@ -12,7 +12,7 @@ fn test_router_with_mock() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -29,7 +29,7 @@ fn test_router_verify_all() {
     let vcs = vec![
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -39,7 +39,7 @@ fn test_router_verify_all() {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -57,7 +57,7 @@ fn test_router_verify_all_parallel() {
     let vcs: Vec<_> = (0..8)
         .map(|i| VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: format!("fn_{i}"),
+            function: format!("fn_{i}").into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -76,7 +76,7 @@ fn test_router_verify_all_parallel_fallback_single() {
     let router = Router::new();
     let vcs = vec![VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -94,7 +94,7 @@ fn test_router_with_arc_backends() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -130,9 +130,12 @@ fn test_backend_plan_prefers_solver_family_before_fallback() {
 
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "preferred".to_string(),
+                solver: "preferred".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            }
         }
     }
 
@@ -151,18 +154,17 @@ fn test_backend_plan_prefers_solver_family_before_fallback() {
 
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Failed {
-                solver: "fallback".to_string(),
+                solver: "fallback".into(),
                 time_ms: 0,
                 counterexample: None,
             }
         }
     }
 
-    let router =
-        Router::with_backends(vec![Box::new(FallbackBackend), Box::new(PreferredBackend)]);
+    let router = Router::with_backends(vec![Box::new(FallbackBackend), Box::new(PreferredBackend)]);
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -197,7 +199,7 @@ fn test_non_termination_not_dispatched_to_cegar() {
             context: "while loop".to_string(),
             measure: "n".to_string(),
         },
-        function: "loop_fn".to_string(),
+        function: "loop_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -213,11 +215,7 @@ fn test_non_termination_not_dispatched_to_cegar() {
 
     // Mock backend should handle it instead.
     let result = router.verify_one(&vc);
-    assert_ne!(
-        result.solver_name(),
-        "cegar",
-        "NonTermination must not be dispatched to CEGAR"
-    );
+    assert_ne!(result.solver_name(), "cegar", "NonTermination must not be dispatched to CEGAR");
 }
 
 #[test]
@@ -230,7 +228,7 @@ fn test_cegar_backend_skipped_for_simple_safety_vc() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "simple_fn".to_string(),
+        function: "simple_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -257,7 +255,7 @@ fn test_cegar_backend_ranked_in_plan_for_l0_safety() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -267,7 +265,10 @@ fn test_cegar_backend_ranked_in_plan_for_l0_safety() {
     assert_eq!(plan.len(), 2);
     // Mock is General (rank 9), CEGAR is Cegar (rank 2 for L0Safety).
     // But CEGAR can't handle this VC, so mock (which can) should come first.
-    assert_eq!(plan[0].name, "mock", "mock should be first (can_handle=true beats can_handle=false)");
+    assert_eq!(
+        plan[0].name, "mock",
+        "mock should be first (can_handle=true beats can_handle=false)"
+    );
     assert_eq!(plan[1].name, "cegar", "cegar should be second");
 }
 
@@ -285,7 +286,7 @@ fn test_cegar_backend_ranked_high_for_l1_functional() {
 
     let vc = VerificationCondition {
         kind: VcKind::Postcondition,
-        function: "post_fn".to_string(),
+        function: "post_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -331,10 +332,8 @@ fn test_cegar_dispatch_with_complex_loop_invariant_formula() {
     ]);
 
     let vc = VerificationCondition {
-        kind: VcKind::Assertion {
-            message: "loop invariant: counter decreases".to_string(),
-        },
-        function: "complex_fn".to_string(),
+        kind: VcKind::Assertion { message: "loop invariant: counter decreases".to_string() },
+        function: "complex_fn".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -342,7 +341,11 @@ fn test_cegar_dispatch_with_complex_loop_invariant_formula() {
 
     // Loop-invariant assertion (25) + loop pattern (20) + dimensionality = well above 30.
     let classification = cegar_classifier::classify(&vc);
-    assert!(classification.should_use_cegar, "complex loop invariant VC should trigger CEGAR, score={}", classification.score);
+    assert!(
+        classification.should_use_cegar,
+        "complex loop invariant VC should trigger CEGAR, score={}",
+        classification.score
+    );
 
     // Router should dispatch to CEGAR.
     let plan = router.backend_plan(&vc);
@@ -374,11 +377,8 @@ fn test_cegar_in_multi_backend_router_dispatch() {
     // tRust #194: NonTermination should NOT go to CEGAR.
     // tRust #556: sunder is disabled, so tla2 or mock handles NonTermination.
     let non_term_vc = VerificationCondition {
-        kind: VcKind::NonTermination {
-            context: "loop".to_string(),
-            measure: "n".to_string(),
-        },
-        function: "loop_fn".to_string(),
+        kind: VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() },
+        function: "loop_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -398,7 +398,7 @@ fn test_cegar_in_multi_backend_router_dispatch() {
     // DivisionByZero should skip CEGAR and go to zani or mock.
     let safety_vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "div_fn".to_string(),
+        function: "div_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -440,7 +440,7 @@ fn test_cegar_verify_all_with_mixed_vcs() {
         // Should go to CEGAR (Postcondition scores 10 > threshold 5).
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "cegar_fn".to_string(),
+            function: "cegar_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -448,7 +448,7 @@ fn test_cegar_verify_all_with_mixed_vcs() {
         // Should go to mock (DivisionByZero scores 0).
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "mock_fn".to_string(),
+            function: "mock_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -490,23 +490,24 @@ fn test_validate_dispatch_blocks_safety_solver_for_termination_vc() {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "pdr".to_string(),
+                solver: "pdr".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            }
         }
     }
 
-    let router = Router::with_backends(vec![
-        Box::new(PdrBackend),
-        Box::new(mock_backend::MockBackend),
-    ]);
+    let router =
+        Router::with_backends(vec![Box::new(PdrBackend), Box::new(mock_backend::MockBackend)]);
 
     let vc = VerificationCondition {
         kind: VcKind::NonTermination {
             context: "while loop".to_string(),
             measure: "n".to_string(),
         },
-        function: "loop_fn".to_string(),
+        function: "loop_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -544,20 +545,21 @@ fn test_validate_dispatch_allows_valid_solver_for_safety_vc() {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "pdr".to_string(),
+                solver: "pdr".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            }
         }
     }
 
-    let router = Router::with_backends(vec![
-        Box::new(PdrBackend),
-        Box::new(mock_backend::MockBackend),
-    ]);
+    let router =
+        Router::with_backends(vec![Box::new(PdrBackend), Box::new(mock_backend::MockBackend)]);
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "div_fn".to_string(),
+        function: "div_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -590,22 +592,21 @@ fn test_validate_dispatch_blocks_all_safety_only_solvers_for_liveness() {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "ic3".to_string(),
+                solver: "ic3".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            }
         }
     }
 
-    let router = Router::with_backends(vec![
-        Box::new(Ic3Backend),
-        Box::new(mock_backend::MockBackend),
-    ]);
+    let router =
+        Router::with_backends(vec![Box::new(Ic3Backend), Box::new(mock_backend::MockBackend)]);
 
     let vc = VerificationCondition {
-        kind: VcKind::Temporal {
-            property: "eventually done".to_string(),
-        },
-        function: "live_fn".to_string(),
+        kind: VcKind::Temporal { property: "eventually done".to_string() },
+        function: "live_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -634,9 +635,12 @@ fn test_select_backend_returns_none_when_all_invalid() {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "bmc".to_string(),
+                solver: "bmc".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            }
         }
     }
 
@@ -644,11 +648,8 @@ fn test_select_backend_returns_none_when_all_invalid() {
     let router = Router::with_backends(vec![Box::new(BmcBackend)]);
 
     let vc = VerificationCondition {
-        kind: VcKind::NonTermination {
-            context: "loop".to_string(),
-            measure: "n".to_string(),
-        },
-        function: "stuck_fn".to_string(),
+        kind: VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() },
+        function: "stuck_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
@@ -683,7 +684,7 @@ fn test_first_class_backend_families_are_selected_by_kind() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "l0".to_string(),
+                function: "l0".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -694,7 +695,7 @@ fn test_first_class_backend_families_are_selected_by_kind() {
         (
             VerificationCondition {
                 kind: VcKind::Temporal { property: "eventually done".to_string() },
-                function: "l2".to_string(),
+                function: "l2".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -708,7 +709,7 @@ fn test_first_class_backend_families_are_selected_by_kind() {
                     spec_file: "Bank.tla".to_string(),
                     action: "withdraw".to_string(),
                 },
-                function: "l2-refine".to_string(),
+                function: "l2-refine".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
@@ -732,14 +733,11 @@ fn test_first_class_backend_families_are_selected_by_kind() {
     }
 
     // Postcondition/Precondition: sunder is disabled, so mock handles them
-    let l1_cases = [
-        VcKind::Postcondition,
-        VcKind::Precondition { callee: "callee".to_string() },
-    ];
+    let l1_cases = [VcKind::Postcondition, VcKind::Precondition { callee: "callee".to_string() }];
     for kind in l1_cases {
         let vc = VerificationCondition {
             kind: kind.clone(),
-            function: "l1".to_string(),
+            function: "l1".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -795,9 +793,12 @@ impl VerificationBackend for AlwaysProveBackend {
     }
     fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
         VerificationResult::Proved {
-            solver: "always-prove".to_string(),
+            solver: "always-prove".into(),
             time_ms: 1,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 }
 
@@ -807,17 +808,11 @@ fn test_verify_with_independence_splits_disjoint_conjuncts() {
     let router = Router::with_backends(vec![Box::new(AlwaysProveBackend)]);
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]),
         contract_metadata: None,
     };
@@ -836,17 +831,11 @@ fn test_verify_with_independence_no_split_shared_var() {
     let router = Router::with_backends(vec![Box::new(AlwaysProveBackend)]);
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]),
         contract_metadata: None,
     };
@@ -862,7 +851,7 @@ fn test_verify_with_independence_non_conjunction() {
     let router = Router::with_backends(vec![Box::new(AlwaysProveBackend)]);
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Gt(
             Box::new(Formula::Var("x".into(), Sort::Int)),
@@ -882,7 +871,7 @@ fn test_verify_with_independence_transitive_merge() {
     let router = Router::with_backends(vec![Box::new(AlwaysProveBackend)]);
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
             Formula::Gt(
@@ -893,10 +882,7 @@ fn test_verify_with_independence_transitive_merge() {
                 Box::new(Formula::Var("b".into(), Sort::Int)),
                 Box::new(Formula::Var("c".into(), Sort::Int)),
             ),
-            Formula::Gt(
-                Box::new(Formula::Var("d".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("d".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]),
         contract_metadata: None,
     };
@@ -921,7 +907,7 @@ fn test_verify_with_independence_early_failure() {
         }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Failed {
-                solver: "always-fail".to_string(),
+                solver: "always-fail".into(),
                 time_ms: 1,
                 counterexample: None,
             }
@@ -931,17 +917,11 @@ fn test_verify_with_independence_early_failure() {
     let router = Router::with_backends(vec![Box::new(AlwaysFailBackend)]);
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]),
         contract_metadata: None,
     };
@@ -962,14 +942,14 @@ fn test_arena_vc_intern_batch() {
     let vcs = vec![
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f1".to_string(),
+            function: "f1".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
         },
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f2".to_string(),
+            function: "f2".into(),
             location: SourceSpan::default(),
             formula: Formula::Add(
                 Box::new(Formula::Var("x".into(), Sort::Int)),
@@ -996,7 +976,7 @@ fn test_arena_vc_intern_single() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -1016,7 +996,7 @@ fn test_verify_one_arena_delegates_to_verify() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -1037,14 +1017,14 @@ fn test_verify_all_arena_multiple_vcs() {
     let vcs = vec![
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "proved".to_string(),
+            function: "proved".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
         },
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "failed".to_string(),
+            function: "failed".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
@@ -1066,7 +1046,7 @@ fn test_verify_all_arena_parallel_produces_results() {
     let vcs: Vec<_> = (0..8)
         .map(|i| VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: format!("fn_{i}"),
+            function: format!("fn_{i}").into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -1074,11 +1054,7 @@ fn test_verify_all_arena_parallel_produces_results() {
         .collect();
 
     let (arena, arena_vcs) = ArenaVc::intern_batch(&vcs);
-    let results = router.verify_all_arena_parallel(
-        &arena_vcs,
-        Arc::new(arena),
-        4,
-    );
+    let results = router.verify_all_arena_parallel(&arena_vcs, Arc::new(arena), 4);
 
     assert_eq!(results.len(), 8);
     for (_, result) in &results {
@@ -1096,14 +1072,19 @@ fn test_verify_arena_custom_backend_receives_arena() {
     }
 
     impl VerificationBackend for ArenaAwareBackend {
-        fn name(&self) -> &str { "arena-aware" }
-        fn can_handle(&self, _vc: &VerificationCondition) -> bool { true }
+        fn name(&self) -> &str {
+            "arena-aware"
+        }
+        fn can_handle(&self, _vc: &VerificationCondition) -> bool {
+            true
+        }
         fn verify(&self, _vc: &VerificationCondition) -> VerificationResult {
             VerificationResult::Proved {
-                solver: "arena-aware-fallback".to_string(),
+                solver: "arena-aware-fallback".into(),
                 time_ms: 0,
                 strength: ProofStrength::smt_unsat(),
-                proof_certificate: None, solver_warnings: None,
+                proof_certificate: None,
+                solver_warnings: None,
             }
         }
         fn verify_arena(
@@ -1116,10 +1097,11 @@ fn test_verify_arena_custom_backend_receives_arena() {
             // Use the arena directly to emit SMT-LIB without materialization.
             let _smtlib = arena.to_smtlib(root);
             VerificationResult::Proved {
-                solver: "arena-aware".to_string(),
+                solver: "arena-aware".into(),
                 time_ms: 0,
                 strength: ProofStrength::smt_unsat(),
-                proof_certificate: None, solver_warnings: None,
+                proof_certificate: None,
+                solver_warnings: None,
             }
         }
     }
@@ -1130,7 +1112,7 @@ fn test_verify_arena_custom_backend_receives_arena() {
 
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test".to_string(),
+        function: "test".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -1145,5 +1127,188 @@ fn test_verify_arena_custom_backend_receives_arena() {
     assert!(
         arena_called.load(Ordering::SeqCst),
         "verify_arena should have been called, not verify"
+    );
+}
+
+// -----------------------------------------------------------------------
+// #882: MemoryGuard integration tests
+// -----------------------------------------------------------------------
+
+#[test]
+fn test_router_with_memory_guard_builder() {
+    use crate::memory_guard::MemoryGuard;
+
+    let guard = MemoryGuard::new(2048);
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    assert_eq!(router.memory_guard().limit_mb(), 2048);
+}
+
+#[test]
+fn test_router_default_memory_guard() {
+    let router = Router::new();
+    // Default MemoryGuard has 1024 MB limit.
+    assert_eq!(router.memory_guard().limit_mb(), 1024);
+}
+
+#[test]
+fn test_router_memory_guard_unlimited_passes() {
+    use crate::memory_guard::MemoryGuard;
+
+    let guard = MemoryGuard::new(0); // unlimited
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    let vc = VerificationCondition {
+        kind: VcKind::DivisionByZero,
+        function: "test".into(),
+        location: SourceSpan::default(),
+        formula: Formula::Bool(false),
+        contract_metadata: None,
+    };
+
+    // With unlimited guard, dispatch should proceed normally.
+    let result = router.verify_one(&vc);
+    assert!(result.is_proved(), "unlimited memory guard should not block dispatch");
+    assert_eq!(result.solver_name(), "mock");
+}
+
+#[test]
+fn test_router_memory_guard_high_limit_passes() {
+    use crate::memory_guard::MemoryGuard;
+
+    let guard = MemoryGuard::new(64 * 1024); // 64 GB — well above any test process
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    let vc = VerificationCondition {
+        kind: VcKind::DivisionByZero,
+        function: "test".into(),
+        location: SourceSpan::default(),
+        formula: Formula::Bool(false),
+        contract_metadata: None,
+    };
+
+    let result = router.verify_one(&vc);
+    assert!(result.is_proved(), "high limit should not block dispatch");
+    assert_eq!(result.solver_name(), "mock");
+}
+
+#[test]
+fn test_router_memory_guard_low_limit_blocks_dispatch() {
+    use crate::memory_guard::MemoryGuard;
+
+    // 1 MB limit — the test process uses more than this.
+    let guard = MemoryGuard::new(1);
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    let vc = VerificationCondition {
+        kind: VcKind::DivisionByZero,
+        function: "test".into(),
+        location: SourceSpan::default(),
+        formula: Formula::Bool(false),
+        contract_metadata: None,
+    };
+
+    let result = router.verify_one(&vc);
+    assert!(
+        matches!(result, VerificationResult::Unknown { .. }),
+        "1MB limit should block dispatch: {result:?}"
+    );
+    assert_eq!(result.solver_name(), "memory-guard");
+    let reason = match &result {
+        VerificationResult::Unknown { reason, .. } => reason.as_str(),
+        _ => panic!("expected Unknown"),
+    };
+    assert!(reason.contains("memory limit exceeded"), "reason: {reason}");
+}
+
+#[test]
+fn test_router_memory_guard_blocks_verify_all() {
+    use crate::memory_guard::MemoryGuard;
+
+    let guard = MemoryGuard::new(1); // 1 MB — will exceed
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    let vcs = vec![
+        VerificationCondition {
+            kind: VcKind::DivisionByZero,
+            function: "fn1".into(),
+            location: SourceSpan::default(),
+            formula: Formula::Bool(false),
+            contract_metadata: None,
+        },
+        VerificationCondition {
+            kind: VcKind::DivisionByZero,
+            function: "fn2".into(),
+            location: SourceSpan::default(),
+            formula: Formula::Bool(false),
+            contract_metadata: None,
+        },
+    ];
+
+    let results = router.verify_all(&vcs);
+    assert_eq!(results.len(), 2);
+    for (_, result) in &results {
+        assert_eq!(
+            result.solver_name(),
+            "memory-guard",
+            "all VCs should be blocked by memory guard"
+        );
+    }
+}
+
+#[test]
+fn test_router_memory_guard_blocks_arena_dispatch() {
+    use crate::memory_guard::MemoryGuard;
+
+    let guard = MemoryGuard::new(1); // 1 MB — will exceed
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    let vc = VerificationCondition {
+        kind: VcKind::DivisionByZero,
+        function: "test".into(),
+        location: SourceSpan::default(),
+        formula: Formula::Bool(false),
+        contract_metadata: None,
+    };
+
+    let mut arena = trust_types::formula_arena::FormulaArena::new();
+    let root = arena.intern(&vc.formula);
+
+    let result = router.verify_one_arena(&vc, root, &arena);
+    assert_eq!(
+        result.solver_name(),
+        "memory-guard",
+        "arena dispatch should be blocked by memory guard"
+    );
+}
+
+#[test]
+fn test_router_memory_guard_peak_tracked_after_dispatch() {
+    use crate::memory_guard::MemoryGuard;
+
+    let guard = MemoryGuard::new(64 * 1024); // high limit
+    let router =
+        Router::with_backends(vec![Box::new(mock_backend::MockBackend)]).with_memory_guard(guard);
+
+    assert_eq!(router.memory_guard().peak_rss_bytes(), 0, "peak should be 0 before any check");
+
+    let vc = VerificationCondition {
+        kind: VcKind::DivisionByZero,
+        function: "test".into(),
+        location: SourceSpan::default(),
+        formula: Formula::Bool(false),
+        contract_metadata: None,
+    };
+
+    let _ = router.verify_one(&vc);
+    assert!(
+        router.memory_guard().peak_rss_bytes() > 0,
+        "peak RSS should be tracked after dispatch"
     );
 }

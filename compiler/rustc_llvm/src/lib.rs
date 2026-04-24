@@ -38,8 +38,6 @@ impl RustStringInner {
         let ptr: *const RustStringInner = ptr::from_ref(self);
         // We can't use `ptr::cast` here because extern types are `!Sized`.
         let ptr = ptr as *const RustString;
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `ptr` comes from `&RustStringInner`, and `RustString` is only an opaque FFI view of that same allocation.
         unsafe { &*ptr }
     }
 
@@ -47,8 +45,6 @@ impl RustStringInner {
         // SAFETY: A valid `&RustString` must have been created via `as_opaque`.
         let ptr: *const RustString = ptr::from_ref(opaque);
         let ptr: *const RustStringInner = ptr.cast();
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because every `&RustString` passed here was created by `as_opaque`, so the cast recovers the original `RustStringInner`.
         unsafe { &*ptr }
     }
 
@@ -68,9 +64,6 @@ pub unsafe extern "C" fn LLVMRustStringWriteImpl(
     slice_ptr: *const u8, // Same ABI as `*const c_char`
     slice_len: size_t,
 ) {
-    // SAFETY: The pointer and length are valid: the data pointer is
-    // non-null, properly aligned, and the length does not exceed the
-    // allocation size.
     let slice = unsafe { slice::from_raw_parts(slice_ptr, slice_len) };
     RustStringInner::from_opaque(buf).bytes.borrow_mut().extend_from_slice(slice);
 }
@@ -85,8 +78,6 @@ pub fn initialize_available_targets() {
                 unsafe extern "C" {
                     $(fn $method();)*
                 }
-                // SAFETY: The invariants required by this unsafe operation are
-                // satisfied because these nullary LLVM init functions are provided by the linked component selected by this `cfg` and have no extra preconditions.
                 unsafe {
                     $($method();)*
                 }

@@ -70,7 +70,7 @@ fn is_camel_case(name: &str) -> bool {
 
     // start with a non-lowercase letter rather than non-uppercase
     // ones (some scripts don't have a concept of upper/lowercase)
-    !name.chars().next().expect("invariant: name is non-empty").is_lowercase() // tRust: unwrap -> expect
+    !name.chars().next().unwrap().is_lowercase()
         && !name.contains("__")
         && !name.chars().collect::<Vec<_>>().array_windows().any(|&[fst, snd]| {
             // contains a capitalisable character followed by, or preceded by, an underscore
@@ -111,8 +111,8 @@ fn to_camel_case(s: &str) -> String {
             // separate two components with an underscore if their boundary cannot
             // be distinguished using an uppercase/lowercase case distinction
             let join = if let Some(prev) = prev {
-                let l = prev.chars().last().expect("invariant: prev segment is non-empty from split"); // tRust: unwrap -> expect
-                let f = next.chars().next().expect("invariant: next segment is non-empty from split"); // tRust: unwrap -> expect
+                let l = prev.chars().last().unwrap();
+                let f = next.chars().next().unwrap();
                 !char_has_case(l) && !char_has_case(f)
             } else {
                 false
@@ -169,7 +169,7 @@ impl EarlyLintPass for NonCamelCaseTypes {
             // trait impls where we should have warned for the trait definition already.
             ast::ItemKind::Impl(ast::Impl { of_trait: None, items, .. }) => {
                 for it in items {
-                    // tRust: known issue — this doesn't respect `#[allow(..)]` on the item itself.
+                    // FIXME: this doesn't respect `#[allow(..)]` on the item itself.
                     if let ast::AssocItemKind::Type(alias) = &it.kind {
                         self.check_case(cx, "associated type", &alias.ident);
                     }

@@ -12,7 +12,7 @@
 #![allow(unknown_lints)]
 #![allow(rustc::potential_query_instability)]
 #![allow(rustc::default_hash_types)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
 // ---------------------------------------------------------------------------
 // Submodules

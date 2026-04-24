@@ -29,11 +29,7 @@ impl AbstractState {
     /// Create a new empty abstract state at round 0.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            proved_vcs: BTreeSet::new(),
-            active_proposals: BTreeSet::new(),
-            round: 0,
-        }
+        Self { proved_vcs: BTreeSet::new(), active_proposals: BTreeSet::new(), round: 0 }
     }
 
     /// Create a state with given proved VCs, proposals, and round.
@@ -88,11 +84,7 @@ impl AbstractState {
     #[must_use]
     pub fn meet(&self, other: &Self) -> Self {
         Self {
-            proved_vcs: self
-                .proved_vcs
-                .intersection(&other.proved_vcs)
-                .cloned()
-                .collect(),
+            proved_vcs: self.proved_vcs.intersection(&other.proved_vcs).cloned().collect(),
             active_proposals: self
                 .active_proposals
                 .intersection(&other.active_proposals)
@@ -129,11 +121,7 @@ pub trait NarrowingOperator: std::fmt::Debug {
     /// Apply narrowing: given the widened state and a more precise state,
     /// produce a state that is between the two (tighter than widened,
     /// but still sound).
-    fn narrow(
-        &self,
-        wide_state: &AbstractState,
-        precise_state: &AbstractState,
-    ) -> AbstractState;
+    fn narrow(&self, wide_state: &AbstractState, precise_state: &AbstractState) -> AbstractState;
 }
 
 /// Threshold widening: after N iterations, jump to "top" for non-converging components.
@@ -155,11 +143,7 @@ impl ThresholdWidening {
     #[must_use]
     pub fn new(threshold: usize) -> Self {
         assert!(threshold > 0, "widening threshold must be non-zero");
-        Self {
-            threshold,
-            stale_count: 0,
-            last_proved_count: 0,
-        }
+        Self { threshold, stale_count: 0, last_proved_count: 0 }
     }
 
     /// Update the internal counter based on the current state.
@@ -234,13 +218,7 @@ impl DelayedWidening {
     pub fn new(delay: usize, threshold: usize) -> Self {
         assert!(delay > 0, "delay must be non-zero");
         assert!(threshold > 0, "threshold must be non-zero");
-        Self {
-            delay,
-            threshold,
-            total_iterations: 0,
-            stale_count: 0,
-            last_proved_count: 0,
-        }
+        Self { delay, threshold, total_iterations: 0, stale_count: 0, last_proved_count: 0 }
     }
 
     /// Observe a new state, updating internal counters.
@@ -297,21 +275,13 @@ impl WideningOperator for DelayedWidening {
 pub struct SimpleNarrowing;
 
 impl NarrowingOperator for SimpleNarrowing {
-    fn narrow(
-        &self,
-        wide_state: &AbstractState,
-        precise_state: &AbstractState,
-    ) -> AbstractState {
+    fn narrow(&self, wide_state: &AbstractState, precise_state: &AbstractState) -> AbstractState {
         // Keep only VCs that are in both the wide and precise states,
         // plus any newly proved in the precise state.
         let proved: BTreeSet<String> = wide_state
             .proved_vcs
             .intersection(&precise_state.proved_vcs)
-            .chain(
-                precise_state
-                    .proved_vcs
-                    .difference(&wide_state.proved_vcs),
-            )
+            .chain(precise_state.proved_vcs.difference(&wide_state.proved_vcs))
             .cloned()
             .collect();
 
@@ -343,13 +313,7 @@ impl WideningSchedule {
     /// Create a new schedule.
     #[must_use]
     pub fn new(interval: usize, min_iterations: usize, max_applications: usize) -> Self {
-        Self {
-            interval,
-            min_iterations,
-            max_applications,
-            applications: 0,
-            iterations: 0,
-        }
+        Self { interval, min_iterations, max_applications, applications: 0, iterations: 0 }
     }
 
     /// Simple schedule: widen every N iterations, no minimum, unlimited applications.
@@ -437,11 +401,7 @@ pub fn accelerate_convergence(
         .iter()
         .all(|s| s.proved_count() <= baseline.proved_count());
 
-    if is_stale {
-        operator.widen(baseline, last)
-    } else {
-        last.clone()
-    }
+    if is_stale { operator.widen(baseline, last) } else { last.clone() }
 }
 
 /// Recover precision after widening by applying the narrowing operator.
@@ -714,10 +674,10 @@ mod tests {
         let mut sched = WideningSchedule::every(3);
         assert!(!sched.tick()); // iter 1
         assert!(!sched.tick()); // iter 2
-        assert!(sched.tick());  // iter 3
+        assert!(sched.tick()); // iter 3
         assert!(!sched.tick()); // iter 4
         assert!(!sched.tick()); // iter 5
-        assert!(sched.tick());  // iter 6
+        assert!(sched.tick()); // iter 6
     }
 
     #[test]
@@ -726,15 +686,15 @@ mod tests {
         assert!(!sched.tick()); // iter 1: below min
         assert!(!sched.tick()); // iter 2: below min (and would fire)
         assert!(!sched.tick()); // iter 3: below min
-        assert!(sched.tick());  // iter 4: at min and interval
+        assert!(sched.tick()); // iter 4: at min and interval
     }
 
     #[test]
     fn test_schedule_max_applications() {
         let mut sched = WideningSchedule::new(1, 0, 2);
-        assert!(sched.tick());  // iter 1
+        assert!(sched.tick()); // iter 1
         sched.record_application();
-        assert!(sched.tick());  // iter 2
+        assert!(sched.tick()); // iter 2
         sched.record_application();
         assert!(!sched.tick()); // iter 3: max reached
     }
@@ -793,12 +753,7 @@ mod tests {
         tw.observe(&s);
         tw.observe(&s);
 
-        let history = vec![
-            state_with(&["a"], &["b", "c"], 0),
-            s.clone(),
-            s.clone(),
-            s.clone(),
-        ];
+        let history = vec![state_with(&["a"], &["b", "c"], 0), s.clone(), s.clone(), s.clone()];
         let result = accelerate_convergence(&history, 2, &tw);
         // Widening should have promoted proposals to proved.
         assert!(result.proved_vcs.contains("b"));

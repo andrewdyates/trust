@@ -13,11 +13,11 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 use std::io::Write as _;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::Instant;
-use std::fmt::Write;
 
 use trust_types::*;
 
@@ -45,18 +45,20 @@ static ZANI_PATH: OnceLock<Option<String>> = OnceLock::new();
 fn probe_zani_path() -> Option<String> {
     // 1. Explicit env var
     if let Ok(path) = std::env::var("ZANI_PATH")
-        && std::path::Path::new(&path).exists() {
-            return Some(path);
-        }
+        && std::path::Path::new(&path).exists()
+    {
+        return Some(path);
+    }
 
     // 2. PATH probe
     if let Ok(output) = Command::new("which").arg("zani").output()
-        && output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Some(path);
-            }
+        && output.status.success()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Some(path);
         }
+    }
 
     None
 }
@@ -90,10 +92,7 @@ pub fn is_suitable_for_zani(vc: &VerificationCondition) -> bool {
     }
 
     let class = classifier::classify_vc(vc);
-    matches!(
-        class,
-        QueryClass::EasyLinear | QueryClass::BitVector | QueryClass::Mixed
-    )
+    matches!(class, QueryClass::EasyLinear | QueryClass::BitVector | QueryClass::Mixed)
 }
 
 /// tRust #359: Classify a VC for zani dispatch and return the recommended
@@ -133,29 +132,15 @@ pub fn classify_for_zani(vc: &VerificationCondition) -> (bool, u32) {
 #[derive(Debug, Clone)]
 pub enum ZaniBmcOutcome {
     /// Property holds within the BMC depth (UNSAT).
-    ProvedBounded {
-        depth: u32,
-        time_ms: u64,
-    },
+    ProvedBounded { depth: u32, time_ms: u64 },
     /// Found a concrete counterexample (SAT with model).
-    CounterexampleFound {
-        counterexample: Counterexample,
-        time_ms: u64,
-    },
+    CounterexampleFound { counterexample: Counterexample, time_ms: u64 },
     /// BMC depth exhausted without finding a bug -- inconclusive.
-    BoundExhausted {
-        depth: u32,
-        time_ms: u64,
-    },
+    BoundExhausted { depth: u32, time_ms: u64 },
     /// Solver timed out.
-    Timeout {
-        timeout_ms: u64,
-    },
+    Timeout { timeout_ms: u64 },
     /// Error during analysis.
-    Error {
-        reason: String,
-        time_ms: u64,
-    },
+    Error { reason: String, time_ms: u64 },
 }
 
 impl ZaniBmcOutcome {
@@ -163,45 +148,36 @@ impl ZaniBmcOutcome {
     #[must_use]
     pub fn to_verification_result(&self) -> VerificationResult {
         match self {
-            ZaniBmcOutcome::ProvedBounded { depth, time_ms } => {
-                VerificationResult::Proved {
-                    solver: "zani".to_string(),
-                    time_ms: *time_ms,
-                    strength: ProofStrength::bounded(u64::from(*depth)),
-                    proof_certificate: None,
+            ZaniBmcOutcome::ProvedBounded { depth, time_ms } => VerificationResult::Proved {
+                solver: "zani".into(),
+                time_ms: *time_ms,
+                strength: ProofStrength::bounded(u64::from(*depth)),
+                proof_certificate: None,
                 solver_warnings: None,
-                }
-            }
+            },
             ZaniBmcOutcome::CounterexampleFound { counterexample, time_ms } => {
                 VerificationResult::Failed {
-                    solver: "zani".to_string(),
+                    solver: "zani".into(),
                     time_ms: *time_ms,
                     counterexample: Some(counterexample.clone()),
                 }
             }
-            ZaniBmcOutcome::BoundExhausted { depth, time_ms } => {
-                VerificationResult::Unknown {
-                    solver: "zani".to_string(),
-                    time_ms: *time_ms,
-                    reason: format!(
-                        "BMC bound exhausted at depth {depth}: \
+            ZaniBmcOutcome::BoundExhausted { depth, time_ms } => VerificationResult::Unknown {
+                solver: "zani".into(),
+                time_ms: *time_ms,
+                reason: format!(
+                    "BMC bound exhausted at depth {depth}: \
                          no counterexample found within unrolling limit"
-                    ),
-                }
-            }
+                ),
+            },
             ZaniBmcOutcome::Timeout { timeout_ms } => {
-                VerificationResult::Timeout {
-                    solver: "zani".to_string(),
-                    timeout_ms: *timeout_ms,
-                }
+                VerificationResult::Timeout { solver: "zani".into(), timeout_ms: *timeout_ms }
             }
-            ZaniBmcOutcome::Error { reason, time_ms } => {
-                VerificationResult::Unknown {
-                    solver: "zani".to_string(),
-                    time_ms: *time_ms,
-                    reason: reason.clone(),
-                }
-            }
+            ZaniBmcOutcome::Error { reason, time_ms } => VerificationResult::Unknown {
+                solver: "zani".into(),
+                time_ms: *time_ms,
+                reason: reason.clone(),
+            },
         }
     }
 }
@@ -297,11 +273,7 @@ impl ZaniBackend {
     fn effective_depth(&self, vc: &VerificationCondition) -> u32 {
         if self.adaptive_depth {
             let (_, recommended) = classify_for_zani(vc);
-            if recommended > 0 {
-                recommended.min(self.bmc_depth)
-            } else {
-                self.bmc_depth
-            }
+            if recommended > 0 { recommended.min(self.bmc_depth) } else { self.bmc_depth }
         } else {
             self.bmc_depth
         }
@@ -327,9 +299,8 @@ impl ZaniBackend {
                 .map_err(|e| format!("failed to write to zani stdin: {e}"))?;
         }
 
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("failed to read zani output: {e}"))?;
+        let output =
+            child.wait_with_output().map_err(|e| format!("failed to read zani output: {e}"))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -378,9 +349,7 @@ impl ZaniBackend {
 
         // Check for timeout
         if elapsed >= self.timeout_ms {
-            return ZaniBmcOutcome::Timeout {
-                timeout_ms: self.timeout_ms,
-            };
+            return ZaniBmcOutcome::Timeout { timeout_ms: self.timeout_ms };
         }
 
         // Parse the result
@@ -423,7 +392,7 @@ impl VerificationBackend for ZaniBackend {
         // Check if zani is available
         if self.resolve_path().is_none() {
             return VerificationResult::Unknown {
-                solver: "zani".to_string(),
+                solver: "zani".into(),
                 time_ms: 0,
                 reason: "zani binary not found: set ZANI_PATH env or install zani on PATH"
                     .to_string(),
@@ -440,7 +409,7 @@ impl VerificationBackend for ZaniBackend {
             Ok(out) => out,
             Err(e) => {
                 return VerificationResult::Unknown {
-                    solver: "zani".to_string(),
+                    solver: "zani".into(),
                     time_ms: start.elapsed().as_millis() as u64,
                     reason: e,
                 };
@@ -452,7 +421,7 @@ impl VerificationBackend for ZaniBackend {
         // Check for timeout
         if elapsed >= self.timeout_ms {
             return VerificationResult::Timeout {
-                solver: "zani".to_string(),
+                solver: "zani".into(),
                 timeout_ms: self.timeout_ms,
             };
         }
@@ -496,18 +465,18 @@ fn generate_bmc_script(formula: &Formula, bmc_depth: u32) -> String {
 fn attribute_to_zani(result: &mut VerificationResult, bmc_depth: u32) {
     match result {
         VerificationResult::Proved { solver, strength, .. } => {
-            *solver = "zani".to_string();
+            *solver = "zani".into();
             // BMC proves are bounded, not full SMT UNSAT proofs
             *strength = ProofStrength::bounded(u64::from(bmc_depth));
         }
         VerificationResult::Failed { solver, .. } => {
-            *solver = "zani".to_string();
+            *solver = "zani".into();
         }
         VerificationResult::Unknown { solver, .. } => {
-            *solver = "zani".to_string();
+            *solver = "zani".into();
         }
         VerificationResult::Timeout { solver, .. } => {
-            *solver = "zani".to_string();
+            *solver = "zani".into();
         }
         // tRust #734: non-panicking fallback for #[non_exhaustive] forward compat
         _ => {}
@@ -522,10 +491,7 @@ fn classify_bmc_output(output: &str, elapsed_ms: u64, depth: u32) -> ZaniBmcOutc
     let trimmed = output.trim();
 
     if trimmed.starts_with("unsat") {
-        return ZaniBmcOutcome::ProvedBounded {
-            depth,
-            time_ms: elapsed_ms,
-        };
+        return ZaniBmcOutcome::ProvedBounded { depth, time_ms: elapsed_ms };
     }
 
     if trimmed.starts_with("sat") {
@@ -552,10 +518,7 @@ fn classify_bmc_output(output: &str, elapsed_ms: u64, depth: u32) -> ZaniBmcOutc
             || depth >= MAX_BMC_DEPTH;
 
         if is_bound_exhausted {
-            return ZaniBmcOutcome::BoundExhausted {
-                depth,
-                time_ms: elapsed_ms,
-            };
+            return ZaniBmcOutcome::BoundExhausted { depth, time_ms: elapsed_ms };
         }
 
         return ZaniBmcOutcome::Error {
@@ -567,10 +530,7 @@ fn classify_bmc_output(output: &str, elapsed_ms: u64, depth: u32) -> ZaniBmcOutc
 
     // Unexpected output
     ZaniBmcOutcome::Error {
-        reason: format!(
-            "unexpected zani output: {}",
-            &trimmed[..trimmed.len().min(200)]
-        ),
+        reason: format!("unexpected zani output: {}", &trimmed[..trimmed.len().min(200)]),
         time_ms: elapsed_ms,
     }
 }
@@ -619,13 +579,7 @@ fn parse_bmc_counterexample(output: &str) -> Option<Counterexample> {
         trace_steps.sort_by_key(|(step, _)| *step);
         let steps: Vec<TraceStep> = trace_steps
             .into_iter()
-            .map(|(step, assigns)| {
-                TraceStep {
-                    step,
-                    assignments: assigns,
-                    program_point: None,
-                }
-            })
+            .map(|(step, assigns)| TraceStep { step, assignments: assigns, program_point: None })
             .collect();
         Some(CounterexampleTrace::new(steps))
     } else {
@@ -889,10 +843,12 @@ mod tests {
     #[test]
     fn test_attribute_to_zani_proved() {
         let mut result = VerificationResult::Proved {
-            solver: "z4-smtlib".to_string(),
+            solver: "z4-smtlib".into(),
             time_ms: 42,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, };
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        };
         attribute_to_zani(&mut result, 100);
 
         assert_eq!(result.solver_name(), "zani");
@@ -906,11 +862,9 @@ mod tests {
 
     #[test]
     fn test_attribute_to_zani_failed() {
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Uint(42)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Uint(42))]);
         let mut result = VerificationResult::Failed {
-            solver: "z4-smtlib".to_string(),
+            solver: "z4-smtlib".into(),
             time_ms: 10,
             counterexample: Some(cex),
         };
@@ -928,7 +882,7 @@ mod tests {
     #[test]
     fn test_attribute_to_zani_unknown() {
         let mut result = VerificationResult::Unknown {
-            solver: "z4-smtlib".to_string(),
+            solver: "z4-smtlib".into(),
             time_ms: 5,
             reason: "solver returned unknown".to_string(),
         };
@@ -939,10 +893,8 @@ mod tests {
 
     #[test]
     fn test_attribute_to_zani_timeout() {
-        let mut result = VerificationResult::Timeout {
-            solver: "z4-smtlib".to_string(),
-            timeout_ms: 30_000,
-        };
+        let mut result =
+            VerificationResult::Timeout { solver: "z4-smtlib".into(), timeout_ms: 30_000 };
         attribute_to_zani(&mut result, 100);
 
         assert_eq!(result.solver_name(), "zani");
@@ -1030,9 +982,8 @@ mod tests {
         // Test that ZaniBackend can be used as a BMC lane in the portfolio racer
         use std::sync::Arc;
 
-        let zani: Arc<dyn VerificationBackend> = Arc::new(ZaniBackend::with_solver_path(
-            "/nonexistent/zani",
-        ));
+        let zani: Arc<dyn VerificationBackend> =
+            Arc::new(ZaniBackend::with_solver_path("/nonexistent/zani"));
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
@@ -1042,10 +993,7 @@ mod tests {
             contract_metadata: None,
         };
 
-        let lanes = vec![PortfolioLane {
-            strategy: PortfolioStrategy::Bmc,
-            backend: zani,
-        }];
+        let lanes = vec![PortfolioLane { strategy: PortfolioStrategy::Bmc, backend: zani }];
 
         let result = race(&vc, lanes).expect("should get a result");
         assert_eq!(result.winning_strategy, PortfolioStrategy::Bmc);
@@ -1064,10 +1012,8 @@ mod tests {
         use crate::Router;
         use crate::mock_backend::MockBackend;
 
-        let router = Router::with_backends(vec![
-            Box::new(MockBackend),
-            Box::new(ZaniBackend::new()),
-        ]);
+        let router =
+            Router::with_backends(vec![Box::new(MockBackend), Box::new(ZaniBackend::new())]);
 
         let l0_vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
@@ -1187,10 +1133,7 @@ mod tests {
             ),
             contract_metadata: None,
         };
-        assert!(
-            backend.can_handle(&plain_vc),
-            "zani should still handle plain L0Safety VCs"
-        );
+        assert!(backend.can_handle(&plain_vc), "zani should still handle plain L0Safety VCs");
     }
 
     // ---------------------------------------------------------------------------
@@ -1220,10 +1163,7 @@ mod tests {
             ("x".to_string(), CounterexampleValue::Uint(0)),
             ("y".to_string(), CounterexampleValue::Int(-5)),
         ]);
-        let outcome = ZaniBmcOutcome::CounterexampleFound {
-            counterexample: cex,
-            time_ms: 15,
-        };
+        let outcome = ZaniBmcOutcome::CounterexampleFound { counterexample: cex, time_ms: 15 };
         let result = outcome.to_verification_result();
 
         assert!(result.is_failed());
@@ -1264,10 +1204,8 @@ mod tests {
 
     #[test]
     fn test_bmc_outcome_error_to_verification_result() {
-        let outcome = ZaniBmcOutcome::Error {
-            reason: "internal zani error".to_string(),
-            time_ms: 5,
-        };
+        let outcome =
+            ZaniBmcOutcome::Error { reason: "internal zani error".to_string(), time_ms: 5 };
         let result = outcome.to_verification_result();
 
         assert!(matches!(result, VerificationResult::Unknown { .. }));
@@ -1549,9 +1487,7 @@ mod tests {
     #[test]
     fn test_is_not_suitable_for_zani_ownership() {
         let vc = VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "[memory:region] non-aliasing".to_string(),
-            },
+            kind: VcKind::Assertion { message: "[memory:region] non-aliasing".to_string() },
             function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Var("region_0_base".to_string(), Sort::Int),
@@ -1613,9 +1549,7 @@ mod tests {
 
     #[test]
     fn test_effective_depth_adaptive_small() {
-        let backend = ZaniBackend::new()
-            .with_bmc_depth(500)
-            .with_adaptive_depth(true);
+        let backend = ZaniBackend::new().with_bmc_depth(500).with_adaptive_depth(true);
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
             function: "f".into(),
@@ -1633,7 +1567,7 @@ mod tests {
     #[test]
     fn test_effective_depth_adaptive_clamped_to_ceiling() {
         let backend = ZaniBackend::new()
-            .with_bmc_depth(30)  // Low ceiling
+            .with_bmc_depth(30) // Low ceiling
             .with_adaptive_depth(true);
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,

@@ -1,6 +1,3 @@
-//! tRust: Diagnostic types and lint emission helpers shared across MIR
-//! tRust: transform passes.
-
 use rustc_errors::codes::*;
 use rustc_errors::{
     Applicability, Diag, DiagCtxtHandle, Diagnostic, EmissionGuarantee, Level, Subdiagnostic, msg,
@@ -24,7 +21,7 @@ pub(crate) fn emit_inline_always_target_feature_diagnostic<'a, 'tcx>(
 ) {
     tcx.emit_node_span_lint(
         lint::builtin::INLINE_ALWAYS_MISMATCHING_TARGET_FEATURES,
-        tcx.local_def_id_to_hir_id(caller_def_id.as_local().expect("invariant: caller must be a local definition")), // tRust: unwrap elimination
+        tcx.local_def_id_to_hir_id(caller_def_id.as_local().unwrap()),
         call_span,
         rustc_errors::DiagDecorator(|lint| {
             let callee = tcx.def_path_str(callee_def_id);

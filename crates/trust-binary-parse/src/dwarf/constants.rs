@@ -5,9 +5,11 @@
 
 pub const DW_TAG_ARRAY_TYPE: u64 = 0x01;
 pub const DW_TAG_FORMAL_PARAMETER: u64 = 0x05;
+#[cfg(test)]
 pub const DW_TAG_LEXICAL_BLOCK: u64 = 0x0b;
 pub const DW_TAG_MEMBER: u64 = 0x0d;
 pub const DW_TAG_POINTER_TYPE: u64 = 0x0f;
+#[cfg(test)]
 pub const DW_TAG_COMPILE_UNIT: u64 = 0x11;
 pub const DW_TAG_STRUCTURE_TYPE: u64 = 0x13;
 pub const DW_TAG_SUBROUTINE_TYPE: u64 = 0x15;
@@ -18,9 +20,12 @@ pub const DW_TAG_SUBRANGE_TYPE: u64 = 0x21;
 pub const DW_TAG_BASE_TYPE: u64 = 0x24;
 pub const DW_TAG_CONST_TYPE: u64 = 0x26;
 pub const DW_TAG_ENUMERATOR: u64 = 0x28;
+#[cfg(test)]
 pub const DW_TAG_SUBPROGRAM: u64 = 0x2e;
+#[cfg(test)]
 pub const DW_TAG_VARIABLE: u64 = 0x34;
 pub const DW_TAG_VOLATILE_TYPE: u64 = 0x35;
+#[cfg(test)]
 pub const DW_TAG_NAMESPACE: u64 = 0x39;
 pub const DW_TAG_ENUMERATION_TYPE: u64 = 0x04;
 pub const DW_TAG_UNSPECIFIED_TYPE: u64 = 0x3b;
@@ -55,43 +60,36 @@ pub const DW_FORM_IMPLICIT_CONST: u64 = 0x21;
 pub const DW_FORM_STRX1: u64 = 0x25;
 pub const DW_FORM_STRX2: u64 = 0x26;
 
-pub const DW_AT_SIBLING: u64 = 0x01;
-pub const DW_AT_LOCATION: u64 = 0x02;
 pub const DW_AT_NAME: u64 = 0x03;
 pub const DW_AT_BYTE_SIZE: u64 = 0x0b;
-pub const DW_AT_BIT_OFFSET: u64 = 0x0c;
-pub const DW_AT_BIT_SIZE: u64 = 0x0d;
 pub const DW_AT_STMT_LIST: u64 = 0x10;
+#[cfg(test)]
 pub const DW_AT_LOW_PC: u64 = 0x11;
+#[cfg(test)]
 pub const DW_AT_HIGH_PC: u64 = 0x12;
-pub const DW_AT_LANGUAGE: u64 = 0x13;
 pub const DW_AT_CONST_VALUE: u64 = 0x1c;
-pub const DW_AT_INLINE: u64 = 0x20;
 pub const DW_AT_LOWER_BOUND: u64 = 0x22;
-pub const DW_AT_PRODUCER: u64 = 0x25;
 pub const DW_AT_UPPER_BOUND: u64 = 0x2f;
-pub const DW_AT_ABSTRACT_ORIGIN: u64 = 0x31;
-pub const DW_AT_ARTIFICIAL: u64 = 0x34;
 pub const DW_AT_COUNT: u64 = 0x37;
 pub const DW_AT_DATA_MEMBER_LOCATION: u64 = 0x38;
-pub const DW_AT_DECL_FILE: u64 = 0x3a;
-pub const DW_AT_DECL_LINE: u64 = 0x3b;
 pub const DW_AT_ENCODING: u64 = 0x3e;
-pub const DW_AT_EXTERNAL: u64 = 0x3f;
-pub const DW_AT_SPECIFICATION: u64 = 0x47;
 pub const DW_AT_TYPE: u64 = 0x49;
-pub const DW_AT_LINKAGE_NAME: u64 = 0x6e;
-pub const DW_AT_STR_OFFSETS_BASE: u64 = 0x72;
-pub const DW_AT_ADDR_BASE: u64 = 0x73;
-pub const DW_AT_COMP_DIR: u64 = 0x1b;
 
+#[cfg(test)]
 pub const DW_ATE_ADDRESS: u64 = 0x01;
+#[cfg(test)]
 pub const DW_ATE_BOOLEAN: u64 = 0x02;
+#[cfg(test)]
 pub const DW_ATE_FLOAT: u64 = 0x04;
+#[cfg(test)]
 pub const DW_ATE_SIGNED: u64 = 0x05;
+#[cfg(test)]
 pub const DW_ATE_SIGNED_CHAR: u64 = 0x06;
+#[cfg(test)]
 pub const DW_ATE_UNSIGNED: u64 = 0x07;
+#[cfg(test)]
 pub const DW_ATE_UNSIGNED_CHAR: u64 = 0x08;
+#[cfg(test)]
 pub const DW_ATE_UTF: u64 = 0x10;
 
 pub const DW_CHILDREN_NO: u8 = 0x00;
@@ -111,13 +109,27 @@ mod tests {
     #[test]
     fn test_dwarf_tag_values_are_distinct() {
         let tags = [
-            DW_TAG_ARRAY_TYPE, DW_TAG_FORMAL_PARAMETER, DW_TAG_LEXICAL_BLOCK,
-            DW_TAG_MEMBER, DW_TAG_POINTER_TYPE, DW_TAG_COMPILE_UNIT,
-            DW_TAG_STRUCTURE_TYPE, DW_TAG_SUBROUTINE_TYPE, DW_TAG_TYPEDEF,
-            DW_TAG_UNION_TYPE, DW_TAG_UNSPECIFIED_PARAMETERS, DW_TAG_SUBRANGE_TYPE,
-            DW_TAG_BASE_TYPE, DW_TAG_CONST_TYPE, DW_TAG_ENUMERATOR,
-            DW_TAG_SUBPROGRAM, DW_TAG_VARIABLE, DW_TAG_VOLATILE_TYPE,
-            DW_TAG_NAMESPACE, DW_TAG_ENUMERATION_TYPE, DW_TAG_UNSPECIFIED_TYPE,
+            DW_TAG_ARRAY_TYPE,
+            DW_TAG_FORMAL_PARAMETER,
+            DW_TAG_LEXICAL_BLOCK,
+            DW_TAG_MEMBER,
+            DW_TAG_POINTER_TYPE,
+            DW_TAG_COMPILE_UNIT,
+            DW_TAG_STRUCTURE_TYPE,
+            DW_TAG_SUBROUTINE_TYPE,
+            DW_TAG_TYPEDEF,
+            DW_TAG_UNION_TYPE,
+            DW_TAG_UNSPECIFIED_PARAMETERS,
+            DW_TAG_SUBRANGE_TYPE,
+            DW_TAG_BASE_TYPE,
+            DW_TAG_CONST_TYPE,
+            DW_TAG_ENUMERATOR,
+            DW_TAG_SUBPROGRAM,
+            DW_TAG_VARIABLE,
+            DW_TAG_VOLATILE_TYPE,
+            DW_TAG_NAMESPACE,
+            DW_TAG_ENUMERATION_TYPE,
+            DW_TAG_UNSPECIFIED_TYPE,
         ];
         for (i, a) in tags.iter().enumerate() {
             for (j, b) in tags.iter().enumerate() {
@@ -131,14 +143,35 @@ mod tests {
     #[test]
     fn test_dwarf_form_values_are_distinct() {
         let forms = [
-            DW_FORM_ADDR, DW_FORM_BLOCK2, DW_FORM_BLOCK4, DW_FORM_DATA2,
-            DW_FORM_DATA4, DW_FORM_DATA8, DW_FORM_STRING, DW_FORM_BLOCK,
-            DW_FORM_BLOCK1, DW_FORM_DATA1, DW_FORM_FLAG, DW_FORM_SDATA,
-            DW_FORM_STRP, DW_FORM_UDATA, DW_FORM_REF_ADDR, DW_FORM_REF1,
-            DW_FORM_REF2, DW_FORM_REF4, DW_FORM_REF8, DW_FORM_REF_UDATA,
-            DW_FORM_INDIRECT, DW_FORM_SEC_OFFSET, DW_FORM_EXPRLOC,
-            DW_FORM_FLAG_PRESENT, DW_FORM_ADDRX, DW_FORM_LINE_STRP,
-            DW_FORM_IMPLICIT_CONST, DW_FORM_STRX1, DW_FORM_STRX2,
+            DW_FORM_ADDR,
+            DW_FORM_BLOCK2,
+            DW_FORM_BLOCK4,
+            DW_FORM_DATA2,
+            DW_FORM_DATA4,
+            DW_FORM_DATA8,
+            DW_FORM_STRING,
+            DW_FORM_BLOCK,
+            DW_FORM_BLOCK1,
+            DW_FORM_DATA1,
+            DW_FORM_FLAG,
+            DW_FORM_SDATA,
+            DW_FORM_STRP,
+            DW_FORM_UDATA,
+            DW_FORM_REF_ADDR,
+            DW_FORM_REF1,
+            DW_FORM_REF2,
+            DW_FORM_REF4,
+            DW_FORM_REF8,
+            DW_FORM_REF_UDATA,
+            DW_FORM_INDIRECT,
+            DW_FORM_SEC_OFFSET,
+            DW_FORM_EXPRLOC,
+            DW_FORM_FLAG_PRESENT,
+            DW_FORM_ADDRX,
+            DW_FORM_LINE_STRP,
+            DW_FORM_IMPLICIT_CONST,
+            DW_FORM_STRX1,
+            DW_FORM_STRX2,
         ];
         for (i, a) in forms.iter().enumerate() {
             for (j, b) in forms.iter().enumerate() {
@@ -169,8 +202,14 @@ mod tests {
     #[test]
     fn test_dw_ate_values_are_distinct() {
         let ates = [
-            DW_ATE_ADDRESS, DW_ATE_BOOLEAN, DW_ATE_FLOAT, DW_ATE_SIGNED,
-            DW_ATE_SIGNED_CHAR, DW_ATE_UNSIGNED, DW_ATE_UNSIGNED_CHAR, DW_ATE_UTF,
+            DW_ATE_ADDRESS,
+            DW_ATE_BOOLEAN,
+            DW_ATE_FLOAT,
+            DW_ATE_SIGNED,
+            DW_ATE_SIGNED_CHAR,
+            DW_ATE_UNSIGNED,
+            DW_ATE_UNSIGNED_CHAR,
+            DW_ATE_UTF,
         ];
         for (i, a) in ates.iter().enumerate() {
             for (j, b) in ates.iter().enumerate() {

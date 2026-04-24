@@ -20,8 +20,10 @@
 use std::collections::VecDeque;
 use trust_types::fx::{FxHashMap, FxHashSet};
 
+#[cfg(test)]
+use crate::Trace;
 use crate::liveness::LivenessResult;
-use crate::{LivenessProperty, StateId, StateMachine, Trace};
+use crate::{LivenessProperty, StateId, StateMachine};
 
 /// An action in the state machine, identified by its event label.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -53,38 +55,42 @@ pub enum FairnessConstraint {
 impl FairnessConstraint {
     /// Get the action this constraint applies to.
     #[must_use]
-    pub(crate) fn action(&self) -> &Action {
+    fn action(&self) -> &Action {
         match self {
             FairnessConstraint::WeakFairness(a)
             | FairnessConstraint::StrongFairness(a)
             | FairnessConstraint::Unconditional(a) => a,
         }
     }
+}
 
+#[cfg(test)]
+impl FairnessConstraint {
     /// Returns `true` if this is a weak fairness constraint.
     #[must_use]
-    pub(crate) fn is_weak(&self) -> bool {
+    fn is_weak(&self) -> bool {
         matches!(self, FairnessConstraint::WeakFairness(_))
     }
 
     /// Returns `true` if this is a strong fairness constraint.
     #[must_use]
-    pub(crate) fn is_strong(&self) -> bool {
+    fn is_strong(&self) -> bool {
         matches!(self, FairnessConstraint::StrongFairness(_))
     }
 
     /// Returns `true` if this is an unconditional fairness constraint.
     #[must_use]
-    pub(crate) fn is_unconditional(&self) -> bool {
+    fn is_unconditional(&self) -> bool {
         matches!(self, FairnessConstraint::Unconditional(_))
     }
 }
 
 /// Describes how a fairness constraint was violated in a trace.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 #[allow(clippy::enum_variant_names)]
-pub(crate) enum FairnessViolation {
+enum FairnessViolation {
     /// Weak fairness violated: the action was continuously enabled from
     /// `enabled_from_index` onward but never taken.
     WeakViolation {
@@ -111,10 +117,11 @@ pub(crate) enum FairnessViolation {
     },
 }
 
+#[cfg(test)]
 impl FairnessViolation {
     /// Get the action name involved in this violation.
     #[must_use]
-    pub(crate) fn action(&self) -> &str {
+    fn action(&self) -> &str {
         match self {
             FairnessViolation::WeakViolation { action, .. }
             | FairnessViolation::StrongViolation { action, .. }
@@ -135,8 +142,9 @@ pub struct StarvationWitness {
 }
 
 /// A step in a fair schedule.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ScheduleStep {
+struct ScheduleStep {
     /// Current state.
     pub state: StateId,
     /// Event/action taken.
@@ -146,15 +154,17 @@ pub(crate) struct ScheduleStep {
 }
 
 /// A fair schedule: a sequence of steps satisfying fairness constraints.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FairSchedule {
+struct FairSchedule {
     /// Ordered steps of the schedule.
     pub steps: Vec<ScheduleStep>,
 }
 
 /// Annotation on a single trace step indicating fairness-relevant information.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FairnessAnnotation {
+struct FairnessAnnotation {
     /// Index in the trace (state position).
     pub trace_index: usize,
     /// The state at this position.
@@ -168,66 +178,40 @@ pub(crate) struct FairnessAnnotation {
 }
 
 /// An annotated trace with fairness information on each step.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct AnnotatedTrace {
+struct AnnotatedTrace {
     /// Per-step annotations.
     pub annotations: Vec<FairnessAnnotation>,
 }
 
 /// Checks execution traces against a set of fairness constraints.
-///
-/// The `FairnessChecker` holds a state machine and a set of constraints.
-/// It can check individual traces, annotate them, or verify liveness
-/// under fairness assumptions.
+#[cfg(test)]
 #[derive(Debug, Clone)]
-pub(crate) struct FairnessChecker {
+struct FairnessChecker {
     machine: StateMachine,
     constraints: Vec<FairnessConstraint>,
 }
 
+#[cfg(test)]
 impl FairnessChecker {
-    /// Create a new checker for the given machine and constraints.
     #[must_use]
-    pub(crate) fn new(machine: StateMachine, constraints: Vec<FairnessConstraint>) -> Self {
+    fn new(machine: StateMachine, constraints: Vec<FairnessConstraint>) -> Self {
         Self { machine, constraints }
     }
 
-    /// Return the constraints held by this checker.
     #[must_use]
-    pub(crate) fn constraints(&self) -> &[FairnessConstraint] {
-        &self.constraints
-    }
-
-    /// Return the state machine held by this checker.
-    #[must_use]
-    pub(crate) fn machine(&self) -> &StateMachine {
-        &self.machine
-    }
-
-    /// Check all fairness constraints against a finite trace.
-    ///
-    /// Returns a list of violations found. An empty list means the trace
-    /// satisfies all constraints (within the bounded observation window).
-    #[must_use]
-    pub(crate) fn check_trace(&self, trace: &Trace) -> Vec<FairnessViolation> {
+    fn check_trace(&self, trace: &Trace) -> Vec<FairnessViolation> {
         let mut violations = Vec::new();
         for constraint in &self.constraints {
             match constraint {
                 FairnessConstraint::WeakFairness(action) => {
-                    if let Some(v) = check_weak_fairness_trace(
-                        &self.machine,
-                        trace,
-                        &action.0,
-                    ) {
+                    if let Some(v) = check_weak_fairness_trace(&self.machine, trace, &action.0) {
                         violations.push(v);
                     }
                 }
                 FairnessConstraint::StrongFairness(action) => {
-                    if let Some(v) = check_strong_fairness_trace(
-                        &self.machine,
-                        trace,
-                        &action.0,
-                    ) {
+                    if let Some(v) = check_strong_fairness_trace(&self.machine, trace, &action.0) {
                         violations.push(v);
                     }
                 }
@@ -241,38 +225,29 @@ impl FairnessChecker {
         violations
     }
 
-    /// Check liveness under the stored fairness constraints.
     #[must_use]
-    pub(crate) fn check_liveness(&self, property: &LivenessProperty) -> LivenessResult {
+    fn check_liveness(&self, property: &LivenessProperty) -> LivenessResult {
         check_under_fairness(&self.machine, property, &self.constraints)
     }
 
-    /// Annotate a trace with fairness-relevant information.
     #[must_use]
-    pub(crate) fn annotate(&self, trace: &Trace) -> AnnotatedTrace {
+    fn annotate(&self, trace: &Trace) -> AnnotatedTrace {
         annotate_trace(&self.machine, trace, &self.constraints)
     }
 
-    /// Detect starvation in the underlying machine.
     #[must_use]
-    pub(crate) fn detect_starvation(&self) -> Vec<StarvationWitness> {
+    fn detect_starvation(&self) -> Vec<StarvationWitness> {
         detect_starvation(&self.machine)
     }
 }
 
 // ---------------------------------------------------------------------------
-// Public standalone functions
+// Test-only standalone functions
 // ---------------------------------------------------------------------------
 
-/// Check weak fairness for a single action on a finite trace.
-///
-/// Weak fairness: if the action is continuously enabled from some point onward,
-/// it must eventually be taken. In a finite trace, we check whether the action
-/// is enabled in a suffix but never taken in that suffix.
-///
-/// Returns `Some(violation)` if the trace violates weak fairness for the action.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn check_weak_fairness(
+fn check_weak_fairness(
     sm: &StateMachine,
     trace: &Trace,
     action: &str,
@@ -280,15 +255,9 @@ pub(crate) fn check_weak_fairness(
     check_weak_fairness_trace(sm, trace, action)
 }
 
-/// Check strong fairness for a single action on a finite trace.
-///
-/// Strong fairness: if the action is enabled infinitely often, it must be taken
-/// infinitely often. On a finite trace, we approximate: if the action is enabled
-/// at multiple points but never taken, that is a violation.
-///
-/// Returns `Some(violation)` if the trace violates strong fairness for the action.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn check_strong_fairness(
+fn check_strong_fairness(
     sm: &StateMachine,
     trace: &Trace,
     action: &str,
@@ -296,13 +265,9 @@ pub(crate) fn check_strong_fairness(
     check_strong_fairness_trace(sm, trace, action)
 }
 
-/// Annotate a trace with fairness-relevant information.
-///
-/// For each step in the trace, records which actions are enabled, which action
-/// is taken (if any), and whether the step is relevant to any fairness
-/// constraint in `constraints`.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn annotate_trace(
+fn annotate_trace(
     sm: &StateMachine,
     trace: &Trace,
     constraints: &[FairnessConstraint],
@@ -312,14 +277,9 @@ pub(crate) fn annotate_trace(
     let mut annotations = Vec::with_capacity(trace.states.len());
 
     for (i, &state_id) in trace.states.iter().enumerate() {
-        let enabled: Vec<String> = sm
-            .transitions
-            .iter()
-            .filter(|t| t.from == state_id)
-            .map(|t| t.event.clone())
-            .collect();
+        let enabled: Vec<String> =
+            sm.transitions.iter().filter(|t| t.from == state_id).map(|t| t.event.clone()).collect();
 
-        // Determine which action is taken (transition to next state)
         let taken = if i + 1 < trace.states.len() {
             let next = trace.states[i + 1];
             sm.transitions
@@ -345,14 +305,9 @@ pub(crate) fn annotate_trace(
     AnnotatedTrace { annotations }
 }
 
-/// Generate a fair schedule for a state machine under given fairness constraints.
-///
-/// Produces a bounded schedule (up to `max_steps`) that attempts to satisfy
-/// all fairness constraints by round-robin among enabled fair actions.
-///
-/// Returns `None` if the machine has no transitions from the initial state.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn generate_fair_schedule(
+fn generate_fair_schedule(
     sm: &StateMachine,
     fairness: &[FairnessConstraint],
     max_steps: usize,
@@ -372,14 +327,9 @@ pub(crate) fn generate_fair_schedule(
             break;
         }
 
-        // Try to pick a fair action if available
         let chosen = if !fair_actions.is_empty() {
             let preferred = fair_actions[fair_idx % fair_actions.len()];
-            outgoing
-                .iter()
-                .find(|t| t.event == preferred)
-                .or_else(|| outgoing.first())
-                .copied()
+            outgoing.iter().find(|t| t.event == preferred).or_else(|| outgoing.first()).copied()
         } else {
             outgoing.first().copied()
         };
@@ -397,11 +347,7 @@ pub(crate) fn generate_fair_schedule(
         current = transition.to;
     }
 
-    if steps.is_empty() {
-        None
-    } else {
-        Some(FairSchedule { steps })
-    }
+    if steps.is_empty() { None } else { Some(FairSchedule { steps }) }
 }
 
 /// Check a liveness property under fairness constraints.
@@ -447,19 +393,14 @@ pub fn check_under_fairness(
     // Pre-compute: for each state, which events are enabled
     let mut state_events: FxHashMap<StateId, FxHashSet<&str>> = FxHashMap::default();
     for t in &sm.transitions {
-        state_events
-            .entry(t.from)
-            .or_default()
-            .insert(t.event.as_str());
+        state_events.entry(t.from).or_default().insert(t.event.as_str());
     }
 
     for scc in &sccs {
         // Skip trivial SCCs
         if scc.len() == 1 {
             let state = scc[0];
-            let has_self_loop = adj
-                .get(&state)
-                .is_some_and(|succs| succs.contains(&state));
+            let has_self_loop = adj.get(&state).is_some_and(|succs| succs.contains(&state));
             if !has_self_loop {
                 continue;
             }
@@ -490,9 +431,7 @@ pub fn check_under_fairness(
                     // Weak fairness: if the action is enabled in ALL SCC states
                     // (continuously enabled), it must be taken.
                     let enabled_everywhere = scc.iter().all(|s| {
-                        state_events
-                            .get(s)
-                            .is_some_and(|evts| evts.contains(action_name))
+                        state_events.get(s).is_some_and(|evts| evts.contains(action_name))
                     });
                     if enabled_everywhere && !taken_events.contains(action_name) {
                         is_fair_cycle = false;
@@ -503,9 +442,7 @@ pub fn check_under_fairness(
                     // Strong fairness: if the action is enabled in ANY SCC state
                     // (enabled infinitely often since SCC cycles), it must be taken.
                     let enabled_somewhere = scc.iter().any(|s| {
-                        state_events
-                            .get(s)
-                            .is_some_and(|evts| evts.contains(action_name))
+                        state_events.get(s).is_some_and(|evts| evts.contains(action_name))
                     });
                     if enabled_somewhere && !taken_events.contains(action_name) {
                         is_fair_cycle = false;
@@ -555,18 +492,11 @@ pub fn detect_starvation(sm: &StateMachine) -> Vec<StarvationWitness> {
     // For each state, which events are enabled
     let mut state_events: FxHashMap<StateId, FxHashSet<&str>> = FxHashMap::default();
     for t in &sm.transitions {
-        state_events
-            .entry(t.from)
-            .or_default()
-            .insert(t.event.as_str());
+        state_events.entry(t.from).or_default().insert(t.event.as_str());
     }
 
     // All event names
-    let all_events: FxHashSet<&str> = sm
-        .transitions
-        .iter()
-        .map(|t| t.event.as_str())
-        .collect();
+    let all_events: FxHashSet<&str> = sm.transitions.iter().map(|t| t.event.as_str()).collect();
 
     let mut witnesses = Vec::new();
 
@@ -575,9 +505,7 @@ pub fn detect_starvation(sm: &StateMachine) -> Vec<StarvationWitness> {
             // Skip trivial SCCs
             if scc.len() == 1 {
                 let state = scc[0];
-                let has_self_loop = adj
-                    .get(&state)
-                    .is_some_and(|succs| succs.contains(&state));
+                let has_self_loop = adj.get(&state).is_some_and(|succs| succs.contains(&state));
                 if !has_self_loop {
                     continue;
                 }
@@ -588,11 +516,7 @@ pub fn detect_starvation(sm: &StateMachine) -> Vec<StarvationWitness> {
             // Is the action enabled in any SCC state?
             let enabled_states: Vec<StateId> = scc
                 .iter()
-                .filter(|s| {
-                    state_events
-                        .get(s)
-                        .is_some_and(|evts| evts.contains(event))
-                })
+                .filter(|s| state_events.get(s).is_some_and(|evts| evts.contains(event)))
                 .copied()
                 .collect();
 
@@ -601,14 +525,9 @@ pub fn detect_starvation(sm: &StateMachine) -> Vec<StarvationWitness> {
             }
 
             // Is the action taken within the SCC?
-            let taken_in_scc = sm
-                .transitions
-                .iter()
-                .any(|t| {
-                    t.event.as_str() == *event
-                        && scc_set.contains(&t.from)
-                        && scc_set.contains(&t.to)
-                });
+            let taken_in_scc = sm.transitions.iter().any(|t| {
+                t.event.as_str() == *event && scc_set.contains(&t.from) && scc_set.contains(&t.to)
+            });
 
             if !taken_in_scc {
                 witnesses.push(StarvationWitness {
@@ -627,9 +546,7 @@ pub fn detect_starvation(sm: &StateMachine) -> Vec<StarvationWitness> {
         if !reachable.contains(&s.id) {
             continue;
         }
-        let has_self_loop = adj
-            .get(&s.id)
-            .is_some_and(|succs| succs.contains(&s.id));
+        let has_self_loop = adj.get(&s.id).is_some_and(|succs| succs.contains(&s.id));
         if !has_self_loop {
             continue;
         }
@@ -663,10 +580,11 @@ pub fn detect_starvation(sm: &StateMachine) -> Vec<StarvationWitness> {
 }
 
 // ---------------------------------------------------------------------------
-// Internal trace-level checking helpers
+// Internal trace-level checking helpers (test-only)
 // ---------------------------------------------------------------------------
 
 /// Check weak fairness on a single trace for one action.
+#[cfg(test)]
 fn check_weak_fairness_trace(
     sm: &StateMachine,
     trace: &Trace,
@@ -688,9 +606,7 @@ fn check_weak_fairness_trace(
         .map(|i| {
             let from = trace.states[i];
             let to = trace.states[i + 1];
-            sm.transitions
-                .iter()
-                .any(|t| t.from == from && t.to == to && t.event == action)
+            sm.transitions.iter().any(|t| t.from == from && t.to == to && t.event == action)
         })
         .collect();
 
@@ -716,6 +632,7 @@ fn check_weak_fairness_trace(
 }
 
 /// Check strong fairness on a single trace for one action.
+#[cfg(test)]
 fn check_strong_fairness_trace(
     sm: &StateMachine,
     trace: &Trace,
@@ -741,9 +658,7 @@ fn check_strong_fairness_trace(
     let ever_taken = (0..trace.states.len().saturating_sub(1)).any(|i| {
         let from = trace.states[i];
         let to = trace.states[i + 1];
-        sm.transitions
-            .iter()
-            .any(|t| t.from == from && t.to == to && t.event == action)
+        sm.transitions.iter().any(|t| t.from == from && t.to == to && t.event == action)
     });
 
     if !ever_taken {
@@ -757,6 +672,7 @@ fn check_strong_fairness_trace(
 }
 
 /// Check unconditional fairness on a trace for one action.
+#[cfg(test)]
 fn check_unconditional_trace(
     trace: &Trace,
     sm: &StateMachine,
@@ -773,9 +689,7 @@ fn check_unconditional_trace(
         .filter(|&i| {
             let from = trace.states[i];
             let to = trace.states[i + 1];
-            sm.transitions
-                .iter()
-                .any(|t| t.from == from && t.to == to && t.event == action)
+            sm.transitions.iter().any(|t| t.from == from && t.to == to && t.event == action)
         })
         .count();
 
@@ -903,11 +817,7 @@ struct Lasso {
     cycle_start: usize,
 }
 
-fn build_lasso(
-    initial: StateId,
-    scc: &[StateId],
-    adj: &FxHashMap<StateId, Vec<StateId>>,
-) -> Lasso {
+fn build_lasso(initial: StateId, scc: &[StateId], adj: &FxHashMap<StateId, Vec<StateId>>) -> Lasso {
     let scc_set: FxHashSet<StateId> = scc.iter().copied().collect();
     let scc_entry = scc[0];
 
@@ -1202,9 +1112,8 @@ mod tests {
 
     #[test]
     fn test_starvation_empty_machine() {
-        let sm = StateMachineBuilder::new(StateId(0))
-            .add_state(State::new(StateId(0), "A"))
-            .build();
+        let sm =
+            StateMachineBuilder::new(StateId(0)).add_state(State::new(StateId(0), "A")).build();
 
         let witnesses = detect_starvation(&sm);
         assert!(witnesses.is_empty());
@@ -1236,10 +1145,8 @@ mod tests {
             .add_transition(Transition::new(StateId(1), StateId(0), "back"))
             .build();
 
-        let checker = FairnessChecker::new(
-            sm,
-            vec![FairnessConstraint::WeakFairness(Action::new("go"))],
-        );
+        let checker =
+            FairnessChecker::new(sm, vec![FairnessConstraint::WeakFairness(Action::new("go"))]);
 
         // Trace ends at B where "go" is not enabled => no weak fairness violation
         let trace = Trace::new(vec![StateId(0), StateId(1)]);
@@ -1257,10 +1164,8 @@ mod tests {
             .add_transition(Transition::new(StateId(0), StateId(1), "escape"))
             .build();
 
-        let checker = FairnessChecker::new(
-            sm,
-            vec![FairnessConstraint::WeakFairness(Action::new("escape"))],
-        );
+        let checker =
+            FairnessChecker::new(sm, vec![FairnessConstraint::WeakFairness(Action::new("escape"))]);
 
         // Trace: A -> A -> A (spin self-loop, escape never taken)
         let trace = Trace::new(vec![StateId(0), StateId(0), StateId(0)]);
@@ -1308,10 +1213,8 @@ mod tests {
             .add_transition(Transition::new(StateId(1), StateId(0), "back"))
             .build();
 
-        let checker = FairnessChecker::new(
-            sm,
-            vec![FairnessConstraint::Unconditional(Action::new("tick"))],
-        );
+        let checker =
+            FairnessChecker::new(sm, vec![FairnessConstraint::Unconditional(Action::new("tick"))]);
 
         let trace = Trace::new(vec![StateId(0), StateId(1), StateId(0)]);
         let violations = checker.check_trace(&trace);
@@ -1355,9 +1258,8 @@ mod tests {
 
     #[test]
     fn test_annotate_trace_empty() {
-        let sm = StateMachineBuilder::new(StateId(0))
-            .add_state(State::new(StateId(0), "A"))
-            .build();
+        let sm =
+            StateMachineBuilder::new(StateId(0)).add_state(State::new(StateId(0), "A")).build();
 
         let trace = Trace::new(vec![]);
         let annotated = annotate_trace(&sm, &trace, &[]);
@@ -1432,10 +1334,8 @@ mod tests {
             .add_transition(Transition::new(StateId(0), StateId(1), "escape"))
             .build();
 
-        let checker = FairnessChecker::new(
-            sm,
-            vec![FairnessConstraint::WeakFairness(Action::new("escape"))],
-        );
+        let checker =
+            FairnessChecker::new(sm, vec![FairnessConstraint::WeakFairness(Action::new("escape"))]);
 
         let prop = LivenessProperty::new("reach_goal", "goal");
         let result = checker.check_liveness(&prop);
@@ -1452,10 +1352,8 @@ mod tests {
             .add_transition(Transition::new(StateId(1), StateId(0), "back"))
             .build();
 
-        let checker = FairnessChecker::new(
-            sm,
-            vec![FairnessConstraint::StrongFairness(Action::new("slow"))],
-        );
+        let checker =
+            FairnessChecker::new(sm, vec![FairnessConstraint::StrongFairness(Action::new("slow"))]);
 
         let witnesses = checker.detect_starvation();
         let starved: Vec<&str> = witnesses.iter().map(|w| w.action.as_str()).collect();
@@ -1464,10 +1362,8 @@ mod tests {
 
     #[test]
     fn test_fairness_violation_action_accessor() {
-        let wv = FairnessViolation::WeakViolation {
-            action: "send".to_string(),
-            enabled_from_index: 3,
-        };
+        let wv =
+            FairnessViolation::WeakViolation { action: "send".to_string(), enabled_from_index: 3 };
         assert_eq!(wv.action(), "send");
 
         let sv = FairnessViolation::StrongViolation {

@@ -20,41 +20,25 @@ impl Register {
     /// Create a general-purpose register (X0-X30 or W0-W30).
     #[must_use]
     pub fn gpr(index: u8, is_64bit: bool) -> Self {
-        Self {
-            kind: RegKind::Gpr,
-            index,
-            width: if is_64bit { 64 } else { 32 },
-        }
+        Self { kind: RegKind::Gpr, index, width: if is_64bit { 64 } else { 32 } }
     }
 
     /// Create the stack pointer register (SP / WSP).
     #[must_use]
     pub fn sp(is_64bit: bool) -> Self {
-        Self {
-            kind: RegKind::Sp,
-            index: 31,
-            width: if is_64bit { 64 } else { 32 },
-        }
+        Self { kind: RegKind::Sp, index: 31, width: if is_64bit { 64 } else { 32 } }
     }
 
     /// Create the zero register (XZR / WZR).
     #[must_use]
     pub fn zr(is_64bit: bool) -> Self {
-        Self {
-            kind: RegKind::Zr,
-            index: 31,
-            width: if is_64bit { 64 } else { 32 },
-        }
+        Self { kind: RegKind::Zr, index: 31, width: if is_64bit { 64 } else { 32 } }
     }
 
     /// Create a SIMD/FP register.
     #[must_use]
     pub fn simd(index: u8, width: u16) -> Self {
-        Self {
-            kind: RegKind::Simd,
-            index,
-            width,
-        }
+        Self { kind: RegKind::Simd, index, width }
     }
 
     /// True if this is the zero register.
@@ -179,8 +163,8 @@ impl fmt::Display for ExtendType {
 pub enum Condition {
     Eq = 0b0000,
     Ne = 0b0001,
-    Cs = 0b0010,  // aka HS
-    Cc = 0b0011,  // aka LO
+    Cs = 0b0010, // aka HS
+    Cc = 0b0011, // aka LO
     Mi = 0b0100,
     Pl = 0b0101,
     Vs = 0b0110,
@@ -253,19 +237,19 @@ impl fmt::Display for Condition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum BarrierDomain {
-    Osh,   // Outer shareable
-    Nsh,   // Non-shareable
-    Ish,   // Inner shareable
-    Sy,    // Full system
+    Osh, // Outer shareable
+    Nsh, // Non-shareable
+    Ish, // Inner shareable
+    Sy,  // Full system
 }
 
 /// Barrier type qualifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum BarrierType {
-    Ld,    // Load
-    St,    // Store
-    Full,  // Load + Store
+    Ld,   // Load
+    St,   // Store
+    Full, // Load + Store
 }
 
 /// Memory addressing mode.
@@ -277,12 +261,7 @@ pub enum MemoryOperand {
     /// `[base, #imm]` — base + signed immediate offset.
     BaseOffset { base: Register, offset: i64 },
     /// `[base, Xm]` or `[base, Xm, shift]` — base + register offset.
-    BaseRegister {
-        base: Register,
-        index: Register,
-        extend: Option<ExtendType>,
-        shift: u8,
-    },
+    BaseRegister { base: Register, index: Register, extend: Option<ExtendType>, shift: u8 },
     /// `[base, #imm]!` — pre-indexed.
     PreIndex { base: Register, offset: i64 },
     /// `[base], #imm` — post-indexed.
@@ -298,17 +277,9 @@ pub enum Operand {
     /// A register.
     Reg(Register),
     /// A shifted register: Rm, shift #amount.
-    ShiftedReg {
-        reg: Register,
-        shift: ShiftType,
-        amount: u8,
-    },
+    ShiftedReg { reg: Register, shift: ShiftType, amount: u8 },
     /// An extended register: Rm, extend #amount.
-    ExtendedReg {
-        reg: Register,
-        extend: ExtendType,
-        shift: u8,
-    },
+    ExtendedReg { reg: Register, extend: ExtendType, shift: u8 },
     /// An immediate value.
     Imm(u64),
     /// A signed immediate value (for offsets, etc.).

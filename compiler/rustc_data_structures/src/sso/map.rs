@@ -28,7 +28,7 @@ const SSO_ARRAY_SIZE: usize = 8;
 /// Stores elements in a small array up to a certain length
 /// and switches to `HashMap` when that length is exceeded.
 //
-// tRust: known issue — Implements subset of HashMap API.
+// FIXME: Implements subset of HashMap API.
 //
 // Missing HashMap API:
 //   all hasher-related
@@ -41,7 +41,7 @@ const SSO_ARRAY_SIZE: usize = 8;
 //   Entry::or_insert_with_key
 //   Vacant/Occupied entries and related
 //
-// tRust: known issue — In HashMap most methods accepting key reference
+// FIXME: In HashMap most methods accepting key reference
 // accept reference to generic `Q` where `K: Borrow<Q>`.
 //
 // However, using this approach in `HashMap::get` apparently
@@ -525,7 +525,7 @@ impl<'a, K: Eq + Hash, V> Entry<'a, K, V> {
                     index
                 } else {
                     let index = array.len();
-                    array.try_push((self.key, default())).expect("invariant: SSO array must have capacity for push"); // tRust: unwrap -> expect
+                    array.try_push((self.key, default())).unwrap();
                     index
                 };
                 &mut array[index].1

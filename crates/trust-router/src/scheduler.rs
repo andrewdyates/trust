@@ -93,10 +93,7 @@ pub fn build_schedule(
     config: &SchedulerConfig,
 ) -> Schedule {
     if strategies.is_empty() {
-        return Schedule {
-            budgets: Vec::new(),
-            total_budget: config.total_budget,
-        };
+        return Schedule { budgets: Vec::new(), total_budget: config.total_budget };
     }
 
     let classification = cegar_classifier::classify_with_threshold(vc, config.cegar_threshold);
@@ -106,27 +103,18 @@ pub fn build_schedule(
     // Determine primary strategy index based on classifier.
     let primary_idx = if classification.should_use_cegar {
         // Prefer CEGAR strategy if available.
-        strategies
-            .iter()
-            .position(|s| matches!(s, Strategy::Cegar { .. }))
-            .unwrap_or(0)
+        strategies.iter().position(|s| matches!(s, Strategy::Cegar { .. })).unwrap_or(0)
     } else {
         // Prefer DirectSMT if available.
-        strategies
-            .iter()
-            .position(|s| matches!(s, Strategy::DirectSmt { .. }))
-            .unwrap_or(0)
+        strategies.iter().position(|s| matches!(s, Strategy::DirectSmt { .. })).unwrap_or(0)
     };
 
     // Allocate budgets.
     let primary_ms = (total_ms * config.primary_fraction).max(min_ms);
     let remaining_ms = (total_ms - primary_ms).max(0.0);
     let secondary_count = strategies.len().saturating_sub(1);
-    let per_secondary_ms = if secondary_count > 0 {
-        (remaining_ms / secondary_count as f64).max(min_ms)
-    } else {
-        0.0
-    };
+    let per_secondary_ms =
+        if secondary_count > 0 { (remaining_ms / secondary_count as f64).max(min_ms) } else { 0.0 };
 
     // Scale CEGAR budget based on classifier score.
     let cegar_bonus = if classification.should_use_cegar {
@@ -140,11 +128,7 @@ pub fn build_schedule(
         .iter()
         .enumerate()
         .map(|(idx, strategy)| {
-            let base_ms = if idx == primary_idx {
-                primary_ms
-            } else {
-                per_secondary_ms
-            };
+            let base_ms = if idx == primary_idx { primary_ms } else { per_secondary_ms };
 
             // Apply CEGAR bonus to CEGAR strategies.
             let adjusted_ms = if matches!(strategy, Strategy::Cegar { .. }) {
@@ -166,18 +150,12 @@ pub fn build_schedule(
     // Sort by priority.
     budgets.sort_by_key(|b| b.priority);
 
-    Schedule {
-        budgets,
-        total_budget: config.total_budget,
-    }
+    Schedule { budgets, total_budget: config.total_budget }
 }
 
 /// tRust: Build a schedule using default configuration.
 #[must_use]
-pub fn schedule_default(
-    vc: &VerificationCondition,
-    strategies: &[Strategy],
-) -> Schedule {
+pub fn schedule_default(vc: &VerificationCondition, strategies: &[Strategy]) -> Schedule {
     build_schedule(vc, strategies, &SchedulerConfig::default())
 }
 
@@ -190,7 +168,7 @@ mod tests {
     fn safety_vc() -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -206,10 +184,8 @@ mod tests {
         let x_next = Formula::Var("x_next_step".into(), Sort::Int);
         let formula = Formula::Lt(Box::new(x_next), Box::new(x));
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "loop invariant: counter decreases".to_string(),
-            },
-            function: "loop_fn".to_string(),
+            kind: VcKind::Assertion { message: "loop invariant: counter decreases".to_string() },
+            function: "loop_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -232,11 +208,8 @@ mod tests {
 
     #[test]
     fn test_schedule_smt_primary_for_simple_vc() {
-        let strategies = vec![
-            Strategy::direct_smt(5000),
-            Strategy::cegar(100),
-            Strategy::bounded_mc(50),
-        ];
+        let strategies =
+            vec![Strategy::direct_smt(5000), Strategy::cegar(100), Strategy::bounded_mc(50)];
         let schedule = schedule_default(&safety_vc(), &strategies);
         assert_eq!(schedule.strategy_count(), 3);
         // DirectSMT should be primary (priority 0) for simple safety VCs.
@@ -246,11 +219,8 @@ mod tests {
 
     #[test]
     fn test_schedule_cegar_primary_for_complex_vc() {
-        let strategies = vec![
-            Strategy::direct_smt(5000),
-            Strategy::cegar(100),
-            Strategy::bounded_mc(50),
-        ];
+        let strategies =
+            vec![Strategy::direct_smt(5000), Strategy::cegar(100), Strategy::bounded_mc(50)];
         let schedule = schedule_default(&complex_vc(), &strategies);
         // CEGAR should be primary for non-termination VCs (high classifier score).
         assert_eq!(schedule.budgets[0].strategy.name(), "cegar");
@@ -259,10 +229,7 @@ mod tests {
 
     #[test]
     fn test_schedule_cegar_bonus() {
-        let strategies = vec![
-            Strategy::direct_smt(5000),
-            Strategy::cegar(100),
-        ];
+        let strategies = vec![Strategy::direct_smt(5000), Strategy::cegar(100)];
         let config = SchedulerConfig {
             total_budget: Duration::from_secs(10),
             cegar_threshold: 30,
@@ -283,11 +250,8 @@ mod tests {
 
     #[test]
     fn test_schedule_minimum_time_enforced() {
-        let strategies = vec![
-            Strategy::direct_smt(5000),
-            Strategy::cegar(100),
-            Strategy::bounded_mc(50),
-        ];
+        let strategies =
+            vec![Strategy::direct_smt(5000), Strategy::cegar(100), Strategy::bounded_mc(50)];
         let config = SchedulerConfig {
             total_budget: Duration::from_millis(100), // Very small
             min_strategy_time: Duration::from_millis(500),
@@ -302,10 +266,7 @@ mod tests {
 
     #[test]
     fn test_schedule_strategy_names() {
-        let strategies = vec![
-            Strategy::direct_smt(5000),
-            Strategy::bounded_mc(50),
-        ];
+        let strategies = vec![Strategy::direct_smt(5000), Strategy::bounded_mc(50)];
         let schedule = schedule_default(&safety_vc(), &strategies);
         let names = schedule.strategy_names();
         assert!(names.contains(&"direct-smt"));

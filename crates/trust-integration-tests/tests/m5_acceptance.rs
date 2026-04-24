@@ -26,19 +26,15 @@ use trust_convergence::{
 };
 use trust_loop::{LoopConfig, TerminationReason, VerifyContext};
 use trust_strengthen::{
-    ConcreteState, HoudiniConfig, HoudiniRefiner, HoudiniVerifier,
-    HoudiniCounterexample, HoudiniError,
-    IceConfig, IceLearner,
-    ImplicationExample,
-    NoOpLlm, ProposalKind, StrengthenConfig,
+    ConcreteState, HoudiniConfig, HoudiniCounterexample, HoudiniError, HoudiniRefiner,
+    HoudiniVerifier, IceConfig, IceLearner, ImplicationExample, NoOpLlm, ProposalKind,
+    StrengthenConfig,
 };
 use trust_types::{
-    AssertMessage, BasicBlock, BinOp, BlockId, ConstValue, Counterexample,
-    CounterexampleValue, CrateVerificationResult, Formula,
-    FunctionVerificationResult, LocalDecl, Operand, Place, ProofStrength,
-    Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, VcKind,
-    VerifiableBody, VerifiableFunction, VerificationCondition,
-    VerificationResult,
+    AssertMessage, BasicBlock, BinOp, BlockId, ConstValue, Counterexample, CounterexampleValue,
+    CrateVerificationResult, Formula, FunctionVerificationResult, LocalDecl, Operand, Place,
+    ProofStrength, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody,
+    VerifiableFunction, VerificationCondition, VerificationResult,
 };
 
 // ===========================================================================
@@ -66,14 +62,14 @@ fn binary_search_function() -> VerifiableFunction {
                     ty: Ty::Slice { elem: Box::new(Ty::Int { width: 32, signed: true }) },
                     name: Some("arr".into()),
                 },
-                LocalDecl { index: 2, ty: Ty::Int { width: 32, signed: true }, name: Some("target".into()) },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("target".into()),
+                },
                 LocalDecl { index: 3, ty: Ty::usize(), name: Some("low".into()) },
                 LocalDecl { index: 4, ty: Ty::usize(), name: Some("high".into()) },
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 LocalDecl { index: 6, ty: Ty::usize(), name: None },
                 LocalDecl { index: 7, ty: Ty::usize(), name: Some("mid".into()) },
             ],
@@ -216,7 +212,10 @@ fn test_m5_acceptance_full_loop_converges_to_proven_program() {
                             solver: "z4".into(),
                             time_ms: 8,
                             counterexample: Some(Counterexample::new(vec![
-                                ("low".to_string(), CounterexampleValue::Uint((u64::MAX - 1) as u128)),
+                                (
+                                    "low".to_string(),
+                                    CounterexampleValue::Uint((u64::MAX - 1) as u128),
+                                ),
                                 ("high".to_string(), CounterexampleValue::Uint(2)),
                             ])),
                         },
@@ -238,10 +237,7 @@ fn test_m5_acceptance_full_loop_converges_to_proven_program() {
         strengthen_output.has_proposals,
         "Idea 2 (STRENGTHEN): must propose fixes for the overflow"
     );
-    assert!(
-        strengthen_output.failures_analyzed >= 1,
-        "should have analyzed at least 1 failure"
-    );
+    assert!(strengthen_output.failures_analyzed >= 1, "should have analyzed at least 1 failure");
 
     // Verify proposals target the overflow
     let has_overflow_fix = strengthen_output.proposals.iter().any(|p| {
@@ -266,10 +262,7 @@ fn test_m5_acceptance_full_loop_converges_to_proven_program() {
     let has_safe_arith = plan.rewrites.iter().any(|r| {
         matches!(&r.kind, RewriteKind::ReplaceExpression { new_text, .. } if new_text.contains("checked_add"))
     });
-    assert!(
-        has_spec || has_safe_arith,
-        "plan must insert specs or replace with safe arithmetic"
-    );
+    assert!(has_spec || has_safe_arith, "plan must insert specs or replace with safe arithmetic");
 
     // ===================================================================
     // ITERATION 2: Re-verify after strengthen -> All proved
@@ -290,7 +283,8 @@ fn test_m5_acceptance_full_loop_converges_to_proven_program() {
                             solver: "z4".into(),
                             time_ms: 5,
                             strength: ProofStrength::smt_unsat(),
-                            proof_certificate: None, solver_warnings: None,
+                            proof_certificate: None,
+                            solver_warnings: None,
                         },
                     )
                 })
@@ -304,10 +298,7 @@ fn test_m5_acceptance_full_loop_converges_to_proven_program() {
 
     // After fix, strengthen should find NO failures
     let post_fix_output = trust_strengthen::run(&crate_results_iter2, &config, &NoOpLlm);
-    assert!(
-        !post_fix_output.has_proposals,
-        "after fix, no further strengthening should be needed"
-    );
+    assert!(!post_fix_output.has_proposals, "after fix, no further strengthening should be needed");
     assert_eq!(post_fix_output.failures_analyzed, 0);
 
     // ===================================================================
@@ -376,10 +367,7 @@ fn test_m5_acceptance_houdini_infers_loop_invariants() {
     //   C2: low + high < MAX   (prevents overflow -- THE KEY INVARIANT)
     //   C3: low < 1000         (too restrictive -- should be eliminated)
     let candidates = vec![
-        Formula::Ge(
-            Box::new(Formula::Var("low".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Ge(Box::new(Formula::Var("low".into(), Sort::Int)), Box::new(Formula::Int(0))),
         Formula::Ge(
             Box::new(Formula::Var("high".into(), Sort::Int)),
             Box::new(Formula::Var("low".into(), Sort::Int)),
@@ -391,10 +379,7 @@ fn test_m5_acceptance_houdini_infers_loop_invariants() {
             )),
             Box::new(Formula::Int(i128::MAX)),
         ),
-        Formula::Lt(
-            Box::new(Formula::Var("low".into(), Sort::Int)),
-            Box::new(Formula::Int(1000)),
-        ),
+        Formula::Lt(Box::new(Formula::Var("low".into(), Sort::Int)), Box::new(Formula::Int(1000))),
     ];
 
     // Mock verifier: simulates solver checking the conjunction.
@@ -416,10 +401,7 @@ fn test_m5_acceptance_houdini_infers_loop_invariants() {
             });
             if has_restrictive {
                 Ok(Some(HoudiniCounterexample {
-                    assignments: vec![
-                        ("low".to_string(), 5000),
-                        ("high".to_string(), 6000),
-                    ],
+                    assignments: vec![("low".to_string(), 5000), ("high".to_string(), 6000)],
                 }))
             } else {
                 // Remaining candidates are valid
@@ -433,18 +415,12 @@ fn test_m5_acceptance_houdini_infers_loop_invariants() {
     let result = refiner.refine(&candidates, &BinarySearchVerifier).unwrap();
 
     assert!(result.converged, "Houdini should converge");
-    assert_eq!(
-        result.surviving.len(), 3,
-        "3 of 4 candidates should survive (C3 eliminated)"
-    );
+    assert_eq!(result.surviving.len(), 3, "3 of 4 candidates should survive (C3 eliminated)");
     assert!(
         result.removed_indices.contains(&3),
         "C3 (low < 1000) should be eliminated by counterexample"
     );
-    assert!(
-        result.iterations <= 3,
-        "should converge within 3 iterations"
-    );
+    assert!(result.iterations <= 3, "should converge within 3 iterations");
 
     eprintln!("=== M5 Acceptance: Houdini invariant inference ===");
     eprintln!("  Candidates:  {}", candidates.len());
@@ -464,34 +440,24 @@ fn test_m5_acceptance_houdini_infers_loop_invariants() {
 /// positive/negative/implication examples.
 #[test]
 fn test_m5_acceptance_ice_learns_overflow_invariant() {
-    let mut learner = IceLearner::new(IceConfig {
-        max_iterations: 20,
-        max_tree_depth: 4,
-    });
+    let mut learner = IceLearner::new(IceConfig { max_iterations: 20, max_tree_depth: 4 });
 
     // Positive examples: safe states where low + high does NOT overflow
-    learner.add_positive(ConcreteState::new(vec![
-        ("low".into(), 0), ("high".into(), 100),
-    ]));
-    learner.add_positive(ConcreteState::new(vec![
-        ("low".into(), 50), ("high".into(), 50),
-    ]));
-    learner.add_positive(ConcreteState::new(vec![
-        ("low".into(), 0), ("high".into(), 0),
-    ]));
-    learner.add_positive(ConcreteState::new(vec![
-        ("low".into(), 100), ("high".into(), 200),
-    ]));
+    learner.add_positive(ConcreteState::new(vec![("low".into(), 0), ("high".into(), 100)]));
+    learner.add_positive(ConcreteState::new(vec![("low".into(), 50), ("high".into(), 50)]));
+    learner.add_positive(ConcreteState::new(vec![("low".into(), 0), ("high".into(), 0)]));
+    learner.add_positive(ConcreteState::new(vec![("low".into(), 100), ("high".into(), 200)]));
 
     // Negative examples: states where low + high WOULD overflow (large values)
     learner.add_negative(ConcreteState::new(vec![
-        ("low".into(), i128::MAX / 2 + 1), ("high".into(), i128::MAX / 2 + 1),
+        ("low".into(), i128::MAX / 2 + 1),
+        ("high".into(), i128::MAX / 2 + 1),
     ]));
+    learner
+        .add_negative(ConcreteState::new(vec![("low".into(), i128::MAX - 1), ("high".into(), 2)]));
     learner.add_negative(ConcreteState::new(vec![
-        ("low".into(), i128::MAX - 1), ("high".into(), 2),
-    ]));
-    learner.add_negative(ConcreteState::new(vec![
-        ("low".into(), i128::MAX / 2), ("high".into(), i128::MAX / 2 + 2),
+        ("low".into(), i128::MAX / 2),
+        ("high".into(), i128::MAX / 2 + 2),
     ]));
 
     // Implication examples: loop iteration transitions (low increases, high decreases)
@@ -505,14 +471,12 @@ fn test_m5_acceptance_ice_learns_overflow_invariant() {
     });
 
     // Synthesize the invariant from examples
-    let invariant = learner.synthesize_invariant()
+    let invariant = learner
+        .synthesize_invariant()
         .expect("ICE should synthesize an invariant from the examples");
 
     // The invariant should be a non-trivial formula (not just Bool(true/false))
-    assert!(
-        !matches!(&invariant, Formula::Bool(false)),
-        "invariant should not be trivially false"
-    );
+    assert!(!matches!(&invariant, Formula::Bool(false)), "invariant should not be trivially false");
 
     // Verify the formula has structure (is a real classifier, not a degenerate tree)
     let formula_str = format!("{invariant:?}");
@@ -538,7 +502,7 @@ fn test_m5_acceptance_ice_learns_overflow_invariant() {
 #[test]
 fn test_m5_acceptance_trust_loop_converges() {
     let overflow_vc = VerificationCondition {
-        function: "binary_search".to_string(),
+        function: "binary_search".into(),
         kind: VcKind::ArithmeticOverflow {
             op: BinOp::Add,
             operand_tys: (
@@ -552,7 +516,7 @@ fn test_m5_acceptance_trust_loop_converges() {
     };
 
     let bounds_vc = VerificationCondition {
-        function: "binary_search".to_string(),
+        function: "binary_search".into(),
         kind: VcKind::Assertion { message: "loop bounds valid".into() },
         location: SourceSpan::default(),
         formula: Formula::Var("bounds_check".into(), Sort::Bool),
@@ -576,7 +540,7 @@ fn test_m5_acceptance_trust_loop_converges() {
             self.verify_calls.set(idx + 1);
 
             let overflow_vc = VerificationCondition {
-                function: "binary_search".to_string(),
+                function: "binary_search".into(),
                 kind: VcKind::ArithmeticOverflow {
                     op: BinOp::Add,
                     operand_tys: (
@@ -589,7 +553,7 @@ fn test_m5_acceptance_trust_loop_converges() {
                 contract_metadata: None,
             };
             let bounds_vc = VerificationCondition {
-                function: "binary_search".to_string(),
+                function: "binary_search".into(),
                 kind: VcKind::Assertion { message: "loop bounds valid".into() },
                 location: SourceSpan::default(),
                 formula: Formula::Var("bounds_check".into(), Sort::Bool),
@@ -599,33 +563,48 @@ fn test_m5_acceptance_trust_loop_converges() {
             if idx == 0 {
                 // First verification: overflow fails, bounds passes
                 vec![
-                    (overflow_vc, VerificationResult::Failed {
-                        solver: "z4".into(),
-                        time_ms: 8,
-                        counterexample: None,
-                    }),
-                    (bounds_vc, VerificationResult::Proved {
-                        solver: "z4".into(),
-                        time_ms: 3,
-                        strength: ProofStrength::smt_unsat(),
-                        proof_certificate: None, solver_warnings: None,
-                    }),
+                    (
+                        overflow_vc,
+                        VerificationResult::Failed {
+                            solver: "z4".into(),
+                            time_ms: 8,
+                            counterexample: None,
+                        },
+                    ),
+                    (
+                        bounds_vc,
+                        VerificationResult::Proved {
+                            solver: "z4".into(),
+                            time_ms: 3,
+                            strength: ProofStrength::smt_unsat(),
+                            proof_certificate: None,
+                            solver_warnings: None,
+                        },
+                    ),
                 ]
             } else {
                 // After strengthening: both prove
                 vec![
-                    (overflow_vc, VerificationResult::Proved {
-                        solver: "z4".into(),
-                        time_ms: 5,
-                        strength: ProofStrength::smt_unsat(),
-                        proof_certificate: None, solver_warnings: None,
-                    }),
-                    (bounds_vc, VerificationResult::Proved {
-                        solver: "z4".into(),
-                        time_ms: 3,
-                        strength: ProofStrength::smt_unsat(),
-                        proof_certificate: None, solver_warnings: None,
-                    }),
+                    (
+                        overflow_vc,
+                        VerificationResult::Proved {
+                            solver: "z4".into(),
+                            time_ms: 5,
+                            strength: ProofStrength::smt_unsat(),
+                            proof_certificate: None,
+                            solver_warnings: None,
+                        },
+                    ),
+                    (
+                        bounds_vc,
+                        VerificationResult::Proved {
+                            solver: "z4".into(),
+                            time_ms: 3,
+                            strength: ProofStrength::smt_unsat(),
+                            proof_certificate: None,
+                            solver_warnings: None,
+                        },
+                    ),
                 ]
             }
         }
@@ -642,28 +621,29 @@ fn test_m5_acceptance_trust_loop_converges() {
             }
 
             // Return a strengthened version of each failed VC
-            failed.iter().map(|(vc, _)| {
-                VerificationCondition {
-                    function: vc.function.clone(),
+            failed
+                .iter()
+                .map(|(vc, _)| VerificationCondition {
+                    function: vc.function,
                     kind: vc.kind.clone(),
                     location: vc.location.clone(),
                     formula: Formula::Var(
-                        format!("{}_strengthened", match &vc.formula {
-                            Formula::Var(name, _) => name.as_str(),
-                            _ => "unknown",
-                        }),
+                        format!(
+                            "{}_strengthened",
+                            match &vc.formula {
+                                Formula::Var(name, _) => name.as_str(),
+                                _ => "unknown",
+                            }
+                        ),
                         Sort::Bool,
                     ),
                     contract_metadata: None,
-                }
-            }).collect()
+                })
+                .collect()
         }
     }
 
-    let ctx = BinarySearchContext {
-        verify_calls: Cell::new(0),
-        strengthen_calls: Cell::new(0),
-    };
+    let ctx = BinarySearchContext { verify_calls: Cell::new(0), strengthen_calls: Cell::new(0) };
 
     let loop_config = LoopConfig {
         max_iterations: 5,
@@ -673,11 +653,8 @@ fn test_m5_acceptance_trust_loop_converges() {
         verdict_config: Default::default(),
     };
 
-    let result = trust_loop::run_iterative_verification(
-        &loop_config,
-        vec![overflow_vc, bounds_vc],
-        &ctx,
-    );
+    let result =
+        trust_loop::run_iterative_verification(&loop_config, vec![overflow_vc, bounds_vc], &ctx);
 
     assert_eq!(result.iterations, 2, "loop should converge in 2 iterations");
     assert_eq!(
@@ -716,18 +693,14 @@ fn test_m5_acceptance_three_ideas_compose() {
     let all_vcs = trust_vcgen::generate_vcs(&func);
     assert!(!all_vcs.is_empty(), "vcgen should generate VCs");
 
-    let overflow_count = all_vcs.iter()
-        .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. }))
-        .count();
+    let overflow_count =
+        all_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. })).count();
     assert!(overflow_count >= 1, "must detect at least 1 overflow VC");
 
     // Step 2: STRENGTHEN (Idea 2) - Use multiple strategies
     // 2a: Houdini-style candidate generation
     let houdini_candidates = vec![
-        Formula::Ge(
-            Box::new(Formula::Var("low".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Ge(Box::new(Formula::Var("low".into(), Sort::Int)), Box::new(Formula::Int(0))),
         Formula::Ge(
             Box::new(Formula::Var("high".into(), Sort::Int)),
             Box::new(Formula::Var("low".into(), Sort::Int)),
@@ -737,14 +710,14 @@ fn test_m5_acceptance_three_ideas_compose() {
     struct PassThroughVerifier;
     impl HoudiniVerifier for PassThroughVerifier {
         fn check_conjunction(
-            &self, _: &[Formula],
+            &self,
+            _: &[Formula],
         ) -> Result<Option<HoudiniCounterexample>, HoudiniError> {
             Ok(None) // Both candidates are valid
         }
     }
-    let houdini_result = HoudiniRefiner::with_defaults()
-        .refine(&houdini_candidates, &PassThroughVerifier)
-        .unwrap();
+    let houdini_result =
+        HoudiniRefiner::with_defaults().refine(&houdini_candidates, &PassThroughVerifier).unwrap();
     assert!(houdini_result.converged);
     assert_eq!(houdini_result.surviving.len(), 2);
 
@@ -753,10 +726,11 @@ fn test_m5_acceptance_three_ideas_compose() {
     ice_learner.add_positive(ConcreteState::new(vec![("low".into(), 0), ("high".into(), 10)]));
     ice_learner.add_positive(ConcreteState::new(vec![("low".into(), 5), ("high".into(), 5)]));
     ice_learner.add_negative(ConcreteState::new(vec![
-        ("low".into(), i128::MAX / 2 + 1), ("high".into(), i128::MAX / 2 + 1),
+        ("low".into(), i128::MAX / 2 + 1),
+        ("high".into(), i128::MAX / 2 + 1),
     ]));
-    let _ice_invariant = ice_learner.synthesize_invariant()
-        .expect("ICE should produce an invariant");
+    let _ice_invariant =
+        ice_learner.synthesize_invariant().expect("ICE should produce an invariant");
 
     // 2c: Pattern-based strengthening via trust-strengthen::run
     let iter1_results = CrateVerificationResult {
@@ -764,11 +738,19 @@ fn test_m5_acceptance_three_ideas_compose() {
         functions: vec![FunctionVerificationResult {
             function_path: "search::binary_search".into(),
             function_name: "binary_search".into(),
-            results: all_vcs.iter()
+            results: all_vcs
+                .iter()
                 .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. }))
-                .map(|vc| (vc.clone(), VerificationResult::Failed {
-                    solver: "z4".into(), time_ms: 5, counterexample: None,
-                }))
+                .map(|vc| {
+                    (
+                        vc.clone(),
+                        VerificationResult::Failed {
+                            solver: "z4".into(),
+                            time_ms: 5,
+                            counterexample: None,
+                        },
+                    )
+                })
                 .collect(),
             from_notes: 0,
             with_assumptions: 0,
@@ -776,7 +758,8 @@ fn test_m5_acceptance_three_ideas_compose() {
         total_from_notes: 0,
         total_with_assumptions: 0,
     };
-    let strengthen_out = trust_strengthen::run(&iter1_results, &StrengthenConfig::default(), &NoOpLlm);
+    let strengthen_out =
+        trust_strengthen::run(&iter1_results, &StrengthenConfig::default(), &NoOpLlm);
     assert!(strengthen_out.has_proposals);
 
     // Step 3: BACKPROP (Idea 3) - Convert all proposals to rewrites
@@ -788,16 +771,16 @@ fn test_m5_acceptance_three_ideas_compose() {
     let mut tracker = ConvergenceTracker::new(2, 10);
 
     // Iteration 0: overflow detected
-    let frontier0 = ProofFrontier { trusted: 3, certified: 0, runtime_checked: 0, failed: 2, unknown: 0 };
-    let snap0 = IterationSnapshot::new(0, frontier0.clone())
-        .with_fingerprint("pre_strengthen");
+    let frontier0 =
+        ProofFrontier { trusted: 3, certified: 0, runtime_checked: 0, failed: 2, unknown: 0 };
+    let snap0 = IterationSnapshot::new(0, frontier0.clone()).with_fingerprint("pre_strengthen");
     let d0 = tracker.observe(snap0);
     assert!(matches!(d0, ConvergenceDecision::Continue { .. }));
 
     // Iteration 1: after backprop applies fix, all prove
-    let frontier1 = ProofFrontier { trusted: 5, certified: 0, runtime_checked: 0, failed: 0, unknown: 0 };
-    let snap1 = IterationSnapshot::new(1, frontier1.clone())
-        .with_fingerprint("post_strengthen");
+    let frontier1 =
+        ProofFrontier { trusted: 5, certified: 0, runtime_checked: 0, failed: 0, unknown: 0 };
+    let snap1 = IterationSnapshot::new(1, frontier1.clone()).with_fingerprint("post_strengthen");
     let _d1 = tracker.observe(snap1);
     // All VCs proved => loop exits on the vcs_failed == 0 check (before convergence decision)
 
@@ -810,15 +793,24 @@ fn test_m5_acceptance_three_ideas_compose() {
 
     // Step 5: Verify all three ideas contributed
     eprintln!("=== M5 Acceptance: Three Ideas Compose ===");
-    eprintln!("  Idea 1 (PROVE):       {} VCs generated, {} overflow detected", all_vcs.len(), overflow_count);
+    eprintln!(
+        "  Idea 1 (PROVE):       {} VCs generated, {} overflow detected",
+        all_vcs.len(),
+        overflow_count
+    );
     eprintln!("  Idea 2 (STRENGTHEN):");
     eprintln!("    Houdini:            {} surviving invariants", houdini_result.surviving.len());
-    eprintln!("    ICE:                learned invariant ({} pos, {} neg examples)",
-        ice_learner.positive_count(), ice_learner.negative_count());
+    eprintln!(
+        "    ICE:                learned invariant ({} pos, {} neg examples)",
+        ice_learner.positive_count(),
+        ice_learner.negative_count()
+    );
     eprintln!("    Pattern:            {} proposals", strengthen_out.proposals.len());
     eprintln!("  Idea 3 (BACKPROP):    {} rewrites", plan.len());
-    eprintln!("  CONVERGENCE:          {} -> {} proved, {} -> {} failed",
-        frontier0.trusted, frontier1.trusted, frontier0.failed, frontier1.failed);
+    eprintln!(
+        "  CONVERGENCE:          {} -> {} proved, {} -> {} failed",
+        frontier0.trusted, frontier1.trusted, frontier0.failed, frontier1.failed
+    );
     eprintln!("  RESULT:               PROGRAM PROVEN CORRECT (0 failures)");
     eprintln!("=== Three Ideas Compose PASSED ===");
 }

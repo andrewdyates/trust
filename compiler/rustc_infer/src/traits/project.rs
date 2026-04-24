@@ -61,7 +61,7 @@ impl<'tcx, T> Normalized<'tcx, T> {
 /// call `ProjectionCache::complete` to make sure the obligations won't be
 /// re-evaluated and avoid an exponential worst-case.
 //
-// tRust: known issue —: we probably also want some sort of cross-infcx cache here to
+// FIXME: we probably also want some sort of cross-infcx cache here to
 // reduce the amount of duplication. Let's see what we get with the Chalk reforms.
 pub struct ProjectionCache<'a, 'tcx> {
     map: &'a mut SnapshotMapStorage<ProjectionCacheKey<'tcx>, ProjectionCacheEntry<'tcx>>,

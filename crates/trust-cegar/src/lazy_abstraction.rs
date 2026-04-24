@@ -40,7 +40,6 @@ pub enum ExpansionStrategy {
     CoarsestFirst,
 }
 
-
 /// Configuration for lazy abstraction refinement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -151,11 +150,7 @@ impl AbstractReachTree {
     pub fn new(root_block_idx: usize, initial_predicates: Vec<Predicate>) -> Self {
         let root_state = AbstractState::top();
         let root = TreeNode::new(0, root_block_idx, root_state, None, 0);
-        Self {
-            nodes: vec![root],
-            worklist: vec![0],
-            global_predicates: initial_predicates,
-        }
+        Self { nodes: vec![root], worklist: vec![0], global_predicates: initial_predicates }
     }
 
     /// Get a reference to a node by ID.
@@ -238,9 +233,7 @@ impl AbstractReachTree {
             }
         }
         // Remove invalidated nodes from worklist
-        self.worklist.retain(|id| {
-            self.nodes.get(*id).is_some_and(|n| !n.invalidated)
-        });
+        self.worklist.retain(|id| self.nodes.get(*id).is_some_and(|n| !n.invalidated));
         // Clear the parent's children and re-add it to worklist
         if let Some(node) = self.nodes.get_mut(node_id) {
             node.children.clear();
@@ -260,11 +253,8 @@ impl AbstractReachTree {
             ExpansionStrategy::DepthFirst => self.worklist.pop(),
             ExpansionStrategy::BreadthFirst => Some(self.worklist.remove(0)),
             ExpansionStrategy::CoarsestFirst => {
-                let (best_idx, _) = self
-                    .worklist
-                    .iter()
-                    .enumerate()
-                    .min_by_key(|(_, nid)| {
+                let (best_idx, _) =
+                    self.worklist.iter().enumerate().min_by_key(|(_, nid)| {
                         self.nodes.get(**nid).map_or(0, |n| n.state.len())
                     })?;
                 Some(self.worklist.remove(best_idx))
@@ -303,12 +293,7 @@ impl LazyAbstractionRefiner {
         config: LazyAbstractionConfig,
     ) -> Self {
         let tree = AbstractReachTree::new(root_block_idx, initial_predicates);
-        Self {
-            tree,
-            config,
-            refinement_count: 0,
-            total_expansions: 0,
-        }
+        Self { tree, config, refinement_count: 0, total_expansions: 0 }
     }
 
     /// Access the underlying ART.
@@ -419,9 +404,7 @@ impl LazyAbstractionRefiner {
         cex: &Counterexample,
     ) -> Result<Vec<Predicate>, CegarError> {
         if self.refinement_count >= self.config.max_refinements {
-            return Err(CegarError::MaxIterationsExceeded {
-                max: self.config.max_refinements,
-            });
+            return Err(CegarError::MaxIterationsExceeded { max: self.config.max_refinements });
         }
 
         let mut new_predicates = Vec::new();
@@ -558,9 +541,7 @@ fn successor_blocks(block: &BasicBlock) -> Vec<usize> {
             succs
         }
         Terminator::Assert { target, .. } => vec![target.0],
-        Terminator::Call { target, .. } => {
-            target.iter().map(|t| t.0).collect()
-        }
+        Terminator::Call { target, .. } => target.iter().map(|t| t.0).collect(),
         Terminator::Drop { target, .. } => vec![target.0],
         Terminator::Return | Terminator::Unreachable => Vec::new(),
         _ => vec![],
@@ -569,10 +550,7 @@ fn successor_blocks(block: &BasicBlock) -> Vec<usize> {
 
 /// Extract interpolant predicates from the conflict between abstract state
 /// and counterexample values (simplified Craig interpolation).
-fn extract_interpolants_from_cex(
-    state: &AbstractState,
-    cex: &Counterexample,
-) -> Vec<Predicate> {
+fn extract_interpolants_from_cex(state: &AbstractState, cex: &Counterexample) -> Vec<Predicate> {
     let mut interpolants = Vec::new();
 
     for (var_name, value) in &cex.assignments {
@@ -610,7 +588,7 @@ fn extract_interpolants_from_cex(
                 }
             }
             CounterexampleValue::Float(_) => {}
-            _ => {},
+            _ => {}
         }
     }
 
@@ -720,16 +698,8 @@ mod tests {
                     span: span(),
                 },
             },
-            BasicBlock {
-                id: BlockId(2),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
-            BasicBlock {
-                id: BlockId(3),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            },
+            BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
+            BasicBlock { id: BlockId(3), stmts: vec![], terminator: Terminator::Return },
         ]
     }
 
@@ -822,10 +792,8 @@ mod tests {
 
         // SwitchInt should produce children for bb2 and bb3.
         assert_eq!(children_of_bb1.len(), 2);
-        let child_blocks: Vec<usize> = children_of_bb1
-            .iter()
-            .map(|&id| refiner.tree().node(id).unwrap().block_idx)
-            .collect();
+        let child_blocks: Vec<usize> =
+            children_of_bb1.iter().map(|&id| refiner.tree().node(id).unwrap().block_idx).collect();
         assert!(child_blocks.contains(&2));
         assert!(child_blocks.contains(&3));
     }
@@ -883,9 +851,7 @@ mod tests {
         let refiner = LazyAbstractionRefiner::new(0, vec![], config);
 
         // Counterexample consistent with top (no predicates) is feasible.
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(5)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(5))]);
         assert!(refiner.is_feasible(&[0], &blocks, &cex));
     }
 
@@ -898,9 +864,7 @@ mod tests {
         let refiner = LazyAbstractionRefiner::new(0, preds, config);
 
         // Counterexample with x = -1 contradicts x >= 0.
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(-1)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(-1))]);
         assert!(!refiner.is_feasible(&[0], &blocks, &cex));
     }
 
@@ -920,16 +884,12 @@ mod tests {
     #[test]
     fn test_refiner_max_refinements_exceeded() {
         let blocks = simple_blocks();
-        let config = LazyAbstractionConfig {
-            max_refinements: 1,
-            ..LazyAbstractionConfig::default()
-        };
+        let config =
+            LazyAbstractionConfig { max_refinements: 1, ..LazyAbstractionConfig::default() };
         let mut refiner = LazyAbstractionRefiner::new(0, vec![], config);
         let _ = refiner.expand_node(0, &blocks).unwrap();
 
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(-1)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(-1))]);
 
         // First refinement should succeed.
         let r1 = refiner.refine_path(&[0], &blocks, &cex);
@@ -953,12 +913,8 @@ mod tests {
     #[test]
     fn test_contradicts_counterexample_range() {
         let pred = Predicate::range("x", 0, 100);
-        let cex_in = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(50)),
-        ]);
-        let cex_out = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(200)),
-        ]);
+        let cex_in = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(50))]);
+        let cex_out = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(200))]);
         assert!(!contradicts_counterexample(&pred, &cex_in));
         assert!(contradicts_counterexample(&pred, &cex_out));
     }

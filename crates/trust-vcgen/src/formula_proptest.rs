@@ -9,7 +9,7 @@
 use proptest::prelude::*;
 use trust_types::{Formula, Sort};
 
-use crate::simplify::{boolean_simplify, constant_fold, measure_size, SimplificationPipeline};
+use crate::simplify::{SimplificationPipeline, boolean_simplify, constant_fold, measure_size};
 
 // ---------------------------------------------------------------------------
 // tRust #475: Bounded-depth Formula strategy for proptest

@@ -199,7 +199,7 @@ fn generate_default_impl(
     item_span: Span,
     foreign_item_name: Ident,
 ) -> Box<ast::Item> {
-    // tRust: known issue — re-add some original attrs
+    // FIXME: re-add some original attrs
     let attrs = ThinVec::new();
 
     let mut default_func = func.clone();
@@ -207,8 +207,6 @@ fn generate_default_impl(
         node_id: DUMMY_NODE_ID,
         inner_span: macro_name.span,
         eii_macro_path: ast::Path::from_ident(macro_name),
-        // SAFETY: The invariants required by this unsafe operation are
-        // upheld by the caller's contract and preceding checks.
         impl_safety: if impl_unsafe {
             ast::Safety::Unsafe(eii_attr_span)
         } else {

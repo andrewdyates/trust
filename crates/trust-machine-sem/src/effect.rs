@@ -51,12 +51,7 @@ pub enum Effect {
     },
 
     /// Update the NZCV condition flags.
-    FlagUpdate {
-        n: Formula,
-        z: Formula,
-        c: Formula,
-        v: Formula,
-    },
+    FlagUpdate { n: Formula, z: Formula, c: Formula, v: Formula },
 
     /// Unconditional branch to a target address.
     Branch {

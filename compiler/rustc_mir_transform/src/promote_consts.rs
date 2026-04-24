@@ -192,9 +192,7 @@ struct Unpromotable;
 
 impl<'tcx> Validator<'_, 'tcx> {
     fn validate_candidate(&mut self, candidate: Candidate) -> Result<(), Unpromotable> {
-        // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
         let Left(statement) = self.body.stmt_at(candidate.location) else { bug!() };
-        // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
         let Some((_, Rvalue::Ref(_, kind, place))) = statement.kind.as_assign() else { bug!() };
 
         // We can only promote interior borrows of promotable temps (non-temps
@@ -214,7 +212,7 @@ impl<'tcx> Validator<'_, 'tcx> {
         Ok(())
     }
 
-    // NOTE: Caching qualif_local results may improve performance but is not yet implemented.
+    // FIXME(eddyb) maybe cache this?
     fn qualif_local<Q: qualifs::Qualif>(&mut self, local: Local) -> bool {
         let TempState::Defined { location: loc, .. } = self.temps[local] else {
             return false;
@@ -224,7 +222,6 @@ impl<'tcx> Validator<'_, 'tcx> {
         match stmt_or_term {
             Left(statement) => {
                 let Some((_, rhs)) = statement.kind.as_assign() else {
-                    // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                     span_bug!(statement.source_info.span, "{:?} is not an assignment", statement)
                 };
                 qualifs::in_rvalue::<Q, _>(self.ccx, &mut |l| self.qualif_local::<Q>(l), rhs)
@@ -257,7 +254,6 @@ impl<'tcx> Validator<'_, 'tcx> {
             match stmt_or_term {
                 Left(statement) => {
                     let Some((_, rhs)) = statement.kind.as_assign() else {
-                        // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                         span_bug!(
                             statement.source_info.span,
                             "{:?} is not an assignment",
@@ -272,7 +268,6 @@ impl<'tcx> Validator<'_, 'tcx> {
                     }
                     TerminatorKind::Yield { .. } => Err(Unpromotable),
                     kind => {
-                        // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                         span_bug!(terminator.source_info.span, "{:?} not promotable", kind);
                     }
                 },
@@ -374,8 +369,11 @@ impl<'tcx> Validator<'_, 'tcx> {
             Operand::Constant(c) => {
                 if let Some(def_id) = c.check_static_ptr(self.tcx) {
                     // Only allow statics (not consts) to refer to other statics.
-                    // NOTE: Static reference promotion is restricted to static contexts.
-                    // Promoting in fn/const fn is safe but may be useless (e.g., `let x = &STATIC`).
+                    // FIXME(eddyb) does this matter at all for promotion?
+                    // FIXME(RalfJung) it makes little sense to not promote this in `fn`/`const fn`,
+                    // and in `const` this cannot occur anyway. The only concern is that we might
+                    // promote even `let x = &STATIC` which would be useless, but this applies to
+                    // promotion inside statics as well.
                     let is_static = matches!(self.const_kind, Some(hir::ConstContext::Static(_)));
                     if !is_static {
                         return Err(Unpromotable);
@@ -395,7 +393,8 @@ impl<'tcx> Validator<'_, 'tcx> {
     fn validate_ref(&mut self, kind: BorrowKind, place: &Place<'tcx>) -> Result<(), Unpromotable> {
         match kind {
             // Reject these borrow types just to be safe.
-            // NOTE: Fake/ClosureCapture borrows rejected for safety; no known use case.
+            // FIXME(RalfJung): could we allow them? Should we? No point in it until we have a
+            // usecase.
             BorrowKind::Fake(_) | BorrowKind::Mut { kind: MutBorrowKind::ClosureCapture } => {
                 return Err(Unpromotable);
             }
@@ -407,8 +406,8 @@ impl<'tcx> Validator<'_, 'tcx> {
                 }
             }
 
-            // NOTE: Currently promotes both default and two-phase mutable borrows;
-            // restricting to &mut [] for default borrows only may be safer.
+            // FIXME: consider changing this to only promote &mut [] for default borrows,
+            // also forbidding two phase borrows
             BorrowKind::Mut { kind: MutBorrowKind::Default | MutBorrowKind::TwoPhaseBorrow } => {
                 let ty = place.ty(self.body, self.tcx).ty;
 
@@ -682,8 +681,7 @@ impl<'tcx> Validator<'_, 'tcx> {
         match constant {
             // `Const::Ty` is always a `ConstKind::Param` right now and that can never be turned
             // into a mir value for promotion
-            // tRust: Upstream TODO -- tracked by rust-lang min_generic_const_args feature gate.
-            // TODO(mgca): Determine if type_const should be normalized during promotion.
+            // FIXME(mgca): do we want uses of type_const to be normalized during promotion?
             Const::Ty(..) => false,
             Const::Val(..) => true,
             // Evaluating a MIR constant requires borrow-checking it. For inline consts, as of
@@ -743,7 +741,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
     }
 
     fn assign(&mut self, dest: Local, rvalue: Rvalue<'tcx>, span: Span) {
-        let last = self.promoted.basic_blocks.last_index().expect("invariant: promoted body must have at least one basic block"); // tRust: unwrap elimination
+        let last = self.promoted.basic_blocks.last_index().unwrap();
         let data = &mut self.promoted[last];
         data.statements.push(Statement::new(
             SourceInfo::outermost(span),
@@ -767,7 +765,6 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                 location
             }
             state => {
-                // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                 span_bug!(self.promoted.span, "{:?} not promotable: {:?}", temp, state);
             }
         };
@@ -789,7 +786,6 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
             let (mut rvalue, source_info) = {
                 let statement = &mut self.source[loc.block].statements[loc.statement_index];
                 let StatementKind::Assign(box (_, rhs)) = &mut statement.kind else {
-                    // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                     span_bug!(statement.source_info.span, "{:?} is not an assignment", statement);
                 };
 
@@ -818,7 +814,6 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                 let target = match &terminator.kind {
                     TerminatorKind::Call { target: Some(target), .. } => *target,
                     kind => {
-                        // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                         span_bug!(terminator.source_info.span, "{:?} not promotable", kind);
                     }
                 };
@@ -841,7 +836,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                         self.visit_operand(&mut arg.node, loc);
                     }
 
-                    let last = self.promoted.basic_blocks.last_index().expect("invariant: promoted body must have at least one basic block"); // tRust: unwrap elimination
+                    let last = self.promoted.basic_blocks.last_index().unwrap();
                     let new_target = self.new_block();
 
                     *self.promoted[last].terminator_mut() = Terminator {
@@ -859,7 +854,6 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                     };
                 }
                 kind => {
-                    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                     span_bug!(terminator.source_info.span, "{:?} not promotable", kind);
                 }
             };
@@ -896,7 +890,6 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
             let StatementKind::Assign(box (_, Rvalue::Ref(region, borrow_kind, place))) =
                 &mut statement.kind
             else {
-                // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                 bug!()
             };
 
@@ -955,7 +948,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
         // Now that we did promotion, we know whether we'll want to add this to `required_consts` of
         // the surrounding MIR body.
         if self.add_to_required {
-            self.source.required_consts.as_mut().expect("invariant: required_consts must be initialized during promotion").push(promoted_op); // tRust: unwrap elimination
+            self.source.required_consts.as_mut().unwrap().push(promoted_op);
         }
 
         self.promoted.set_required_consts(self.required_consts);

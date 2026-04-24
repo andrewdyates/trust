@@ -9,13 +9,12 @@
 
 use crate::constants::*;
 use crate::error::ParseError;
-use crate::header::{parse_fat_header, parse_header, FatArch, MachHeader64};
+use crate::header::{FatArch, MachHeader64, parse_fat_header, parse_header};
 use crate::load_command::{
-    LoadCommand, Section64, SegmentCommand64, SymtabCommand,
-    parse_load_commands,
+    LoadCommand, Section64, SegmentCommand64, SymtabCommand, parse_load_commands,
 };
-use crate::relocation::{parse_relocations, Relocation};
-use crate::symbol::{parse_symbols, Symbol};
+use crate::relocation::{Relocation, parse_relocations};
+use crate::symbol::{Symbol, parse_symbols};
 
 /// A parsed Mach-O 64-bit binary.
 ///
@@ -43,12 +42,7 @@ impl<'a> MachO<'a> {
         let (header, swap) = parse_header(data)?;
         let load_commands = parse_load_commands(data, header.ncmds, swap)?;
 
-        Ok(Self {
-            data,
-            header,
-            swap,
-            load_commands,
-        })
+        Ok(Self { data, header, swap, load_commands })
     }
 
     /// Check if the data starts with a fat binary header.
@@ -88,6 +82,12 @@ impl<'a> MachO<'a> {
         self.data
     }
 
+    /// Mach-O CPU type from the file header.
+    #[must_use]
+    pub fn cputype(&self) -> i32 {
+        self.header.cputype
+    }
+
     /// Iterate over all segments.
     pub fn segments(&self) -> impl Iterator<Item = &SegmentCommand64<'a>> {
         self.load_commands.iter().filter_map(|lc| match lc {
@@ -98,8 +98,7 @@ impl<'a> MachO<'a> {
 
     /// Iterate over all sections across all segments.
     pub fn sections(&self) -> impl Iterator<Item = (&SegmentCommand64<'a>, &Section64<'a>)> {
-        self.segments()
-            .flat_map(|seg| seg.sections.iter().map(move |sect| (seg, sect)))
+        self.segments().flat_map(|seg| seg.sections.iter().map(move |sect| (seg, sect)))
     }
 
     /// Find a section by segment name and section name.
@@ -130,20 +129,18 @@ impl<'a> MachO<'a> {
     /// Requires LC_SYMTAB to be present; returns an empty vec if not.
     pub fn symbols(&self) -> Result<Vec<Symbol<'a>>, ParseError> {
         match self.symtab_command() {
-            Some(st) => parse_symbols(
-                self.data,
-                st.symoff,
-                st.nsyms,
-                st.stroff,
-                st.strsize,
-                self.swap,
-            ),
+            Some(st) => {
+                parse_symbols(self.data, st.symoff, st.nsyms, st.stroff, st.strsize, self.swap)
+            }
             None => Ok(Vec::new()),
         }
     }
 
     /// Parse relocations for a specific section.
-    pub fn section_relocations(&self, section: &Section64<'_>) -> Result<Vec<Relocation>, ParseError> {
+    pub fn section_relocations(
+        &self,
+        section: &Section64<'_>,
+    ) -> Result<Vec<Relocation>, ParseError> {
         parse_relocations(self.data, section.reloff, section.nreloc, self.swap)
     }
 
@@ -231,7 +228,9 @@ impl<'a> MachO<'a> {
                 .find(|a| a.cputype == CPU_TYPE_ARM64)
                 .or_else(|| arches.first())
                 .ok_or_else(|| {
-                    ParseError::UnsupportedFormat("fat binary contains no architecture slices".into())
+                    ParseError::UnsupportedFormat(
+                        "fat binary contains no architecture slices".into(),
+                    )
                 })?;
             Self::from_fat_slice(data, arch)
         } else {
@@ -245,6 +244,46 @@ impl<'a> MachO<'a> {
     #[must_use]
     pub fn find_aarch64_slice(arches: &[FatArch]) -> Option<&FatArch> {
         arches.iter().find(|a| a.cputype == CPU_TYPE_ARM64)
+    }
+}
+
+impl Section64<'_> {
+    /// Memory address of this section.
+    #[must_use]
+    pub fn addr(&self) -> u64 {
+        self.addr
+    }
+
+    /// Size of this section in bytes.
+    #[must_use]
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    /// File offset of this section.
+    #[must_use]
+    pub fn offset(&self) -> u32 {
+        self.offset
+    }
+}
+
+impl<'a> Symbol<'a> {
+    /// Symbol name from the string table.
+    #[must_use]
+    pub fn name(&self) -> &'a str {
+        self.name
+    }
+
+    /// Section number (1-based) or NO_SECT (0).
+    #[must_use]
+    pub fn section_index(&self) -> u8 {
+        self.n_sect
+    }
+
+    /// Symbol value (address for defined symbols).
+    #[must_use]
+    pub fn value(&self) -> u64 {
+        self.n_value
     }
 }
 
@@ -315,8 +354,7 @@ mod tests {
 
         let segment_end = buf.len();
         let seg_cmdsize = (segment_end - segment_start) as u32;
-        buf[seg_cmdsize_offset..seg_cmdsize_offset + 4]
-            .copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg_cmdsize_offset..seg_cmdsize_offset + 4].copy_from_slice(&seg_cmdsize.to_le_bytes());
 
         // -- LC_SYMTAB --
         buf.extend_from_slice(&LC_SYMTAB.to_le_bytes()); // cmd
@@ -357,13 +395,11 @@ mod tests {
         buf.extend_from_slice(&0x03E80000u32.to_le_bytes()); // version
         let bv_end = buf.len();
         let bv_cmdsize = (bv_end - bv_start) as u32;
-        buf[bv_cmdsize_offset..bv_cmdsize_offset + 4]
-            .copy_from_slice(&bv_cmdsize.to_le_bytes());
+        buf[bv_cmdsize_offset..bv_cmdsize_offset + 4].copy_from_slice(&bv_cmdsize.to_le_bytes());
 
         let cmds_end = buf.len();
         let sizeofcmds = (cmds_end - cmds_start) as u32;
-        buf[sizeofcmds_offset..sizeofcmds_offset + 4]
-            .copy_from_slice(&sizeofcmds.to_le_bytes());
+        buf[sizeofcmds_offset..sizeofcmds_offset + 4].copy_from_slice(&sizeofcmds.to_le_bytes());
 
         // -- Section data: 4 bytes of ARM64 "ret" instruction --
         let text_data_offset = buf.len();
@@ -378,8 +414,7 @@ mod tests {
         buf.extend_from_slice(b"\0_main\0");
 
         // Patch stroff
-        buf[stroff_pos..stroff_pos + 4]
-            .copy_from_slice(&(strtab_offset as u32).to_le_bytes());
+        buf[stroff_pos..stroff_pos + 4].copy_from_slice(&(strtab_offset as u32).to_le_bytes());
 
         // -- Symbol table: one nlist_64 entry for _main --
         let symtab_offset = buf.len();
@@ -390,8 +425,7 @@ mod tests {
         buf.extend_from_slice(&0x100001000u64.to_le_bytes()); // n_value
 
         // Patch symoff
-        buf[symoff_pos..symoff_pos + 4]
-            .copy_from_slice(&(symtab_offset as u32).to_le_bytes());
+        buf[symoff_pos..symoff_pos + 4].copy_from_slice(&(symtab_offset as u32).to_le_bytes());
 
         buf
     }
@@ -437,7 +471,10 @@ mod tests {
         let uuid = macho.uuid().expect("should have UUID");
         assert_eq!(
             uuid,
-            [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]
+            [
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+                0x0F, 0x10
+            ]
         );
     }
 

@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 // trust-sunder-lib: Library facade for sunder deductive verifier
 //
 // Phase 1 of Pipeline v2 (#790, designs/2026-04-14-verification-pipeline-v2.md).

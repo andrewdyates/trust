@@ -151,7 +151,6 @@ impl<'a, 'tcx> ConstraintConversion<'a, 'tcx> {
                 // This may actually be reachable. If so, we should convert
                 // this to a proper error/consider whether we should detect
                 // this somewhere else.
-                // tRust: invariant: structural invariant — predefined regions from universal_regions must map to known region vids
                 bug!(
                     "unexpected overflowed when processing region obligations: {outlives_predicates:#?}"
                 );
@@ -219,7 +218,7 @@ impl<'a, 'tcx> ConstraintConversion<'a, 'tcx> {
     /// create new region variables, which we must not do when verifying
     /// our region bounds.
     ///
-    /// /// NOTE: This should get removed once higher ranked region obligations obligations
+    /// FIXME: This should get removed once higher ranked region obligations
     /// are dealt with during trait solving.
     fn replace_placeholders_with_nll<T: TypeFoldable<TyCtxt<'tcx>>>(&mut self, value: T) -> T {
         if value.has_placeholders() {
@@ -292,7 +291,7 @@ impl<'a, 'tcx> ConstraintConversion<'a, 'tcx> {
             self.span,
         ) {
             Ok(TypeOpOutput { output: ty, constraints, .. }) => {
-                // // NOTE(higher_ranked_auto): What should we do with the assumptions here? here?
+                // FIXME(higher_ranked_auto): What should we do with the assumptions here?
                 if let Some(QueryRegionConstraints { outlives, assumptions: _ }) = constraints {
                     next_outlives_predicates.extend(outlives.iter().copied());
                 }

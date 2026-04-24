@@ -397,7 +397,7 @@ impl CheckCfg {
 
         let sanitize_values = SanitizerSet::all()
             .into_iter()
-            .map(|sanitizer| Symbol::intern(sanitizer.as_str().expect("invariant: sanitizer must have a string representation"))); // tRust: unwrap -> expect
+            .map(|sanitizer| Symbol::intern(sanitizer.as_str().unwrap()));
         ins!(sym::sanitize, empty_values).extend(sanitize_values);
 
         ins!(sym::sanitizer_cfi_generalize_pointers, no_values);

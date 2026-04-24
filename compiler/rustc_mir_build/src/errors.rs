@@ -28,8 +28,6 @@ pub(crate) struct CallToDeprecatedSafeFnRequiresUnsafeSub {
     pub(crate) start_of_line_suggestion: String,
     #[suggestion_part(code = "{start_of_line_suggestion}")]
     pub(crate) start_of_line: Span,
-    // SAFETY: The invariants required by this unsafe operation are
-    // upheld by the caller's contract and preceding checks.
     #[suggestion_part(code = "unsafe {{ ")]
     pub(crate) left: Span,
     #[suggestion_part(code = " }}")]

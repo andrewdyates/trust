@@ -51,10 +51,10 @@ pub(crate) fn compute_abi_info<'a, Ty, C>(
             continue;
         }
 
-        // tRust: known issue — MSVC 2015+ will pass the first 3 vector arguments in [XYZ]MM0-2
+        // FIXME: MSVC 2015+ will pass the first 3 vector arguments in [XYZ]MM0-2
         // See https://reviews.llvm.org/D72114 for Clang behavior
 
-        let align_4 = Align::from_bytes(4).expect("invariant: 4-byte alignment is a valid power of two"); // tRust: unwrap -> expect
+        let align_4 = Align::from_bytes(4).unwrap();
 
         if arg.layout.is_adt()
             && let Some(max_repr_align) = arg.layout.max_repr_align

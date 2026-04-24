@@ -1,6 +1,3 @@
-//! tRust: MIR constant codegen for evaluating constant operands and lowering them
-//! tRust: into backend values.
-
 use rustc_abi::BackendRepr;
 use rustc_middle::mir::interpret::ErrorHandled;
 use rustc_middle::ty::layout::{HasTyCtxt, HasTypingEnv};
@@ -47,7 +44,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 // A constant that came from a const generic but was then used as an argument to
                 // old-style simd_shuffle (passing as argument instead of as a generic param).
                 ty::ConstKind::Value(cv) => return Ok(Ok(cv.valtree)),
-                // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                 other => span_bug!(constant.span, "{other:#?}"),
             },
             // We should never encounter `Const::Val` unless MIR opts (like const prop) evaluate
@@ -56,10 +52,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             // a lot of care around intrinsics. For an issue to happen here, it would require a
             // macro expanding to a `simd_shuffle` call without wrapping the constant argument in a
             // `const {}` block, but the user pass through arbitrary expressions.
-            // NOTE(oli-obk): The magic const generic argument of simd_shuffle should be replaced
-            // with a
+            // FIXME(oli-obk): replace the magic const generic argument of `simd_shuffle` with a
             // real const generic, and get rid of this entire function.
-            // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
             other => span_bug!(constant.span, "{other:#?}"),
         };
         let uv = self.monomorphize(uv);
@@ -91,12 +85,10 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     .iter()
                     .map(|field| {
                         let Some(prim) = field.try_to_scalar() else {
-                            // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                             bug!("field is not a scalar {:?}", field)
                         };
                         let layout = bx.layout_of(field_ty);
                         let BackendRepr::Scalar(scalar) = layout.backend_repr else {
-                            // tRust: invariant: structural invariant — const evaluation context constrains the expression forms
                             bug!("from_const: invalid ByVal layout: {:#?}", layout);
                         };
                         bx.scalar_to_backend(prim, scalar, bx.immediate_backend_type(layout))

@@ -15,8 +15,7 @@
 
 use trust_lean5::integration::{CertificationBridge, PipelineOutput};
 use trust_proof_cert::{
-    CertificateChain, CertificateStore, ChainFindingKind, ChainStep, ChainStepType,
-    ChainValidator,
+    CertificateChain, CertificateStore, ChainFindingKind, ChainStep, ChainStepType, ChainValidator,
 };
 use trust_types::*;
 
@@ -27,7 +26,7 @@ use trust_types::*;
 fn sample_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_div".to_string(),
+        function: "safe_div".into(),
         location: SourceSpan::default(),
         formula: Formula::Not(Box::new(Formula::Eq(
             Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -43,7 +42,7 @@ fn overflow_vc() -> VerificationCondition {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "get_midpoint".to_string(),
+        function: "get_midpoint".into(),
         location: SourceSpan::default(),
         formula: Formula::Not(Box::new(Formula::And(vec![
             Formula::Le(
@@ -67,10 +66,11 @@ fn overflow_vc() -> VerificationCondition {
 
 fn proved_result() -> VerificationResult {
     VerificationResult::Proved {
-        solver: "z4".to_string(),
+        solver: "z4".into(),
         time_ms: 5,
         strength: ProofStrength::smt_unsat(),
-        proof_certificate: None, solver_warnings: None,
+        proof_certificate: None,
+        solver_warnings: None,
     }
 }
 
@@ -103,9 +103,7 @@ fn test_pipeline_generated_chain_passes_validation() {
     let chain = extract_chain(&output);
 
     // verify_integrity (hash linkage only)
-    chain
-        .verify_integrity()
-        .expect("pipeline-generated chain should have valid hash linkage");
+    chain.verify_integrity().expect("pipeline-generated chain should have valid hash linkage");
 
     // Full ChainValidator (hash linkage + ordering + gap detection + duplicates)
     let validation = ChainValidator::validate(chain);
@@ -123,10 +121,7 @@ fn test_multiple_pipeline_chains_all_valid() {
     let bridge = CertificationBridge::new();
     let mut store = CertificateStore::new("chain-test");
 
-    let vcs = vec![
-        (sample_vc(), "2026-04-13T10:00:00Z"),
-        (overflow_vc(), "2026-04-13T10:01:00Z"),
-    ];
+    let vcs = vec![(sample_vc(), "2026-04-13T10:00:00Z"), (overflow_vc(), "2026-04-13T10:01:00Z")];
 
     let mut chains = Vec::new();
 
@@ -142,11 +137,7 @@ fn test_multiple_pipeline_chains_all_valid() {
 
     for (i, chain) in chains.iter().enumerate() {
         let validation = ChainValidator::validate(chain);
-        assert!(
-            validation.valid,
-            "chain {i} should pass validation: {:?}",
-            validation.findings
-        );
+        assert!(validation.valid, "chain {i} should pass validation: {:?}", validation.findings);
     }
 
     // Validate via validate_chain (returns Result) too
@@ -205,9 +196,7 @@ fn test_hash_mismatch_fails_validation() {
     });
 
     // verify_integrity should fail
-    let err = chain
-        .verify_integrity()
-        .expect_err("mismatched hashes should fail integrity check");
+    let err = chain.verify_integrity().expect_err("mismatched hashes should fail integrity check");
     let msg = format!("{err}");
     assert!(
         msg.contains("step 0") || msg.contains("hash"),
@@ -218,10 +207,7 @@ fn test_hash_mismatch_fails_validation() {
     let validation = ChainValidator::validate(&chain);
     assert!(!validation.valid, "mismatched hashes should fail validation");
     assert!(
-        validation
-            .findings
-            .iter()
-            .any(|f| f.kind == ChainFindingKind::HashMismatch),
+        validation.findings.iter().any(|f| f.kind == ChainFindingKind::HashMismatch),
         "should report HashMismatch finding"
     );
 }
@@ -261,10 +247,7 @@ fn test_hash_mismatch_in_three_step_chain() {
     let validation = ChainValidator::validate(&chain);
     assert!(!validation.valid);
     assert!(
-        validation
-            .findings
-            .iter()
-            .any(|f| f.kind == ChainFindingKind::HashMismatch),
+        validation.findings.iter().any(|f| f.kind == ChainFindingKind::HashMismatch),
         "should detect hash mismatch between steps 1 and 2"
     );
 
@@ -274,10 +257,7 @@ fn test_hash_mismatch_in_three_step_chain() {
         .iter()
         .find(|f| f.kind == ChainFindingKind::HashMismatch)
         .expect("should have HashMismatch finding");
-    assert_eq!(
-        mismatch.step_index, 1,
-        "hash mismatch should be reported at step index 1"
-    );
+    assert_eq!(mismatch.step_index, 1, "hash mismatch should be reported at step index 1");
 }
 
 // ===========================================================================
@@ -311,10 +291,7 @@ fn test_wrong_step_ordering_solver_before_vcgen() {
     let validation = ChainValidator::validate(&chain);
     assert!(!validation.valid);
     assert!(
-        validation
-            .findings
-            .iter()
-            .any(|f| f.kind == ChainFindingKind::OutOfOrder),
+        validation.findings.iter().any(|f| f.kind == ChainFindingKind::OutOfOrder),
         "should report OutOfOrder finding: {:?}",
         validation.findings
     );
@@ -355,10 +332,7 @@ fn test_wrong_step_ordering_lean5_before_solver() {
     let validation = ChainValidator::validate(&chain);
     assert!(!validation.valid);
     assert!(
-        validation
-            .findings
-            .iter()
-            .any(|f| f.kind == ChainFindingKind::OutOfOrder),
+        validation.findings.iter().any(|f| f.kind == ChainFindingKind::OutOfOrder),
         "Lean5Certification (rank 2) followed by SolverProof (rank 1) is out of order"
     );
 }
@@ -378,9 +352,7 @@ fn test_empty_chain_fails_validation() {
     assert_eq!(validation.findings[0].kind, ChainFindingKind::EmptyChain);
 
     // verify_integrity passes for empty chain (no pairs to check)
-    chain
-        .verify_integrity()
-        .expect("empty chain has no integrity violations (vacuously true)");
+    chain.verify_integrity().expect("empty chain has no integrity violations (vacuously true)");
 }
 
 /// Chain missing VcGeneration step should fail.
@@ -400,10 +372,7 @@ fn test_missing_vc_generation_step_fails() {
     let validation = ChainValidator::validate(&chain);
     assert!(!validation.valid);
     assert!(
-        validation
-            .findings
-            .iter()
-            .any(|f| f.kind == ChainFindingKind::MissingStep),
+        validation.findings.iter().any(|f| f.kind == ChainFindingKind::MissingStep),
         "should report MissingStep for VcGeneration"
     );
 }
@@ -434,10 +403,7 @@ fn test_duplicate_step_type_fails() {
     let validation = ChainValidator::validate(&chain);
     assert!(!validation.valid);
     assert!(
-        validation
-            .findings
-            .iter()
-            .any(|f| f.kind == ChainFindingKind::DuplicateStep),
+        validation.findings.iter().any(|f| f.kind == ChainFindingKind::DuplicateStep),
         "should report DuplicateStep"
     );
 }
@@ -449,10 +415,7 @@ fn test_validate_chain_result_api() {
     let empty = CertificateChain::new();
     let err = ChainValidator::validate_chain(&empty).expect_err("empty chain should error");
     let msg = format!("{err}");
-    assert!(
-        msg.contains("no steps"),
-        "error should mention no steps, got: {msg}"
-    );
+    assert!(msg.contains("no steps"), "error should mention no steps, got: {msg}");
 
     // Valid: well-formed two-step chain
     let mut valid = CertificateChain::new();
@@ -503,11 +466,7 @@ fn test_chain_json_roundtrip() {
 
     // The recovered chain should also pass validation
     let validation = ChainValidator::validate(&recovered);
-    assert!(
-        validation.valid,
-        "recovered chain should pass validation: {:?}",
-        validation.findings
-    );
+    assert!(validation.valid, "recovered chain should pass validation: {:?}", validation.findings);
 }
 
 // ===========================================================================

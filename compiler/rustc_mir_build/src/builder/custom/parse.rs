@@ -93,7 +93,7 @@ impl<'a, 'tcx> ParseCtxt<'a, 'tcx> {
     pub(crate) fn parse_args(&mut self, params: &IndexSlice<ParamId, Param<'tcx>>) -> PResult<()> {
         for param in params.iter() {
             let (var, span) = {
-                let pat = param.pat.as_ref().expect("invariant: parameter has a pattern"); // tRust: unwrap -> expect
+                let pat = param.pat.as_ref().unwrap();
                 match &pat.kind {
                     PatKind::Binding { var, .. } => (*var, pat.span),
                     _ => {
@@ -150,12 +150,12 @@ impl<'a, 'tcx> ParseCtxt<'a, 'tcx> {
     /// basic block definitions in order.
     pub(crate) fn parse_body(&mut self, expr_id: ExprId) -> PResult<()> {
         let body = parse_by_kind!(self, expr_id, _, "whole body",
-            ExprKind::Block { block } => self.thir[*block].expr.expect("invariant: block has an expression"), // tRust: unwrap -> expect
+            ExprKind::Block { block } => self.thir[*block].expr.unwrap(),
         );
         let (block_decls, rest) = parse_by_kind!(self, body, _, "body with block decls",
             ExprKind::Block { block } => {
                 let block = &self.thir[*block];
-                (&block.stmts, block.expr.expect("invariant: block has an expression")) // tRust: unwrap -> expect
+                (&block.stmts, block.expr.unwrap())
             },
         );
         self.parse_block_decls(block_decls.iter().copied())?;
@@ -163,7 +163,7 @@ impl<'a, 'tcx> ParseCtxt<'a, 'tcx> {
         let (local_decls, rest) = parse_by_kind!(self, rest, _, "body with local decls",
             ExprKind::Block { block } => {
                 let block = &self.thir[*block];
-                (&block.stmts, block.expr.expect("invariant: block has an expression")) // tRust: unwrap -> expect
+                (&block.stmts, block.expr.unwrap())
             },
         );
         self.parse_local_decls(local_decls.iter().copied())?;
@@ -171,7 +171,7 @@ impl<'a, 'tcx> ParseCtxt<'a, 'tcx> {
         let (debuginfo, rest) = parse_by_kind!(self, rest, _, "body with debuginfo",
             ExprKind::Block { block } => {
                 let block = &self.thir[*block];
-                (&block.stmts, block.expr.expect("invariant: block has an expression")) // tRust: unwrap -> expect
+                (&block.stmts, block.expr.unwrap())
             },
         );
         self.parse_debuginfo(debuginfo.iter().copied())?;
@@ -215,7 +215,7 @@ impl<'a, 'tcx> ParseCtxt<'a, 'tcx> {
     }
 
     fn parse_local_decls(&mut self, mut stmts: impl Iterator<Item = StmtId>) -> PResult<()> {
-        let (ret_var, ..) = self.parse_let_statement(stmts.next().expect("invariant: iterator is non-empty"))?; // tRust: unwrap -> expect
+        let (ret_var, ..) = self.parse_let_statement(stmts.next().unwrap())?;
         self.local_map.insert(ret_var, Local::ZERO);
 
         for stmt in stmts {

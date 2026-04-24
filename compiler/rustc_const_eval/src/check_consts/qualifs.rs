@@ -2,7 +2,7 @@
 //!
 //! See the `Qualif` trait for more info.
 
-// tRust: known issue (const_trait_impl) — This API should be really reworked. It's dangerously general for
+// FIXME(const_trait_impl): This API should be really reworked. It's dangerously general for
 // having basically only two use-cases that act in different ways.
 
 use rustc_errors::ErrorGuaranteed;
@@ -100,7 +100,7 @@ impl Qualif for HasMutInterior {
         // Instead we invoke an obligation context manually, and provide the opaque type inference settings
         // that allow the trait solver to just error out instead of cycling.
         let freeze_def_id = cx.tcx.require_lang_item(LangItem::Freeze, cx.body.span);
-        // tRust: known issue (#132279) — Once we've got a typing mode which reveals opaque types using the HIR
+        // FIXME(#132279): Once we've got a typing mode which reveals opaque types using the HIR
         // typeck results without causing query cycles, we should use this here instead of defining
         // opaque types.
         let typing_env = ty::TypingEnv {
@@ -215,7 +215,7 @@ impl Qualif for NeedsNonConstDrop {
     }
 }
 
-// tRust: known issue — Use `mir::visit::Visitor` for the `in_*` functions if/when it supports early return.
+// FIXME: Use `mir::visit::Visitor` for the `in_*` functions if/when it supports early return.
 
 /// Returns `true` if this `Rvalue` contains qualif `Q`.
 pub fn in_rvalue<'tcx, Q, F>(
@@ -346,10 +346,9 @@ where
             ty::ConstKind::Param(_) | ty::ConstKind::Error(_) => None,
             // Unevaluated consts in MIR bodies don't have associated MIR (e.g. `type const`).
             ty::ConstKind::Unevaluated(_) => None,
-            // tRust: known issue (mgca) — Investigate whether using `None` for `ConstKind::Value` is overly
+            // FIXME(mgca): Investigate whether using `None` for `ConstKind::Value` is overly
             // strict, and if instead we should be doing some kind of value-based analysis.
             ty::ConstKind::Value(_) => None,
-            // tRust: invariant — match arms cover all valid cases for this type/value
             _ => bug!(
                 "expected ConstKind::Param, ConstKind::Value, ConstKind::Unevaluated, or ConstKind::Error here, found {:?}",
                 ct

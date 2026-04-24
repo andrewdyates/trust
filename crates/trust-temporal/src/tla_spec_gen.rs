@@ -33,11 +33,8 @@ pub fn generate_tla_spec(machine: &StateMachine, module_name: &str) -> String {
     let _ = writeln!(spec);
 
     // State set
-    let state_names: Vec<String> = machine
-        .states
-        .iter()
-        .map(|s| format!("\"{}\"", s.name))
-        .collect();
+    let state_names: Vec<String> =
+        machine.states.iter().map(|s| format!("\"{}\"", s.name)).collect();
     let _ = writeln!(spec, "States == {{{}}}", state_names.join(", "));
     let _ = writeln!(spec);
 
@@ -57,9 +54,8 @@ pub fn generate_tla_spec(machine: &StateMachine, module_name: &str) -> String {
             let from_name = machine
                 .state(t.from)
                 .map_or_else(|| format!("state_{}", t.from.0), |s| s.name.clone());
-            let to_name = machine
-                .state(t.to)
-                .map_or_else(|| format!("state_{}", t.to.0), |s| s.name.clone());
+            let to_name =
+                machine.state(t.to).map_or_else(|| format!("state_{}", t.to.0), |s| s.name.clone());
 
             let disjunct = if let Some(guard) = &t.guard {
                 format!(
@@ -91,7 +87,7 @@ pub fn generate_tla_spec(machine: &StateMachine, module_name: &str) -> String {
 ///
 /// Converts a `TemporalProperty` to its TLA+ syntax equivalent.
 #[must_use]
-pub(crate) fn generate_property_check(property: &TemporalProperty) -> String {
+fn generate_property_check(property: &TemporalProperty) -> String {
     match property {
         TemporalProperty::Always { condition } => format!("[]{condition}"),
         TemporalProperty::Eventually { condition } => format!("<>{condition}"),
@@ -106,8 +102,9 @@ pub(crate) fn generate_property_check(property: &TemporalProperty) -> String {
 ///
 /// Converts a state label reference to a TLA+ predicate that checks
 /// if the current state has that label.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn generate_label_predicate(machine: &StateMachine, label: &str) -> String {
+fn generate_label_predicate(machine: &StateMachine, label: &str) -> String {
     let matching_states: Vec<String> = machine
         .states
         .iter()
@@ -207,9 +204,8 @@ mod tests {
 
     #[test]
     fn generate_spec_no_transitions() {
-        let machine = StateMachineBuilder::new(StateId(0))
-            .add_state(State::new(StateId(0), "Only"))
-            .build();
+        let machine =
+            StateMachineBuilder::new(StateId(0)).add_state(State::new(StateId(0), "Only")).build();
         let spec = generate_tla_spec(&machine, "EmptySpec");
         assert!(spec.contains("Next == FALSE"));
     }
@@ -219,9 +215,7 @@ mod tests {
         let machine = StateMachineBuilder::new(StateId(0))
             .add_state(State::new(StateId(0), "A"))
             .add_state(State::new(StateId(1), "B"))
-            .add_transition(
-                Transition::new(StateId(0), StateId(1), "go").with_guard("x > 0"),
-            )
+            .add_transition(Transition::new(StateId(0), StateId(1), "go").with_guard("x > 0"))
             .build();
         let spec = generate_tla_spec(&machine, "GuardSpec");
         assert!(spec.contains("x > 0"));
@@ -250,10 +244,7 @@ mod tests {
 
     #[test]
     fn property_until() {
-        let prop = TemporalProperty::Until {
-            left: "running".into(),
-            right: "done".into(),
-        };
+        let prop = TemporalProperty::Until { left: "running".into(), right: "done".into() };
         assert_eq!(generate_property_check(&prop), "(running) \\U (done)");
     }
 

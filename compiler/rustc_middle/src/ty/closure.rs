@@ -103,23 +103,22 @@ impl<'tcx> CapturedPlace<'tcx> {
         for proj in self.place.projections.iter() {
             match proj.kind {
                 HirProjectionKind::Field(idx, variant) => match ty.kind() {
-                    ty::Tuple(_) => write!(&mut symbol, "__{}", idx.index()).expect("invariant: write to string/buffer succeeds"),
+                    ty::Tuple(_) => write!(&mut symbol, "__{}", idx.index()).unwrap(),
                     ty::Adt(def, ..) => {
                         write!(
                             &mut symbol,
                             "__{}",
                             def.variant(variant).fields[idx].name.as_str(),
                         )
-                        .expect("invariant: closure capture has upvar");
+                        .unwrap();
                     }
                     ty => {
-                        // tRust: invariant: Unexpected type <...> for Field projection
                         bug!("Unexpected type {:?} for `Field` projection", ty)
                     }
                 },
 
                 HirProjectionKind::UnwrapUnsafeBinder => {
-                    write!(&mut symbol, "__unwrap").expect("invariant: write to string/buffer succeeds");
+                    write!(&mut symbol, "__unwrap").unwrap();
                 }
 
                 // Ignore derefs for now, as they are likely caused by
@@ -127,7 +126,6 @@ impl<'tcx> CapturedPlace<'tcx> {
                 HirProjectionKind::Deref => {}
                 // Just change the type to the hidden type, so we can actually project.
                 HirProjectionKind::OpaqueCast => {}
-                // tRust: invariant: Unexpected projection <...> in captured place
                 proj => bug!("Unexpected projection {:?} in captured place", proj),
             }
             ty = proj.ty;
@@ -141,7 +139,6 @@ impl<'tcx> CapturedPlace<'tcx> {
     pub fn get_root_variable(&self) -> HirId {
         match self.place.base {
             HirPlaceBase::Upvar(upvar_id) => upvar_id.var_path.hir_id,
-            // tRust: invariant: Expected upvar, found=<...>
             base => bug!("Expected upvar, found={:?}", base),
         }
     }
@@ -150,7 +147,6 @@ impl<'tcx> CapturedPlace<'tcx> {
     pub fn get_closure_local_def_id(&self) -> LocalDefId {
         match self.place.base {
             HirPlaceBase::Upvar(upvar_id) => upvar_id.closure_expr_id,
-            // tRust: invariant: expected upvar, found=<...>
             base => bug!("expected upvar, found={:?}", base),
         }
     }
@@ -165,7 +161,7 @@ impl<'tcx> CapturedPlace<'tcx> {
             // Fallback on upvars mentioned if neither path or capture expr id is captured
 
             // Safe to unwrap since we know this place is captured by the closure, therefore the closure must have upvars.
-            tcx.upvars_mentioned(self.get_closure_local_def_id()).expect("invariant: closure has upvars")
+            tcx.upvars_mentioned(self.get_closure_local_def_id()).unwrap()
                 [&self.get_root_variable()]
                 .span
         }
@@ -181,7 +177,7 @@ impl<'tcx> CapturedPlace<'tcx> {
             // Fallback on upvars mentioned if neither path or capture expr id is captured
 
             // Safe to unwrap since we know this place is captured by the closure, therefore the closure must have upvars.
-            tcx.upvars_mentioned(self.get_closure_local_def_id()).expect("invariant: closure has upvars")
+            tcx.upvars_mentioned(self.get_closure_local_def_id()).unwrap()
                 [&self.get_root_variable()]
                 .span
         }
@@ -305,7 +301,6 @@ pub struct CaptureInfo {
 pub fn place_to_string_for_capture<'tcx>(tcx: TyCtxt<'tcx>, place: &HirPlace<'tcx>) -> String {
     let mut curr_string: String = match place.base {
         HirPlaceBase::Upvar(upvar_id) => tcx.hir_name(upvar_id.var_path.hir_id).to_string(),
-        // tRust: invariant: Capture_information should only contain upvars
         _ => bug!("Capture_information should only contain upvars"),
     };
 
@@ -326,7 +321,6 @@ pub fn place_to_string_for_capture<'tcx>(tcx: TyCtxt<'tcx>, place: &HirPlace<'tc
                     curr_string = format!("{}.{}", curr_string, idx.index());
                 }
                 _ => {
-                    // tRust: invariant: unexpected state in place_to_string_for_capture
                     bug!(
                         "Field projection applied to a type other than Adt or Tuple: {:?}.",
                         place.ty_before_projection(i).kind()
@@ -338,7 +332,6 @@ pub fn place_to_string_for_capture<'tcx>(tcx: TyCtxt<'tcx>, place: &HirPlace<'tc
             }
             // Just change the type to the hidden type, so we can actually project.
             HirProjectionKind::OpaqueCast => {}
-            // tRust: invariant: <...> unexpected because it isn't captured
             proj => bug!("{:?} unexpected because it isn't captured", proj),
         }
     }
@@ -397,7 +390,7 @@ pub enum BorrowKind {
     /// simplicity, we don't give users the way to express this
     /// borrow, it's just used when translating closures.
     ///
-    /// tRust: known issue — Rename this to indicate the borrow is actually not immutable.
+    /// FIXME: Rename this to indicate the borrow is actually not immutable.
     UniqueImmutable,
 
     /// Data is mutable and not aliasable.
@@ -452,7 +445,7 @@ pub fn analyze_coroutine_closure_captures<'a, 'tcx: 'a, T>(
             while child_captures.peek().is_some_and(|(_, child_capture)| {
                 child_prefix_matches_parent_projections(parent_capture, child_capture)
             }) {
-                let (child_field_idx, child_capture) = child_captures.next().expect("invariant: iterator has next element");
+                let (child_field_idx, child_capture) = child_captures.next().unwrap();
                 // This analysis only makes sense if the parent capture is a
                 // prefix of the child capture.
                 assert!(
@@ -484,11 +477,9 @@ fn child_prefix_matches_parent_projections(
     child_capture: &ty::CapturedPlace<'_>,
 ) -> bool {
     let HirPlaceBase::Upvar(parent_base) = parent_capture.place.base else {
-        // tRust: invariant: expected capture to be an upvar
         bug!("expected capture to be an upvar");
     };
     let HirPlaceBase::Upvar(child_base) = child_capture.place.base else {
-        // tRust: invariant: expected capture to be an upvar
         bug!("expected capture to be an upvar");
     };
 

@@ -26,12 +26,9 @@ pub(crate) fn acquire_global_lock(name: &str) -> Box<dyn Any> {
 
     impl Drop for Handle {
         fn drop(&mut self) {
-            // SAFETY: `self.0` is a valid Windows HANDLE obtained from
-            // `CreateMutexA`. Closing it once in Drop is correct because
-            // Handle is not Copy/Clone, so this runs exactly once.
             unsafe {
-                // tRust: known issue — can panic here
-                CloseHandle(self.0).expect("invariant: CloseHandle must succeed"); // tRust: unwrap -> expect
+                // FIXME can panic here
+                CloseHandle(self.0).unwrap();
             }
         }
     }
@@ -40,25 +37,19 @@ pub(crate) fn acquire_global_lock(name: &str) -> Box<dyn Any> {
 
     impl Drop for Guard {
         fn drop(&mut self) {
-            // SAFETY: The mutex was successfully acquired via
-            // `WaitForSingleObject` before constructing this Guard,
-            // so releasing it here is valid. Guard is not Copy/Clone.
             unsafe {
-                // tRust: known issue — can panic here
-                ReleaseMutex((self.0).0).expect("invariant: ReleaseMutex must succeed"); // tRust: unwrap -> expect
+                // FIXME can panic here
+                ReleaseMutex((self.0).0).unwrap();
             }
         }
     }
 
-    let cname = CString::new(name).expect("invariant: mutex name must not contain null bytes"); // tRust: unwrap -> expect
+    let cname = CString::new(name).unwrap();
     // Create a named mutex, with no security attributes and also not
     // acquired when we create it.
     //
     // This will silently create one if it doesn't already exist, or it'll
     // open up a handle to one if it already exists.
-    // SAFETY: `cname` is a valid CString that outlives this call.
-    // `PCSTR::from_raw` receives a valid nul-terminated pointer.
-    // `None` for security attributes and `false` for initial owner are valid.
     let mutex = unsafe { CreateMutexA(None, false, PCSTR::from_raw(cname.as_ptr().cast())) }
         .unwrap_or_else(|_| panic!("failed to create global mutex named `{}`", name));
     let mutex = Handle(mutex);
@@ -74,8 +65,6 @@ pub(crate) fn acquire_global_lock(name: &str) -> Box<dyn Any> {
     // ownership of the lock so we continue.
     //
     // If an error happens.. well... that's surprising!
-    // SAFETY: `mutex.0` is a valid HANDLE returned by `CreateMutexA`
-    // above. INFINITE timeout means this blocks until the mutex is acquired.
     match unsafe { WaitForSingleObject(mutex.0, INFINITE) } {
         WAIT_OBJECT_0 | WAIT_ABANDONED => (),
         err => panic!(

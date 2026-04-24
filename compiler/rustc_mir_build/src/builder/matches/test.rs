@@ -57,7 +57,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
             // Or-patterns are not tested directly; instead they are expanded into subcandidates,
             // which are then distinguished by testing whatever non-or patterns they contain.
-            // tRust: invariant — match-pair expansion removes `TestableCase::Or` before test selection, so `make_test` only sees non-or cases.
             TestableCase::Or { .. } => bug!("or-patterns should have already been handled"),
         };
 
@@ -313,7 +312,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
             TestKind::Never => {
                 // Check that the place is initialized.
-                // tRust: known issue — Also assert validity of the data at `place`. (upstream FIXME by never_patterns)
+                // FIXME(never_patterns): Also assert validity of the data at `place`.
                 self.cfg.push_fake_read(
                     block,
                     source_info,
@@ -432,7 +431,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 func: Operand::Constant(Box::new(ConstOperand {
                     span: source_info.span,
 
-                    // tRust: known issue — This constant comes from user input (a (upstream #54571)
+                    // FIXME(#54571): This constant comes from user input (a
                     // constant in a pattern). Are there forms where users can add
                     // type annotations here?  For example, an associated constant?
                     // Need to experiment.

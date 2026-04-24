@@ -73,11 +73,7 @@ pub(crate) fn classify_z4_rule(rule_name: &str) -> Z4RuleKind {
         "sk" => Z4RuleKind::Skolem,
         other if other.starts_with("th-lemma") => {
             // th-lemma may have a theory suffix: "th-lemma" or "th-lemma arith"
-            let theory = other
-                .strip_prefix("th-lemma")
-                .unwrap_or("")
-                .trim()
-                .to_string();
+            let theory = other.strip_prefix("th-lemma").unwrap_or("").trim().to_string();
             let theory = if theory.is_empty() { "unknown".to_string() } else { theory };
             Z4RuleKind::TheoryLemma { theory }
         }
@@ -217,7 +213,8 @@ fn tokenize_smtlib2(s: &str) -> Vec<String> {
             tokens.push(chars[start..i].iter().collect());
         } else {
             let start = i;
-            while i < chars.len() && !chars[i].is_whitespace() && chars[i] != '(' && chars[i] != ')' {
+            while i < chars.len() && !chars[i].is_whitespace() && chars[i] != '(' && chars[i] != ')'
+            {
                 i += 1;
             }
             tokens.push(chars[start..i].iter().collect());
@@ -256,9 +253,7 @@ fn tokenize_smtlib2(s: &str) -> Vec<String> {
 /// # Errors
 ///
 /// Returns `CertificateError` if a proof step references a non-existent premise.
-pub fn translate_z4_proof(
-    z4_cert: &Z4ProofCertificate,
-) -> Result<SolverProof, CertificateError> {
+pub fn translate_z4_proof(z4_cert: &Z4ProofCertificate) -> Result<SolverProof, CertificateError> {
     if z4_cert.proof_steps.is_empty() {
         return Ok(SolverProof {
             steps: Vec::new(),
@@ -319,36 +314,26 @@ fn translate_step(
     conclusion: &Formula,
 ) -> Result<ProofStep, CertificateError> {
     match rule_kind {
-        Z4RuleKind::Asserted => Ok(ProofStep::Axiom {
-            name: format!("asserted_{idx}"),
-            formula: conclusion.clone(),
-        }),
+        Z4RuleKind::Asserted => {
+            Ok(ProofStep::Axiom { name: format!("asserted_{idx}"), formula: conclusion.clone() })
+        }
 
         Z4RuleKind::ModusPonens => {
             // mp requires exactly 2 premises: the implication and the antecedent
             let (impl_step, ante_step) = get_two_premises(z4_step, idx, "mp")?;
-            Ok(ProofStep::ModusPonens {
-                implication_step: impl_step,
-                antecedent_step: ante_step,
-            })
+            Ok(ProofStep::ModusPonens { implication_step: impl_step, antecedent_step: ante_step })
         }
 
         Z4RuleKind::UnitResolution => {
             // unit-resolution has 1+ premises; first is the clause, rest are units
             if z4_step.premises.is_empty() {
                 return Err(CertificateError::InvalidProofTerm {
-                    reason: format!(
-                        "z4 unit-resolution step {idx} has no premises"
-                    ),
+                    reason: format!("z4 unit-resolution step {idx} has no premises"),
                 });
             }
             // Model as resolution between first two premises (or first + self for single)
             let positive = z4_step.premises[0];
-            let negative = if z4_step.premises.len() > 1 {
-                z4_step.premises[1]
-            } else {
-                positive
-            };
+            let negative = if z4_step.premises.len() > 1 { z4_step.premises[1] } else { positive };
             // Use conclusion as pivot placeholder
             Ok(ProofStep::Resolution {
                 positive_step: positive,
@@ -357,42 +342,29 @@ fn translate_step(
             })
         }
 
-        Z4RuleKind::Reflexivity => Ok(ProofStep::Axiom {
-            name: format!("refl_{idx}"),
-            formula: conclusion.clone(),
-        }),
+        Z4RuleKind::Reflexivity => {
+            Ok(ProofStep::Axiom { name: format!("refl_{idx}"), formula: conclusion.clone() })
+        }
 
         Z4RuleKind::Symmetry => {
             // symm requires 1 premise: the equality to flip
             let premise = get_first_premise(z4_step, idx, "symm")?;
-            Ok(ProofStep::Rewrite {
-                equality_step: premise,
-                target_step: premise,
-            })
+            Ok(ProofStep::Rewrite { equality_step: premise, target_step: premise })
         }
 
         Z4RuleKind::Transitivity => {
             // trans requires 2 premises: a=b and b=c
             let (eq1, eq2) = get_two_premises(z4_step, idx, "trans")?;
-            Ok(ProofStep::Rewrite {
-                equality_step: eq1,
-                target_step: eq2,
-            })
+            Ok(ProofStep::Rewrite { equality_step: eq1, target_step: eq2 })
         }
 
         Z4RuleKind::Monotonicity => {
             // monotonicity requires 1+ equality premises
             let premise = get_first_premise(z4_step, idx, "monotonicity")?;
             // Extract function name from annotations or conclusion
-            let function_name = z4_step
-                .annotations
-                .get(":decl")
-                .cloned()
-                .unwrap_or_else(|| format!("f_{idx}"));
-            Ok(ProofStep::Congruence {
-                equality_step: premise,
-                function_name,
-            })
+            let function_name =
+                z4_step.annotations.get(":decl").cloned().unwrap_or_else(|| format!("f_{idx}"));
+            Ok(ProofStep::Congruence { equality_step: premise, function_name })
         }
 
         Z4RuleKind::QuantInst => {
@@ -412,10 +384,7 @@ fn translate_step(
                 .get(":pattern")
                 .map(|p| parse_smtlib2_conclusion(p))
                 .unwrap_or_else(|| conclusion.clone());
-            Ok(ProofStep::Instantiation {
-                quantified_step: premise,
-                witness,
-            })
+            Ok(ProofStep::Instantiation { quantified_step: premise, witness })
         }
 
         Z4RuleKind::TheoryLemma { theory } => Ok(ProofStep::Axiom {
@@ -423,37 +392,26 @@ fn translate_step(
             formula: conclusion.clone(),
         }),
 
-        Z4RuleKind::DefAxiom => Ok(ProofStep::Axiom {
-            name: format!("def-axiom_{idx}"),
-            formula: conclusion.clone(),
-        }),
+        Z4RuleKind::DefAxiom => {
+            Ok(ProofStep::Axiom { name: format!("def-axiom_{idx}"), formula: conclusion.clone() })
+        }
 
         Z4RuleKind::NnfRewrite => {
             // NNF rewrite: if we have a premise, it's a rewrite; otherwise axiom
             if let Some(&premise) = z4_step.premises.first() {
-                Ok(ProofStep::Rewrite {
-                    equality_step: premise,
-                    target_step: premise,
-                })
+                Ok(ProofStep::Rewrite { equality_step: premise, target_step: premise })
             } else {
-                Ok(ProofStep::Axiom {
-                    name: format!("nnf_{idx}"),
-                    formula: conclusion.clone(),
-                })
+                Ok(ProofStep::Axiom { name: format!("nnf_{idx}"), formula: conclusion.clone() })
             }
         }
 
-        Z4RuleKind::Skolem => Ok(ProofStep::Axiom {
-            name: format!("skolem_{idx}"),
-            formula: conclusion.clone(),
-        }),
+        Z4RuleKind::Skolem => {
+            Ok(ProofStep::Axiom { name: format!("skolem_{idx}"), formula: conclusion.clone() })
+        }
 
         Z4RuleKind::Unknown(rule) => {
             // Unknown rules become trusted axioms
-            Ok(ProofStep::Axiom {
-                name: format!("{rule}_{idx}"),
-                formula: conclusion.clone(),
-            })
+            Ok(ProofStep::Axiom { name: format!("{rule}_{idx}"), formula: conclusion.clone() })
         }
     }
 }
@@ -496,7 +454,7 @@ fn get_first_premise(
 
 #[cfg(test)]
 mod tests {
-    use trust_types::fx::FxHashMap;
+    use std::collections::BTreeMap;
 
     use trust_proof_cert::z4_certificate::{Z4ProofCertificate, Z4ProofStep};
 
@@ -510,7 +468,7 @@ mod tests {
             rule: None,
             conclusion: conclusion.to_string(),
             premises,
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         }
     }
 
@@ -615,10 +573,7 @@ mod tests {
 
     #[test]
     fn test_parse_variable() {
-        assert_eq!(
-            parse_smtlib2_conclusion("p"),
-            Formula::Var("p".into(), Sort::Bool)
-        );
+        assert_eq!(parse_smtlib2_conclusion("p"), Formula::Var("p".into(), Sort::Bool));
     }
 
     #[test]
@@ -655,10 +610,7 @@ mod tests {
     fn test_parse_comparison() {
         assert_eq!(
             parse_smtlib2_conclusion("(<= x 10)"),
-            Formula::Le(
-                Box::new(Formula::Var("x".into(), Sort::Bool)),
-                Box::new(Formula::Int(10)),
-            )
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Bool)), Box::new(Formula::Int(10)),)
         );
     }
 
@@ -713,10 +665,14 @@ mod tests {
         assert_eq!(proof.steps.len(), 4);
 
         // Step 0: asserted -> Axiom
-        assert!(matches!(&proof.steps[0], ProofStep::Axiom { name, .. } if name.starts_with("asserted")));
+        assert!(
+            matches!(&proof.steps[0], ProofStep::Axiom { name, .. } if name.starts_with("asserted"))
+        );
 
         // Step 1: asserted -> Axiom
-        assert!(matches!(&proof.steps[1], ProofStep::Axiom { name, .. } if name.starts_with("asserted")));
+        assert!(
+            matches!(&proof.steps[1], ProofStep::Axiom { name, .. } if name.starts_with("asserted"))
+        );
 
         // Step 2: mp -> ModusPonens
         assert!(matches!(
@@ -742,7 +698,7 @@ mod tests {
             rule: None,
             conclusion: "q".to_string(),
             premises: vec![1], // forward reference
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
         cert.proof_steps.push(make_z4_step("asserted", "p", vec![]));
 
@@ -761,7 +717,7 @@ mod tests {
             rule: None,
             conclusion: "(<= x 100)".to_string(),
             premises: vec![],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let proof = translate_z4_proof(&cert).expect("th-lemma should translate");
@@ -781,15 +737,12 @@ mod tests {
             rule: None,
             conclusion: "(= (f a) (f b))".to_string(),
             premises: vec![0],
-            annotations: FxHashMap::default(),
+            annotations: BTreeMap::new(),
         });
 
         let proof = translate_z4_proof(&cert).expect("monotonicity should translate");
         assert_eq!(proof.steps.len(), 2);
-        assert!(matches!(
-            &proof.steps[1],
-            ProofStep::Congruence { equality_step: 0, .. }
-        ));
+        assert!(matches!(&proof.steps[1], ProofStep::Congruence { equality_step: 0, .. }));
     }
 
     #[test]
@@ -801,10 +754,7 @@ mod tests {
 
         let proof = translate_z4_proof(&cert).expect("trans should translate");
         assert_eq!(proof.steps.len(), 3);
-        assert!(matches!(
-            &proof.steps[2],
-            ProofStep::Rewrite { equality_step: 0, target_step: 1 }
-        ));
+        assert!(matches!(&proof.steps[2], ProofStep::Rewrite { equality_step: 0, target_step: 1 }));
     }
 
     #[test]
@@ -890,7 +840,7 @@ mod tests {
 
         let vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Not(Box::new(Formula::Eq(
                 Box::new(Formula::Var("d".into(), Sort::Int)),
@@ -899,8 +849,8 @@ mod tests {
             contract_metadata: None,
         };
 
-        let term = crate::reconstruction::reconstruct(&solver_proof, &vc)
-            .expect("should reconstruct");
+        let term =
+            crate::reconstruction::reconstruct(&solver_proof, &vc).expect("should reconstruct");
         assert!(crate::reconstruction::validate_reconstruction(&term));
     }
 }

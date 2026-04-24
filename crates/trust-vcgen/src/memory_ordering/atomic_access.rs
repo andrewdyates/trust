@@ -80,26 +80,21 @@ impl AtomicAccessLog {
     /// Find all accesses to a given location.
     #[must_use]
     pub fn accesses_to(&self, location: &str) -> Vec<(usize, &AtomicAccessEntry)> {
-        self.entries
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| e.location == location)
-            .collect()
+        self.entries.iter().enumerate().filter(|(_, e)| e.location == location).collect()
     }
 
     /// Find all accesses by a given thread.
     #[must_use]
     pub fn accesses_by_thread(&self, thread_id: &str) -> Vec<(usize, &AtomicAccessEntry)> {
-        self.entries
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| e.thread_id == thread_id)
-            .collect()
+        self.entries.iter().enumerate().filter(|(_, e)| e.thread_id == thread_id).collect()
     }
 
     /// Find all accesses using a specific ordering.
     #[must_use]
-    pub fn accesses_with_ordering(&self, ordering: MemoryOrdering) -> Vec<(usize, &AtomicAccessEntry)> {
+    pub fn accesses_with_ordering(
+        &self,
+        ordering: MemoryOrdering,
+    ) -> Vec<(usize, &AtomicAccessEntry)> {
         self.entries
             .iter()
             .enumerate()
@@ -132,8 +127,8 @@ impl AtomicAccessLog {
             let is_release = matches!(
                 release.access_kind,
                 AccessKind::AtomicWrite(MemoryOrdering::Release)
-                | AccessKind::AtomicWrite(MemoryOrdering::AcqRel)
-                | AccessKind::AtomicWrite(MemoryOrdering::SeqCst)
+                    | AccessKind::AtomicWrite(MemoryOrdering::AcqRel)
+                    | AccessKind::AtomicWrite(MemoryOrdering::SeqCst)
             );
             if !is_release {
                 continue;
@@ -149,8 +144,8 @@ impl AtomicAccessLog {
                 let is_acquire = matches!(
                     acquire.access_kind,
                     AccessKind::AtomicRead(MemoryOrdering::Acquire)
-                    | AccessKind::AtomicRead(MemoryOrdering::AcqRel)
-                    | AccessKind::AtomicRead(MemoryOrdering::SeqCst)
+                        | AccessKind::AtomicRead(MemoryOrdering::AcqRel)
+                        | AccessKind::AtomicRead(MemoryOrdering::SeqCst)
                 );
                 if is_acquire {
                     pairs.push((i, j));

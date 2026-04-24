@@ -7,8 +7,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_router::sunder_native::SunderNativeBackend;
 use trust_router::VerificationBackend;
+use trust_router::sunder_native::SunderNativeBackend;
 use trust_types::{Formula, Sort, SourceSpan, VcKind, VerificationCondition, VerificationResult};
 use trust_vcgen::stdlib_specs::{FnContract, StdlibSpecs};
 
@@ -31,17 +31,13 @@ impl SunderDirectOracle {
     /// Create a new oracle with default sunder timeout.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            backend: SunderNativeBackend::new(),
-        }
+        Self { backend: SunderNativeBackend::new() }
     }
 
     /// Create an oracle with a custom sunder timeout (milliseconds).
     #[must_use]
     pub fn with_timeout(timeout_ms: u64) -> Self {
-        Self {
-            backend: SunderNativeBackend::with_timeout(timeout_ms),
-        }
+        Self { backend: SunderNativeBackend::with_timeout(timeout_ms) }
     }
 }
 
@@ -52,11 +48,7 @@ impl Default for SunderDirectOracle {
 }
 
 impl VerificationOracle for SunderDirectOracle {
-    fn verify_specs(
-        &self,
-        function_path: &str,
-        specs: &[SpecProposal],
-    ) -> VerifyOutcome {
+    fn verify_specs(&self, function_path: &str, specs: &[SpecProposal]) -> VerifyOutcome {
         if specs.is_empty() {
             return VerifyOutcome::AllPassed;
         }
@@ -80,17 +72,10 @@ impl VerificationOracle for SunderDirectOracle {
                 VerificationResult::Proved { .. } => {
                     // This spec is valid -- continue checking others
                 }
-                VerificationResult::Failed {
-                    counterexample, ..
-                } => {
-                    let cex_text = counterexample
-                        .as_ref()
-                        .map(|c| c.to_string())
-                        .unwrap_or_else(|| {
-                            format!(
-                                "sunder rejected spec: {}",
-                                spec.to_attribute()
-                            )
+                VerificationResult::Failed { counterexample, .. } => {
+                    let cex_text =
+                        counterexample.as_ref().map(|c| c.to_string()).unwrap_or_else(|| {
+                            format!("sunder rejected spec: {}", spec.to_attribute())
                         });
                     counterexample_parts.push(cex_text);
                     failed_specs.push(spec.clone());
@@ -109,10 +94,7 @@ impl VerificationOracle for SunderDirectOracle {
                 }
                 VerificationResult::Timeout { .. } => {
                     return VerifyOutcome::Error {
-                        message: format!(
-                            "sunder timed out verifying: {}",
-                            spec.to_attribute()
-                        ),
+                        message: format!("sunder timed out verifying: {}", spec.to_attribute()),
                     };
                 }
             }
@@ -121,10 +103,7 @@ impl VerificationOracle for SunderDirectOracle {
         if failed_specs.is_empty() {
             VerifyOutcome::AllPassed
         } else {
-            VerifyOutcome::Failed {
-                counterexample: counterexample_parts.join("; "),
-                failed_specs,
-            }
+            VerifyOutcome::Failed { counterexample: counterexample_parts.join("; "), failed_specs }
         }
     }
 }
@@ -136,13 +115,11 @@ impl VerificationOracle for SunderDirectOracle {
 /// based on the spec kind (precondition vs postcondition).
 fn spec_to_vc(spec: &SpecProposal, function_path: &str) -> VerificationCondition {
     let kind = match spec.kind {
-        SpecKind::Requires => VcKind::Precondition {
-            callee: function_path.to_string(),
-        },
+        SpecKind::Requires => VcKind::Precondition { callee: function_path.to_string() },
         SpecKind::Ensures => VcKind::Postcondition,
-        SpecKind::Invariant => VcKind::Assertion {
-            message: format!("[loop:invariant] {}", spec.spec_body),
-        },
+        SpecKind::Invariant => {
+            VcKind::Assertion { message: format!("[loop:invariant] {}", spec.spec_body) }
+        }
     };
 
     // Encode the spec body as a formula. For simple boolean specs,
@@ -152,7 +129,7 @@ fn spec_to_vc(spec: &SpecProposal, function_path: &str) -> VerificationCondition
 
     VerificationCondition {
         kind,
-        function: function_path.to_string(),
+        function: function_path.into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -204,12 +181,7 @@ fn contract_to_proposals(contract: &FnContract) -> Vec<SpecProposal> {
     let mut proposals = Vec::new();
 
     // Extract the short function name from the fully-qualified path
-    let fn_name = contract
-        .fn_path
-        .rsplit("::")
-        .next()
-        .unwrap_or(&contract.fn_path)
-        .to_string();
+    let fn_name = contract.fn_path.rsplit("::").next().unwrap_or(&contract.fn_path).to_string();
 
     for (i, pre) in contract.preconditions.iter().enumerate() {
         proposals.push(SpecProposal {
@@ -492,10 +464,7 @@ mod tests {
     fn test_import_stdlib_seed_specs_iteration_zero() {
         let seeds = import_stdlib_seed_specs();
         for spec in &seeds {
-            assert_eq!(
-                spec.iteration, 0,
-                "stdlib seeds should have iteration 0 (not inferred)"
-            );
+            assert_eq!(spec.iteration, 0, "stdlib seeds should have iteration 0 (not inferred)");
         }
     }
 

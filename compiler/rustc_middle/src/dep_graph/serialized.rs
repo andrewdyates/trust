@@ -139,7 +139,7 @@ impl SerializedDepGraph {
             // all the others.
             let index = &raw[..DEP_NODE_SIZE];
             raw = &raw[bytes_per_index..];
-            let index = u32::from_le_bytes(index.try_into().expect("invariant: value fits in target type")) & mask;
+            let index = u32::from_le_bytes(index.try_into().unwrap()) & mask;
             SerializedDepNodeIndex::from_u32(index)
         })
     }
@@ -406,10 +406,10 @@ impl SerializedNodeHeader {
 
     #[inline]
     fn unpack(&self) -> Unpacked {
-        let head = u16::from_le_bytes(self.bytes[..2].try_into().expect("invariant: value fits in target type"));
-        let index = u32::from_le_bytes(self.bytes[2..6].try_into().expect("invariant: value fits in target type"));
-        let key_fingerprint = self.bytes[6..22].try_into().expect("invariant: value fits in target type");
-        let value_fingerprint = self.bytes[22..].try_into().expect("invariant: value fits in target type");
+        let head = u16::from_le_bytes(self.bytes[..2].try_into().unwrap());
+        let index = u32::from_le_bytes(self.bytes[2..6].try_into().unwrap());
+        let key_fingerprint = self.bytes[6..22].try_into().unwrap();
+        let value_fingerprint = self.bytes[22..].try_into().unwrap();
 
         let kind = head & mask(Self::KIND_BITS) as u16;
         let bytes_per_index = (head >> Self::KIND_BITS) & mask(Self::WIDTH_BITS) as u16;
@@ -481,7 +481,7 @@ impl NodeInfo {
 
         if header.len().is_none() {
             // The edges are all unique and the number of unique indices is less than u32::MAX.
-            e.emit_u32(edges.len().try_into().expect("invariant: value fits in target type"));
+            e.emit_u32(edges.len().try_into().unwrap());
         }
 
         let bytes_per_index = header.bytes_per_index();
@@ -511,7 +511,7 @@ impl NodeInfo {
 
         // Find the highest edge in the new dep node indices
         let edge_max =
-            edges.clone().map(|i| colors.current(i).expect("invariant: map returned a valid value").as_u32()).max().unwrap_or(0);
+            edges.clone().map(|i| colors.current(i).unwrap().as_u32()).max().unwrap_or(0);
 
         let header =
             SerializedNodeHeader::new(node, index, value_fingerprint, edge_max, edge_count);
@@ -519,12 +519,12 @@ impl NodeInfo {
 
         if header.len().is_none() {
             // The edges are all unique and the number of unique indices is less than u32::MAX.
-            e.emit_u32(edge_count.try_into().expect("invariant: value fits in target type"));
+            e.emit_u32(edge_count.try_into().unwrap());
         }
 
         let bytes_per_index = header.bytes_per_index();
         for node_index in edges {
-            let node_index = colors.current(node_index).expect("invariant: current returned a valid value");
+            let node_index = colors.current(node_index).unwrap();
             e.write_with(|dest| {
                 *dest = node_index.as_u32().to_le_bytes();
                 bytes_per_index
@@ -598,10 +598,10 @@ impl EncoderState {
             // This can exceed u32::MAX by at most `N` * `COUNT` where `N` is the thread pool count since
             // `try_into().unwrap()` will make threads panic when `self.next_node_index` exceeds u32::MAX.
             local.next_node_index =
-                self.next_node_index.fetch_add(COUNT as u64, Ordering::Relaxed).try_into().expect("invariant: value fits in target type");
+                self.next_node_index.fetch_add(COUNT as u64, Ordering::Relaxed).try_into().unwrap();
 
             // Check that we'll stay within `u32`
-            local.next_node_index.checked_add(COUNT).expect("invariant: arithmetic does not overflow");
+            local.next_node_index.checked_add(COUNT).unwrap();
 
             local.remaining_node_index = COUNT;
         }
@@ -661,7 +661,7 @@ impl EncoderState {
     fn flush_mem_encoder(&self, local: &mut LocalEncoderState) {
         let data = &mut local.encoder.data;
         if data.len() > 64 * 1024 {
-            self.file.lock().as_mut().expect("invariant: mutex is not poisoned").emit_raw_bytes(&data[..]);
+            self.file.lock().as_mut().unwrap().emit_raw_bytes(&data[..]);
             data.clear();
         }
     }
@@ -720,7 +720,7 @@ impl EncoderState {
             |this| {
                 this.previous
                     .edge_targets_from(prev_index)
-                    .map(|i| colors.current(i).expect("invariant: map returned a valid value"))
+                    .map(|i| colors.current(i).unwrap())
                     .collect()
             },
             retained_graph,
@@ -739,7 +739,7 @@ impl EncoderState {
             local.remaining_node_index = 0;
 
             let data = mem::replace(&mut local.encoder.data, Vec::new());
-            self.file.lock().as_mut().expect("invariant: mutex is not poisoned").emit_raw_bytes(&data);
+            self.file.lock().as_mut().unwrap().emit_raw_bytes(&data);
 
             LocalEncoderResult {
                 kind_stats: local.kind_stats.clone(),
@@ -749,7 +749,7 @@ impl EncoderState {
             }
         });
 
-        let mut encoder = self.file.lock().take().expect("invariant: mutex is not poisoned");
+        let mut encoder = self.file.lock().take().unwrap();
 
         let mut kind_stats: Vec<u32> = iter::repeat_n(0, DepKind::MAX as usize + 1).collect();
 
@@ -771,18 +771,18 @@ impl EncoderState {
             count.encode(&mut encoder);
         }
 
-        self.previous.session_count.checked_add(1).expect("invariant: arithmetic does not overflow").encode(&mut encoder);
+        self.previous.session_count.checked_add(1).unwrap().encode(&mut encoder);
 
         debug!(?node_max, ?node_count, ?edge_count);
         debug!("position: {:?}", encoder.position());
-        IntEncodedWithFixedSize(node_max.try_into().expect("invariant: value fits in target type")).encode(&mut encoder);
-        IntEncodedWithFixedSize(node_count.try_into().expect("invariant: value fits in target type")).encode(&mut encoder);
-        IntEncodedWithFixedSize(edge_count.try_into().expect("invariant: value fits in target type")).encode(&mut encoder);
+        IntEncodedWithFixedSize(node_max.try_into().unwrap()).encode(&mut encoder);
+        IntEncodedWithFixedSize(node_count.try_into().unwrap()).encode(&mut encoder);
+        IntEncodedWithFixedSize(edge_count.try_into().unwrap()).encode(&mut encoder);
         debug!("position: {:?}", encoder.position());
         // Drop the encoder so that nothing is written after the counts.
         let result = encoder.finish();
         if let Ok(position) = result {
-            // tRust: known issue (rylev) — we hardcode the dep graph file name so we
+            // FIXME(rylev): we hardcode the dep graph file name so we
             // don't need a dependency on rustc_incremental just for that.
             profiler.artifact_size("dep_graph", "dep-graph.bin", position as u64);
         }

@@ -170,7 +170,7 @@ fn compute_symbol_name<'tcx>(
         }
     }
 
-    // tRust: known issue (eddyb) — Precompute a custom symbol name based on attributes.
+    // FIXME(eddyb) Precompute a custom symbol name based on attributes.
     let attrs = if tcx.def_kind(def_id).has_codegen_attrs() {
         &tcx.codegen_instance_attrs(instance.def)
     } else {

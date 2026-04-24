@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-machine-sem: ISA semantics formalization
 //!
 //! Maps decoded instructions to their logical effects on machine state.
@@ -9,11 +9,11 @@
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
 pub(crate) mod aarch64;
-pub(crate) mod x86_64;
 pub(crate) mod effect;
 pub(crate) mod error;
 pub(crate) mod semantics;
 pub(crate) mod state;
+pub(crate) mod x86_64;
 
 pub use aarch64::Aarch64Semantics;
 pub use x86_64::X86_64Semantics;

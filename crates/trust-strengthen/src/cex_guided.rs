@@ -10,10 +10,7 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use trust_types::fx::FxHashMap;
-
-use trust_types::{
-    BinOp, Counterexample, CounterexampleValue, Ty, VcKind, VerificationCondition,
-};
+use trust_types::{BinOp, Counterexample, CounterexampleValue, Ty, VcKind, VerificationCondition};
 
 use crate::analyzer::FailurePattern;
 use crate::counterexample::{self, CounterexampleHint, HintKind};
@@ -62,9 +59,7 @@ impl CexModel {
     /// Build a `CexModel` from raw (name, value) pairs for testing.
     #[must_use]
     pub fn from_pairs(pairs: Vec<(String, CexValue)>) -> Self {
-        CexModel {
-            values: pairs.into_iter().collect(),
-        }
+        CexModel { values: pairs.into_iter().collect() }
     }
 
     /// Convert back to trust-types `Counterexample` for use with hint extraction.
@@ -105,10 +100,7 @@ impl CounterexampleAnalyzer {
     /// counterexample provides useful information, proposals will have a
     /// confidence boost over their heuristic-only equivalents.
     #[must_use]
-    pub fn refine(
-        vc: &VerificationCondition,
-        cex_model: &CexModel,
-    ) -> Vec<StrengtheningProposal> {
+    pub fn refine(vc: &VerificationCondition, cex_model: &CexModel) -> Vec<StrengtheningProposal> {
         let target = build_target(vc);
         let pattern = classify_vc_kind(&vc.kind);
         let cex = cex_model.to_counterexample();
@@ -133,11 +125,9 @@ impl CounterexampleAnalyzer {
             VcKind::CastOverflow { from_ty, to_ty } => {
                 refine_cast_overflow(&target, from_ty, to_ty, &hints)
             }
-            VcKind::ShiftOverflow {
-                operand_ty,
-                shift_ty: _,
-                op: _,
-            } => refine_shift_overflow(&target, operand_ty, &hints),
+            VcKind::ShiftOverflow { operand_ty, shift_ty: _, op: _ } => {
+                refine_shift_overflow(&target, operand_ty, &hints)
+            }
             _ => {
                 // For other VcKinds, fall back to hint-derived proposals
                 refine_from_hints_generic(&target, &vc.kind, &hints)
@@ -146,9 +136,7 @@ impl CounterexampleAnalyzer {
 
         // Sort by confidence descending
         proposals.sort_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         proposals
@@ -189,26 +177,24 @@ fn refine_arithmetic_overflow(
             &format!("#[requires(\"{var} < {type_name}::MAX\")]"),
             0.95,
             &format!("ArithmeticOverflow::{op_name}"),
-            &format!(
-                "Counterexample shows {var}={type_name}::MAX causing {op_name} overflow"
-            ),
+            &format!("Counterexample shows {var}={type_name}::MAX causing {op_name} overflow"),
         ));
     }
 
     // Use combined bound expression from hints if available
     for hint in hints {
         if let HintKind::BoundExpr { spec_fragment } = &hint.kind
-            && spec_fragment.contains(" <= ") && spec_fragment.contains(" - ") {
-                proposals.push(make_cex_proposal(
-                    target,
-                    &format!("#[requires(\"{spec_fragment}\")]"),
-                    0.92,
-                    &format!("ArithmeticOverflow::{}", op_info(op).0),
-                    &format!(
-                        "Counterexample-derived bound: {spec_fragment}"
-                    ),
-                ));
-            }
+            && spec_fragment.contains(" <= ")
+            && spec_fragment.contains(" - ")
+        {
+            proposals.push(make_cex_proposal(
+                target,
+                &format!("#[requires(\"{spec_fragment}\")]"),
+                0.92,
+                &format!("ArithmeticOverflow::{}", op_info(op).0),
+                &format!("Counterexample-derived bound: {spec_fragment}"),
+            ));
+        }
     }
 
     // Suggest checked arithmetic (always applicable)
@@ -240,12 +226,10 @@ fn refine_division_by_zero(
     let mut proposals = Vec::new();
 
     // Find the zero-valued variable from the cex
-    let zero_var = cex_model.values.iter().find(|(_, v)| {
-        matches!(
-            v,
-            CexValue::Integer(0) | CexValue::Unsigned(0)
-        )
-    });
+    let zero_var = cex_model
+        .values
+        .iter()
+        .find(|(_, v)| matches!(v, CexValue::Integer(0) | CexValue::Unsigned(0)));
 
     if let Some((var_name, _)) = zero_var {
         // Concrete evidence: variable is 0
@@ -254,9 +238,7 @@ fn refine_division_by_zero(
             &format!("#[requires(\"{var_name} != 0\")]"),
             0.98,
             "DivisionByZero",
-            &format!(
-                "Counterexample shows {var_name}=0 causing division by zero"
-            ),
+            &format!("Counterexample shows {var_name}=0 causing division by zero"),
         ));
     } else {
         // Hints found zero but no named variable match; use generic
@@ -305,12 +287,14 @@ fn refine_index_out_of_bounds(
     let mut proposals = Vec::new();
 
     // Look for index >= len pattern in the cex values
-    let idx_var = cex_model.values.iter().find(|(name, _)| {
-        name.contains("index") || name.contains("idx") || name.as_str() == "i"
-    });
-    let len_var = cex_model.values.iter().find(|(name, _)| {
-        name.contains("len") || name.contains("length") || name.contains("size")
-    });
+    let idx_var = cex_model
+        .values
+        .iter()
+        .find(|(name, _)| name.contains("index") || name.contains("idx") || name.as_str() == "i");
+    let len_var = cex_model
+        .values
+        .iter()
+        .find(|(name, _)| name.contains("len") || name.contains("length") || name.contains("size"));
 
     if let (Some((idx_name, idx_val)), Some((len_name, len_val))) = (idx_var, len_var) {
         let idx_str = format_cex_value(idx_val);
@@ -320,15 +304,11 @@ fn refine_index_out_of_bounds(
             &format!("#[requires(\"{idx_name} < {len_name}\")]"),
             0.97,
             "IndexOutOfBounds",
-            &format!(
-                "Counterexample shows {idx_name}={idx_str} >= {len_name}={len_str}"
-            ),
+            &format!("Counterexample shows {idx_name}={idx_str} >= {len_name}={len_str}"),
         ));
     } else {
         // Use hints if available
-        let lt_hint = hints
-            .iter()
-            .find(|h| matches!(&h.kind, HintKind::LessThan { .. }));
+        let lt_hint = hints.iter().find(|h| matches!(&h.kind, HintKind::LessThan { .. }));
         if let Some(h) = lt_hint {
             if let HintKind::LessThan { other } = &h.kind {
                 proposals.push(make_cex_proposal(
@@ -336,10 +316,7 @@ fn refine_index_out_of_bounds(
                     &format!("#[requires(\"{} < {other}\")]", h.variable),
                     0.95,
                     "IndexOutOfBounds",
-                    &format!(
-                        "Counterexample hints: {} must be less than {other}",
-                        h.variable
-                    ),
+                    &format!("Counterexample hints: {} must be less than {other}", h.variable),
                 ));
             }
         } else {
@@ -378,9 +355,8 @@ fn refine_negation_overflow(
     let (bit_width, _) = extract_type_info(ty);
     let min_val = -(1i128 << (bit_width - 1));
 
-    let at_min_var = cex_model.values.iter().find(|(_, v)| {
-        matches!(v, CexValue::Integer(i) if *i == min_val)
-    });
+    let at_min_var =
+        cex_model.values.iter().find(|(_, v)| matches!(v, CexValue::Integer(i) if *i == min_val));
 
     if let Some((var_name, _)) = at_min_var {
         proposals.push(make_cex_proposal(
@@ -388,25 +364,18 @@ fn refine_negation_overflow(
             &format!("#[requires(\"{var_name} != {type_name}::MIN\")]"),
             0.97,
             "NegationOverflow",
-            &format!(
-                "Counterexample shows {var_name}={type_name}::MIN, negation overflows"
-            ),
+            &format!("Counterexample shows {var_name}={type_name}::MIN, negation overflows"),
         ));
     } else {
         // Use hints
-        let ne_hint = hints
-            .iter()
-            .find(|h| matches!(&h.kind, HintKind::NotEqual { .. }));
+        let ne_hint = hints.iter().find(|h| matches!(&h.kind, HintKind::NotEqual { .. }));
         if let Some(h) = ne_hint {
             proposals.push(make_cex_proposal(
                 target,
                 &format!("#[requires(\"{} != {type_name}::MIN\")]", h.variable),
                 0.93,
                 "NegationOverflow",
-                &format!(
-                    "Counterexample hints: {} must not equal {type_name}::MIN",
-                    h.variable
-                ),
+                &format!("Counterexample hints: {} must not equal {type_name}::MIN", h.variable),
             ));
         } else {
             proposals.push(make_cex_proposal(
@@ -441,18 +410,13 @@ fn refine_cast_overflow(
     let to_name = ty_to_rust_name(to_ty);
 
     // Use hint upper bounds for concrete refinement
-    let ub_hint = hints
-        .iter()
-        .find(|h| matches!(&h.kind, HintKind::UpperBound { .. }));
+    let ub_hint = hints.iter().find(|h| matches!(&h.kind, HintKind::UpperBound { .. }));
 
     if let Some(h) = ub_hint {
         if let HintKind::UpperBound { bound } = &h.kind {
             proposals.push(make_cex_proposal(
                 target,
-                &format!(
-                    "#[requires(\"{} <= {bound}\")]",
-                    h.variable
-                ),
+                &format!("#[requires(\"{} <= {bound}\")]", h.variable),
                 0.93,
                 "CastOverflow",
                 &format!(
@@ -490,9 +454,7 @@ fn refine_shift_overflow(
     let mut proposals = Vec::new();
     let bit_width = extract_type_info(operand_ty).0;
 
-    let ub_hint = hints
-        .iter()
-        .find(|h| matches!(&h.kind, HintKind::UpperBound { .. }));
+    let ub_hint = hints.iter().find(|h| matches!(&h.kind, HintKind::UpperBound { .. }));
 
     if let Some(h) = ub_hint {
         proposals.push(make_cex_proposal(
@@ -500,10 +462,7 @@ fn refine_shift_overflow(
             &format!("#[requires(\"{} < {bit_width}\")]", h.variable),
             0.95,
             "ShiftOverflow",
-            &format!(
-                "Counterexample shows {} >= {bit_width}, shift overflows",
-                h.variable
-            ),
+            &format!("Counterexample shows {} >= {bit_width}, shift overflows", h.variable),
         ));
     } else {
         proposals.push(make_cex_proposal(
@@ -562,18 +521,10 @@ fn refine_from_hints_generic(
 
 fn build_target(vc: &VerificationCondition) -> InsertionTarget {
     InsertionTarget {
-        function_path: vc.function.clone(),
-        function_name: short_name(&vc.function),
-        file: if vc.location.file.is_empty() {
-            None
-        } else {
-            Some(vc.location.file.clone())
-        },
-        line: if vc.location.line_start == 0 {
-            None
-        } else {
-            Some(vc.location.line_start)
-        },
+        function_path: vc.function.as_str().to_string(),
+        function_name: short_name(vc.function.as_str()),
+        file: if vc.location.file.is_empty() { None } else { Some(vc.location.file.clone()) },
+        line: if vc.location.line_start == 0 { None } else { Some(vc.location.line_start) },
     }
 }
 
@@ -601,11 +552,7 @@ fn ty_to_rust_name(ty: &Ty) -> String {
     match ty {
         Ty::Int { width, signed } => {
             let prefix = if *signed { "i" } else { "u" };
-            if *width == 0 {
-                format!("{prefix}size")
-            } else {
-                format!("{prefix}{width}")
-            }
+            if *width == 0 { format!("{prefix}size") } else { format!("{prefix}{width}") }
         }
         Ty::Float { width } => format!("f{width}"),
         Ty::Bool => "bool".to_string(),
@@ -674,8 +621,9 @@ fn format_cex_value(val: &CexValue) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::{Formula, SourceSpan};
+
+    use super::*;
 
     fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
         VerificationCondition {
@@ -852,16 +800,13 @@ mod tests {
     #[test]
     fn test_oob_cex_unnamed_vars() {
         let vc = make_vc(VcKind::SliceBoundsCheck, "collection::slice_range");
-        let cex = CexModel::from_pairs(vec![
-            ("n".into(), CexValue::Unsigned(100)),
-        ]);
+        let cex = CexModel::from_pairs(vec![("n".into(), CexValue::Unsigned(100))]);
 
         let proposals = CounterexampleAnalyzer::refine(&vc, &cex);
         assert!(!proposals.is_empty());
         // Should still produce a bounds-related proposal
-        let has_bounds = proposals
-            .iter()
-            .any(|p| p.spec_text.contains("< ") || p.spec_text.contains("len"));
+        let has_bounds =
+            proposals.iter().any(|p| p.spec_text.contains("< ") || p.spec_text.contains("len"));
         assert!(has_bounds, "should produce some bounds-related proposal");
     }
 
@@ -870,14 +815,10 @@ mod tests {
     #[test]
     fn test_negation_overflow_at_min() {
         let vc = make_vc(
-            VcKind::NegationOverflow {
-                ty: Ty::Int { width: 64, signed: true },
-            },
+            VcKind::NegationOverflow { ty: Ty::Int { width: 64, signed: true } },
             "math::negate",
         );
-        let cex = CexModel::from_pairs(vec![
-            ("x".into(), CexValue::Integer(i64::MIN as i128)),
-        ]);
+        let cex = CexModel::from_pairs(vec![("x".into(), CexValue::Integer(i64::MIN as i128))]);
 
         let proposals = CounterexampleAnalyzer::refine(&vc, &cex);
         assert!(!proposals.is_empty());
@@ -902,9 +843,8 @@ mod tests {
             },
             "convert::narrow",
         );
-        let cex = CexModel::from_pairs(vec![
-            ("x".into(), CexValue::Unsigned(u32::MAX as u128 + 1)),
-        ]);
+        let cex =
+            CexModel::from_pairs(vec![("x".into(), CexValue::Unsigned(u32::MAX as u128 + 1))]);
 
         let proposals = CounterexampleAnalyzer::refine(&vc, &cex);
         assert!(!proposals.is_empty());
@@ -1034,9 +974,7 @@ mod tests {
     #[test]
     fn test_unknown_vc_kind_with_cex_produces_low_confidence() {
         let vc = make_vc(VcKind::Deadlock, "service::event_loop");
-        let cex = CexModel::from_pairs(vec![
-            ("state".into(), CexValue::Integer(3)),
-        ]);
+        let cex = CexModel::from_pairs(vec![("state".into(), CexValue::Integer(3))]);
 
         let proposals = CounterexampleAnalyzer::refine(&vc, &cex);
         assert!(!proposals.is_empty());
@@ -1080,21 +1018,15 @@ mod tests {
                 ]),
             ),
             (
-                VcKind::NegationOverflow {
-                    ty: Ty::Int { width: 64, signed: true },
-                },
-                CexModel::from_pairs(vec![
-                    ("x".into(), CexValue::Integer(i64::MIN as i128)),
-                ]),
+                VcKind::NegationOverflow { ty: Ty::Int { width: 64, signed: true } },
+                CexModel::from_pairs(vec![("x".into(), CexValue::Integer(i64::MIN as i128))]),
             ),
             (
                 VcKind::CastOverflow {
                     from_ty: Ty::Int { width: 64, signed: false },
                     to_ty: Ty::Int { width: 32, signed: false },
                 },
-                CexModel::from_pairs(vec![
-                    ("x".into(), CexValue::Unsigned(u32::MAX as u128 + 1)),
-                ]),
+                CexModel::from_pairs(vec![("x".into(), CexValue::Unsigned(u32::MAX as u128 + 1))]),
             ),
             (
                 VcKind::ShiftOverflow {
@@ -1102,16 +1034,9 @@ mod tests {
                     operand_ty: Ty::Int { width: 64, signed: false },
                     shift_ty: Ty::Int { width: 64, signed: false },
                 },
-                CexModel::from_pairs(vec![
-                    ("shift".into(), CexValue::Unsigned(64)),
-                ]),
+                CexModel::from_pairs(vec![("shift".into(), CexValue::Unsigned(64))]),
             ),
-            (
-                VcKind::Deadlock,
-                CexModel::from_pairs(vec![
-                    ("state".into(), CexValue::Integer(0)),
-                ]),
-            ),
+            (VcKind::Deadlock, CexModel::from_pairs(vec![("state".into(), CexValue::Integer(0))])),
         ];
 
         for (kind, cex) in &vc_cex_pairs {

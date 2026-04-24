@@ -100,7 +100,7 @@ impl<'tcx> AbiHashStable<'tcx> for Ty<'tcx> {
 
             ty::Tuple(args) if args.len() == 0 => {}
 
-            // tRust: known issue — Not yet supported.
+            // FIXME: Not yet supported.
             ty::Foreign(_)
             | ty::Ref(_, _, _)
             | ty::Str

@@ -64,7 +64,7 @@ impl LanguageItems {
         self.items
             .iter()
             .enumerate()
-            .filter_map(|(i, id)| id.map(|id| (LangItem::from_u32(i as u32).expect("invariant: lang item index always maps to a valid LangItem variant"), id))) // tRust: unwrap -> expect
+            .filter_map(|(i, id)| id.map(|id| (LangItem::from_u32(i as u32).unwrap(), id)))
     }
 }
 
@@ -374,7 +374,7 @@ language_item_table! {
     AsyncGenPending,         sym::AsyncGenPending,     async_gen_pending,          Target::AssocConst,     GenericRequirement::Exact(1);
     AsyncGenFinished,        sym::AsyncGenFinished,    async_gen_finished,         Target::AssocConst,     GenericRequirement::Exact(1);
 
-    // tRust: known issue — (swatinem) the following lang items are used for async lowering and
+    // FIXME(swatinem): the following lang items are used for async lowering and
     // should become obsolete eventually.
     ResumeTy,                sym::ResumeTy,            resume_ty,                  Target::Struct,         GenericRequirement::None;
     GetContext,              sym::get_context,         get_context_fn,             Target::Fn,             GenericRequirement::None;

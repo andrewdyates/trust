@@ -16,8 +16,6 @@ struct Point {
 impl<T> TypedArena<T> {
     /// Clears the arena. Deallocates all but the longest chunk which may be reused.
     fn clear(&mut self) {
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because every drained chunk is initialized up to `chunk.entries`, and `clear_last_chunk` handles the partially filled last chunk.
         unsafe {
             // Clear the last chunk, which is partially filled.
             let mut chunks_borrow = self.chunks.borrow_mut();

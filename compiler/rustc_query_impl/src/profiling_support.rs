@@ -77,9 +77,9 @@ impl<'a, 'tcx> QueryKeyStringBuilder<'a, 'tcx> {
                     end_index = 3;
                 } else {
                     write!(&mut dis_buffer[..], "[{}]", def_key.disambiguated_data.disambiguator)
-                        .expect("invariant: dis_buffer is large enough for disambiguator format"); // tRust: unwrap -> expect
-                    let end_of_dis = dis_buffer.iter().position(|&c| c == b']').expect("invariant: write! above guarantees ']' is present in dis_buffer"); // tRust: unwrap -> expect
-                    dis = std::str::from_utf8(&dis_buffer[..end_of_dis + 1]).expect("invariant: disambiguator format is always valid UTF-8"); // tRust: unwrap -> expect
+                        .unwrap();
+                    let end_of_dis = dis_buffer.iter().position(|&c| c == b']').unwrap();
+                    dis = std::str::from_utf8(&dis_buffer[..end_of_dis + 1]).unwrap();
                     end_index = 4;
                 }
             }
@@ -248,7 +248,7 @@ fn alloc_self_profile_query_strings_inner<'tcx, C>(
             let query_name = profiler.get_or_alloc_cached_string(query.name);
             let event_id = event_id_builder.from_label(query_name).to_string_id();
 
-            // tRust: known issue (eddyb) — make this O(1) by using a pre-cached query name `EventId`,
+            // FIXME(eddyb) make this O(1) by using a pre-cached query name `EventId`,
             // instead of passing the `DepNodeIndex` to `finish_with_query_invocation_id`,
             // when recording the event in the first place.
             let mut query_invocation_ids = Vec::new();

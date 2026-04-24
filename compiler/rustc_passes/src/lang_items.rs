@@ -33,7 +33,7 @@ struct LanguageItemCollector<'ast, 'tcx> {
     items: LanguageItems,
     tcx: TyCtxt<'tcx>,
     resolver: &'ast ResolverAstLowering<'tcx>,
-    // tRust: known issue — (#118552) We should probably feed def_span eagerly on def-id creation
+    // FIXME(#118552): We should probably feed def_span eagerly on def-id creation
     // so we can avoid constructing this map for local def-ids.
     item_spans: FxHashMap<DefId, Span>,
     parent_item: Option<&'ast ast::Item>,
@@ -196,12 +196,12 @@ impl<'ast, 'tcx> LanguageItemCollector<'ast, 'tcx> {
             // Some other types like Box and various functions like drop_in_place
             // have minimum requirements.
 
-            // tRust: known issue — This still doesn't count, e.g., elided lifetimes and APITs.
+            // FIXME: This still doesn't count, e.g., elided lifetimes and APITs.
             let mut actual_num = generics.params.len();
             if target.is_associated_item() {
                 actual_num += self
                     .parent_item
-                    .expect("invariant: associated item always has a parent item") // tRust: unwrap -> expect
+                    .unwrap()
                     .opt_generics()
                     .map_or(0, |generics| generics.params.len());
             }
@@ -325,7 +325,7 @@ impl<'ast, 'tcx> visit::Visitor<'ast> for LanguageItemCollector<'ast, 'tcx> {
                     (true, None)
                 };
                 (
-                    match &self.parent_item.expect("invariant: associated item always has a parent item").kind { // tRust: unwrap -> expect
+                    match &self.parent_item.unwrap().kind {
                         ast::ItemKind::Impl(i) => {
                             if i.of_trait.is_some() {
                                 Target::Method(MethodKind::TraitImpl)

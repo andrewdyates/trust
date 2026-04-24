@@ -470,7 +470,6 @@ pub trait FnMut<Args: Tuple>: FnOnce<Args> {
 #[lang = "panic"]
 #[track_caller]
 pub fn panic(_msg: &'static str) -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::puts("Panicking\n\0" as *const str as *const i8);
         intrinsics::abort();
@@ -509,7 +508,6 @@ panic_const! {
 #[lang = "panic_bounds_check"]
 #[track_caller]
 fn panic_bounds_check(index: usize, len: usize) -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf(
             "index out of bounds: the len is %d but the index is %d\n\0" as *const str as *const i8,
@@ -523,7 +521,6 @@ fn panic_bounds_check(index: usize, len: usize) -> ! {
 #[lang = "panic_cannot_unwind"]
 #[track_caller]
 fn panic_cannot_unwind() -> ! {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::puts("panic in a function that cannot unwind\n\0" as *const str as *const i8);
         intrinsics::abort();
@@ -558,8 +555,6 @@ unsafe extern "C" {
 pub unsafe fn drop_in_place<T: ?Sized>(to_drop: *mut T) {
     // Code here does not matter - this is replaced by the
     // real drop glue by the compiler.
-    // SAFETY: `drop_in_place` is called with a valid, aligned, dereferenceable pointer
-    // provided by the compiler-generated drop glue.
     unsafe {
         drop_in_place(to_drop);
     }
@@ -601,7 +596,6 @@ impl<T: ?Sized + Unsize<U>, U: ?Sized> CoerceUnsized<Box<U>> for Box<T> {}
 
 impl<T> Box<T> {
     pub fn new(val: T) -> Box<T> {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             let size = size_of::<T>();
             let ptr = libc::malloc(size);
@@ -614,7 +608,6 @@ impl<T> Box<T> {
 impl<T: ?Sized, A> Drop for Box<T, A> {
     fn drop(&mut self) {
         // inner value is dropped by compiler
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             libc::free(self.0.pointer.0 as *mut u8);
         }

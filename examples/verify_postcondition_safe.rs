@@ -2,20 +2,25 @@
 // VcKind: Postcondition
 // Expected: Postcondition PROVED (absent -- abs always returns non-negative)
 // Safe pattern: correct abs implementation handles negative inputs properly
-//
-// Note: Contract annotations (#[ensures]) depend on compiler parser integration.
-// Until available, this test operates at Layer 2 only (synthetic MIR).
-// The source file documents the intended contract pattern.
+// NOTE: This single-file regression example still uses the legacy contracts
+// surface. New crate-based public examples should prefer `trust-spec` and
+// `#[trust::ensures(...)]`.
 //
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-// #[ensures(result >= 0)]
+#![feature(contracts)]
+
+extern crate core;
+
+use core::contracts::ensures;
+
+#[ensures(|ret: &i32| *ret >= 0)]
 fn abs_correct(x: i32) -> i32 {
-    if x < 0 {
+    if x == i32::MIN {
+        i32::MAX
+    } else if x < 0 {
         -x // SAFE: negates negative values to make them positive
-            // Note: i32::MIN edge case handled by wrapping in practice;
-            // a full proof would require x != i32::MIN precondition
     } else {
         x // already non-negative
     }

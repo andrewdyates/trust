@@ -18,11 +18,11 @@
 
 use trust_types::{Formula, Sort};
 
-use crate::chc::{encode_loop, ChcSystem, LoopEncoding};
+use crate::chc::{ChcSystem, LoopEncoding, encode_loop};
 use crate::error::CegarError;
-use crate::invariant_extract::{extract_invariants, LoopInvariant};
+use crate::invariant_extract::{LoopInvariant, extract_invariants};
 use crate::predicate::Predicate;
-use crate::spacer::{parse_spacer_response, chc_to_smtlib2, SpacerConfig, SpacerResult};
+use crate::spacer::{SpacerConfig, SpacerResult, chc_to_smtlib2, parse_spacer_response};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -41,7 +41,6 @@ pub enum LoopStrategy {
     /// Only use bounded unrolling (no Spacer invocation).
     BoundedUnrolling { depth: usize },
 }
-
 
 /// Configuration for CHC-CEGAR integration.
 #[derive(Debug, Clone)]
@@ -114,10 +113,7 @@ pub fn refine_with_chc(
     match &config.loop_strategy {
         LoopStrategy::BoundedUnrolling { depth } => {
             let unrolled = bounded_unroll(encoding, *depth);
-            Ok(ChcRefinementResult::BoundedFallback {
-                depth: *depth,
-                unrolled_formula: unrolled,
-            })
+            Ok(ChcRefinementResult::BoundedFallback { depth: *depth, unrolled_formula: unrolled })
         }
         LoopStrategy::ChcOnly | LoopStrategy::ChcWithFallback => {
             // Encode the loop as a CHC system.
@@ -163,10 +159,7 @@ fn process_spacer_result(
 
             if let Some(inv) = invariants.into_iter().next() {
                 let new_predicates = inv.predicates.clone();
-                Ok(ChcRefinementResult::InvariantFound {
-                    new_predicates,
-                    invariant: inv,
-                })
+                Ok(ChcRefinementResult::InvariantFound { new_predicates, invariant: inv })
             } else {
                 // Spacer returned sat but no interpretations.
                 Ok(ChcRefinementResult::Timeout {
@@ -183,9 +176,7 @@ fn process_spacer_result(
                     unrolled_formula: unrolled,
                 })
             } else {
-                Ok(ChcRefinementResult::Timeout {
-                    reason: reason.clone(),
-                })
+                Ok(ChcRefinementResult::Timeout { reason: reason.clone() })
             }
         }
     }
@@ -225,10 +216,7 @@ pub fn get_chc_system(encoding: &LoopEncoding) -> Result<ChcSystem, CegarError> 
 pub fn bounded_unroll(encoding: &LoopEncoding, depth: usize) -> Formula {
     if depth == 0 {
         // Zero unrolling: just precondition /\ postcondition
-        return Formula::And(vec![
-            encoding.precondition.clone(),
-            encoding.postcondition.clone(),
-        ]);
+        return Formula::And(vec![encoding.precondition.clone(), encoding.postcondition.clone()]);
     }
 
     let mut conjuncts = Vec::new();
@@ -249,11 +237,7 @@ pub fn bounded_unroll(encoding: &LoopEncoding, depth: usize) -> Formula {
     }
 
     // Postcondition over the final-step variables.
-    let final_post = rename_vars_with_step(
-        &encoding.postcondition,
-        &encoding.variables,
-        depth,
-    );
+    let final_post = rename_vars_with_step(&encoding.postcondition, &encoding.variables, depth);
     conjuncts.push(final_post);
 
     Formula::And(conjuncts)
@@ -291,11 +275,7 @@ fn rename_for_step(
 }
 
 /// Rename variables in a formula to use step-specific names.
-fn rename_vars_with_step(
-    formula: &Formula,
-    variables: &[(String, Sort)],
-    step: usize,
-) -> Formula {
+fn rename_vars_with_step(formula: &Formula, variables: &[(String, Sort)], step: usize) -> Formula {
     let mut result = formula.clone();
     for (var_name, _) in variables {
         if step == 0 {
@@ -326,50 +306,39 @@ fn rename_var(formula: &Formula, from: &str, to: &str) -> Formula {
         Formula::Or(children) => {
             Formula::Or(children.iter().map(|c| rename_var(c, from, to)).collect())
         }
-        Formula::Implies(a, b) => Formula::Implies(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Eq(a, b) => Formula::Eq(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Lt(a, b) => Formula::Lt(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Le(a, b) => Formula::Le(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Gt(a, b) => Formula::Gt(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Ge(a, b) => Formula::Ge(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Add(a, b) => Formula::Add(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Sub(a, b) => Formula::Sub(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Mul(a, b) => Formula::Mul(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Div(a, b) => Formula::Div(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
-        Formula::Rem(a, b) => Formula::Rem(
-            Box::new(rename_var(a, from, to)),
-            Box::new(rename_var(b, from, to)),
-        ),
+        Formula::Implies(a, b) => {
+            Formula::Implies(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Eq(a, b) => {
+            Formula::Eq(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Lt(a, b) => {
+            Formula::Lt(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Le(a, b) => {
+            Formula::Le(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Gt(a, b) => {
+            Formula::Gt(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Ge(a, b) => {
+            Formula::Ge(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Add(a, b) => {
+            Formula::Add(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Sub(a, b) => {
+            Formula::Sub(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Mul(a, b) => {
+            Formula::Mul(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Div(a, b) => {
+            Formula::Div(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
+        Formula::Rem(a, b) => {
+            Formula::Rem(Box::new(rename_var(a, from, to)), Box::new(rename_var(b, from, to)))
+        }
         Formula::Ite(c, t, e) => Formula::Ite(
             Box::new(rename_var(c, from, to)),
             Box::new(rename_var(t, from, to)),
@@ -430,23 +399,22 @@ mod tests {
     (and (>= x!0 0) (<= x!0 10)))
 )"#;
 
-        let result = refine_with_chc(&encoding, &config, Some(solver_output))
-            .expect("should refine");
+        let result =
+            refine_with_chc(&encoding, &config, Some(solver_output)).expect("should refine");
 
         match result {
-            ChcRefinementResult::InvariantFound {
-                new_predicates,
-                invariant,
-            } => {
+            ChcRefinementResult::InvariantFound { new_predicates, invariant } => {
                 assert_eq!(invariant.loop_name, "Inv_loop_0");
                 assert!(!new_predicates.is_empty());
                 // Should contain x >= 0 and x <= 10
-                assert!(new_predicates
-                    .iter()
-                    .any(|p| *p == Predicate::comparison("x", CmpOp::Ge, "0")));
-                assert!(new_predicates
-                    .iter()
-                    .any(|p| *p == Predicate::comparison("x", CmpOp::Le, "10")));
+                assert!(
+                    new_predicates.iter().any(|p| *p == Predicate::comparison("x", CmpOp::Ge, "0"))
+                );
+                assert!(
+                    new_predicates
+                        .iter()
+                        .any(|p| *p == Predicate::comparison("x", CmpOp::Le, "10"))
+                );
             }
             other => panic!("expected InvariantFound, got: {:?}", other),
         }
@@ -457,8 +425,8 @@ mod tests {
         let encoding = counting_loop_encoding();
         let config = ChcCegarConfig::default();
 
-        let result = refine_with_chc(&encoding, &config, Some("unsat\n"))
-            .expect("should handle unsat");
+        let result =
+            refine_with_chc(&encoding, &config, Some("unsat\n")).expect("should handle unsat");
         assert_eq!(result, ChcRefinementResult::PropertyViolated);
     }
 
@@ -485,10 +453,7 @@ mod tests {
     #[test]
     fn test_refine_with_chc_timeout_chc_only() {
         let encoding = counting_loop_encoding();
-        let config = ChcCegarConfig {
-            loop_strategy: LoopStrategy::ChcOnly,
-            ..Default::default()
-        };
+        let config = ChcCegarConfig { loop_strategy: LoopStrategy::ChcOnly, ..Default::default() };
 
         let result = refine_with_chc(&encoding, &config, Some("unknown\ntimeout\n"))
             .expect("should timeout");
@@ -588,10 +553,8 @@ mod tests {
 
     #[test]
     fn test_rename_var_in_comparison() {
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         let renamed = rename_var(&formula, "x", "x__step_1");
         assert_eq!(
             renamed,

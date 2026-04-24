@@ -77,7 +77,7 @@ pub trait CrateDef {
 
     /// Return registered tool attributes with the given attribute name.
     ///
-    /// tRust: known issue (jdonszelmann) — may panic on non-tool attributes. After more attribute work, non-tool
+    /// FIXME(jdonszelmann): may panic on non-tool attributes. After more attribute work, non-tool
     /// attributes will simply return an empty list.
     ///
     /// Single segmented name like `#[clippy]` is specified as `&["clippy".to_string()]`.

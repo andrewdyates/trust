@@ -137,7 +137,6 @@ impl SsaLocals {
             if let Set1::One(DefLocation::Assignment(loc)) = self.assignments[local] {
                 let stmt = body.stmt_at(loc).left()?;
                 // `loc` must point to a direct assignment to `local`.
-                // tRust: invariant: algorithm precondition — SSA/reference propagation analysis maintains this invariant
                 let Some((target, rvalue)) = stmt.kind.as_assign() else { bug!() };
                 assert_eq!(target.as_local(), Some(local));
                 Some((local, rvalue, loc))
@@ -231,7 +230,6 @@ impl<'tcx> Visitor<'tcx> for SsaVisitor<'_, 'tcx> {
         }
         match ctxt {
             PlaceContext::MutatingUse(MutatingUseContext::Projection)
-            // tRust: invariant: algorithm precondition — SSA/reference propagation analysis maintains this invariant
             | PlaceContext::NonMutatingUse(NonMutatingUseContext::Projection) => bug!(),
             // Anything can happen with raw pointers, so remove them.
             PlaceContext::NonMutatingUse(NonMutatingUseContext::RawBorrow)
@@ -263,7 +261,6 @@ impl<'tcx> Visitor<'tcx> for SsaVisitor<'_, 'tcx> {
                 let TerminatorKind::Call { target, .. } =
                     self.body.basic_blocks[call].terminator().kind
                 else {
-                    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                     bug!()
                 };
                 Some(DefLocation::CallReturn { call, target })
@@ -308,7 +305,7 @@ fn compute_copy_classes(ssa: &mut SsaLocals, body: &Body<'_>) {
         let local_ty = body.local_decls()[local].ty;
         let rhs_ty = body.local_decls()[rhs].ty;
         if local_ty != rhs_ty {
-            // NOTE(#112651): Subtyping guard - skip when local and rhs types differ.
+            // FIXME(#112651): This can be removed afterwards.
             trace!("skipped `{local:?} = {rhs:?}` due to subtyping: {local_ty} != {rhs_ty}");
             continue;
         }

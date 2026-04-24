@@ -187,8 +187,8 @@ impl EnumSizeOpt {
             Variants::Multiple { variants, .. } if variants.len() <= 1 => return None,
             Variants::Multiple { variants, .. } => variants,
         };
-        let min = variants.iter().map(|v| v.size).min().expect("invariant: Multiple variants must have at least one entry"); // tRust: unwrap elimination
-        let max = variants.iter().map(|v| v.size).max().expect("invariant: Multiple variants must have at least one entry"); // tRust: unwrap elimination
+        let min = variants.iter().map(|v| v.size).min().unwrap();
+        let max = variants.iter().map(|v| v.size).max().unwrap();
         if max.bytes() - min.bytes() < self.discrepancy {
             return None;
         }
@@ -216,7 +216,7 @@ impl EnumSizeOpt {
         for (var_idx, layout) in variants.iter_enumerated() {
             let curr_idx = ptr_size * adt_def.discriminant_for_variant(tcx, var_idx).val as u64;
             let val = Scalar::from_target_usize(layout.size.bytes(), &tcx);
-            alloc.write_scalar(&tcx, alloc_range(curr_idx, val.size()), val).expect("invariant: writing scalar to fresh allocation cannot fail"); // tRust: unwrap elimination
+            alloc.write_scalar(&tcx, alloc_range(curr_idx, val.size()), val).unwrap();
         }
         alloc.mutability = Mutability::Not;
         let alloc = tcx.reserve_and_set_memory_alloc(tcx.mk_const_alloc(alloc));

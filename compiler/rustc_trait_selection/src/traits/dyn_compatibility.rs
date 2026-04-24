@@ -244,7 +244,7 @@ fn predicate_references_self<'tcx>(
         ty::ClauseKind::WellFormed(..)
         | ty::ClauseKind::TypeOutlives(..)
         | ty::ClauseKind::RegionOutlives(..)
-        // tRust: known issue (generic_const_exprs) — this can mention `Self`
+        // FIXME(generic_const_exprs): this can mention `Self`
         | ty::ClauseKind::ConstEvaluatable(..)
         | ty::ClauseKind::HostEffect(..)
         | ty::ClauseKind::UnstableFeature(_)
@@ -479,7 +479,7 @@ fn virtual_call_violations_for_method<'tcx>(
 
     // `self: Self` can't be dispatched on.
     // However, this is considered dyn compatible. We allow it as a special case here.
-    // tRust: known issue (mikeyhew) — get rid of this `if` statement once `receiver_is_dispatchable` allows
+    // FIXME(mikeyhew) get rid of this `if` statement once `receiver_is_dispatchable` allows
     // `Receiver: Unsize<Receiver[Self => dyn Trait]>`.
     if receiver_ty != tcx.types.self_param {
         if !receiver_is_dispatchable(tcx, method, receiver_ty) {
@@ -620,7 +620,7 @@ fn receiver_for_self_ty<'tcx>(
 /// for `self: Rc<Self>`, this means `Rc<Self>: DispatchFromDyn<Rc<U>>`
 /// for `self: Pin<Box<Self>>`, this means `Pin<Box<Self>>: DispatchFromDyn<Pin<Box<U>>>`
 //
-// tRust: known issue (mikeyhew) — when unsized receivers are implemented as part of unsized rvalues, add this
+// FIXME(mikeyhew) when unsized receivers are implemented as part of unsized rvalues, add this
 // fallback query: `Receiver: Unsize<Receiver[Self => U]>` to support receivers like
 // `self: Wrapper<Self>`.
 fn receiver_is_dispatchable<'tcx>(
@@ -669,7 +669,7 @@ fn receiver_is_dispatchable<'tcx>(
         predicates.push(unsize_predicate.upcast(tcx));
 
         // U: Trait<Arg1, ..., ArgN>
-        let trait_def_id = method.trait_container(tcx).expect("invariant: value is present");
+        let trait_def_id = method.trait_container(tcx).unwrap();
         let args = GenericArgs::for_item(tcx, trait_def_id, |param, _| {
             if param.index == 0 { unsized_self_ty.into() } else { tcx.mk_param_from_def(param) }
         });

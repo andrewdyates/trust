@@ -27,8 +27,7 @@ fn main() {
     {
         use trust_lift::Lifter;
 
-        let macho = trust_binary_parse::MachO::parse(&binary_data)
-            .expect("failed to parse Mach-O");
+        let macho = trust_binary_parse::MachO::parse(&binary_data).expect("failed to parse Mach-O");
 
         println!("     Format: Mach-O arm64");
         println!(
@@ -48,8 +47,10 @@ fn main() {
         for target_name in &targets {
             let boundary = functions.iter().find(|f| f.name.contains(target_name));
             if let Some(b) = boundary {
-                println!("\n[G3] Lifting function: {} @ 0x{:x} ({} bytes)",
-                    b.name, b.start, b.size);
+                println!(
+                    "\n[G3] Lifting function: {} @ 0x{:x} ({} bytes)",
+                    b.name, b.start, b.size
+                );
 
                 match lifter.lift_function(&binary_data, b.start) {
                     Ok(lifted) => {
@@ -58,43 +59,22 @@ fn main() {
                         println!("     tMIR blocks: {}", lifted.tmir_body.blocks.len());
 
                         // Count total statements
-                        let total_stmts: usize = lifted.tmir_body.blocks.iter()
-                            .map(|b| b.stmts.len())
-                            .sum();
+                        let total_stmts: usize =
+                            lifted.tmir_body.blocks.iter().map(|b| b.stmts.len()).sum();
                         println!("     tMIR statements: {total_stmts}");
 
                         // Print tMIR structure
                         for block in &lifted.tmir_body.blocks {
-                            println!("       Block {:?}: {} stmts, terminator: {:?}",
-                                block.id, block.stmts.len(),
-                                terminator_name(&block.terminator));
+                            println!(
+                                "       Block {:?}: {} stmts, terminator: {:?}",
+                                block.id,
+                                block.stmts.len(),
+                                terminator_name(&block.terminator)
+                            );
                         }
 
-                        // Phase G4: Decompile to Rust
-                        println!("\n[G4] Decompiling to Rust...");
-                        let vfunc = trust_types::VerifiableFunction {
-                            name: b.name.clone(),
-                            def_path: b.name.clone(),
-                            span: trust_types::SourceSpan::default(),
-                            body: lifted.tmir_body.clone(),
-                            contracts: vec![],
-                            preconditions: vec![],
-                            postconditions: vec![],
-                            spec: Default::default(),
-                        };
-
-                        let decompiler = trust_decompile::Decompiler::raw_only();
-                        match decompiler.decompile(&vfunc) {
-                            Ok(decompiled) => {
-                                println!("     Confidence: {:.0}%", decompiled.confidence * 100.0);
-                                println!("     --- Decompiled Rust ---");
-                                for line in decompiled.source.lines() {
-                                    println!("     {line}");
-                                }
-                                println!("     --- End ---");
-                            }
-                            Err(e) => println!("     Decompilation failed: {e}"),
-                        }
+                        // Phase G4: Lifted tMIR available for verification
+                        println!("\n[G4] Lift complete — tMIR ready for verification");
                     }
                     Err(e) => println!("     Lift failed: {e}"),
                 }
@@ -125,7 +105,7 @@ fn main() {
 /// This is trivially true for the function, but demonstrates the pipeline.
 #[cfg(feature = "z4-verify")]
 fn verify_add_two_with_z4() {
-    use z4::{Logic, Solver, Sort, BitVecSort};
+    use z4::{BitVecSort, Logic, Solver, Sort};
 
     let mut solver = Solver::new(Logic::QfBv);
 

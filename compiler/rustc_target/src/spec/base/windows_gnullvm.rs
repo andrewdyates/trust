@@ -50,7 +50,7 @@ pub(crate) fn opts() -> TargetOptions {
         crt_static_allows_dylibs: true,
         crt_static_respected: true,
         debuginfo_kind: DebuginfoKind::Dwarf,
-        // tRust: known issue (davidtwco) — Support Split DWARF on Windows GNU - may require LLVM changes to
+        // FIXME(davidtwco): Support Split DWARF on Windows GNU - may require LLVM changes to
         // output DWO, despite using DWARF, doesn't use ELF..
         supported_split_debuginfo: Cow::Borrowed(&[SplitDebuginfo::Off]),
         mcount: "_mcount".into(),

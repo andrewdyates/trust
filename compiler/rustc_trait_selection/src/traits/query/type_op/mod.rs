@@ -166,7 +166,7 @@ where
         let mut error_info = None;
         let mut region_constraints = QueryRegionConstraints::default();
 
-        // tRust: accepted tradeoff (type_alias_impl_trait) — : When moving an opaque type to hidden type mapping from the query to the current inferctxt,
+        // HACK(type_alias_impl_trait): When moving an opaque type to hidden type mapping from the query to the current inferctxt,
         // we sometimes end up with `Opaque<'a> = Opaque<'b>` instead of an actual hidden type. In that case we don't register a
         // hidden type but just equate the lifetimes. Thus we need to scrape the region constraints even though we're also manually
         // collecting region constraints via `region_constraints`.

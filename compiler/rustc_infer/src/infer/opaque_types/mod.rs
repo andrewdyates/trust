@@ -53,7 +53,7 @@ impl<'tcx> InferCtxt<'tcx> {
                     let ty_var = self.next_ty_var(span);
                     obligations.extend(
                         self.handle_opaque_type(ty, ty_var, span, param_env)
-                            .expect("invariant: handle_opaque_type must succeed for definable opaque types without escaping bound vars") // tRust:
+                            .unwrap()
                             .into_iter()
                             .map(|goal| {
                                 Obligation::new(
@@ -277,7 +277,6 @@ impl<'tcx> InferCtxt<'tcx> {
                 );
             }
             mode @ (ty::TypingMode::PostBorrowckAnalysis { .. } | ty::TypingMode::PostAnalysis) => {
-                // tRust: invariant — hidden types must not be inserted during post-analysis typing modes
                 bug!("insert hidden type in {mode:?}")
             }
         }
@@ -313,8 +312,8 @@ impl<'tcx> InferCtxt<'tcx> {
                 ty_op: |ty| match *ty.kind() {
                     // We can't normalize associated types from `rustc_infer`,
                     // but we can eagerly register inference variables for them.
-                    // tRust: known issue —(RPITIT): Don't replace RPITITs with inference vars.
-                    // tRust: known issue —(inherent_associated_types): Extend this to support `ty::Inherent`, too.
+                    // FIXME(RPITIT): Don't replace RPITITs with inference vars.
+                    // FIXME(inherent_associated_types): Extend this to support `ty::Inherent`, too.
                     ty::Alias(ty::Projection, projection_ty)
                         if !projection_ty.has_escaping_bound_vars()
                             && !tcx.is_impl_trait_in_trait(projection_ty.def_id)

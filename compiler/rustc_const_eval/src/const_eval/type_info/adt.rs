@@ -12,7 +12,7 @@ use crate::interpret::{
 };
 
 impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
-    // tRust: known issue (type_info) — No semver considerations for now
+    // FIXME(type_info): No semver considerations for now
     pub(crate) fn write_adt_type_info(
         &mut self,
         place: &impl Writeable<'tcx, CtfeProvenance>,
@@ -61,7 +61,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         let struct_layout = self.layout_of(struct_ty)?;
 
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: ADT type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -74,7 +74,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     let is_non_exhaustive = struct_def.is_field_list_non_exhaustive();
                     self.write_scalar(Scalar::from_bool(is_non_exhaustive), &field_place)?
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -92,7 +91,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         let union_layout = self.layout_of(union_ty)?;
 
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: ADT type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -105,7 +104,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     let is_non_exhaustive = union_def.is_field_list_non_exhaustive();
                     self.write_scalar(Scalar::from_bool(is_non_exhaustive), &field_place)?
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -123,7 +121,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         let enum_layout = self.layout_of(enum_ty)?;
 
         for (field_idx, field) in
-            place.layout().ty.ty_adt_def().expect("invariant: ADT type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
 
@@ -145,7 +143,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     let is_non_exhaustive = enum_def.is_variant_list_non_exhaustive();
                     self.write_scalar(Scalar::from_bool(is_non_exhaustive), &field_place)?
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field.did), "unimplemented field {other}"),
             }
         }
@@ -162,7 +159,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         let (variant_layout, variant_def) = variant;
 
         for (field_idx, field_def) in
-            place.layout().ty.ty_adt_def().expect("invariant: ADT type_info place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&place, field_idx)?;
             match field_def.name {
@@ -178,7 +175,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     let is_non_exhaustive = variant_def.is_field_list_non_exhaustive();
                     self.write_scalar(Scalar::from_bool(is_non_exhaustive), &field_place)?
                 }
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field_def.did), "unimplemented field {other}"),
             }
         }
@@ -236,7 +232,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
             .layout()
             .ty
             .ty_adt_def()
-            .expect("invariant: field name lookup succeeds for known ADT field")
+            .unwrap()
             .non_enum_variant()
             .fields
             .iter_enumerated()
@@ -244,7 +240,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
             let field_place = self.project_field(&generic_type_place, field_idx)?;
             match field_def.name {
                 sym::ty => self.write_type_id(ty, &field_place)?,
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field_def.did), "unimplemented field {other}"),
             }
         }
@@ -254,7 +249,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
     }
 
     fn write_generic_const(&mut self, c: Const<'tcx>, place: MPlaceTy<'tcx>) -> InterpResult<'tcx> {
-        // tRust: invariant — array length constant must be fully evaluated at this point
         let ConstKind::Value(c) = c.kind() else { bug!("expected a computed const, got {c:?}") };
 
         let (variant_idx, variant_place) = self.downcast(&place, sym::Const)?;
@@ -264,7 +258,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
             .layout()
             .ty
             .ty_adt_def()
-            .expect("invariant: field name lookup succeeds for known ADT field")
+            .unwrap()
             .non_enum_variant()
             .fields
             .iter_enumerated()
@@ -272,7 +266,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
             let field_place = self.project_field(&const_place, field_idx)?;
             match field_def.name {
                 sym::ty => self.write_type_id(c.ty, &field_place)?,
-                // tRust: invariant — match covers all implemented fields for this type info struct
                 other => span_bug!(self.tcx.def_span(field_def.did), "unimplemented field {other}"),
             }
         }

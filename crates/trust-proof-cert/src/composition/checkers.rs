@@ -6,10 +6,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{CertificateId, CertificationStatus, ProofCertificate, SolverInfo};
 use crate::formula_norm::formula_subsumes;
+use crate::{CertificateId, CertificationStatus, ProofCertificate, SolverInfo};
 
 use super::types::{
     ComposabilityResult, ComposedProof, CompositionError, FunctionStrength, Property,
@@ -25,7 +25,10 @@ use super::types::{
 /// Returns `Err(CompositionError::FormulaDeserializationFailed)` if either
 /// certificate's `formula_json` is corrupted and cannot be deserialized
 /// during the semantic fallback check.
-pub fn check_composability(a: &ProofCertificate, b: &ProofCertificate) -> Result<ComposabilityResult, CompositionError> {
+pub fn check_composability(
+    a: &ProofCertificate,
+    b: &ProofCertificate,
+) -> Result<ComposabilityResult, CompositionError> {
     let mut issues = Vec::new();
     let mut shared_deps = Vec::new();
 
@@ -54,11 +57,7 @@ pub fn check_composability(a: &ProofCertificate, b: &ProofCertificate) -> Result
         shared_deps.push(a.function.clone());
     }
 
-    let result = ComposabilityResult {
-        composable: issues.is_empty(),
-        issues,
-        shared_deps,
-    };
+    let result = ComposabilityResult { composable: issues.is_empty(), issues, shared_deps };
 
     // If syntactic check passes, return immediately.
     // If it fails, try semantic fallback for formula-level implication.
@@ -85,7 +84,10 @@ pub fn check_composability(a: &ProofCertificate, b: &ProofCertificate) -> Result
 /// subsumption holds in either direction, or if the formulas are for
 /// different functions/VCs. Returns `Err(CompositionError::FormulaDeserializationFailed)`
 /// if either certificate's `formula_json` cannot be deserialized.
-pub(crate) fn check_composability_semantic(a: &ProofCertificate, b: &ProofCertificate) -> Result<ComposabilityResult, CompositionError> {
+pub(crate) fn check_composability_semantic(
+    a: &ProofCertificate,
+    b: &ProofCertificate,
+) -> Result<ComposabilityResult, CompositionError> {
     use trust_types::Formula;
 
     let mut issues = Vec::new();
@@ -102,25 +104,23 @@ pub(crate) fn check_composability_semantic(a: &ProofCertificate, b: &ProofCertif
             "both certificates prove the same VC kind ({}) for function `{}`",
             a.vc_snapshot.kind, a.function
         ));
-        return Ok(ComposabilityResult {
-            composable: false,
-            issues,
-            shared_deps,
-        });
+        return Ok(ComposabilityResult { composable: false, issues, shared_deps });
     }
 
     // Deserialize formulas for semantic comparison — propagate errors instead
     // of silently dropping them (tRust #756).
-    let formula_a: Formula = serde_json::from_str(&a.vc_snapshot.formula_json)
-        .map_err(|e| CompositionError::FormulaDeserializationFailed {
+    let formula_a: Formula = serde_json::from_str(&a.vc_snapshot.formula_json).map_err(|e| {
+        CompositionError::FormulaDeserializationFailed {
             function: a.function.clone(),
             reason: e.to_string(),
-        })?;
-    let formula_b: Formula = serde_json::from_str(&b.vc_snapshot.formula_json)
-        .map_err(|e| CompositionError::FormulaDeserializationFailed {
+        }
+    })?;
+    let formula_b: Formula = serde_json::from_str(&b.vc_snapshot.formula_json).map_err(|e| {
+        CompositionError::FormulaDeserializationFailed {
             function: b.function.clone(),
             reason: e.to_string(),
-        })?;
+        }
+    })?;
 
     // Check semantic compatibility: if either subsumes the other,
     // they are logically consistent (not contradictory).
@@ -130,11 +130,7 @@ pub(crate) fn check_composability_semantic(a: &ProofCertificate, b: &ProofCertif
 
     if a_subsumes_b || b_subsumes_a {
         // Formulas are semantically compatible — one implies the other
-        Ok(ComposabilityResult {
-            composable: true,
-            issues: Vec::new(),
-            shared_deps,
-        })
+        Ok(ComposabilityResult { composable: true, issues: Vec::new(), shared_deps })
     } else {
         // Cannot determine semantic compatibility; check for contradiction
         // via implication of negation: if fa => NOT fb (or vice versa),
@@ -152,11 +148,7 @@ pub(crate) fn check_composability_semantic(a: &ProofCertificate, b: &ProofCertif
             // (no evidence of conflict).
         }
 
-        Ok(ComposabilityResult {
-            composable: issues.is_empty(),
-            issues,
-            shared_deps,
-        })
+        Ok(ComposabilityResult { composable: issues.is_empty(), issues, shared_deps })
     }
 }
 
@@ -246,13 +238,14 @@ pub fn compose_proofs(certs: &[&ProofCertificate]) -> Result<ComposedProof, Comp
 /// `foo` (which calls `bar`) and `bar`, then `foo` is transitively verified.
 ///
 /// Returns the set of function names that are fully covered (all callees proved).
+// tRust: BTreeMap for deterministic certificate output (#827)
 pub fn transitive_closure(
     certs: &[&ProofCertificate],
-    call_graph: &FxHashMap<String, Vec<String>>,
-) -> FxHashSet<String> {
+    call_graph: &BTreeMap<String, Vec<String>>,
+) -> BTreeSet<String> {
     // Build the set of proved functions
-    let mut proved: FxHashSet<String> = certs.iter().map(|c| c.function.clone()).collect();
-    let directly_proved: FxHashSet<String> = proved.clone();
+    let mut proved: BTreeSet<String> = certs.iter().map(|c| c.function.clone()).collect();
+    let directly_proved: BTreeSet<String> = proved.clone();
 
     // Iterative fixed-point: a function is transitively verified if all its callees
     // are also in the proved set.
@@ -319,10 +312,8 @@ pub fn weakening(
     // Mark as derived by appending weakening info to the VC kind
     derived.vc_snapshot.kind = format!("Weakened({})", weaker_property.0);
     // Regenerate ID since content changed
-    derived.id = CertificateId::generate(
-        &derived.function,
-        &format!("{}-weakened", derived.timestamp),
-    );
+    derived.id =
+        CertificateId::generate(&derived.function, &format!("{}-weakened", derived.timestamp));
 
     Ok(derived)
 }
@@ -360,9 +351,10 @@ pub fn strengthening_check(
             return Ok(());
         }
         if let Some(ch) = rest.chars().next()
-            && (ch == ' ' || ch == '{' || ch == '(' || ch == '<') {
-                return Ok(());
-            }
+            && (ch == ' ' || ch == '{' || ch == '(' || ch == '<')
+        {
+            return Ok(());
+        }
     }
 
     Err(CompositionError::StrengtheningFailed {
@@ -372,7 +364,9 @@ pub fn strengthening_check(
 }
 
 /// Determine the weakest proof strength from a set of solver infos.
-pub(crate) fn weakest_strength<'a>(solvers: impl Iterator<Item = &'a SolverInfo>) -> trust_types::ProofStrength {
+pub(crate) fn weakest_strength<'a>(
+    solvers: impl Iterator<Item = &'a SolverInfo>,
+) -> trust_types::ProofStrength {
     let mut weakest = trust_types::ProofStrength::constructive();
 
     for solver in solvers {
@@ -429,9 +423,10 @@ fn is_valid_weakening(original_kind: &str, weaker: &str) -> bool {
         }
         // The character after the prefix must be a structural delimiter
         if let Some(ch) = rest.chars().next()
-            && (ch == ' ' || ch == '{' || ch == '(' || ch == '<') {
-                return true;
-            }
+            && (ch == ' ' || ch == '{' || ch == '(' || ch == '<')
+        {
+            return true;
+        }
     }
 
     false

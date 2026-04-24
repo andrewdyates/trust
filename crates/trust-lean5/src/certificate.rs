@@ -212,7 +212,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "get_midpoint".to_string(),
+            function: "get_midpoint".into(),
             location: SourceSpan::default(),
             formula: Formula::Not(Box::new(Formula::And(vec![
                 Formula::Le(
@@ -236,10 +236,12 @@ mod tests {
 
     fn sample_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 5,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     #[test]
@@ -325,7 +327,7 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "get_midpoint".to_string(),
+            function: "get_midpoint".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -343,7 +345,7 @@ mod tests {
         // Verify against a different VC
         let vc2 = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "f".to_string(),
+            function: "f".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,

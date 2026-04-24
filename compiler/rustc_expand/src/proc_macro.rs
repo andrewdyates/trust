@@ -171,7 +171,7 @@ pub(super) fn provide_derive_macro_expansion<'tcx>(
     let (invoc_id, input) = key;
 
     // Make sure that we invalidate the query when the crate defining the proc macro changes
-    let _ = tcx.crate_hash(invoc_id.expn_data().macro_def_id.expect("invariant: proc macro invocation has a def_id").krate); // tRust:;
+    let _ = tcx.crate_hash(invoc_id.expn_data().macro_def_id.unwrap().krate);
 
     QueryDeriveExpandCtx::with(|ecx, client| {
         expand_derive_macro(invoc_id, input.clone(), ecx, client).map(|ts| &*tcx.arena.alloc(ts))
@@ -249,9 +249,7 @@ impl QueryDeriveExpandCtx {
                 // lifetime is valid.
                 // If `with` is called at some other time, it will panic due to usage of
                 // `scoped_tls::with`.
-                // SAFETY: `enter` stored a live `ExtCtxt` in this scoped TLS slot for the
-                // duration of `with`, so this pointer is non-null and uniquely borrowed here.
-                unsafe { casted.as_mut().expect("invariant: non-null pointer from Box::into_raw") } // tRust:
+                unsafe { casted.as_mut().unwrap() }
             };
 
             f(ectx, ctx.client)

@@ -125,7 +125,7 @@ fn show_substructure(cx: &ExtCtxt<'_>, span: Span, substr: &Substructure<'_>) ->
         for i in 0..fields.len() {
             let field = &fields[i];
             if is_struct {
-                let name = cx.expr_str(field.span, field.name.expect("invariant: named struct field must have a name in Debug derive").name); // tRust: unwrap -> expect
+                let name = cx.expr_str(field.span, field.name.unwrap().name);
                 args.push(name);
             }
 
@@ -142,7 +142,7 @@ fn show_substructure(cx: &ExtCtxt<'_>, span: Span, substr: &Substructure<'_>) ->
         for i in 0..fields.len() {
             let field = &fields[i];
             if is_struct {
-                name_exprs.push(cx.expr_str(field.span, field.name.expect("invariant: named struct field must have a name in Debug derive").name)); // tRust: unwrap -> expect
+                name_exprs.push(cx.expr_str(field.span, field.name.unwrap().name));
             }
 
             let field = expr_for_field(cx, field, i, fields.len());
@@ -203,7 +203,7 @@ fn show_substructure(cx: &ExtCtxt<'_>, span: Span, substr: &Substructure<'_>) ->
 
         let mut stmts = ThinVec::with_capacity(2);
         if is_struct {
-            stmts.push(names_let.expect("invariant: names_let must be Some when is_struct is true")); // tRust: unwrap -> expect
+            stmts.push(names_let.unwrap());
         }
         stmts.push(values_let);
         BlockOrExpr::new_mixed(stmts, Some(expr))

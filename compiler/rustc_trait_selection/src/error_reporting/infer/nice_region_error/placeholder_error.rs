@@ -18,7 +18,7 @@ use crate::errors::{
 use crate::infer::{RegionResolutionError, SubregionOrigin, TypeTrace, ValuePairs};
 use crate::traits::{ObligationCause, ObligationCauseCode};
 
-// tRust: accepted tradeoff (eddyb) — maybe move this in a more central location.
+// HACK(eddyb) maybe move this in a more central location.
 #[derive(Copy, Clone)]
 pub struct Highlighted<'tcx, T> {
     pub tcx: TyCtxt<'tcx>,
@@ -413,7 +413,6 @@ impl<'tcx> NiceRegionError<'_, 'tcx> {
                         self.tcx()
                             .signature_unclosure(args.as_closure().sig(), rustc_hir::Safety::Safe)
                     } else {
-                        // tRust: invariant — the type must still be a closure type when reaching this diagnostic path
                         bug!("type is not longer closure");
                     }
                 });

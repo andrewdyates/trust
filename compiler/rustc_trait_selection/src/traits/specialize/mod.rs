@@ -130,7 +130,6 @@ pub fn translate_args_with_cause<'tcx>(
 
             fulfill_implication(infcx, param_env, source_trait_ref, source_impl, target_impl, cause)
                 .unwrap_or_else(|_| {
-                    // tRust: invariant — When translating generic parameters from to \ , the expected specialization failed to hold
                     bug!(
                         "When translating generic parameters from {source_impl:?} to \
                         {target_impl:?}, the expected specialization failed to hold"

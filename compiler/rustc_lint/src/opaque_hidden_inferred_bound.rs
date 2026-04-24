@@ -97,7 +97,7 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
                 // have opaques in them anyways.
                 let Some(proj_term) = proj.term.as_type() else { return };
 
-                // tRust: known issue — `impl Trait<Assoc = impl Trait2>` from an RPIT is "ok"...
+                // HACK: `impl Trait<Assoc = impl Trait2>` from an RPIT is "ok"...
                 if let ty::Alias(ty::Opaque, opaque_ty) = *proj_term.kind()
                     && cx.tcx.parent(opaque_ty.def_id) == def_id
                     && matches!(
@@ -108,7 +108,7 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
                     return;
                 }
 
-                // tRust: known issue — `async fn() -> Self` in traits is "ok"...
+                // HACK: `async fn() -> Self` in traits is "ok"...
                 // This is not really that great, but it's similar to why the `-> Self`
                 // return type is well-formed in traits even when `Self` isn't sized.
                 if let ty::Param(param_ty) = *proj_term.kind()

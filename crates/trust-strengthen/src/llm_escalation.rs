@@ -131,9 +131,9 @@ impl EscalationPolicy {
     /// (the threshold check is done separately in `should_escalate`).
     #[must_use]
     pub fn trigger_enabled(&self, trigger: &EscalationTrigger) -> bool {
-        self.enabled_triggers.iter().any(|t| {
-            std::mem::discriminant(t) == std::mem::discriminant(trigger)
-        })
+        self.enabled_triggers
+            .iter()
+            .any(|t| std::mem::discriminant(t) == std::mem::discriminant(trigger))
     }
 }
 
@@ -214,9 +214,10 @@ impl EscalationTracker {
 
         // For LowConfidence, check against the policy threshold
         if let EscalationTrigger::LowConfidence { max_confidence } = trigger
-            && *max_confidence >= self.policy.confidence_threshold_pct {
-                return None;
-            }
+            && *max_confidence >= self.policy.confidence_threshold_pct
+        {
+            return None;
+        }
 
         // Get next tier
         self.current_tier.next()
@@ -322,8 +323,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::atomic::{AtomicU32, Ordering};
+
+    use super::*;
 
     // -- ModelTier tests --
 
@@ -381,9 +383,7 @@ mod tests {
         assert!(policy.trigger_enabled(&EscalationTrigger::EmptyResponse));
         assert!(policy.trigger_enabled(&EscalationTrigger::ParseFailure));
         assert!(policy.trigger_enabled(&EscalationTrigger::TransientError));
-        assert!(policy.trigger_enabled(&EscalationTrigger::LowConfidence {
-            max_confidence: 30,
-        }));
+        assert!(policy.trigger_enabled(&EscalationTrigger::LowConfidence { max_confidence: 30 }));
     }
 
     #[test]
@@ -401,10 +401,7 @@ mod tests {
 
     #[test]
     fn test_tracker_starts_at_policy_tier() {
-        let policy = EscalationPolicy {
-            starting_tier: ModelTier::Fast,
-            ..Default::default()
-        };
+        let policy = EscalationPolicy { starting_tier: ModelTier::Fast, ..Default::default() };
         let tracker = EscalationTracker::new(policy);
         assert_eq!(tracker.current_tier(), ModelTier::Fast);
         assert_eq!(tracker.escalations_used(), 0);
@@ -495,9 +492,8 @@ mod tests {
         tracker.record_attempt();
 
         // 30% < 50% threshold -> should escalate
-        let result = tracker.should_escalate(&EscalationTrigger::LowConfidence {
-            max_confidence: 30,
-        });
+        let result =
+            tracker.should_escalate(&EscalationTrigger::LowConfidence { max_confidence: 30 });
         assert_eq!(result, Some(ModelTier::Balanced));
     }
 
@@ -513,9 +509,8 @@ mod tests {
         tracker.record_attempt();
 
         // 60% >= 50% threshold -> should NOT escalate
-        let result = tracker.should_escalate(&EscalationTrigger::LowConfidence {
-            max_confidence: 60,
-        });
+        let result =
+            tracker.should_escalate(&EscalationTrigger::LowConfidence { max_confidence: 60 });
         assert_eq!(result, None);
     }
 
@@ -582,25 +577,11 @@ mod tests {
 
     #[test]
     fn test_escalation_trigger_display() {
+        assert_eq!(format!("{}", EscalationTrigger::EmptyResponse), "empty response");
+        assert_eq!(format!("{}", EscalationTrigger::ParseFailure), "parse failure");
+        assert_eq!(format!("{}", EscalationTrigger::TransientError), "transient error");
         assert_eq!(
-            format!("{}", EscalationTrigger::EmptyResponse),
-            "empty response"
-        );
-        assert_eq!(
-            format!("{}", EscalationTrigger::ParseFailure),
-            "parse failure"
-        );
-        assert_eq!(
-            format!("{}", EscalationTrigger::TransientError),
-            "transient error"
-        );
-        assert_eq!(
-            format!(
-                "{}",
-                EscalationTrigger::LowConfidence {
-                    max_confidence: 30
-                }
-            ),
+            format!("{}", EscalationTrigger::LowConfidence { max_confidence: 30 }),
             "low confidence (max: 0.30)"
         );
     }
@@ -616,10 +597,7 @@ mod tests {
 
     impl EscalationMockLlm {
         fn new(responses: Vec<Result<String, LlmError>>) -> Self {
-            Self {
-                call_count: AtomicU32::new(0),
-                responses,
-            }
+            Self { call_count: AtomicU32::new(0), responses }
         }
     }
 
@@ -648,10 +626,7 @@ mod tests {
             r#"[{"kind":"precondition","spec_body":"x > 0","confidence":0.9,"rationale":"ok"}]"#
                 .into(),
         )]);
-        let policy = EscalationPolicy {
-            starting_tier: ModelTier::Fast,
-            ..Default::default()
-        };
+        let policy = EscalationPolicy { starting_tier: ModelTier::Fast, ..Default::default() };
         let mut tracker = EscalationTracker::new(policy);
         let request = LlmRequest {
             prompt: "test".into(),
@@ -764,11 +739,7 @@ mod tests {
         };
 
         let result = send_with_escalation(&mock, &request, &mut tracker, |response| {
-            if response.content == "[]" {
-                Err(EscalationTrigger::EmptyResponse)
-            } else {
-                Ok(())
-            }
+            if response.content == "[]" { Err(EscalationTrigger::EmptyResponse) } else { Ok(()) }
         });
 
         // Should still return Ok with the last response
@@ -814,10 +785,7 @@ mod tests {
             }
         }
 
-        let policy = EscalationPolicy {
-            starting_tier: ModelTier::Fast,
-            ..Default::default()
-        };
+        let policy = EscalationPolicy { starting_tier: ModelTier::Fast, ..Default::default() };
         let mut tracker = EscalationTracker::new(policy);
         let request = LlmRequest {
             prompt: "test".into(),
@@ -837,10 +805,7 @@ mod tests {
 
     #[test]
     fn test_tracker_current_model_id() {
-        let policy = EscalationPolicy {
-            starting_tier: ModelTier::Balanced,
-            ..Default::default()
-        };
+        let policy = EscalationPolicy { starting_tier: ModelTier::Balanced, ..Default::default() };
         let tracker = EscalationTracker::new(policy);
         assert_eq!(tracker.current_model_id(), "AI Model-sonnet-4-20250514");
     }

@@ -126,7 +126,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                             && !root_pred.self_ty().has_escaping_bound_vars()
                             // The type of the leaf predicate is (roughly) the same as the type
                             // from the root predicate, as a proxy for "we care about the root"
-                            // tRust: known issue — this doesn't account for trivial derefs, but works as a first
+                            // FIXME: this doesn't account for trivial derefs, but works as a first
                             // approximation.
                             && (
                                 // `T: Trait` && `&&T: OtherTrait`, we want `OtherTrait`
@@ -634,7 +634,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         // Errors for Subtype predicates show up as
                         // `FulfillmentErrorCode::SubtypeError`,
                         // not selection error.
-                        // tRust: invariant — a subtype predicate mismatch must produce a corresponding subtype error, not an unrelated one
                         span_bug!(span, "subtype requirement gave wrong error: `{:?}`", predicate)
                     }
 
@@ -642,13 +641,11 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         // Errors for Coerce predicates show up as
                         // `FulfillmentErrorCode::SubtypeError`,
                         // not selection error.
-                        // tRust: invariant — a coerce predicate mismatch must produce a corresponding coerce error, not an unrelated one
                         span_bug!(span, "coerce requirement gave wrong error: `{:?}`", predicate)
                     }
 
                     ty::PredicateKind::Clause(ty::ClauseKind::RegionOutlives(..))
                     | ty::PredicateKind::Clause(ty::ClauseKind::TypeOutlives(..)) => {
-                        // tRust: invariant — outlives clauses (region and type) are resolved during borrowck, not trait selection; reaching this path indicates a misrouted obligation
                         span_bug!(
                             span,
                             "outlives clauses should not error outside borrowck. obligation: `{:?}`",
@@ -657,7 +654,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     }
 
                     ty::PredicateKind::Clause(ty::ClauseKind::Projection(..)) => {
-                        // tRust: invariant — projection clauses should be implied by other obligations and not produce independent selection errors
                         span_bug!(
                             span,
                             "projection clauses should be implied from elsewhere. obligation: `{:?}`",
@@ -696,7 +692,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                                 return guar;
                             }
 
-                            // tRust: known issue — we'll need a better message which takes into account
+                            // FIXME: we'll need a better message which takes into account
                             // which bounds actually failed to hold.
                             self.dcx().struct_span_err(
                                 span,
@@ -708,7 +704,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                             // ambiguity; otherwise, they always
                             // degenerate into other obligations
                             // (which may fail).
-                            // tRust: invariant — well-formedness obligations must produce valid diagnostics when unsatisfied
                             span_bug!(span, "WF predicate not satisfied for {:?}", ty);
                         }
                     }
@@ -728,7 +723,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     | ty::PredicateKind::NormalizesTo { .. }
                     | ty::PredicateKind::AliasRelate { .. }
                     | ty::PredicateKind::Clause(ty::ClauseKind::ConstArgHasType { .. }) => {
-                        // tRust: invariant — Unexpected `Predicate` for `SelectionError`: ``
                         span_bug!(
                             span,
                             "Unexpected `Predicate` for `SelectionError`: `{:?}`",
@@ -770,7 +764,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             }
 
             SelectionError::NotConstEvaluatable(NotConstEvaluatable::MentionsInfer) => {
-                // tRust: invariant — MentionsInfer should have been handled in `traits/fulfill.rs` or `traits/select/mod.rs`
                 bug!(
                     "MentionsInfer should have been handled in `traits/fulfill.rs` or `traits/select/mod.rs`"
                 )
@@ -791,7 +784,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             },
 
             SelectionError::Overflow(_) => {
-                // tRust: invariant — overflow should be handled before the `report_selection_error` path
                 bug!("overflow should be handled before the `report_selection_error` path");
             }
 
@@ -854,7 +846,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         main_obligation: &PredicateObligation<'tcx>,
         span: Span,
     ) -> Diag<'a> {
-        // tRust: known issue (const_trait_impl) — We should recompute the predicate with `[const]`
+        // FIXME(const_trait_impl): We should recompute the predicate with `[const]`
         // if it's `const`, and if it holds, explain that this bound only
         // *conditionally* holds.
         let trait_ref = predicate.map_bound(|predicate| ty::TraitPredicate {
@@ -1029,7 +1021,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             let coro_kind = match self
                 .tcx
                 .coroutine_kind(self.tcx.coroutine_for_closure(closure_def_id))
-                .expect("invariant: value is present")
+                .unwrap()
             {
                 rustc_hir::CoroutineKind::Desugared(desugaring, _) => desugaring.to_string(),
                 coro => coro.to_string(),
@@ -1225,7 +1217,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 && self
                     .infcx
                     .type_implements_trait(
-                        self.tcx.get_diagnostic_item(sym::From).expect("invariant: diagnostic item is defined"),
+                        self.tcx.get_diagnostic_item(sym::From).unwrap(),
                         [self_ty, expr_ty],
                         obligation.param_env,
                     )
@@ -1287,7 +1279,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             let implements_from = self
                 .infcx
                 .type_implements_trait(
-                    self.tcx.get_diagnostic_item(sym::From).expect("invariant: diagnostic item is defined"),
+                    self.tcx.get_diagnostic_item(sym::From).unwrap(),
                     [self_ty, err_ty],
                     obligation.param_env,
                 )
@@ -1414,7 +1406,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                             Applicability::MachineApplicable,
                         );
                     } else {
-                        // tRust: known issue (adt_const_params) — We should check there's not already an
+                        // FIXME(adt_const_params): We should check there's not already an
                         // overlapping `Eq`/`PartialEq` impl.
                         diag.span_suggestion(
                             span.shrink_to_lo(),
@@ -1534,7 +1526,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             return true;
         }
 
-        // tRust: known issue — We could be smarter about this, i.e. if cond's param-env is a
+        // FIXME: We could be smarter about this, i.e. if cond's param-env is a
         // subset of error's param-env. This only matters when binders will carry
         // predicates though, and obviously only matters for error reporting.
         if cond.param_env != error.param_env {
@@ -1593,7 +1585,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         bound_predicate.rebind(data),
                     );
                     let unnormalized_term = data.projection_term.to_term(self.tcx);
-                    // tRust: known issue (-Znext-solver) — For diagnostic purposes, it would be nice
+                    // FIXME(-Znext-solver): For diagnostic purposes, it would be nice
                     // to deeply normalize this type.
                     let normalized_term =
                         ocx.normalize(&obligation.cause, obligation.param_env, unnormalized_term);
@@ -2055,7 +2047,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     }
                     // Avoid mentioning types that are private to another crate
                     else if let ty::Adt(def, _) = self_ty.peel_refs().kind() {
-                        // tRust: known issue (compiler-errors) — This could be generalized, both to
+                        // FIXME(compiler-errors): This could be generalized, both to
                         // be more granular, and probably look past other `#[fundamental]`
                         // types, too.
                         let mut did = def.did();
@@ -2156,7 +2148,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         && line.starts_with("the trait")
                         && line.contains("is not implemented for")
                     {
-                        // tRust: accepted tradeoff (estebank) — : we remove the pre-existing
+                        // HACK(estebank): we remove the pre-existing
                         // "the trait `X` is not implemented for" note, which only happens if there
                         // was a custom label. We do this because we want that note to always be the
                         // first, and making this logic run earlier will get tricky. For now, we
@@ -2306,7 +2298,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 candidates.iter().map(|(c, _)| c.print_only_trait_path().to_string()).collect();
             traits.sort();
             traits.dedup();
-            // tRust: known issue — this could use a better heuristic, like just checking
+            // FIXME: this could use a better heuristic, like just checking
             // that args[1..] is the same.
             let all_traits_equal = traits.len() == 1;
             let mut types: Vec<_> =
@@ -3046,7 +3038,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     }
                 }
                 // Should never get a Yes at this point! We already ran it before, and did not get a Yes.
-                // tRust: invariant — Inconsistent rustc_transmute::is_transmutable(...) result, got Yes
                 Answer::Yes => span_bug!(
                     span,
                     "Inconsistent rustc_transmute::is_transmutable(...) result, got Yes",
@@ -3689,7 +3680,8 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 // Make a fresh inference variable so we can determine what the generic parameters
                 // of the trait are.
                 let var = self.next_ty_var(DUMMY_SP);
-                // tRust: known issue (const_trait_impl) — let trait_ref = ty::TraitRef::new(self.tcx, trait_def_id, [ty.skip_binder(), var]);
+                // FIXME(const_trait_impl)
+                let trait_ref = ty::TraitRef::new(self.tcx, trait_def_id, [ty.skip_binder(), var]);
                 let obligation = Obligation::new(
                     self.tcx,
                     ObligationCause::dummy(),
@@ -3723,7 +3715,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             let guar = self
                 .dcx()
                 .struct_span_err(span, "constant expression depends on a generic parameter")
-                // tRust: known issue (const_generics) — we should suggest to the user how they can resolve this
+                // FIXME(const_generics): we should suggest to the user how they can resolve this
                 // issue. However, this is currently not actually possible
                 // (see https://github.com/rust-lang/rust/issues/66962#issuecomment-575907083).
                 //
@@ -3782,12 +3774,10 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     Ok(err)
                 }
                 _ => {
-                    // tRust: invariant — all valid self.tcx.sess.source_map().span_to_snippet(const_span) variants must be handled above; const evaluatable failed for non-unevaluated const `
                     bug!("const evaluatable failed for non-unevaluated const `{ct:?}`");
                 }
             },
             _ => {
-                // tRust: invariant — Unexpected non-ConstEvaluatable predicate, this should not be reachable
                 span_bug!(
                     span,
                     "unexpected non-ConstEvaluatable predicate, this should not be reachable"

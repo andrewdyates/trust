@@ -46,12 +46,12 @@ impl<'tcx> OutlivesEnvironment<'tcx> {
             }
         }
 
-        // tRust: known issue (-Znext-trait-solver) — Normalize these.
+        // FIXME(-Znext-trait-solver): Normalize these.
         let higher_ranked_assumptions = infcx.take_registered_region_assumptions();
         let higher_ranked_assumptions =
             elaborate::elaborate_outlives_assumptions(infcx.tcx, higher_ranked_assumptions);
 
-        // tRust: known issue — This needs to be modified so that we normalize the known type
+        // FIXME: This needs to be modified so that we normalize the known type
         // outlives obligations then elaborate them into their region/type components.
         // Otherwise, `<W<'a> as Mirror>::Assoc: 'b` will not imply `'a: 'b` even
         // if we can normalize `'a`.

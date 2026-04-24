@@ -484,7 +484,7 @@ impl<'a> Parser<'a> {
             let (span, opt_end) = if this.is_at_start_of_range_notation_rhs() {
                 // RHS must be parsed with more associativity than the dots.
                 let attrs = this.parse_outer_attributes()?;
-                this.parse_expr_assoc_with(Bound::Excluded(op.expect("invariant: operator is present").precedence()), attrs) // tRust: unwrap -> expect
+                this.parse_expr_assoc_with(Bound::Excluded(op.unwrap().precedence()), attrs)
                     .map(|(x, _)| (lo.to(x.span), Some(x)))
                     .map_err(|err| this.maybe_err_dotdotlt_syntax(maybe_lt, err))?
             } else {
@@ -866,7 +866,7 @@ impl<'a> Parser<'a> {
             // `raw [ const | mut ]`.
             let found_raw = self.eat_keyword(exp!(Raw));
             assert!(found_raw);
-            let mutability = self.parse_const_or_mut().expect("invariant: token is const or mut"); // tRust: unwrap -> expect
+            let mutability = self.parse_const_or_mut().unwrap();
             (ast::BorrowKind::Raw, mutability)
         } else {
             match self.parse_pin_and_mut() {
@@ -1050,7 +1050,7 @@ impl<'a> Parser<'a> {
     ///
     /// See also [`TokenKind::break_two_token_op`] which does similar splitting of `>>` into `>`.
     //
-    // tRust: known issue —: With current `TokenCursor` it's hard to break tokens into more than 2
+    // FIXME: With current `TokenCursor` it's hard to break tokens into more than 2
     //  parts unless those parts are processed immediately. `TokenCursor` should either
     //  support pushing "future tokens" (would be also helpful to `break_and_eat`), or
     //  we should break everything including floats into more basic proc-macro style
@@ -1127,7 +1127,7 @@ impl<'a> Parser<'a> {
             [IdentLike(_), Punct('.'), IdentLike(_), Punct('+' | '-')] |
             // 1.2e+3 | 1.2e-3
             [IdentLike(_), Punct('.'), IdentLike(_), Punct('+' | '-'), IdentLike(_)] => {
-                // See the tRust: known issue — about `TokenCursor` above.
+                // See the FIXME about `TokenCursor` above.
                 self.error_unexpected_after_dot();
                 DestructuredFloat::Error
             }
@@ -1427,8 +1427,8 @@ impl<'a> Parser<'a> {
                 // Force collection (as opposed to just `parse_expr`) is required to avoid the
                 // attribute duplication seen in #138478.
                 let expr = this.parse_expr_force_collect();
-                // tRust: known issue —(nnethercote) Sometimes with expressions we get a trailing comma, possibly
-                // related to the tRust: known issue — in `collect_tokens_for_expr`. Examples are the multi-line
+                // FIXME(nnethercote) Sometimes with expressions we get a trailing comma, possibly
+                // related to the FIXME in `collect_tokens_for_expr`. Examples are the multi-line
                 // `assert_eq!` calls involving arguments annotated with `#[rustfmt::skip]` in
                 // `compiler/rustc_index/src/bit_set/tests.rs`.
                 if this.token.kind == token::Comma {
@@ -1553,8 +1553,8 @@ impl<'a> Parser<'a> {
                 let at_async = this.check_keyword(exp!(Async));
                 // check for `gen {}` and `gen move {}`
                 // or `async gen {}` and `async gen move {}`
-                // tRust: known issue —: (async) gen closures aren't yet parsed.
-                // tRust: known issue —(gen_blocks): Parse `gen async` and suggest swap
+                // FIXME: (async) gen closures aren't yet parsed.
+                // FIXME(gen_blocks): Parse `gen async` and suggest swap
                 if this.token_uninterpolated_span().at_least_rust_2024()
                     && this.is_gen_block(kw::Gen, at_async as usize)
                 {
@@ -1606,7 +1606,7 @@ impl<'a> Parser<'a> {
         };
         let kind = if es.len() == 1 && matches!(trailing_comma, Trailing::No) {
             // `(e)` is parenthesized `e`.
-            ExprKind::Paren(es.into_iter().next().expect("invariant: collection has at least one element")) // tRust: unwrap -> expect
+            ExprKind::Paren(es.into_iter().next().unwrap())
         } else {
             // `(e,)` is a tuple with only one field, `e`.
             ExprKind::Tup(es)
@@ -2242,7 +2242,7 @@ impl<'a> Parser<'a> {
                     let suffixless_lit = token::Lit::new(token_lit.kind, token_lit.symbol, None);
                     let symbol = Symbol::intern(&suffixless_lit.to_string());
                     let token_lit = token::Lit::new(token::Err(guar), symbol, token_lit.suffix);
-                    MetaItemLit::from_token_lit(token_lit, uninterpolated_span).expect("invariant: token literal is valid") // tRust: unwrap -> expect
+                    MetaItemLit::from_token_lit(token_lit, uninterpolated_span).unwrap()
                 }
             }
         })
@@ -2254,7 +2254,7 @@ impl<'a> Parser<'a> {
         if let Some(expr) = self.eat_metavar_seq_with_matcher(
             |mv_kind| matches!(mv_kind, MetaVarKind::Expr { .. }),
             |this| {
-                // tRust: known issue —(nnethercote) The `expr` case should only match if
+                // FIXME(nnethercote) The `expr` case should only match if
                 // `e` is an `ExprKind::Lit` or an `ExprKind::Unary` containing
                 // an `UnOp::Neg` and an `ExprKind::Lit`, like how
                 // `can_begin_literal_maybe_minus` works. But this method has
@@ -2459,7 +2459,7 @@ impl<'a> Parser<'a> {
             Some(CoroutineKind::Async { .. }) => {}
             Some(CoroutineKind::Gen { span, .. }) | Some(CoroutineKind::AsyncGen { span, .. }) => {
                 // Feature-gate `gen ||` and `async gen ||` closures.
-                // tRust: known issue —(gen_blocks): This perhaps should be a different gate.
+                // FIXME(gen_blocks): This perhaps should be a different gate.
                 self.psess.gated_spans.gate(sym::gen_blocks, span);
             }
             None => {}
@@ -3421,7 +3421,7 @@ impl<'a> Parser<'a> {
             let recover_missing_comma = arm_body.is_some() || pat.could_be_never_pattern();
             if recover_missing_comma {
                 result = result.or_else(|err| {
-                    // tRust: known issue —(compiler-errors): We could also recover `; PAT =>` here
+                    // FIXME(compiler-errors): We could also recover `; PAT =>` here
 
                     // Try to parse a following `PAT =>`, if successful
                     // then we should recover.
@@ -3523,7 +3523,7 @@ impl<'a> Parser<'a> {
                 && let ast::PatKind::Guard(..) = &subpat.kind
             {
                 // Detect and recover from `($pat if $cond) => $arm`.
-                // tRust: known issue —(guard_patterns): convert this to a normal guard instead
+                // FIXME(guard_patterns): convert this to a normal guard instead
                 let span = pat.span;
                 let ast::PatKind::Paren(subpat) = pat.kind else { unreachable!() };
                 let ast::PatKind::Guard(_, mut guard) = subpat.kind else { unreachable!() };
@@ -4202,7 +4202,7 @@ impl<'a> Parser<'a> {
             let trailing = Trailing::from(
                 this.restrictions.contains(Restrictions::STMT_EXPR)
                      && this.token == token::Semi
-                // tRust: known issue —: pass an additional condition through from the place
+                // FIXME: pass an additional condition through from the place
                 // where we know we need a comma, rather than assuming that
                 // `#[attr] expr,` always captures a trailing comma.
                 || this.token == token::Comma,

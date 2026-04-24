@@ -185,7 +185,6 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for LateBoundRegionsCollector<'tcx> {
                     return;
                 }
                 // All free alias types should've been expanded beforehand.
-                // tRust: invariant: unexpected free alias type
                 ty::Alias(ty::Free, _) => bug!("unexpected free alias type"),
                 _ => {}
             }

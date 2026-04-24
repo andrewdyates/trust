@@ -196,7 +196,7 @@ pub fn parse_asm_args<'a>(
                 return Err(dcx.create_err(errors::AsmExpectedComma { span: p.token.span }));
             } else {
                 // ...after that delegate to `expect` to also include the other expected tokens.
-                return Err(p.expect(exp!(Comma)).err().expect("invariant: result is an error")); // tRust: unwrap -> expect
+                return Err(p.expect(exp!(Comma)).err().unwrap());
             }
         }
 
@@ -236,7 +236,7 @@ pub fn parse_asm_args<'a>(
 
         // Parse operand names.
         let name = if p.token.is_ident() && p.look_ahead(1, |t| *t == token::Eq) {
-            let (ident, _) = p.token.ident().expect("invariant: token is an identifier"); // tRust: unwrap -> expect
+            let (ident, _) = p.token.ident().unwrap();
             p.bump();
             p.expect(exp!(Eq))?;
             allow_templates = false;

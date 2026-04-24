@@ -72,7 +72,7 @@ pub struct CodegenFnAttrs {
     /// i.e., if a foreign function has some symbol foo,
     /// generate this function under its real name,
     /// but *also* under the same name as this foreign function so that the foreign function has an implementation.
-    // tRust: known issue — make "SymbolName<'tcx>"
+    // FIXME: make "SymbolName<'tcx>"
     pub foreign_item_symbol_aliases: Vec<(DefId, Linkage, Visibility)>,
     /// The `#[link_ordinal = "..."]` attribute, indicating an ordinal an
     /// imported function has in the dynamic library. Note that this must not
@@ -100,7 +100,7 @@ pub struct CodegenFnAttrs {
     /// switching between multiple instruction sets.
     pub instruction_set: Option<InstructionSetAttr>,
     /// The `#[align(...)]` attribute. Determines the alignment of the function body.
-    // tRust: known issue (#82232, #143834) — temporarily renamed to mitigate `#[align]` nameres ambiguity
+    // FIXME(#82232, #143834): temporarily renamed to mitigate `#[align]` nameres ambiguity
     pub alignment: Option<Align>,
     /// The `#[patchable_function_entry(...)]` attribute. Indicates how many nops should be around
     /// the function entry.

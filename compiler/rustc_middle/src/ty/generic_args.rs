@@ -84,7 +84,6 @@ impl<'tcx> rustc_type_ir::inherent::GenericArgs<TyCtxt<'tcx>> for ty::GenericArg
                     tupled_upvars_ty: tupled_upvars_ty.expect_ty(),
                 }
             }
-            // tRust: invariant: inline const args must include synthetic type parameter
             _ => bug!("closure args missing synthetics"),
         }
     }
@@ -104,7 +103,6 @@ impl<'tcx> rustc_type_ir::inherent::GenericArgs<TyCtxt<'tcx>> for ty::GenericArg
                 tupled_upvars_ty: tupled_upvars_ty.expect_ty(),
                 coroutine_captures_by_ref_ty: coroutine_captures_by_ref_ty.expect_ty(),
             },
-            // tRust: invariant: inline const args must include synthetic type parameter
             _ => bug!("closure args missing synthetics"),
         }
     }
@@ -121,7 +119,6 @@ impl<'tcx> rustc_type_ir::inherent::GenericArgs<TyCtxt<'tcx>> for ty::GenericArg
                     tupled_upvars_ty: tupled_upvars_ty.expect_ty(),
                 }
             }
-            // tRust: invariant: inline const args must include synthetic type parameter
             _ => bug!("coroutine args missing synthetics"),
         }
     }
@@ -223,12 +220,6 @@ impl<'tcx> GenericArg<'tcx> {
     #[inline]
     pub fn kind(self) -> GenericArgKind<'tcx> {
         let ptr =
-            // SAFETY: The pointer was created by `pack()` which ORs in tag bits from a
-            // validly-aligned interned pointer. Masking off TAG_MASK restores the original
-            // non-null pointer address; the result is non-zero because the original interned
-            // pointer was non-null and aligned (alignment > TAG_MASK, asserted in `pack()`).
-            // SAFETY: `pack()` stored a non-null, properly aligned interned pointer here,
-            // so clearing the tag bits recovers that original address.
             unsafe { self.ptr.map_addr(|addr| NonZero::new_unchecked(addr.get() & !TAG_MASK)) };
         // SAFETY: use of `Interned::new_unchecked` here is ok because these
         // pointers were originally created from `Interned` types in `pack()`,
@@ -284,7 +275,6 @@ impl<'tcx> GenericArg<'tcx> {
 
     /// Unpack the `GenericArg` as a region when it is known certainly to be a region.
     pub fn expect_region(self) -> ty::Region<'tcx> {
-        // tRust: invariant: expected value must exist: expected a region, but found another kind
         self.as_region().unwrap_or_else(|| bug!("expected a region, but found another kind"))
     }
 
@@ -292,20 +282,18 @@ impl<'tcx> GenericArg<'tcx> {
     /// This is true in cases where `GenericArgs` is used in places where the kinds are known
     /// to be limited (e.g. in tuples, where the only parameters are type parameters).
     pub fn expect_ty(self) -> Ty<'tcx> {
-        // tRust: invariant: expected value must exist: expected a type, but found another kind
         self.as_type().unwrap_or_else(|| bug!("expected a type, but found another kind"))
     }
 
     /// Unpack the `GenericArg` as a const when it is known certainly to be a const.
     pub fn expect_const(self) -> ty::Const<'tcx> {
-        // tRust: invariant: expected value must exist: expected a const, but found another kind
         self.as_const().unwrap_or_else(|| bug!("expected a const, but found another kind"))
     }
 
     pub fn is_non_region_infer(self) -> bool {
         match self.kind() {
             GenericArgKind::Lifetime(_) => false,
-            // tRust: known issue — This shouldn't return numerical/float.
+            // FIXME: This shouldn't return numerical/float.
             GenericArgKind::Type(ty) => ty.is_ty_or_numeric_infer(),
             GenericArgKind::Const(ct) => ct.is_ct_infer(),
         }
@@ -395,7 +383,6 @@ impl<'tcx> GenericArgs<'tcx> {
     pub fn into_type_list(&self, tcx: TyCtxt<'tcx>) -> &'tcx List<Ty<'tcx>> {
         tcx.mk_type_list_from_iter(self.iter().map(|arg| match arg.kind() {
             GenericArgKind::Type(ty) => ty,
-            // tRust: invariant: into_type_list called on generic arg with non-types
             _ => bug!("`into_type_list` called on generic arg with non-types"),
         }))
     }
@@ -542,7 +529,6 @@ impl<'tcx> GenericArgs<'tcx> {
     pub fn type_at(&self, i: usize) -> Ty<'tcx> {
         self[i].as_type().unwrap_or_else(
             #[track_caller]
-            // tRust: invariant: expected type for param #<...> in <...>
             || bug!("expected type for param #{} in {:?}", i, self),
         )
     }
@@ -552,7 +538,6 @@ impl<'tcx> GenericArgs<'tcx> {
     pub fn region_at(&self, i: usize) -> ty::Region<'tcx> {
         self[i].as_region().unwrap_or_else(
             #[track_caller]
-            // tRust: invariant: expected region for param #<...> in <...>
             || bug!("expected region for param #{} in {:?}", i, self),
         )
     }
@@ -562,7 +547,6 @@ impl<'tcx> GenericArgs<'tcx> {
     pub fn const_at(&self, i: usize) -> ty::Const<'tcx> {
         self[i].as_const().unwrap_or_else(
             #[track_caller]
-            // tRust: invariant: expected const for param #<...> in <...>
             || bug!("expected const for param #{} in {:?}", i, self),
         )
     }

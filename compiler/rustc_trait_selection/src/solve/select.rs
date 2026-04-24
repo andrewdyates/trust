@@ -28,7 +28,7 @@ impl<'tcx> InferCtxt<'tcx> {
             &mut Select { span: obligation.cause.span },
         )
         .break_value()
-        .expect("invariant: value is present")
+        .unwrap()
     }
 }
 
@@ -56,13 +56,13 @@ impl<'tcx> inspect::ProofTreeVisitor<'tcx> for Select {
         if candidates.len() == 1 {
             return ControlFlow::Break(Ok(to_selection(
                 self.span,
-                candidates.into_iter().next().expect("invariant: iterator is non-empty"),
+                candidates.into_iter().next().unwrap(),
             )));
         }
 
         // Don't winnow until `Certainty::Yes` -- we don't need to winnow until
         // codegen, and only on the good path.
-        if matches!(goal.result().expect("invariant: candidate has result"), Certainty::Maybe { .. }) {
+        if matches!(goal.result().unwrap(), Certainty::Maybe { .. }) {
             return ControlFlow::Break(Ok(None));
         }
 
@@ -82,7 +82,7 @@ impl<'tcx> inspect::ProofTreeVisitor<'tcx> for Select {
             }
         }
 
-        ControlFlow::Break(Ok(to_selection(self.span, candidates.into_iter().next().expect("invariant: iterator is non-empty"))))
+        ControlFlow::Break(Ok(to_selection(self.span, candidates.into_iter().next().unwrap())))
     }
 }
 
@@ -95,7 +95,7 @@ fn candidate_should_be_dropped_in_favor_of<'tcx>(
 ) -> bool {
     // Don't winnow until `Certainty::Yes` -- we don't need to winnow until
     // codegen, and only on the good path.
-    if matches!(other.result().expect("invariant: candidate has result"), Certainty::Maybe { .. }) {
+    if matches!(other.result().unwrap(), Certainty::Maybe { .. }) {
         return false;
     }
 
@@ -110,7 +110,6 @@ fn candidate_should_be_dropped_in_favor_of<'tcx>(
 
     match (victim_source, other_source) {
         (_, CandidateSource::CoherenceUnknowable) | (CandidateSource::CoherenceUnknowable, _) => {
-            // tRust: invariant — Should not have assembled a CoherenceUnknowable candidate
             bug!("should not have assembled a CoherenceUnknowable candidate")
         }
 
@@ -169,7 +168,7 @@ fn to_selection<'tcx>(
     Some(match cand.kind() {
         ProbeKind::TraitCandidate { source, result: _ } => match source {
             CandidateSource::Impl(impl_def_id) => {
-                // tRust: known issue — Remove this in favor of storing this in the tree
+                // FIXME: Remove this in favor of storing this in the tree
                 // For impl candidates, we do the rematch manually to compute the args.
                 ImplSource::UserDefined(ImplSourceUserDefinedData {
                     impl_def_id,
@@ -182,7 +181,6 @@ fn to_selection<'tcx>(
                 ImplSource::Param(nested)
             }
             CandidateSource::CoherenceUnknowable => {
-                // tRust: invariant — Didn't expect to select an unknowable candidate
                 span_bug!(span, "didn't expect to select an unknowable candidate")
             }
         },
@@ -193,7 +191,6 @@ fn to_selection<'tcx>(
         | ProbeKind::Root { result: _ }
         | ProbeKind::ShadowedEnvProbing
         | ProbeKind::RigidAlias { result: _ } => {
-            // tRust: invariant — Didn't expect to assemble trait candidate from
             span_bug!(span, "didn't expect to assemble trait candidate from {:#?}", cand.kind())
         }
     })

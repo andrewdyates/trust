@@ -57,14 +57,15 @@ members = [
   "crates/trust-convergence",
   "crates/trust-proof-cert",
   "crates/trust-temporal",
-  "crates/trust-runtime",
-  "crates/trust-testgen",
   "crates/trust-strengthen",
+  "crates/trust-spec",
   "crates/trust-debug",
   "crates/trust-backprop",
   "crates/trust-zani-lib",
   "crates/trust-sunder-lib",
   "crates/trust-llvm2-bridge",
+  "crates/trust-lean5",
+  "crates/trust-integration-tests",
 ]
 
 exclude = [
@@ -75,10 +76,10 @@ exclude = [
   "tests/rustdoc-gui",
   # HACK(eddyb) This hardcodes the fact that our CI uses `/checkout/obj`.
   "obj",
-  # tRust: standalone workspace crates (need rustc_private/nightly)
+  # tRust: standalone workspace crates
   "crates/trust-mir-extract",
-  "crates/trust-driver",  # deprecated standalone wrapper; kept for z4 backend
-  "crates/trust-lean5",
+  # tRust: benchmark crates (criterion dependency, run separately)
+  "benchmarks/verify_overhead",
 ]
 
 [profile.release.package.rustc_thread_pool]
@@ -115,7 +116,6 @@ codegen-units = 1
 # For git dependencies, also add your source to ALLOWED_SOURCES in src/tools/tidy/src/extdeps.rs.
 #[patch.crates-io]
 
-
 # tRust: workspace-level package metadata for verification pipeline crates
 [workspace.package]
 version = "0.1.0"
@@ -134,9 +134,8 @@ trust-temporal = { path = "crates/trust-temporal" }
 trust-convergence = { path = "crates/trust-convergence" }
 trust-proof-cert = { path = "crates/trust-proof-cert" }
 trust-config = { path = "crates/trust-config" }
-trust-runtime = { path = "crates/trust-runtime" }
-trust-testgen = { path = "crates/trust-testgen" }
 trust-strengthen = { path = "crates/trust-strengthen" }
+trust-spec = { path = "crates/trust-spec" }
 trust-cegar = { path = "crates/trust-cegar" }
 trust-debug = { path = "crates/trust-debug" }
 trust-symex = { path = "crates/trust-symex" }
@@ -145,15 +144,13 @@ trust-lift = { path = "crates/trust-lift" }
 trust-binary-parse = { path = "crates/trust-binary-parse" }
 trust-disasm = { path = "crates/trust-disasm" }
 trust-machine-sem = { path = "crates/trust-machine-sem" }
-trust-type-recover = { path = "crates/trust-type-recover" }
-trust-decompile = { path = "crates/trust-decompile" }
 trust-backprop = { path = "crates/trust-backprop" }
 trust-zani-lib = { path = "crates/trust-zani-lib" }
 trust-sunder-lib = { path = "crates/trust-sunder-lib" }
 trust-loop = { path = "crates/trust-loop" }
 trust-lean5 = { path = "crates/trust-lean5" }
 trust-transval = { path = "crates/trust-transval" }
-trust-crown = { path = "crates/trust-crown" }
+fs2 = "0.4"
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
 syn = { version = "2", features = ["full", "visit", "extra-traits"] }
@@ -162,6 +159,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+tempfile = "3"
 # tRust #837: Deterministic hashing for compilation reproducibility
 rustc-hash = "2.0.0"
 indexmap = "2.7"
@@ -176,12 +174,14 @@ reqwest = { version = "0.12", features = ["json", "blocking"], default-features 
 # tRust: lean5 proof kernel for Lean5 backend
 lean5-kernel = { git = "https://github.com/andrewdyates/lean5" }
 # tRust: tla2 model-checking core for temporal verification backend
-tla-mc-core = { git = "https://github.com/andrewdyates/tla2" }
+tla-mc-core = { git = "https://github.com/andrewdyates/tla2", rev = "f96cd001f0a2022000313ef9dd92e4a79f62ba98" }
 # tRust: z4 SMT solver for verification backends
 # URL must NOT have .git suffix — zani uses bare URL, Cargo treats z4.git vs z4 as different sources.
 z4 = { git = "https://github.com/andrewdyates/z4" }
 # tRust: z4-bindings typed builder API for direct z4 integration
 z4-bindings = { git = "https://github.com/andrewdyates/z4" }
+# tRust #879: z4-proof-common shared types for proof checker crates
+z4-proof-common = { git = "https://github.com/andrewdyates/z4" }
 # tRust: zani bounded model checker
 zani-verifier = { git = "https://github.com/andrewdyates/zani" }
 # tRust: zani_core VC IR for direct BMC/CHC integration

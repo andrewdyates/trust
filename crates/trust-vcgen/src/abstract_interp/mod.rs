@@ -19,9 +19,9 @@
 pub(crate) mod arithmetic;
 pub(crate) mod discharge;
 pub(crate) mod domain;
-pub(crate) mod transfer;
 #[cfg(test)]
 mod tests;
+pub(crate) mod transfer;
 
 // Re-export all public items so external consumers see the same API.
 pub use arithmetic::*;
@@ -96,16 +96,8 @@ impl Interval {
         if other.is_bottom() {
             return *self;
         }
-        let lo = if other.lo < self.lo {
-            thresholds.next_below(self.lo)
-        } else {
-            self.lo
-        };
-        let hi = if other.hi > self.hi {
-            thresholds.next_above(self.hi)
-        } else {
-            self.hi
-        };
+        let lo = if other.lo < self.lo { thresholds.next_below(self.lo) } else { self.lo };
+        let hi = if other.hi > self.hi { thresholds.next_above(self.hi) } else { self.hi };
         Interval { lo, hi }
     }
 }
@@ -209,7 +201,11 @@ impl ThresholdSet {
                 if i + 1 < self.values.len() { self.values[i + 1] } else { i128::MAX }
             }
             Err(i) => {
-                if i < self.values.len() { self.values[i] } else { i128::MAX }
+                if i < self.values.len() {
+                    self.values[i]
+                } else {
+                    i128::MAX
+                }
             }
         }
     }
@@ -223,21 +219,30 @@ impl ThresholdSet {
                 if i > 0 { self.values[i - 1] } else { i128::MIN }
             }
             Err(i) => {
-                if i > 0 { self.values[i - 1] } else { i128::MIN }
+                if i > 0 {
+                    self.values[i - 1]
+                } else {
+                    i128::MIN
+                }
             }
         }
     }
 
     /// Whether the set is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool { self.values.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
 
     /// Number of thresholds.
     #[must_use]
-    pub fn len(&self) -> usize { self.values.len() }
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
 
     /// Access the sorted threshold values.
     #[must_use]
-    pub fn values(&self) -> &[i128] { &self.values }
+    pub fn values(&self) -> &[i128] {
+        &self.values
+    }
 }
-

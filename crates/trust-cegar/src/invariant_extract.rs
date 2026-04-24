@@ -104,9 +104,8 @@ pub fn parse_smtlib_expr(
     // Variable reference.
     if !trimmed.starts_with('(') {
         // Look up in variable map.
-        if let Some((_, orig_name, sort)) = variable_map
-            .iter()
-            .find(|(spacer_name, _, _)| spacer_name == trimmed)
+        if let Some((_, orig_name, sort)) =
+            variable_map.iter().find(|(spacer_name, _, _)| spacer_name == trimmed)
         {
             return Ok(Formula::Var(orig_name.clone(), sort.clone()));
         }
@@ -219,11 +218,7 @@ pub fn parse_smtlib_expr(
             let cond = args_iter.next().unwrap_or(Formula::Bool(true));
             let then_branch = args_iter.next().unwrap_or(Formula::Bool(true));
             let else_branch = args_iter.next().unwrap_or(Formula::Bool(false));
-            Ok(Formula::Ite(
-                Box::new(cond),
-                Box::new(then_branch),
-                Box::new(else_branch),
-            ))
+            Ok(Formula::Ite(Box::new(cond), Box::new(then_branch), Box::new(else_branch)))
         }
         other => Err(CegarError::SolverError {
             detail: format!("unsupported SMT-LIB2 operator: {other}"),
@@ -234,15 +229,9 @@ pub fn parse_smtlib_expr(
 /// Split an s-expression into operator and arguments string.
 fn split_sexp(inner: &str) -> Result<(&str, &str), CegarError> {
     let trimmed = inner.trim();
-    let op_end = trimmed
-        .find(|c: char| c.is_whitespace())
-        .unwrap_or(trimmed.len());
+    let op_end = trimmed.find(|c: char| c.is_whitespace()).unwrap_or(trimmed.len());
     let operator = &trimmed[..op_end];
-    let args = if op_end < trimmed.len() {
-        &trimmed[op_end + 1..]
-    } else {
-        ""
-    };
+    let args = if op_end < trimmed.len() { &trimmed[op_end + 1..] } else { "" };
     Ok((operator, args.trim()))
 }
 
@@ -282,9 +271,7 @@ fn parse_sexp_args(
 fn find_sexp_end(input: &str) -> Result<usize, CegarError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Err(CegarError::SolverError {
-            detail: "empty s-expression".to_string(),
-        });
+        return Err(CegarError::SolverError { detail: "empty s-expression".to_string() });
     }
 
     if trimmed.starts_with('(') {
@@ -302,14 +289,10 @@ fn find_sexp_end(input: &str) -> Result<usize, CegarError> {
                 _ => {}
             }
         }
-        Err(CegarError::SolverError {
-            detail: format!("unbalanced parentheses in: {trimmed}"),
-        })
+        Err(CegarError::SolverError { detail: format!("unbalanced parentheses in: {trimmed}") })
     } else {
         // Atom: find end of token.
-        let end = trimmed
-            .find(|c: char| c.is_whitespace() || c == ')')
-            .unwrap_or(trimmed.len());
+        let end = trimmed.find(|c: char| c.is_whitespace() || c == ')').unwrap_or(trimmed.len());
         Ok(end)
     }
 }
@@ -426,10 +409,7 @@ mod tests {
     fn test_parse_smtlib_variable_unmapped() {
         let var_map = vec![];
         let formula = parse_smtlib_expr("unknown_var", &var_map).expect("should parse");
-        assert_eq!(
-            formula,
-            Formula::Var("unknown_var".into(), Sort::Int)
-        );
+        assert_eq!(formula, Formula::Var("unknown_var".into(), Sort::Int));
     }
 
     #[test]
@@ -438,10 +418,7 @@ mod tests {
         let formula = parse_smtlib_expr("(>= x!0 0)", &var_map).expect("should parse");
         assert_eq!(
             formula,
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            )
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)),)
         );
     }
 
@@ -471,10 +448,7 @@ mod tests {
         let formula = parse_smtlib_expr("(+ x 1)", &var_map).expect("should parse");
         assert_eq!(
             formula,
-            Formula::Add(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(1)),
-            )
+            Formula::Add(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(1)),)
         );
     }
 
@@ -482,10 +456,7 @@ mod tests {
     fn test_parse_smtlib_negation() {
         let var_map = vec![("x".to_string(), "x".to_string(), Sort::Int)];
         let formula = parse_smtlib_expr("(- x)", &var_map).expect("should parse");
-        assert_eq!(
-            formula,
-            Formula::Neg(Box::new(Formula::Var("x".into(), Sort::Int)))
-        );
+        assert_eq!(formula, Formula::Neg(Box::new(Formula::Var("x".into(), Sort::Int))));
     }
 
     #[test]
@@ -497,25 +468,19 @@ mod tests {
         };
         let var_map = vec![("x!0".to_string(), "x".to_string(), Sort::Int)];
 
-        let invariants =
-            extract_invariants(&[interp], &var_map).expect("should extract");
+        let invariants = extract_invariants(&[interp], &var_map).expect("should extract");
 
         assert_eq!(invariants.len(), 1);
         assert_eq!(invariants[0].loop_name, "Inv");
         assert!(!invariants[0].predicates.is_empty());
         // Should have x >= 0 and x <= 10
-        assert!(invariants[0]
-            .predicates
-            .contains(&Predicate::comparison("x", CmpOp::Ge, "0")));
-        assert!(invariants[0]
-            .predicates
-            .contains(&Predicate::comparison("x", CmpOp::Le, "10")));
+        assert!(invariants[0].predicates.contains(&Predicate::comparison("x", CmpOp::Ge, "0")));
+        assert!(invariants[0].predicates.contains(&Predicate::comparison("x", CmpOp::Le, "10")));
     }
 
     #[test]
     fn test_extract_invariants_empty() {
-        let invariants =
-            extract_invariants(&[], &[]).expect("empty should succeed");
+        let invariants = extract_invariants(&[], &[]).expect("empty should succeed");
         assert!(invariants.is_empty());
     }
 
@@ -527,8 +492,7 @@ mod tests {
             body: "true".to_string(),
         };
 
-        let invariants =
-            extract_invariants(&[interp], &[]).expect("should extract");
+        let invariants = extract_invariants(&[interp], &[]).expect("should extract");
         assert_eq!(invariants[0].formula, Formula::Bool(true));
         assert!(invariants[0].predicates.is_empty());
     }
@@ -548,11 +512,8 @@ mod tests {
     #[test]
     fn test_parse_smtlib_nested() {
         let var_map = vec![("x!0".to_string(), "x".to_string(), Sort::Int)];
-        let formula = parse_smtlib_expr(
-            "(and (>= x!0 0) (or (<= x!0 10) (= x!0 20)))",
-            &var_map,
-        )
-        .expect("should parse nested");
+        let formula = parse_smtlib_expr("(and (>= x!0 0) (or (<= x!0 10) (= x!0 20)))", &var_map)
+            .expect("should parse nested");
 
         match formula {
             Formula::And(children) => {
@@ -581,10 +542,8 @@ mod tests {
 
     #[test]
     fn test_extract_predicates_equality() {
-        let formula = Formula::Eq(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(5)),
-        );
+        let formula =
+            Formula::Eq(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5)));
         let preds = extract_predicates_from_invariant(&formula, &[]);
         assert!(preds.contains(&Predicate::comparison("x", CmpOp::Eq, "5")));
     }

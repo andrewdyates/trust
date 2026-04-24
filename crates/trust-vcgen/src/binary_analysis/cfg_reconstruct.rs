@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use trust_types::*;
 
 use super::lifter::{AbstractInsn, AbstractOp};
+#[cfg(test)]
 use super::lowering::{build_lowering_context, lower_cfg_to_blocks, synthetic_registers};
 
 /// One reconstructed basic block in the binary CFG.
@@ -149,6 +150,7 @@ pub fn reconstruct_cfg(instructions: &[AbstractInsn]) -> ReconstructedCfg {
 }
 
 /// Convert reconstructed CFG nodes into trust-types basic blocks.
+#[cfg(test)]
 #[must_use]
 pub fn cfg_to_blocks(cfg: &ReconstructedCfg) -> Vec<BasicBlock> {
     let registers = synthetic_registers(cfg);
@@ -352,7 +354,7 @@ mod tests {
                 AbstractOp::Load {
                     dst: 0,
                     access: MemoryAccess::Read {
-                        addr: Formula::Var("ptr".to_string(), Sort::Int),
+                        addr: Formula::Var("ptr".into(), Sort::Int),
                         size: 4,
                     },
                 },

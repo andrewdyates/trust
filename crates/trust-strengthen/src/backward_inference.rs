@@ -12,9 +12,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use std::fmt::Write;
+
 use crate::analyzer::FailurePattern;
 use crate::source_reader::SourceContext;
-use std::fmt::Write;
 
 /// tRust: Error types for spec inference parsing and validation.
 #[derive(Debug, Clone, thiserror::Error)]
@@ -161,18 +162,13 @@ impl InferredSpec {
 
     /// tRust: Iterate over all specs with their kind label.
     pub fn all_specs(&self) -> impl Iterator<Item = &InferredSpecItem> {
-        self.preconditions
-            .iter()
-            .chain(self.postconditions.iter())
-            .chain(self.invariants.iter())
+        self.preconditions.iter().chain(self.postconditions.iter()).chain(self.invariants.iter())
     }
 
     /// tRust: Highest confidence across all inferred specs, or 0.0 if empty.
     #[must_use]
     pub fn max_confidence(&self) -> f64 {
-        self.all_specs()
-            .map(|s| s.confidence)
-            .fold(0.0_f64, f64::max)
+        self.all_specs().map(|s| s.confidence).fold(0.0_f64, f64::max)
     }
 }
 
@@ -229,10 +225,7 @@ pub fn format_inference_prompt(req: &SpecInferenceRequest) -> String {
     let category_instructions = category_template(req.category);
     let failures_text = format_failures(&req.failures);
     let params_text = format_params(&req.params);
-    let return_text = req
-        .return_type
-        .as_deref()
-        .unwrap_or("()");
+    let return_text = req.return_type.as_deref().unwrap_or("()");
     let existing_text = if req.existing_specs.is_empty() {
         String::new()
     } else {
@@ -370,7 +363,8 @@ fn format_failures(failures: &[FailureDescription]) -> String {
         .iter()
         .enumerate()
         .map(|(i, f)| {
-            let mut line = format!("{}. **{}**: {}", i + 1, format_pattern(&f.pattern), f.description);
+            let mut line =
+                format!("{}. **{}**: {}", i + 1, format_pattern(&f.pattern), f.description);
             if let Some(ref solver) = f.solver {
                 let _ = write!(line, " (solver: {solver})");
             }
@@ -408,11 +402,7 @@ fn format_params(params: &[(String, String)]) -> String {
     if params.is_empty() {
         return "(no parameters)".to_string();
     }
-    params
-        .iter()
-        .map(|(name, ty)| format!("- `{name}`: `{ty}`"))
-        .collect::<Vec<_>>()
-        .join("\n")
+    params.iter().map(|(name, ty)| format!("- `{name}`: `{ty}`")).collect::<Vec<_>>().join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -435,11 +425,8 @@ pub fn parse_inference_response(
 ) -> Result<InferredSpec, SpecParseError> {
     let json_text = extract_json(response)?;
 
-    let raw_specs: Vec<RawSpecItem> = serde_json::from_str(&json_text).map_err(|e| {
-        SpecParseError::InvalidJson {
-            reason: e.to_string(),
-        }
-    })?;
+    let raw_specs: Vec<RawSpecItem> = serde_json::from_str(&json_text)
+        .map_err(|e| SpecParseError::InvalidJson { reason: e.to_string() })?;
 
     if raw_specs.is_empty() {
         return Err(SpecParseError::EmptyResponse);
@@ -523,13 +510,12 @@ fn extract_json(text: &str) -> Result<String, SpecParseError> {
 
     // Try to find [ ... ] anywhere in the text
     if let (Some(start), Some(end)) = (trimmed.find('['), trimmed.rfind(']'))
-        && start < end {
-            return Ok(trimmed[start..=end].to_string());
-        }
+        && start < end
+    {
+        return Ok(trimmed[start..=end].to_string());
+    }
 
-    Err(SpecParseError::InvalidJson {
-        reason: "no JSON array found in response".to_string(),
-    })
+    Err(SpecParseError::InvalidJson { reason: "no JSON array found in response".to_string() })
 }
 
 // ---------------------------------------------------------------------------
@@ -581,11 +567,7 @@ pub fn validate_inferred_spec(spec: &InferredSpec, func: &FunctionSummary) -> Va
         validate_one_item(item, "invariant", func, &mut errors, &mut warnings);
     }
 
-    ValidationResult {
-        is_valid: errors.is_empty(),
-        errors,
-        warnings,
-    }
+    ValidationResult { is_valid: errors.is_empty(), errors, warnings }
 }
 
 /// tRust: Validate a single spec item.
@@ -642,10 +624,9 @@ fn validate_one_item(
     // tRust: Check for identifiers not in param list (soft warning)
     if !func.param_names.is_empty() {
         let builtins = [
-            "result", "self", "true", "false", "len", "MAX", "MIN", "usize", "u8",
-            "u16", "u32", "u64", "u128", "isize", "i8", "i16", "i32", "i64", "i128",
-            "f32", "f64", "bool", "old", "forall", "exists", "is_some", "is_none",
-            "is_null", "is_ok", "is_err",
+            "result", "self", "true", "false", "len", "MAX", "MIN", "usize", "u8", "u16", "u32",
+            "u64", "u128", "isize", "i8", "i16", "i32", "i64", "i128", "f32", "f64", "bool", "old",
+            "forall", "exists", "is_some", "is_none", "is_null", "is_ok", "is_err",
         ];
         for ident in extract_identifiers(&item.expression) {
             if ident.len() > 1
@@ -671,9 +652,7 @@ fn extract_identifiers(expr: &str) -> Vec<String> {
         if ch.is_alphanumeric() || ch == '_' {
             current.push(ch);
         } else {
-            if !current.is_empty()
-                && !current.chars().next().unwrap_or('0').is_ascii_digit()
-            {
+            if !current.is_empty() && !current.chars().next().unwrap_or('0').is_ascii_digit() {
                 ids.push(std::mem::take(&mut current));
             } else {
                 current.clear();
@@ -710,9 +689,7 @@ mod tests {
             ],
             return_type: Some("usize".to_string()),
             failures: vec![FailureDescription {
-                pattern: FailurePattern::ArithmeticOverflow {
-                    op: trust_types::BinOp::Add,
-                },
+                pattern: FailurePattern::ArithmeticOverflow { op: trust_types::BinOp::Add },
                 description: "Addition a + b may overflow usize".to_string(),
                 solver: Some("z4".to_string()),
                 counterexample_summary: Some("a = 18446744073709551615, b = 1".to_string()),
@@ -759,10 +736,7 @@ mod tests {
     fn test_format_prompt_contains_function_name() {
         let req = midpoint_request(SpecCategory::Safety);
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("get_midpoint"),
-            "prompt should contain function name"
-        );
+        assert!(prompt.contains("get_midpoint"), "prompt should contain function name");
     }
 
     #[test]
@@ -779,10 +753,7 @@ mod tests {
     fn test_format_prompt_contains_body() {
         let req = midpoint_request(SpecCategory::Safety);
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("(a + b) / 2"),
-            "prompt should contain body summary"
-        );
+        assert!(prompt.contains("(a + b) / 2"), "prompt should contain body summary");
     }
 
     #[test]
@@ -793,10 +764,7 @@ mod tests {
             prompt.contains("Arithmetic overflow"),
             "prompt should describe the failure pattern"
         );
-        assert!(
-            prompt.contains("z4"),
-            "prompt should mention the solver"
-        );
+        assert!(prompt.contains("z4"), "prompt should mention the solver");
     }
 
     #[test]
@@ -813,14 +781,8 @@ mod tests {
     fn test_format_prompt_safety_category_instructions() {
         let req = midpoint_request(SpecCategory::Safety);
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("Safety"),
-            "prompt should contain safety category title"
-        );
-        assert!(
-            prompt.contains("overflow guards"),
-            "safety prompt should mention overflow guards"
-        );
+        assert!(prompt.contains("Safety"), "prompt should contain safety category title");
+        assert!(prompt.contains("overflow guards"), "safety prompt should mention overflow guards");
     }
 
     #[test]
@@ -841,14 +803,8 @@ mod tests {
     fn test_format_prompt_ownership_category_instructions() {
         let req = midpoint_request(SpecCategory::Ownership);
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("Ownership"),
-            "prompt should contain ownership category title"
-        );
-        assert!(
-            prompt.contains("borrow"),
-            "ownership prompt should mention borrows"
-        );
+        assert!(prompt.contains("Ownership"), "prompt should contain ownership category title");
+        assert!(prompt.contains("borrow"), "ownership prompt should mention borrows");
     }
 
     #[test]
@@ -856,46 +812,26 @@ mod tests {
         let req = midpoint_request(SpecCategory::Safety);
         let prompt = format_inference_prompt(&req);
         assert!(prompt.contains("JSON"), "prompt should request JSON output");
-        assert!(
-            prompt.contains("\"kind\""),
-            "prompt should specify the JSON schema"
-        );
+        assert!(prompt.contains("\"kind\""), "prompt should specify the JSON schema");
     }
 
     #[test]
     fn test_format_prompt_contains_parameter_list() {
         let req = midpoint_request(SpecCategory::Safety);
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("`a`: `usize`"),
-            "prompt should list parameter a with type"
-        );
-        assert!(
-            prompt.contains("`b`: `usize`"),
-            "prompt should list parameter b with type"
-        );
+        assert!(prompt.contains("`a`: `usize`"), "prompt should list parameter a with type");
+        assert!(prompt.contains("`b`: `usize`"), "prompt should list parameter b with type");
     }
 
     #[test]
     fn test_format_prompt_with_existing_specs() {
         let mut req = midpoint_request(SpecCategory::Safety);
-        req.existing_specs = vec![
-            "#[requires(\"a > 0\")]".to_string(),
-            "#[ensures(\"result <= a\")]".to_string(),
-        ];
+        req.existing_specs =
+            vec!["#[requires(\"a > 0\")]".to_string(), "#[ensures(\"result <= a\")]".to_string()];
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("Existing Specifications"),
-            "prompt should mention existing specs"
-        );
-        assert!(
-            prompt.contains("a > 0"),
-            "prompt should include existing spec body"
-        );
-        assert!(
-            prompt.contains("Do not duplicate"),
-            "prompt should warn against duplication"
-        );
+        assert!(prompt.contains("Existing Specifications"), "prompt should mention existing specs");
+        assert!(prompt.contains("a > 0"), "prompt should include existing spec body");
+        assert!(prompt.contains("Do not duplicate"), "prompt should warn against duplication");
     }
 
     #[test]
@@ -913,14 +849,8 @@ mod tests {
     fn test_format_prompt_division_by_zero() {
         let req = divide_request();
         let prompt = format_inference_prompt(&req);
-        assert!(
-            prompt.contains("Division by zero"),
-            "prompt should describe div-by-zero failure"
-        );
-        assert!(
-            prompt.contains("y = 0"),
-            "prompt should include counterexample"
-        );
+        assert!(prompt.contains("Division by zero"), "prompt should describe div-by-zero failure");
+        assert!(prompt.contains("y = 0"), "prompt should include counterexample");
     }
 
     // === Response parsing tests ===
@@ -936,8 +866,9 @@ mod tests {
             }
         ]"#;
 
-        let spec = parse_inference_response(json, "test::midpoint", "midpoint", SpecCategory::Safety)
-            .expect("should parse valid JSON");
+        let spec =
+            parse_inference_response(json, "test::midpoint", "midpoint", SpecCategory::Safety)
+                .expect("should parse valid JSON");
         assert_eq!(spec.preconditions.len(), 1);
         assert_eq!(spec.preconditions[0].expression, "a <= usize::MAX - b");
         assert!((spec.preconditions[0].confidence - 0.95).abs() < f64::EPSILON);
@@ -967,9 +898,8 @@ mod tests {
     fn test_parse_valid_invariant() {
         let json = r#"[{"kind": "invariant", "expression": "i < n", "confidence": 0.85, "rationale": "Loop bound"}]"#;
 
-        let spec =
-            parse_inference_response(json, "test::loop_fn", "loop_fn", SpecCategory::Safety)
-                .expect("should parse invariant");
+        let spec = parse_inference_response(json, "test::loop_fn", "loop_fn", SpecCategory::Safety)
+            .expect("should parse invariant");
         assert_eq!(spec.invariants.len(), 1);
         assert_eq!(spec.invariants[0].expression, "i < n");
     }
@@ -1060,13 +990,11 @@ This prevents division by zero."#;
 
     #[test]
     fn test_parse_unknown_kind_returns_error() {
-        let json = r#"[{"kind": "magic", "expression": "x > 0", "confidence": 0.5, "rationale": "Bad"}]"#;
+        let json =
+            r#"[{"kind": "magic", "expression": "x > 0", "confidence": 0.5, "rationale": "Bad"}]"#;
         let result = parse_inference_response(json, "test::f", "f", SpecCategory::Safety);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SpecParseError::UnexpectedStructure { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), SpecParseError::UnexpectedStructure { .. }));
     }
 
     // === Validation tests ===
@@ -1335,9 +1263,7 @@ This prevents division by zero."#;
 
     #[test]
     fn test_spec_parse_error_display() {
-        let e = SpecParseError::InvalidJson {
-            reason: "unexpected EOF".to_string(),
-        };
+        let e = SpecParseError::InvalidJson { reason: "unexpected EOF".to_string() };
         assert!(e.to_string().contains("unexpected EOF"));
 
         let e = SpecParseError::EmptyResponse;
@@ -1404,10 +1330,6 @@ This prevents division by zero."#;
 
         // 5. Validate
         let validation = validate_inferred_spec(&spec, &midpoint_summary());
-        assert!(
-            validation.is_valid,
-            "end-to-end spec should validate: {:?}",
-            validation.errors
-        );
+        assert!(validation.is_valid, "end-to-end spec should validate: {:?}", validation.errors);
     }
 }

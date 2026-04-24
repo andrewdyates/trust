@@ -8,7 +8,7 @@ mod helpers;
 
 use trust_disasm::Instruction;
 use trust_disasm::opcode::Opcode;
-use trust_disasm::operand::{Condition, MemoryOperand, Operand, RegKind};
+use trust_disasm::operand::{Condition, MemoryOperand, Operand, RegKind, Register};
 use trust_types::Formula;
 
 use crate::effect::Effect;
@@ -86,11 +86,13 @@ impl Semantics for Aarch64Semantics {
             Opcode::Ldrsb => self.sem_ldr_variant(state, insn, 1, true),
             Opcode::Ldrsh => self.sem_ldr_variant(state, insn, 2, true),
             Opcode::Ldrsw => self.sem_ldr_variant(state, insn, 4, true),
+            Opcode::Ldp => self.sem_ldp(state, insn),
 
             // Stores
             Opcode::Str => self.sem_str(state, insn),
             Opcode::Strb => self.sem_str_variant(state, insn, 1),
             Opcode::Strh => self.sem_str_variant(state, insn, 2),
+            Opcode::Stp => self.sem_stp(state, insn),
 
             // Branches
             Opcode::B => self.sem_b(state, insn),
@@ -347,6 +349,54 @@ impl Aarch64Semantics {
         let addr = resolve_mem_address(state, mem_op)?;
 
         let mut effects = vec![Effect::MemWrite { address: addr.clone(), value: src, width_bytes }];
+
+        if let Some(wb) = writeback_effect(state, mem_op) {
+            effects.push(wb);
+        }
+
+        effects.push(pc_advance(state, insn));
+        Ok(effects)
+    }
+
+    /// LDP: Rt, Rt2 = mem[addr], mem[addr + element_size].
+    fn sem_ldp(&self, state: &MachineState, insn: &Instruction) -> Result<Vec<Effect>, SemError> {
+        let (rt, rt2, width, mem_op) = extract_pair_regs_and_mem(insn)?;
+        let width_bytes = width / 8;
+        let addr0 = resolve_pair_mem_address(state, insn, mem_op)?;
+        let addr1 = offset_addr(&addr0, width_bytes);
+
+        let loaded0 = load_le_bytes(state, &addr0, width_bytes, width);
+        let loaded1 = load_le_bytes(state, &addr1, width_bytes, width);
+
+        let mut effects = vec![
+            Effect::MemRead { address: addr0.clone(), width_bytes },
+            Effect::MemRead { address: addr1.clone(), width_bytes },
+            Effect::RegWrite { index: rt.index, width, value: loaded0 },
+            Effect::RegWrite { index: rt2.index, width, value: loaded1 },
+        ];
+
+        if let Some(wb) = writeback_effect(state, mem_op) {
+            effects.push(wb);
+        }
+
+        effects.push(pc_advance(state, insn));
+        Ok(effects)
+    }
+
+    /// STP: mem[addr], mem[addr + element_size] = Rt, Rt2.
+    fn sem_stp(&self, state: &MachineState, insn: &Instruction) -> Result<Vec<Effect>, SemError> {
+        let (rt, rt2, width, mem_op) = extract_pair_regs_and_mem(insn)?;
+        let width_bytes = width / 8;
+        let addr0 = resolve_pair_mem_address(state, insn, mem_op)?;
+        let addr1 = offset_addr(&addr0, width_bytes);
+
+        let src0 = read_pair_gpr(state, &rt, width);
+        let src1 = read_pair_gpr(state, &rt2, width);
+
+        let mut effects = vec![
+            Effect::MemWrite { address: addr0.clone(), value: src0, width_bytes },
+            Effect::MemWrite { address: addr1.clone(), value: src1, width_bytes },
+        ];
 
         if let Some(wb) = writeback_effect(state, mem_op) {
             effects.push(wb);
@@ -1363,6 +1413,88 @@ fn write_reg_or_sp(index: u8, is_sp: bool, width: u32, value: Formula) -> Effect
     }
 }
 
+fn extract_pair_regs_and_mem(
+    insn: &Instruction,
+) -> Result<(Register, Register, u32, &MemoryOperand), SemError> {
+    let rt = extract_pair_gpr(insn, 0)?;
+    let rt2 = extract_pair_gpr(insn, 1)?;
+    let width = u32::from(rt.width);
+
+    if rt2.width != rt.width {
+        return Err(SemError::InvalidOperand {
+            opcode: insn.opcode,
+            index: 1,
+            detail: "LDP/STP register widths must match".into(),
+        });
+    }
+
+    if width != 32 && width != 64 {
+        return Err(SemError::InvalidOperand {
+            opcode: insn.opcode,
+            index: 0,
+            detail: "LDP/STP supports only 32-bit and 64-bit GPR pairs".into(),
+        });
+    }
+
+    let mem = match insn.operand(2) {
+        Some(Operand::Mem(mem)) => mem,
+        _ => {
+            return Err(SemError::InvalidOperand {
+                opcode: insn.opcode,
+                index: 2,
+                detail: "expected memory operand".into(),
+            });
+        }
+    };
+
+    Ok((rt, rt2, width, mem))
+}
+
+fn extract_pair_gpr(insn: &Instruction, index: usize) -> Result<Register, SemError> {
+    match insn.operand(index) {
+        Some(Operand::Reg(reg)) if reg.kind == RegKind::Gpr || reg.kind == RegKind::Zr => Ok(*reg),
+        _ => Err(SemError::InvalidOperand {
+            opcode: insn.opcode,
+            index,
+            detail: "expected GPR pair register".into(),
+        }),
+    }
+}
+
+fn resolve_pair_mem_address(
+    state: &MachineState,
+    insn: &Instruction,
+    mem_op: &MemoryOperand,
+) -> Result<Formula, SemError> {
+    match mem_op {
+        MemoryOperand::Base { .. }
+        | MemoryOperand::BaseOffset { .. }
+        | MemoryOperand::PreIndex { .. }
+        | MemoryOperand::PostIndex { .. } => resolve_mem_address(state, mem_op),
+        _ => Err(SemError::InvalidOperand {
+            opcode: insn.opcode,
+            index: 2,
+            detail: "unsupported LDP/STP addressing mode".into(),
+        }),
+    }
+}
+
+fn offset_addr(addr: &Formula, offset_bytes: u32) -> Formula {
+    Formula::BvAdd(
+        Box::new(addr.clone()),
+        Box::new(Formula::BitVec { value: i128::from(offset_bytes), width: 64 }),
+        64,
+    )
+}
+
+fn read_pair_gpr(state: &MachineState, reg: &Register, width: u32) -> Formula {
+    if reg.kind == RegKind::Zr {
+        Formula::BitVec { value: 0, width }
+    } else {
+        state.read_gpr(reg.index, width)
+    }
+}
+
 /// PC = PC + 4 (standard sequential advance).
 fn pc_advance(state: &MachineState, _insn: &Instruction) -> Effect {
     Effect::PcUpdate {
@@ -1558,4 +1690,104 @@ fn load_le_bytes(
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::semantics::Semantics;
+    use trust_disasm::decode_aarch64;
+
+    fn decode(enc: u32) -> Instruction {
+        decode_aarch64(&enc.to_le_bytes(), 0x1000).expect("decode AArch64 instruction")
+    }
+
+    fn add64(lhs: Formula, rhs: i128) -> Formula {
+        Formula::BvAdd(Box::new(lhs), Box::new(Formula::BitVec { value: rhs, width: 64 }), 64)
+    }
+
+    fn pc_plus_4(state: &MachineState) -> Formula {
+        add64(state.pc.clone(), 4)
+    }
+
+    #[test]
+    fn ldp_base_offset_reads_pair_and_writes_gprs() {
+        // LDP X0, X1, [X2]
+        let insn = decode(0xA9_40_04_40);
+        assert_eq!(insn.opcode, Opcode::Ldp);
+
+        let state = MachineState::symbolic();
+        let effects = Aarch64Semantics.effects(&state, &insn).expect("LDP effects");
+
+        let addr0 = add64(state.read_gpr(2, 64), 0);
+        let addr1 = add64(addr0.clone(), 8);
+        let loaded0 = load_le_bytes(&state, &addr0, 8, 64);
+        let loaded1 = load_le_bytes(&state, &addr1, 8, 64);
+
+        assert_eq!(
+            effects,
+            vec![
+                Effect::MemRead { address: addr0, width_bytes: 8 },
+                Effect::MemRead { address: addr1, width_bytes: 8 },
+                Effect::RegWrite { index: 0, width: 64, value: loaded0 },
+                Effect::RegWrite { index: 1, width: 64, value: loaded1 },
+                Effect::PcUpdate { value: pc_plus_4(&state) },
+            ]
+        );
+    }
+
+    #[test]
+    fn stp_pre_index_stores_pair_and_updates_sp() {
+        // STP X29, X30, [SP, #-16]!
+        let insn = decode(0xA9_BF_7B_FD);
+        assert_eq!(insn.opcode, Opcode::Stp);
+
+        let state = MachineState::symbolic();
+        let effects = Aarch64Semantics.effects(&state, &insn).expect("STP effects");
+
+        let addr0 = add64(state.sp.clone(), -16);
+        let addr1 = add64(addr0.clone(), 8);
+
+        assert_eq!(
+            effects,
+            vec![
+                Effect::MemWrite {
+                    address: addr0.clone(),
+                    value: state.read_gpr(29, 64),
+                    width_bytes: 8,
+                },
+                Effect::MemWrite { address: addr1, value: state.read_gpr(30, 64), width_bytes: 8 },
+                Effect::SpWrite { value: addr0 },
+                Effect::PcUpdate { value: pc_plus_4(&state) },
+            ]
+        );
+    }
+
+    #[test]
+    fn ldp_post_index_reads_pair_and_updates_sp() {
+        // LDP X29, X30, [SP], #16
+        let insn = decode(0xA8_C1_7B_FD);
+        assert_eq!(insn.opcode, Opcode::Ldp);
+
+        let state = MachineState::symbolic();
+        let effects = Aarch64Semantics.effects(&state, &insn).expect("LDP effects");
+
+        let addr0 = state.sp.clone();
+        let addr1 = add64(addr0.clone(), 8);
+        let loaded0 = load_le_bytes(&state, &addr0, 8, 64);
+        let loaded1 = load_le_bytes(&state, &addr1, 8, 64);
+        let writeback = add64(state.sp.clone(), 16);
+
+        assert_eq!(
+            effects,
+            vec![
+                Effect::MemRead { address: addr0, width_bytes: 8 },
+                Effect::MemRead { address: addr1, width_bytes: 8 },
+                Effect::RegWrite { index: 29, width: 64, value: loaded0 },
+                Effect::RegWrite { index: 30, width: 64, value: loaded1 },
+                Effect::SpWrite { value: writeback },
+                Effect::PcUpdate { value: pc_plus_4(&state) },
+            ]
+        );
+    }
 }

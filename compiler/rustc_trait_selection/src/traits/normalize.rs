@@ -48,7 +48,7 @@ impl<'tcx> At<'_, 'tcx> {
     /// same goals in both a temporary and the shared context which negatively impacts
     /// performance as these don't share caching.
     ///
-    /// tRust: known issue (-Znext-solver=no) — For performance reasons, we currently reuse an existing
+    /// FIXME(-Znext-solver=no): For performance reasons, we currently reuse an existing
     /// fulfillment context in the old solver. Once we have removed the old solver, we
     /// can remove the `fulfill_cx` parameter on this function.
     fn deeply_normalize<T, E>(
@@ -65,7 +65,6 @@ impl<'tcx> At<'_, 'tcx> {
         } else {
             if fulfill_cx.has_pending_obligations() {
                 let pending_obligations = fulfill_cx.pending_obligations();
-                // tRust: invariant — Deeply_normalize should not be called with pending obligations: \
                 span_bug!(
                     pending_obligations[0].cause.span,
                     "deeply_normalize should not be called with pending obligations: \
@@ -135,7 +134,7 @@ pub(super) fn needs_normalization<'tcx, T: TypeVisitable<TyCtxt<'tcx>>>(
     // Opaques are treated as rigid outside of `TypingMode::PostAnalysis`,
     // so we can ignore those.
     match infcx.typing_mode() {
-        // tRust: known issue (#132279) — We likely want to reveal opaques during post borrowck analysis
+        // FIXME(#132279): We likely want to reveal opaques during post borrowck analysis
         TypingMode::Coherence
         | TypingMode::Analysis { .. }
         | TypingMode::Borrowck { .. }
@@ -179,7 +178,7 @@ impl<'a, 'b, 'tcx> AssocTypeNormalizer<'a, 'b, 'tcx> {
         if !needs_normalization(self.selcx.infcx, &value) { value } else { value.fold_with(self) }
     }
 
-    // tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+    // FIXME(mgca): While this supports constants, it is only used for types by default right now
     #[instrument(level = "debug", skip(self), ret)]
     fn normalize_trait_projection(&mut self, proj: AliasTerm<'tcx>) -> Term<'tcx> {
         if !proj.has_escaping_bound_vars() {
@@ -239,7 +238,7 @@ impl<'a, 'b, 'tcx> AssocTypeNormalizer<'a, 'b, 'tcx> {
         }
     }
 
-    // tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+    // FIXME(mgca): While this supports constants, it is only used for types by default right now
     #[instrument(level = "debug", skip(self), ret)]
     fn normalize_inherent_projection(&mut self, inherent: AliasTerm<'tcx>) -> Term<'tcx> {
         if !inherent.has_escaping_bound_vars() {
@@ -286,7 +285,7 @@ impl<'a, 'b, 'tcx> AssocTypeNormalizer<'a, 'b, 'tcx> {
         }
     }
 
-    // tRust: known issue (mgca) — While this supports constants, it is only used for types by default right now
+    // FIXME(mgca): While this supports constants, it is only used for types by default right now
     #[instrument(level = "debug", skip(self), ret)]
     fn normalize_free_alias(&mut self, free: AliasTerm<'tcx>) -> Term<'tcx> {
         let recursion_limit = self.cx().recursion_limit();
@@ -310,7 +309,7 @@ impl<'a, 'b, 'tcx> AssocTypeNormalizer<'a, 'b, 'tcx> {
         // placeholders as the trait solver does not expect to encounter escaping bound
         // vars in obligations.
         //
-        // tRust: known issue (lazy_type_alias) — Check how much this actually matters for perf before
+        // FIXME(lazy_type_alias): Check how much this actually matters for perf before
         // stabilization. This is a bit weird and generally not how we handle binders in
         // the compiler so ideally we'd do the same boundvar->placeholder->boundvar dance
         // that other kinds of normalization do.
@@ -399,7 +398,7 @@ impl<'a, 'b, 'tcx> TypeFolder<TyCtxt<'tcx>> for AssocTypeNormalizer<'a, 'b, 'tcx
             ty::Opaque => {
                 // Only normalize `impl Trait` outside of type inference, usually in codegen.
                 match self.selcx.infcx.typing_mode() {
-                    // tRust: known issue (#132279) — We likely want to reveal opaques during post borrowck analysis
+                    // FIXME(#132279): We likely want to reveal opaques during post borrowck analysis
                     TypingMode::Coherence
                     | TypingMode::Analysis { .. }
                     | TypingMode::Borrowck { .. }

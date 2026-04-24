@@ -57,10 +57,7 @@ impl MemoryAddress {
 #[non_exhaustive]
 pub enum MemoryError {
     /// Access to an address outside allocated bounds.
-    OutOfBounds {
-        addr: MemoryAddress,
-        region_size: u64,
-    },
+    OutOfBounds { addr: MemoryAddress, region_size: u64 },
     /// Read/write to freed memory.
     UseAfterFree { addr: MemoryAddress },
     /// Freeing memory that was already freed.
@@ -86,11 +83,7 @@ impl std::fmt::Display for MemoryError {
             }
             Self::DoubleFree { region } => write!(f, "double free of {region}"),
             Self::UninitializedRead { addr } => {
-                write!(
-                    f,
-                    "uninitialized read at {}.{}",
-                    addr.region, addr.offset
-                )
+                write!(f, "uninitialized read at {}.{}", addr.region, addr.offset)
             }
             Self::InvalidFree { region } => {
                 write!(f, "invalid free of non-heap region {region}")
@@ -202,10 +195,7 @@ impl SymbolicMemory {
     /// Create a new symbolic memory with explicit lazy-init setting.
     #[must_use]
     pub fn with_lazy_init(lazy_init: bool) -> Self {
-        Self {
-            lazy_init,
-            ..Self::new()
-        }
+        Self { lazy_init, ..Self::new() }
     }
 
     /// Allocate a new heap region of the given size.
@@ -215,13 +205,7 @@ impl SymbolicMemory {
         let id = self.next_alloc_id;
         self.next_alloc_id += 1;
         let region = MemoryRegion::Heap(id, 0);
-        self.allocations.insert(
-            region.clone(),
-            AllocationMeta {
-                size,
-                freed: false,
-            },
-        );
+        self.allocations.insert(region.clone(), AllocationMeta { size, freed: false });
         region
     }
 
@@ -231,26 +215,14 @@ impl SymbolicMemory {
         let offset = self.next_stack_offset;
         self.next_stack_offset += size;
         let region = MemoryRegion::Stack(offset);
-        self.allocations.insert(
-            region.clone(),
-            AllocationMeta {
-                size,
-                freed: false,
-            },
-        );
+        self.allocations.insert(region.clone(), AllocationMeta { size, freed: false });
         region
     }
 
     /// Register a global memory region.
     pub fn register_global(&mut self, name: impl Into<String>, size: u64) -> MemoryRegion {
         let region = MemoryRegion::Global(name.into());
-        self.allocations.insert(
-            region.clone(),
-            AllocationMeta {
-                size,
-                freed: false,
-            },
-        );
+        self.allocations.insert(region.clone(), AllocationMeta { size, freed: false });
         region
     }
 
@@ -259,22 +231,16 @@ impl SymbolicMemory {
     pub fn deallocate(&mut self, region: &MemoryRegion) -> Result<(), MemoryError> {
         // Only heap regions can be deallocated.
         if !matches!(region, MemoryRegion::Heap(_, _)) {
-            return Err(MemoryError::InvalidFree {
-                region: region.clone(),
-            });
+            return Err(MemoryError::InvalidFree { region: region.clone() });
         }
 
         if self.freed_regions.contains(region) {
-            return Err(MemoryError::DoubleFree {
-                region: region.clone(),
-            });
+            return Err(MemoryError::DoubleFree { region: region.clone() });
         }
 
         if let Some(meta) = self.allocations.get_mut(region) {
             if meta.freed {
-                return Err(MemoryError::DoubleFree {
-                    region: region.clone(),
-                });
+                return Err(MemoryError::DoubleFree { region: region.clone() });
             }
             meta.freed = true;
         }
@@ -306,10 +272,7 @@ impl SymbolicMemory {
         if let Some(meta) = self.allocations.get(&addr.region)
             && addr.offset.checked_add(size).is_none_or(|end| end > meta.size)
         {
-            return Err(MemoryError::OutOfBounds {
-                addr: addr.clone(),
-                region_size: meta.size,
-            });
+            return Err(MemoryError::OutOfBounds { addr: addr.clone(), region_size: meta.size });
         }
 
         // Mask the value to the requested byte width so that partial
@@ -329,11 +292,7 @@ impl SymbolicMemory {
     /// a fresh symbolic variable is created and stored. If `lazy_init`
     /// is disabled, an `UninitializedRead` error is returned.
     // tRust: #777 -- load now respects the size parameter
-    pub fn load(
-        &mut self,
-        addr: &MemoryAddress,
-        size: u64,
-    ) -> Result<SymbolicValue, MemoryError> {
+    pub fn load(&mut self, addr: &MemoryAddress, size: u64) -> Result<SymbolicValue, MemoryError> {
         // Check use-after-free.
         if self.freed_regions.contains(&addr.region) {
             return Err(MemoryError::UseAfterFree { addr: addr.clone() });
@@ -344,10 +303,7 @@ impl SymbolicMemory {
         if let Some(meta) = self.allocations.get(&addr.region)
             && addr.offset.checked_add(size).is_none_or(|end| end > meta.size)
         {
-            return Err(MemoryError::OutOfBounds {
-                addr: addr.clone(),
-                region_size: meta.size,
-            });
+            return Err(MemoryError::OutOfBounds { addr: addr.clone(), region_size: meta.size });
         }
 
         if let Some(val) = self.cells.get(addr) {
@@ -398,10 +354,7 @@ impl SymbolicMemory {
     /// Returns the number of active (non-freed) allocations.
     #[must_use]
     pub fn active_allocation_count(&self) -> usize {
-        self.allocations
-            .values()
-            .filter(|m| !m.freed)
-            .count()
+        self.allocations.values().filter(|m| !m.freed).count()
     }
 
     /// Check whether a region has been freed.
@@ -455,8 +408,7 @@ mod tests {
         let region = mem.allocate(16);
         let addr = MemoryAddress::new(region, 0);
         // Concrete(42) fits in 4 bytes, so masking is transparent.
-        mem.store(&addr, 4, SymbolicValue::Concrete(42))
-            .expect("store should succeed");
+        mem.store(&addr, 4, SymbolicValue::Concrete(42)).expect("store should succeed");
         let val = mem.load(&addr, 4).expect("load should succeed");
         assert_eq!(val, SymbolicValue::Concrete(42));
     }
@@ -488,9 +440,7 @@ mod tests {
         let mut mem = SymbolicMemory::with_lazy_init(false);
         let region = mem.allocate(8);
         let addr = MemoryAddress::new(region, 0);
-        let err = mem
-            .load(&addr, 4)
-            .expect_err("should fail without lazy init");
+        let err = mem.load(&addr, 4).expect_err("should fail without lazy init");
         assert!(matches!(err, MemoryError::UninitializedRead { .. }));
     }
 
@@ -528,8 +478,7 @@ mod tests {
         let r = mem.register_global("MY_GLOBAL", 64);
         assert_eq!(r, MemoryRegion::Global("MY_GLOBAL".into()));
         let addr = MemoryAddress::new(r, 0);
-        mem.store(&addr, 8, SymbolicValue::Concrete(100))
-            .expect("store to global");
+        mem.store(&addr, 8, SymbolicValue::Concrete(100)).expect("store to global");
         let val = mem.load(&addr, 8).expect("load from global");
         assert_eq!(val, SymbolicValue::Concrete(100));
     }
@@ -541,16 +490,9 @@ mod tests {
         let mut mem = SymbolicMemory::new();
         let region = mem.allocate(4);
         let addr = MemoryAddress::new(region, 10); // offset 10 > size 4
-        let err = mem
-            .store(&addr, 4, SymbolicValue::Concrete(0))
-            .expect_err("should be out of bounds");
-        assert!(matches!(
-            err,
-            MemoryError::OutOfBounds {
-                region_size: 4,
-                ..
-            }
-        ));
+        let err =
+            mem.store(&addr, 4, SymbolicValue::Concrete(0)).expect_err("should be out of bounds");
+        assert!(matches!(err, MemoryError::OutOfBounds { region_size: 4, .. }));
     }
 
     #[test]
@@ -579,12 +521,9 @@ mod tests {
         let mut mem = SymbolicMemory::new();
         let region = mem.allocate(8);
         let addr = MemoryAddress::new(region.clone(), 0);
-        mem.store(&addr, 4, SymbolicValue::Concrete(1))
-            .expect("store before free");
+        mem.store(&addr, 4, SymbolicValue::Concrete(1)).expect("store before free");
         mem.deallocate(&region).expect("free should succeed");
-        let err = mem
-            .load(&addr, 4)
-            .expect_err("should detect use-after-free");
+        let err = mem.load(&addr, 4).expect_err("should detect use-after-free");
         assert!(matches!(err, MemoryError::UseAfterFree { .. }));
     }
 
@@ -593,9 +532,7 @@ mod tests {
         let mut mem = SymbolicMemory::new();
         let region = mem.allocate(8);
         mem.deallocate(&region).expect("first free ok");
-        let err = mem
-            .deallocate(&region)
-            .expect_err("should detect double free");
+        let err = mem.deallocate(&region).expect_err("should detect double free");
         assert!(matches!(err, MemoryError::DoubleFree { .. }));
     }
 
@@ -603,9 +540,7 @@ mod tests {
     fn test_memory_invalid_free_stack() {
         let mut mem = SymbolicMemory::new();
         let region = mem.allocate_stack(16);
-        let err = mem
-            .deallocate(&region)
-            .expect_err("should reject non-heap free");
+        let err = mem.deallocate(&region).expect_err("should reject non-heap free");
         assert!(matches!(err, MemoryError::InvalidFree { .. }));
     }
 
@@ -613,9 +548,7 @@ mod tests {
     fn test_memory_invalid_free_global() {
         let mut mem = SymbolicMemory::new();
         let region = mem.register_global("g", 8);
-        let err = mem
-            .deallocate(&region)
-            .expect_err("should reject non-heap free");
+        let err = mem.deallocate(&region).expect_err("should reject non-heap free");
         assert!(matches!(err, MemoryError::InvalidFree { .. }));
     }
 
@@ -626,25 +559,17 @@ mod tests {
         let mut mem = SymbolicMemory::new();
         let region = mem.allocate(16);
         let addr = MemoryAddress::new(region, 0);
-        mem.store(&addr, 4, SymbolicValue::Concrete(10))
-            .expect("store");
+        mem.store(&addr, 4, SymbolicValue::Concrete(10)).expect("store");
 
         let snap = mem.snapshot();
 
         // Modify memory after snapshot.
-        mem.store(&addr, 4, SymbolicValue::Concrete(20))
-            .expect("overwrite");
-        assert_eq!(
-            mem.load(&addr, 4).expect("load"),
-            SymbolicValue::Concrete(20)
-        );
+        mem.store(&addr, 4, SymbolicValue::Concrete(20)).expect("overwrite");
+        assert_eq!(mem.load(&addr, 4).expect("load"), SymbolicValue::Concrete(20));
 
         // Restore should bring back original value.
         mem.restore(snap);
-        assert_eq!(
-            mem.load(&addr, 4).expect("load after restore"),
-            SymbolicValue::Concrete(10)
-        );
+        assert_eq!(mem.load(&addr, 4).expect("load after restore"), SymbolicValue::Concrete(10));
     }
 
     #[test]
@@ -683,8 +608,7 @@ mod tests {
         let mut mem = SymbolicMemory::new();
         let region = mem.allocate(8);
         let addr = MemoryAddress::new(region, 0);
-        mem.store(&addr, 4, SymbolicValue::Concrete(1))
-            .expect("store");
+        mem.store(&addr, 4, SymbolicValue::Concrete(1)).expect("store");
         let diff = diff_memories(&mem, &mem);
         assert!(diff.is_empty());
     }
@@ -694,14 +618,12 @@ mod tests {
         let mut a = SymbolicMemory::new();
         let region_a = a.allocate(8);
         let addr = MemoryAddress::new(region_a, 0);
-        a.store(&addr, 4, SymbolicValue::Concrete(1))
-            .expect("store a");
+        a.store(&addr, 4, SymbolicValue::Concrete(1)).expect("store a");
 
         let mut b = SymbolicMemory::new();
         let region_b = b.allocate(8);
         let addr_b = MemoryAddress::new(region_b, 0);
-        b.store(&addr_b, 4, SymbolicValue::Concrete(2))
-            .expect("store b");
+        b.store(&addr_b, 4, SymbolicValue::Concrete(2)).expect("store b");
 
         let diff = diff_memories(&a, &b);
         assert!(!diff.is_empty());
@@ -712,8 +634,7 @@ mod tests {
         let mut a = SymbolicMemory::new();
         let r = a.allocate(8);
         let addr = MemoryAddress::new(r, 0);
-        a.store(&addr, 4, SymbolicValue::Concrete(5))
-            .expect("store");
+        a.store(&addr, 4, SymbolicValue::Concrete(5)).expect("store");
 
         let b = SymbolicMemory::new();
         let diff = diff_memories(&a, &b);
@@ -781,10 +702,7 @@ mod tests {
     fn test_memory_region_display() {
         assert_eq!(MemoryRegion::Stack(0).to_string(), "stack[0]");
         assert_eq!(MemoryRegion::Heap(3, 0).to_string(), "heap[3+0]");
-        assert_eq!(
-            MemoryRegion::Global("foo".into()).to_string(),
-            "global[foo]"
-        );
+        assert_eq!(MemoryRegion::Global("foo".into()).to_string(), "global[foo]");
     }
 
     // --- Size-aware store/load (tRust #777) ---
@@ -795,8 +713,7 @@ mod tests {
         let region = mem.allocate(16);
         let addr = MemoryAddress::new(region, 0);
         // Store a value with high bits set, but only 1-byte size.
-        mem.store(&addr, 1, SymbolicValue::Concrete(0x1234))
-            .expect("store");
+        mem.store(&addr, 1, SymbolicValue::Concrete(0x1234)).expect("store");
         // Only the low byte (0x34) should survive.
         let val = mem.load(&addr, 16).expect("load full width");
         assert_eq!(val, SymbolicValue::Concrete(0x34));
@@ -808,8 +725,7 @@ mod tests {
         let region = mem.allocate(16);
         let addr = MemoryAddress::new(region, 0);
         // Store a wide value at full width.
-        mem.store(&addr, 16, SymbolicValue::Concrete(0xDEAD_BEEF))
-            .expect("store");
+        mem.store(&addr, 16, SymbolicValue::Concrete(0xDEAD_BEEF)).expect("store");
         // Load only 2 bytes -- should get low 2 bytes.
         let val = mem.load(&addr, 2).expect("load 2 bytes");
         assert_eq!(val, SymbolicValue::Concrete(0xBEEF));
@@ -836,8 +752,7 @@ mod tests {
         mem.store(&addr, 2, sym.clone()).expect("store 2 bytes");
         // Load at full width to see what was actually stored.
         let val = mem.load(&addr, 16).expect("load full");
-        let expected =
-            SymbolicValue::bin_op(sym, BinOp::BitAnd, SymbolicValue::Concrete(0xFFFF));
+        let expected = SymbolicValue::bin_op(sym, BinOp::BitAnd, SymbolicValue::Concrete(0xFFFF));
         assert_eq!(val, expected);
     }
 

@@ -13,6 +13,7 @@
 //! This allows you to override `visit_foo` for types you are
 //! interested in, and invoke (within that method call)
 //! `self.super_foo` to get the default behavior. Just as in an OO
+
 //! in that circumstance.
 //!
 //! For the most part, we do not destructure things external to the
@@ -372,7 +373,7 @@ macro_rules! make_mir_visitor {
                         | ty::InstanceKind::FnPtrAddrShim(_def_id, ty)
                         | ty::InstanceKind::AsyncDropGlue(_def_id, ty)
                         | ty::InstanceKind::AsyncDropGlueCtorShim(_def_id, ty) => {
-                            // tRust: known issue (eddyb) — use a better `TyContext` here.
+                            // FIXME(eddyb) use a better `TyContext` here.
                             self.visit_ty($(& $mutability)? *ty, TyContext::Location(location));
                         }
                         ty::InstanceKind::FutureDropPollShim(_def_id, proxy_ty, impl_ty) => {
@@ -934,7 +935,6 @@ macro_rules! make_mir_visitor {
                 }) = composite {
                     self.visit_ty($(& $mutability)? *ty, TyContext::Location(location));
                     for elem in projection {
-                        // tRust: invariant: unexpected state reached in super_var_debug_info
                         let ProjectionElem::Field(_, ty) = elem else { bug!() };
                         self.visit_ty($(& $mutability)? *ty, TyContext::Location(location));
                     }
@@ -1329,7 +1329,7 @@ pub enum NonMutatingUseContext {
     /// Shared borrow.
     SharedBorrow,
     /// A fake borrow.
-    /// tRust: known issue — do we need to distinguish shallow and deep fake borrows? In fact, do we need to
+    /// FIXME: do we need to distinguish shallow and deep fake borrows? In fact, do we need to
     /// distinguish fake and normal deep borrows?
     FakeBorrow,
     /// `&raw const`.

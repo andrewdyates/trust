@@ -116,7 +116,6 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for ReverseMapper<'tcx> {
                 // All of the regions in the type should either have been
                 // erased by writeback, or mapped back to named regions by
                 // borrow checking.
-                // tRust: invariant: unexpected region kind in opaque type: <...>
                 bug!("unexpected region kind in opaque type: {:?}", r);
             }
         }

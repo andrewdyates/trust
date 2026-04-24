@@ -32,20 +32,12 @@ pub struct ConfigWarning {
 impl ConfigWarning {
     #[must_use]
     fn warning(field: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
-            field: field.into(),
-            message: message.into(),
-            severity: Severity::Warning,
-        }
+        Self { field: field.into(), message: message.into(), severity: Severity::Warning }
     }
 
     #[must_use]
     fn error(field: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
-            field: field.into(),
-            message: message.into(),
-            severity: Severity::Error,
-        }
+        Self { field: field.into(), message: message.into(), severity: Severity::Error }
     }
 }
 
@@ -113,11 +105,7 @@ pub fn validate_config(config: &TrustConfig) -> Result<(), Vec<ConfigWarning>> {
     {
         warnings.push(ConfigWarning::error(
             "solver",
-            format!(
-                "unknown solver '{}'; valid solvers: {}",
-                solver,
-                VALID_SOLVERS.join(", ")
-            ),
+            format!("unknown solver '{}'; valid solvers: {}", solver, VALID_SOLVERS.join(", ")),
         ));
     }
 
@@ -146,10 +134,7 @@ pub fn validate_config(config: &TrustConfig) -> Result<(), Vec<ConfigWarning>> {
         if parallel > MAX_PARALLEL {
             warnings.push(ConfigWarning::warning(
                 "parallel",
-                format!(
-                    "parallel count {} exceeds maximum recommended ({MAX_PARALLEL})",
-                    parallel
-                ),
+                format!("parallel count {} exceeds maximum recommended ({MAX_PARALLEL})", parallel),
             ));
         }
     }
@@ -178,11 +163,7 @@ pub fn validate_config(config: &TrustConfig) -> Result<(), Vec<ConfigWarning>> {
         ));
     }
 
-    if warnings.is_empty() {
-        Ok(())
-    } else {
-        Err(warnings)
-    }
+    if warnings.is_empty() { Ok(()) } else { Err(warnings) }
 }
 
 #[cfg(test)]
@@ -197,10 +178,7 @@ mod tests {
 
     #[test]
     fn test_validate_config_invalid_level() {
-        let config = TrustConfig {
-            level: "L9".to_string(),
-            ..Default::default()
-        };
+        let config = TrustConfig { level: "L9".to_string(), ..Default::default() };
         let warnings = validate_config(&config).unwrap_err();
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].field, "level");
@@ -209,30 +187,21 @@ mod tests {
 
     #[test]
     fn test_validate_config_timeout_too_low() {
-        let config = TrustConfig {
-            timeout_ms: 10,
-            ..Default::default()
-        };
+        let config = TrustConfig { timeout_ms: 10, ..Default::default() };
         let warnings = validate_config(&config).unwrap_err();
         assert!(warnings.iter().any(|w| w.field == "timeout_ms"));
     }
 
     #[test]
     fn test_validate_config_timeout_too_high() {
-        let config = TrustConfig {
-            timeout_ms: 1_000_000,
-            ..Default::default()
-        };
+        let config = TrustConfig { timeout_ms: 1_000_000, ..Default::default() };
         let warnings = validate_config(&config).unwrap_err();
         assert!(warnings.iter().any(|w| w.field == "timeout_ms"));
     }
 
     #[test]
     fn test_validate_config_invalid_solver() {
-        let config = TrustConfig {
-            solver: Some("nonexistent".to_string()),
-            ..Default::default()
-        };
+        let config = TrustConfig { solver: Some("nonexistent".to_string()), ..Default::default() };
         let warnings = validate_config(&config).unwrap_err();
         assert!(warnings.iter().any(|w| w.field == "solver"));
         assert_eq!(warnings[0].severity, Severity::Error);
@@ -240,10 +209,7 @@ mod tests {
 
     #[test]
     fn test_validate_config_valid_solver() {
-        let config = TrustConfig {
-            solver: Some("z4".to_string()),
-            ..Default::default()
-        };
+        let config = TrustConfig { solver: Some("z4".to_string()), ..Default::default() };
         assert!(validate_config(&config).is_ok());
     }
 
@@ -255,31 +221,22 @@ mod tests {
             ..Default::default()
         };
         let warnings = validate_config(&config).unwrap_err();
-        assert!(warnings
-            .iter()
-            .any(|w| w.field == "skip_functions" && w.severity == Severity::Warning));
+        assert!(
+            warnings.iter().any(|w| w.field == "skip_functions" && w.severity == Severity::Warning)
+        );
     }
 
     #[test]
     fn test_validate_config_disabled_with_settings_warning() {
-        let config = TrustConfig {
-            enabled: false,
-            level: "L2".to_string(),
-            ..Default::default()
-        };
+        let config = TrustConfig { enabled: false, level: "L2".to_string(), ..Default::default() };
         let warnings = validate_config(&config).unwrap_err();
         assert!(warnings.iter().any(|w| w.field == "enabled"));
     }
 
     #[test]
     fn test_validate_config_invalid_parallel() {
-        let config = TrustConfig {
-            parallel: Some(0),
-            ..Default::default()
-        };
+        let config = TrustConfig { parallel: Some(0), ..Default::default() };
         let warnings = validate_config(&config).unwrap_err();
-        assert!(warnings
-            .iter()
-            .any(|w| w.field == "parallel" && w.severity == Severity::Error));
+        assert!(warnings.iter().any(|w| w.field == "parallel" && w.severity == Severity::Error));
     }
 }

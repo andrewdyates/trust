@@ -9,9 +9,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
-
 use trust_types::Formula;
+use trust_types::fx::FxHashMap;
 
 // ---------------------------------------------------------------------------
 // Counterexample representation
@@ -344,8 +343,9 @@ fn eval_int(formula: &Formula, assignments: &FxHashMap<&str, i128>) -> Option<i1
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use trust_types::Sort;
+
+    use super::*;
 
     /// A test verifier that returns counterexamples from a pre-configured list.
     struct MockVerifier {

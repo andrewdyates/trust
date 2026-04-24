@@ -34,7 +34,7 @@ pub(crate) fn try_destructure_mir_constant_for_user_output<'tcx>(
     ty: Ty<'tcx>,
 ) -> Option<mir::DestructuredConstant<'tcx>> {
     let typing_env = ty::TypingEnv::fully_monomorphized();
-    // tRust: known issue — use a proper span here?
+    // FIXME: use a proper span here?
     let (ecx, op) = mk_eval_cx_for_const_val(tcx.at(rustc_span::DUMMY_SP), typing_env, val, ty)?;
 
     // We go to `usize` as we cannot allocate anything bigger anyway.
@@ -49,7 +49,6 @@ pub(crate) fn try_destructure_mir_constant_for_user_output<'tcx>(
             (def.variants()[variant].fields.len(), Some(variant), down)
         }
         ty::Tuple(args) => (args.len(), None, op),
-        // tRust: invariant — MIR constant destructuring covers all valid ConstValue variants
         _ => bug!("cannot destructure mir constant {:?}", val),
     };
 
@@ -76,6 +75,6 @@ pub fn tag_for_variant_provider<'tcx>(
 
     let ecx = InterpCx::new(tcx, DUMMY_SP, key.typing_env, crate::const_eval::DummyMachine);
 
-    let layout = ecx.layout_of(ty).expect("invariant: layout_of succeeds for tag computation type");
-    ecx.tag_for_variant(layout, variant_index).expect("invariant: tag_for_variant succeeds for valid variant index").map(|(tag, _tag_field)| tag)
+    let layout = ecx.layout_of(ty).unwrap();
+    ecx.tag_for_variant(layout, variant_index).unwrap().map(|(tag, _tag_field)| tag)
 }

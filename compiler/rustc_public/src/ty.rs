@@ -146,7 +146,7 @@ pub enum TyConstKind {
     Bound(DebruijnIndex, BoundVar),
     Unevaluated(ConstDef, GenericArgs),
 
-    // tRust: known issue — These should be a valtree
+    // FIXME: These should be a valtree
     Value(Ty, Allocation),
     ZSTValue(Ty),
 }
@@ -713,7 +713,7 @@ impl FnDef {
     /// Get the function signature for this function definition.
     pub fn fn_sig(&self) -> PolyFnSig {
         let kind = self.ty().kind();
-        kind.fn_sig().expect("invariant: FnDef type always has fn_sig") // tRust: unwrap -> expect
+        kind.fn_sig().unwrap()
     }
 }
 

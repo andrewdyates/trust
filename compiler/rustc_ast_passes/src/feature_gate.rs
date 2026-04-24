@@ -130,7 +130,7 @@ impl<'a> PostExpansionVisitor<'a> {
             msg!("only lifetime parameters can be used in this context")
         );
 
-        // tRust: known issue (non_lifetime_binders) — Const bound params are pretty broken.
+        // FIXME(non_lifetime_binders): Const bound params are pretty broken.
         // Let's keep users from using this feature accidentally.
         if self.features.non_lifetime_binders() {
             let const_param_spans: Vec<_> = params
@@ -725,8 +725,8 @@ fn check_dependent_features(sess: &Session, features: &Features) {
             let parent_span = features
                 .enabled_features_iter_stable_order()
                 .find_map(|(name, span)| (name == parent).then_some(span))
-                .expect("invariant: parent feature has a span if it is enabled"); // tRust: unwrap -> expect
-            // tRust: known issue — should probably format this in fluent instead of here
+                .unwrap();
+            // FIXME: should probably format this in fluent instead of here
             let missing = children
                 .iter()
                 .filter(|f| !features.enabled(**f))

@@ -38,7 +38,7 @@ pub(crate) fn provide(providers: &mut Providers) {
 
 #[derive(Default)]
 struct LocalCollector {
-    // tRust: known issue — (eddyb) perhaps use `ItemLocalId` instead?
+    // FIXME(eddyb) perhaps use `ItemLocalId` instead?
     locals: FxHashSet<HirId>,
 }
 

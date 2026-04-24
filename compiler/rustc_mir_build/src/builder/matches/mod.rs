@@ -523,7 +523,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         arm_match_scope: Option<(&Arm<'tcx>, region::Scope)>,
     ) -> BasicBlock {
         if branch.sub_branches.len() == 1 {
-            let [sub_branch] = branch.sub_branches.try_into().expect("invariant: value fits in target type"); // tRust: unwrap -> expect
+            let [sub_branch] = branch.sub_branches.try_into().unwrap();
             // Avoid generating another `BasicBlock` when we only have one sub branch.
             self.bind_and_guard_matched_candidate(
                 sub_branch,
@@ -651,7 +651,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             vec![(irrefutable_pat, HasMatchGuard::No)],
             false,
         );
-        let [branch] = built_tree.branches.try_into().expect("invariant: value fits in target type"); // tRust: unwrap -> expect
+        let [branch] = built_tree.branches.try_into().unwrap();
 
         // For matches and function arguments, the place that is being matched
         // can be set when creating the variables. But the place for
@@ -673,7 +673,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             // ```
             if let Some(place) = initializer.try_to_place(self) {
                 // Because or-alternatives bind the same variables, we only explore the first one.
-                let first_sub_branch = branch.sub_branches.first().expect("invariant: collection is non-empty"); // tRust: unwrap -> expect
+                let first_sub_branch = branch.sub_branches.first().unwrap();
                 for binding in &first_sub_branch.bindings {
                     let local = self.var_local_id(binding.var_id, OutsideGuard);
                     if let LocalInfo::User(BindingForm::Var(VarBindingForm {
@@ -683,7 +683,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     {
                         *match_place = Some(place);
                     } else {
-                        // tRust: invariant — every binding in a lowered `let` pattern must map to a user local that records its matched place.
                         bug!("Let binding to non-user variable.")
                     };
                 }
@@ -756,7 +755,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ) {
         match self.thir.exprs[guard_expr].kind {
             ExprKind::Let { expr: _, pat: ref guard_pat } => {
-                // tRust: known issue — pass a proper `opt_match_place`
+                // FIXME: pass a proper `opt_match_place`
                 self.declare_bindings(visibility_scope, scope_span, guard_pat, None, None);
             }
             ExprKind::Scope { value, .. } => {
@@ -889,8 +888,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
             PatKind::Array { ref prefix, ref slice, ref suffix }
             | PatKind::Slice { ref prefix, ref slice, ref suffix } => {
-                let from = u64::try_from(prefix.len()).expect("invariant: value is present"); // tRust: unwrap -> expect
-                let to = u64::try_from(suffix.len()).expect("invariant: value is present"); // tRust: unwrap -> expect
+                let from = u64::try_from(prefix.len()).unwrap();
+                let to = u64::try_from(suffix.len()).unwrap();
                 for subpattern in prefix.iter() {
                     visit_subpat(self, subpattern, &user_tys.index(), f);
                 }
@@ -1084,7 +1083,7 @@ struct Candidate<'tcx> {
     ///
     /// ---
     /// Invariant: it is `None` iff `subcandidates.is_empty()`.
-    /// - tRust: known issue — We sometimes don't unset this when clearing `subcandidates`.
+    /// - FIXME: We sometimes don't unset this when clearing `subcandidates`.
     or_span: Option<Span>,
 
     /// The block before the `bindings` have been established.
@@ -1465,8 +1464,8 @@ impl<'tcx> MatchTreeSubBranch<'tcx> {
         debug_assert!(candidate.match_pairs.is_empty());
         MatchTreeSubBranch {
             span: candidate.extra_data.span,
-            success_block: candidate.pre_binding_block.expect("invariant: candidate has pre-binding block"), // tRust: unwrap -> expect
-            otherwise_block: candidate.otherwise_block.expect("invariant: candidate has otherwise block"), // tRust: unwrap -> expect
+            success_block: candidate.pre_binding_block.unwrap(),
+            otherwise_block: candidate.otherwise_block.unwrap(),
             bindings: sub_branch_bindings(parent_data, &candidate.extra_data.bindings),
             ascriptions: parent_data
                 .iter()
@@ -1520,7 +1519,7 @@ fn sub_branch_bindings<'tcx>(
     // Make sure we've included all bindings. For ill-formed patterns like `(x, _ | y)`, we may not
     // have collected all bindings yet, since we only check the first alternative when determining
     // whether to inline subcandidates' bindings.
-    // tRust: known issue — prevent ill-formed patterns from getting here (upstream FIXME by @dianne)
+    // FIXME(@dianne): prevent ill-formed patterns from getting here
     while let Some(candidate_bindings) = remainder.next() {
         ty::tls::with(|tcx| {
             tcx.dcx().delayed_bug("mismatched or-pattern bindings but no error emitted")
@@ -1552,7 +1551,7 @@ fn push_sub_branch_bindings<'c, 'tcx: 'c>(
                 } else {
                     // For ill-formed patterns like `x | _`, we may not have any subcandidates left
                     // to inline bindings from.
-                    // tRust: known issue — prevent ill-formed patterns from getting here (upstream FIXME by @dianne)
+                    // FIXME(@dianne): prevent ill-formed patterns from getting here
                     ty::tls::with(|tcx| {
                         tcx.dcx().delayed_bug("mismatched or-pattern bindings but no error emitted")
                     });
@@ -1623,7 +1622,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 if let Some(next_candidate_start_block) = next_candidate_start_block {
                     let source_info = self.source_info(leaf_candidate.extra_data.span);
                     // Falsely branch to `next_candidate_start_block` before reaching pre_binding.
-                    let old_pre_binding = leaf_candidate.pre_binding_block.expect("invariant: candidate has pre-binding block"); // tRust: unwrap -> expect
+                    let old_pre_binding = leaf_candidate.pre_binding_block.unwrap();
                     let new_pre_binding = self.cfg.start_new_block();
                     self.false_edges(
                         old_pre_binding,
@@ -1635,7 +1634,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     if has_guard {
                         // Falsely branch to `next_candidate_start_block` also if the guard fails.
                         let new_otherwise = self.cfg.start_new_block();
-                        let old_otherwise = leaf_candidate.otherwise_block.expect("invariant: candidate has otherwise block"); // tRust: unwrap -> expect
+                        let old_otherwise = leaf_candidate.otherwise_block.unwrap();
                         self.false_edges(
                             new_otherwise,
                             old_otherwise,
@@ -1960,7 +1959,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         candidate: &mut Candidate<'tcx>,
         match_pair: MatchPairTree<'tcx>,
     ) {
-        // tRust: invariant — `create_or_subcandidates` is only called for match pairs already classified as or-patterns.
         let TestableCase::Or { pats } = match_pair.testable_case else { bug!() };
         debug!("expanding or-pattern: candidate={:#?}\npats={:#?}", candidate, pats);
         candidate.or_span = Some(match_pair.pattern_span);
@@ -2031,11 +2029,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     fn merge_trivial_subcandidates(&mut self, candidate: &mut Candidate<'tcx>) {
         assert!(!candidate.subcandidates.is_empty());
         if candidate.has_guard {
-            // tRust: known issue — Don't give up if we have a guard. (upstream FIXME by or_patterns; matthewjasper)
+            // FIXME(or_patterns; matthewjasper) Don't give up if we have a guard.
             return;
         }
 
-        // tRust: known issue — Try to be more aggressive here. (upstream FIXME by or_patterns; matthewjasper)
+        // FIXME(or_patterns; matthewjasper) Try to be more aggressive here.
         let can_merge = candidate.subcandidates.iter().all(|subcandidate| {
             subcandidate.subcandidates.is_empty() && subcandidate.extra_data.is_empty()
         });
@@ -2046,7 +2044,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let mut last_otherwise = None;
         let shared_pre_binding_block = self.cfg.start_new_block();
         // This candidate is about to become a leaf, so unset `or_span`.
-        let or_span = candidate.or_span.take().expect("invariant: option was set"); // tRust: unwrap -> expect
+        let or_span = candidate.or_span.take().unwrap();
         let source_info = self.source_info(or_span);
 
         if candidate.false_edge_start_block.is_none() {
@@ -2059,7 +2057,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // (Note that the subcandidates have already had their part of the match
         // tree lowered by this point, which is why we can add a goto to them.)
         for subcandidate in mem::take(&mut candidate.subcandidates) {
-            let subcandidate_block = subcandidate.pre_binding_block.expect("invariant: candidate has pre-binding block"); // tRust: unwrap -> expect
+            let subcandidate_block = subcandidate.pre_binding_block.unwrap();
             self.cfg.goto(subcandidate_block, source_info, shared_pre_binding_block);
             last_otherwise = subcandidate.otherwise_block;
         }
@@ -2080,7 +2078,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         candidate.subcandidates.retain_mut(|candidate| {
             if candidate.extra_data.is_never {
                 candidate.visit_leaves(|subcandidate| {
-                    let block = subcandidate.pre_binding_block.expect("invariant: candidate has pre-binding block"); // tRust: unwrap -> expect
+                    let block = subcandidate.pre_binding_block.unwrap();
                     // That block is already unreachable but needs a terminator to make the MIR well-formed.
                     let source_info = self.source_info(subcandidate.extra_data.span);
                     self.cfg.terminate(block, source_info, TerminatorKind::Unreachable);
@@ -2142,7 +2140,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             assert!(leaf_candidate.match_pairs.is_empty());
             leaf_candidate.match_pairs.extend(remaining_match_pairs.iter().cloned());
 
-            let or_start = leaf_candidate.pre_binding_block.expect("invariant: candidate has pre-binding block"); // tRust: unwrap -> expect
+            let or_start = leaf_candidate.pre_binding_block.unwrap();
             let otherwise =
                 self.match_candidates(span, scrutinee_span, or_start, &mut [leaf_candidate]);
             // In a case like `(P | Q, R | S)`, if `P` succeeds and `R | S` fails, we know `(Q,
@@ -2151,9 +2149,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             // `leaf_candidate.otherwise_block` can be reached by guard failure as well, so we
             // can't skip `Q`.
             let or_otherwise = if leaf_candidate.has_guard {
-                leaf_candidate.otherwise_block.expect("invariant: candidate has otherwise block") // tRust: unwrap -> expect
+                leaf_candidate.otherwise_block.unwrap()
             } else {
-                last_otherwise.expect("invariant: value is present") // tRust: unwrap -> expect
+                last_otherwise.unwrap()
             };
             self.cfg.goto(otherwise, source_info, or_otherwise);
         });
@@ -2181,7 +2179,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let match_pair = &candidates[0].match_pairs[0];
         let test = self.pick_test_for_match_pair(match_pair);
         // Unwrap is ok after simplification.
-        let match_place = match_pair.place.expect("invariant: match pair has a place"); // tRust: unwrap -> expect
+        let match_place = match_pair.place.unwrap();
         debug!(?test, ?match_pair);
 
         (match_place, test)
@@ -2368,7 +2366,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             vec![(pat, HasMatchGuard::No)],
             true,
         );
-        let [branch] = built_tree.branches.try_into().expect("invariant: value fits in target type"); // tRust: unwrap -> expect
+        let [branch] = built_tree.branches.try_into().unwrap();
 
         self.break_for_else(built_tree.otherwise_block, self.source_info(expr_span));
 
@@ -2479,7 +2477,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
             let source_info = self.source_info(guard_span);
             let guard_end = self.source_info(tcx.sess.source_map().end_point(guard_span));
-            let guard_frame = self.guard_context.pop().expect("invariant: guard context stack is non-empty"); // tRust: unwrap -> expect
+            let guard_frame = self.guard_context.pop().unwrap();
             debug!("Exiting guard building context with locals: {:?}", guard_frame);
 
             for &(_, temp, _) in fake_borrows {
@@ -2774,7 +2772,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let local_ty = self.local_decls[local].ty;
 
         let pinned_ty = local_ty.pinned_ty().unwrap_or_else(|| {
-            // tRust: invariant — a binding lowered as `Pinned` must have a local type whose outer constructor is `Pin`.
             span_bug!(
                 source_info.span,
                 "expect type `Pin` for a pinned binding, found type {:?}",
@@ -2886,7 +2883,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         let tcx = self.tcx;
         for (_, node) in tcx.hir_parent_iter(var_id.0) {
-            // tRust: known issue — at what point is it safe to bail on the iterator? (upstream FIXME by khuey)
+            // FIXME(khuey) at what point is it safe to bail on the iterator?
             // Can we stop at the first non-Pat node?
             if matches!(node, Node::LetStmt(&LetStmt { source: LocalSource::AssignDesugar, .. })) {
                 return false;
@@ -2918,7 +2915,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         .sub_branches
                         .get(pat.idx)
                         .or_else(|| branch.sub_branches.last())
-                        .expect("invariant: value is present"); // tRust: unwrap -> expect
+                        .unwrap();
 
                     match self.static_pattern_match_inner(valtree, &pat.pat) {
                         true => return Some(sub_branch.success_block),
@@ -2947,15 +2944,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         match pat.ctor() {
             Constructor::Variant(variant_index) => {
                 let ValTreeKind::Branch(branch) = *valtree else {
-                    // tRust: invariant — enum constants are encoded as branch valtrees rather than direct leaf values.
                     bug!("malformed valtree for an enum")
                 };
                 if branch.len() != 1 {
-                    // tRust: invariant — an enum valtree branch stores exactly one child containing the active variant index.
                     bug!("malformed valtree for an enum")
                 };
                 let ValTreeKind::Leaf(actual_variant_idx) = **branch[0].to_value().valtree else {
-                    // tRust: invariant — the sole child of an enum valtree branch must be a leaf discriminant value.
                     bug!("malformed valtree for an enum")
                 };
 
@@ -2973,7 +2967,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
             Constructor::Bool(pattern_value) => match valtree.to_leaf().try_to_bool() {
                 Ok(actual_value) => *pattern_value == actual_value,
-                // tRust: invariant — a `bool` valtree leaf must use one of the two valid boolean bit-patterns.
                 Err(()) => bug!("bool value with invalid bits"),
             },
             Constructor::F16Range(l, h, end) => {
@@ -3016,7 +3009,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | Constructor::Slice(_)
             | Constructor::UnionField
             | Constructor::Or
-            // tRust: invariant — this helper only handles non-structural constructors that can be checked without recursing into fields.
             | Constructor::Str(_) => bug!("unsupported pattern constructor {:?}", pat.ctor()),
 
             // These should never occur here:
@@ -3025,7 +3017,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | Constructor::Hidden
             | Constructor::Missing
             | Constructor::PrivateUninhabited => {
-                // tRust: invariant — exhaustiveness-only sentinel constructors must be eliminated before concrete static pattern matching.
                 bug!("unsupported pattern constructor {:?}", pat.ctor())
             }
         }

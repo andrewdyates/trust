@@ -40,7 +40,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
 
         // DynTrait { predicates: &'static [Trait] }
         for (field_idx, field) in
-            dyn_place.layout().ty.ty_adt_def().expect("invariant: dyn trait place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            dyn_place.layout().ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&dyn_place, field_idx)?;
             match field.name {
@@ -53,7 +53,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     )?;
                 }
                 other => {
-                    // tRust: invariant — match covers all implemented fields for this type info struct
                     span_bug!(self.tcx.def_span(field.did), "unimplemented DynTrait field {other}")
                 }
             }
@@ -90,7 +89,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         let total_len = principal_ty.map(|_| 1).unwrap_or(0) + auto_trait_def_ids.len();
 
         // element type = DynTraitPredicate
-        let slice_ty = slice_place.layout().ty.builtin_deref(false).expect("invariant: slice place type is a pointer/reference with deref target"); // [DynTraitPredicate]
+        let slice_ty = slice_place.layout().ty.builtin_deref(false).unwrap(); // [DynTraitPredicate]
         let elem_ty = slice_ty.sequence_element_type(tcx); // DynTraitPredicate
 
         let arr_layout = self.layout_of(Ty::new_array(tcx, elem_ty, total_len as u64))?;
@@ -100,7 +99,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         // principal entry (if any) - NOT an auto trait
         if let Some(principal_ty) = principal_ty {
             let Some((_i, elem_place)) = elems.next(self)? else {
-                // tRust: invariant — DynTrait predicate count matches the computed length
                 span_bug!(self.tcx.span, "DynTrait.predicates length computed wrong (principal)");
             };
             self.write_dyn_trait_predicate(elem_place, principal_ty, false)?;
@@ -109,7 +107,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
         // auto trait entries - these ARE auto traits
         for auto in auto_trait_def_ids {
             let Some((_i, elem_place)) = elems.next(self)? else {
-                // tRust: invariant — DynTrait predicate count matches the computed length
                 span_bug!(self.tcx.span, "DynTrait.predicates length computed wrong (auto)");
             };
             let auto_ty = self.mk_dyn_principal_auto_trait_ty(*auto, region);
@@ -132,7 +129,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
             .layout
             .ty
             .ty_adt_def()
-            .expect("invariant: field name lookup succeeds for known ADT field")
+            .unwrap()
             .non_enum_variant()
             .fields
             .iter_enumerated()
@@ -144,7 +141,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     self.write_trait(field_place, trait_ty, is_auto)?;
                 }
                 other => {
-                    // tRust: invariant — match covers all implemented DynTraitPredicate fields
                     span_bug!(
                         self.tcx.def_span(field.did),
                         "unimplemented DynTraitPredicate field {other}"
@@ -162,7 +158,7 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
     ) -> InterpResult<'tcx> {
         // Trait { ty: TypeId, is_auto: bool }
         for (field_idx, field) in
-            trait_place.layout.ty.ty_adt_def().expect("invariant: trait place type is a struct ADT").non_enum_variant().fields.iter_enumerated()
+            trait_place.layout.ty.ty_adt_def().unwrap().non_enum_variant().fields.iter_enumerated()
         {
             let field_place = self.project_field(&trait_place, field_idx)?;
             match field.name {
@@ -173,7 +169,6 @@ impl<'tcx> InterpCx<'tcx, CompileTimeMachine<'tcx>> {
                     self.write_scalar(Scalar::from_bool(is_auto), &field_place)?;
                 }
                 other => {
-                    // tRust: invariant — match covers all implemented fields for this type info struct
                     span_bug!(self.tcx.def_span(field.did), "unimplemented Trait field {other}")
                 }
             }

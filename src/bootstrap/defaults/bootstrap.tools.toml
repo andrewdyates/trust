@@ -8,6 +8,9 @@ incremental = true
 download-rustc = "if-unchanged"
 
 [build]
+# tRust: tools contributors need the same linked local toolchain surface.
+extended = true
+tools = ["cargo", "cargo-trust", "rustdoc", "clippy", "rustfmt", "rust-analyzer", "miri", "src", "llvm-tools"]
 # cargo and clippy tests don't pass on stage 1
 test-stage = 2
 # Document with the in-tree rustdoc by default, since `download-rustc` makes it quick to compile.

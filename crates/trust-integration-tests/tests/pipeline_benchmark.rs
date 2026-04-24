@@ -16,18 +16,17 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::fx::FxHashMap;
 use std::time::{Duration, Instant};
+use trust_types::fx::FxHashMap;
 
 use trust_cache::result_cache::CachePolicy;
-use trust_router::solver_cache::SolverCachedRouter;
 use trust_router::Router;
-use trust_types::{
+use trust_router::solver_cache::SolverCachedRouter;
 use trust_types::fx::FxHashSet;
-    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind,
-    Formula, LocalDecl, Operand, Place, Projection, Rvalue, Sort, SourceSpan,
-    Statement, Terminator, Ty, VcKind, VerifiableBody, VerifiableFunction,
-    VerificationCondition, VerificationResult,
+use trust_types::{
+    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula, LocalDecl, Operand,
+    Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody,
+    VerifiableFunction, VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -45,11 +44,7 @@ fn make_overflow_function(name: &str, ty: Ty, _width: u32) -> VerifiableFunction
                 LocalDecl { index: 0, ty: ty.clone(), name: None },
                 LocalDecl { index: 1, ty: ty.clone(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: ty.clone(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![ty.clone(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![ty.clone(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: ty.clone(), name: None },
             ],
             blocks: vec![
@@ -235,11 +230,7 @@ fn make_contract_function(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -299,11 +290,7 @@ fn make_multi_op_function(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("y".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::u32(), name: None },
                 LocalDecl { index: 5, ty: Ty::u32(), name: None },
             ],
@@ -392,26 +379,10 @@ impl BenchmarkWorkload {
             let prefix = format!("b{batch}");
 
             // Overflow: different integer widths
-            functions.push(make_overflow_function(
-                &format!("{prefix}_add_u8"),
-                Ty::u8(),
-                8,
-            ));
-            functions.push(make_overflow_function(
-                &format!("{prefix}_add_u16"),
-                Ty::u16(),
-                16,
-            ));
-            functions.push(make_overflow_function(
-                &format!("{prefix}_add_u32"),
-                Ty::u32(),
-                32,
-            ));
-            functions.push(make_overflow_function(
-                &format!("{prefix}_add_u64"),
-                Ty::usize(),
-                64,
-            ));
+            functions.push(make_overflow_function(&format!("{prefix}_add_u8"), Ty::u8(), 8));
+            functions.push(make_overflow_function(&format!("{prefix}_add_u16"), Ty::u16(), 16));
+            functions.push(make_overflow_function(&format!("{prefix}_add_u32"), Ty::u32(), 32));
+            functions.push(make_overflow_function(&format!("{prefix}_add_u64"), Ty::usize(), 64));
 
             // Division and remainder
             functions.push(make_division_function(&format!("{prefix}_div")));
@@ -495,19 +466,13 @@ impl BenchmarkResult {
         let kinds_json: Vec<String> = {
             let mut entries: Vec<_> = self.vc_kind_distribution.iter().collect();
             entries.sort_by(|a, b| b.1.cmp(a.1));
-            entries
-                .iter()
-                .map(|(k, v)| format!(r#"    "{}": {}"#, k, v))
-                .collect()
+            entries.iter().map(|(k, v)| format!(r#"    "{}": {}"#, k, v)).collect()
         };
 
         let results_json: Vec<String> = {
             let mut entries: Vec<_> = self.result_distribution.iter().collect();
             entries.sort_by(|a, b| b.1.cmp(a.1));
-            entries
-                .iter()
-                .map(|(k, v)| format!(r#"    "{}": {}"#, k, v))
-                .collect()
+            entries.iter().map(|(k, v)| format!(r#"    "{}": {}"#, k, v)).collect()
         };
 
         let total_us: u128 = self.stages.iter().map(|s| s.duration.as_micros()).sum();
@@ -615,16 +580,12 @@ fn benchmark_verification_pipeline_baseline() {
     let total_vcs = all_vcs.len();
 
     // Verify we hit the 200+ VC target
-    assert!(
-        total_vcs >= 200,
-        "Workload should generate 200+ VCs, got {total_vcs}"
-    );
+    assert!(total_vcs >= 200, "Workload should generate 200+ VCs, got {total_vcs}");
 
     // -----------------------------------------------------------------------
     // Stage 2: First pass -- cold cache (all misses)
     // -----------------------------------------------------------------------
-    let cached_router =
-        SolverCachedRouter::new(Router::new(), CachePolicy::AlwaysCache);
+    let cached_router = SolverCachedRouter::new(Router::new(), CachePolicy::AlwaysCache);
 
     let cold_start = Instant::now();
     let cold_results = cached_router.verify_all(&all_vcs);
@@ -633,15 +594,8 @@ fn benchmark_verification_pipeline_baseline() {
     let cold_stats = cached_router.cache_stats();
 
     // After cold pass: all should be misses (no prior cache entries)
-    assert_eq!(
-        cold_stats.hits, 0_usize,
-        "Cold pass should have 0 cache hits"
-    );
-    assert_eq!(
-        cold_results.len(),
-        total_vcs,
-        "Should get one result per VC"
-    );
+    assert_eq!(cold_stats.hits, 0_usize, "Cold pass should have 0 cache hits");
+    assert_eq!(cold_results.len(), total_vcs, "Should get one result per VC");
 
     // -----------------------------------------------------------------------
     // Stage 3: Second pass -- warm cache (measure hit rate)
@@ -669,12 +623,8 @@ fn benchmark_verification_pipeline_baseline() {
     let mut result_distribution: FxHashMap<String, usize> = FxHashMap::default();
 
     for (vc, result) in &cold_results {
-        *vc_kind_distribution
-            .entry(classify_vc_kind(&vc.kind).to_string())
-            .or_insert(0) += 1;
-        *result_distribution
-            .entry(classify_result(result).to_string())
-            .or_insert(0) += 1;
+        *vc_kind_distribution.entry(classify_vc_kind(&vc.kind).to_string()).or_insert(0) += 1;
+        *result_distribution.entry(classify_result(result).to_string()).or_insert(0) += 1;
     }
     let agg_duration = agg_start.elapsed();
 
@@ -691,10 +641,7 @@ fn benchmark_verification_pipeline_baseline() {
         vc_kind_distribution.contains_key("ArithmeticOverflow"),
         "Should have ArithmeticOverflow VCs"
     );
-    assert!(
-        vc_kind_distribution.contains_key("DivisionByZero"),
-        "Should have DivisionByZero VCs"
-    );
+    assert!(vc_kind_distribution.contains_key("DivisionByZero"), "Should have DivisionByZero VCs");
     assert!(
         vc_kind_distribution.contains_key("IndexOutOfBounds"),
         "Should have IndexOutOfBounds VCs"
@@ -742,10 +689,7 @@ fn benchmark_verification_pipeline_baseline() {
     // Warm pass should be faster than cold pass (cache hits avoid solver)
     // Note: with MockBackend this may not hold due to minimal solver cost,
     // but the measurement infrastructure is the point.
-    eprintln!(
-        "Pipeline benchmark: {} functions, {} VCs",
-        total_functions, total_vcs
-    );
+    eprintln!("Pipeline benchmark: {} functions, {} VCs", total_functions, total_vcs);
     eprintln!(
         "  VC generation:    {:>8}us ({:.1}us/func)",
         vcgen_duration.as_micros(),
@@ -841,17 +785,13 @@ fn benchmark_cache_effectiveness() {
     let workload = BenchmarkWorkload::build();
 
     // Generate all VCs
-    let all_vcs: Vec<VerificationCondition> = workload
-        .functions
-        .iter()
-        .flat_map(trust_vcgen::generate_vcs)
-        .collect();
+    let all_vcs: Vec<VerificationCondition> =
+        workload.functions.iter().flat_map(trust_vcgen::generate_vcs).collect();
 
     let total_vcs = all_vcs.len();
     assert!(total_vcs >= 200);
 
-    let cached_router =
-        SolverCachedRouter::new(Router::new(), CachePolicy::AlwaysCache);
+    let cached_router = SolverCachedRouter::new(Router::new(), CachePolicy::AlwaysCache);
 
     // Pass 1: populate cache
     let pass1_start = Instant::now();
@@ -936,11 +876,8 @@ fn benchmark_cache_effectiveness() {
 fn benchmark_formula_hashing() {
     let workload = BenchmarkWorkload::build();
 
-    let all_vcs: Vec<VerificationCondition> = workload
-        .functions
-        .iter()
-        .flat_map(trust_vcgen::generate_vcs)
-        .collect();
+    let all_vcs: Vec<VerificationCondition> =
+        workload.functions.iter().flat_map(trust_vcgen::generate_vcs).collect();
 
     let total_vcs = all_vcs.len();
     assert!(total_vcs >= 200);
@@ -962,8 +899,7 @@ fn benchmark_formula_hashing() {
     let smtlib_duration = smtlib_start.elapsed();
 
     // Count unique hashes (to estimate cache collision potential)
-    let unique_hashes: FxHashSet<&str> =
-        hashes.iter().map(|s| s.as_str()).collect();
+    let unique_hashes: FxHashSet<&str> = hashes.iter().map(|s| s.as_str()).collect();
 
     let json = format!(
         r#"{{

@@ -52,19 +52,13 @@ impl AggregatedResult {
     /// How many solvers produced a Proved result.
     #[must_use]
     pub fn proved_count(&self) -> usize {
-        self.contributions
-            .iter()
-            .filter(|c| c.result.is_proved())
-            .count()
+        self.contributions.iter().filter(|c| c.result.is_proved()).count()
     }
 
     /// How many solvers produced a Failed result.
     #[must_use]
     pub fn failed_count(&self) -> usize {
-        self.contributions
-            .iter()
-            .filter(|c| c.result.is_failed())
-            .count()
+        self.contributions.iter().filter(|c| c.result.is_failed()).count()
     }
 
     /// How many solvers timed out.
@@ -91,11 +85,11 @@ pub fn aggregate(contributions: Vec<SolverContribution>) -> AggregatedResult {
     if contributions.is_empty() {
         return AggregatedResult {
             best: VerificationResult::Unknown {
-                solver: "none".to_string(),
+                solver: "none".into(),
                 time_ms: 0,
                 reason: "no solver contributions".to_string(),
             },
-            best_solver: "none".to_string(),
+            best_solver: "none".into(),
             contributions: Vec::new(),
             merged_counterexample: None,
             total_time_ms: 0,
@@ -125,13 +119,7 @@ pub fn aggregate(contributions: Vec<SolverContribution>) -> AggregatedResult {
     let best = contributions[best_idx].result.clone();
     let best_solver = contributions[best_idx].solver.clone();
 
-    AggregatedResult {
-        best,
-        best_solver,
-        contributions,
-        merged_counterexample,
-        total_time_ms,
-    }
+    AggregatedResult { best, best_solver, contributions, merged_counterexample, total_time_ms }
 }
 
 /// tRust: Merge multiple counterexamples into one.
@@ -199,53 +187,43 @@ mod tests {
 
     fn proved(solver: &str, strength: ProofStrength) -> VerificationResult {
         VerificationResult::Proved {
-            solver: solver.to_string(),
+            solver: solver.into(),
             time_ms: 10,
             strength,
             proof_certificate: None,
-                solver_warnings: None,
+            solver_warnings: None,
         }
     }
 
     fn failed_with_cex(solver: &str) -> VerificationResult {
         VerificationResult::Failed {
-            solver: solver.to_string(),
+            solver: solver.into(),
             time_ms: 10,
-            counterexample: Some(Counterexample::new(vec![
-                (format!("{solver}_x"), CounterexampleValue::Int(42)),
-            ])),
+            counterexample: Some(Counterexample::new(vec![(
+                format!("{solver}_x"),
+                CounterexampleValue::Int(42),
+            )])),
         }
     }
 
     fn failed_no_cex(solver: &str) -> VerificationResult {
-        VerificationResult::Failed {
-            solver: solver.to_string(),
-            time_ms: 10,
-            counterexample: None,
-        }
+        VerificationResult::Failed { solver: solver.into(), time_ms: 10, counterexample: None }
     }
 
     fn unknown(solver: &str) -> VerificationResult {
         VerificationResult::Unknown {
-            solver: solver.to_string(),
+            solver: solver.into(),
             time_ms: 10,
             reason: "unknown".to_string(),
         }
     }
 
     fn timeout(solver: &str) -> VerificationResult {
-        VerificationResult::Timeout {
-            solver: solver.to_string(),
-            timeout_ms: 5000,
-        }
+        VerificationResult::Timeout { solver: solver.into(), timeout_ms: 5000 }
     }
 
     fn contrib(solver: &str, result: VerificationResult) -> SolverContribution {
-        SolverContribution {
-            solver: solver.to_string(),
-            result,
-            time_ms: 10,
-        }
+        SolverContribution { solver: solver.to_string(), result, time_ms: 10 }
     }
 
     #[test]
@@ -258,9 +236,7 @@ mod tests {
 
     #[test]
     fn test_aggregate_single_proved() {
-        let contributions = vec![
-            contrib("z4", proved("z4", ProofStrength::smt_unsat())),
-        ];
+        let contributions = vec![contrib("z4", proved("z4", ProofStrength::smt_unsat()))];
         let result = aggregate(contributions);
         assert!(result.is_definitive());
         assert!(result.best.is_proved());
@@ -294,10 +270,8 @@ mod tests {
 
     #[test]
     fn test_aggregate_failed_with_cex_beats_without() {
-        let contributions = vec![
-            contrib("zani", failed_no_cex("zani")),
-            contrib("z4", failed_with_cex("z4")),
-        ];
+        let contributions =
+            vec![contrib("zani", failed_no_cex("zani")), contrib("z4", failed_with_cex("z4"))];
         let result = aggregate(contributions);
         assert!(result.best.is_failed());
         assert_eq!(result.best_solver, "z4");
@@ -305,10 +279,8 @@ mod tests {
 
     #[test]
     fn test_aggregate_failed_beats_unknown() {
-        let contributions = vec![
-            contrib("z4", unknown("z4")),
-            contrib("zani", failed_no_cex("zani")),
-        ];
+        let contributions =
+            vec![contrib("z4", unknown("z4")), contrib("zani", failed_no_cex("zani"))];
         let result = aggregate(contributions);
         assert!(result.best.is_failed());
         assert_eq!(result.best_solver, "zani");
@@ -316,10 +288,7 @@ mod tests {
 
     #[test]
     fn test_aggregate_unknown_beats_timeout() {
-        let contributions = vec![
-            contrib("z4", timeout("z4")),
-            contrib("zani", unknown("zani")),
-        ];
+        let contributions = vec![contrib("z4", timeout("z4")), contrib("zani", unknown("zani"))];
         let result = aggregate(contributions);
         assert_eq!(result.best_solver, "zani");
         assert!(matches!(result.best, VerificationResult::Unknown { .. }));
@@ -346,9 +315,7 @@ mod tests {
 
     #[test]
     fn test_merge_counterexamples_single() {
-        let cex = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(1)),
-        ]);
+        let cex = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(1))]);
         let merged = merge_counterexamples(&[&cex]).expect("should merge");
         assert_eq!(merged.assignments.len(), 1);
         assert_eq!(merged.assignments[0].0, "x");
@@ -356,21 +323,15 @@ mod tests {
 
     #[test]
     fn test_merge_counterexamples_disjoint() {
-        let cex1 = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(1)),
-        ]);
-        let cex2 = Counterexample::new(vec![
-            ("y".to_string(), CounterexampleValue::Int(2)),
-        ]);
+        let cex1 = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(1))]);
+        let cex2 = Counterexample::new(vec![("y".to_string(), CounterexampleValue::Int(2))]);
         let merged = merge_counterexamples(&[&cex1, &cex2]).expect("should merge");
         assert_eq!(merged.assignments.len(), 2);
     }
 
     #[test]
     fn test_merge_counterexamples_duplicate_vars() {
-        let cex1 = Counterexample::new(vec![
-            ("x".to_string(), CounterexampleValue::Int(1)),
-        ]);
+        let cex1 = Counterexample::new(vec![("x".to_string(), CounterexampleValue::Int(1))]);
         let cex2 = Counterexample::new(vec![
             ("x".to_string(), CounterexampleValue::Int(99)),
             ("y".to_string(), CounterexampleValue::Int(2)),
@@ -378,20 +339,14 @@ mod tests {
         let merged = merge_counterexamples(&[&cex1, &cex2]).expect("should merge");
         // x from cex1 wins (first-seen).
         assert_eq!(merged.assignments.len(), 2);
-        let x_val = merged
-            .assignments
-            .iter()
-            .find(|(n, _)| n == "x")
-            .expect("x should exist");
+        let x_val = merged.assignments.iter().find(|(n, _)| n == "x").expect("x should exist");
         assert!(matches!(x_val.1, CounterexampleValue::Int(1)));
     }
 
     #[test]
     fn test_aggregate_merges_counterexamples() {
-        let contributions = vec![
-            contrib("z4", failed_with_cex("z4")),
-            contrib("zani", failed_with_cex("zani")),
-        ];
+        let contributions =
+            vec![contrib("z4", failed_with_cex("z4")), contrib("zani", failed_with_cex("zani"))];
         let result = aggregate(contributions);
         let merged = result.merged_counterexample.expect("should have merged cex");
         // z4_x and zani_x should both appear.
@@ -402,15 +357,11 @@ mod tests {
     fn test_aggregate_total_time() {
         let contributions = vec![
             SolverContribution {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 result: proved("z4", ProofStrength::smt_unsat()),
                 time_ms: 100,
             },
-            SolverContribution {
-                solver: "zani".to_string(),
-                result: timeout("zani"),
-                time_ms: 5000,
-            },
+            SolverContribution { solver: "zani".into(), result: timeout("zani"), time_ms: 5000 },
         ];
         let result = aggregate(contributions);
         assert_eq!(result.total_time_ms, 5000);

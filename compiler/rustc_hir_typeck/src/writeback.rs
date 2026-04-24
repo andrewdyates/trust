@@ -120,7 +120,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
             rustc_dump_user_args,
         };
 
-        // tRust: known issue — We specifically don't want the (opaque) error from tainting our
+        // HACK: We specifically don't want the (opaque) error from tainting our
         // inference context. That'll prevent us from doing opaque type inference
         // later on in borrowck, which affects diagnostic spans pretty negatively.
         if let Some(e) = fcx.tainted_by_errors() {
@@ -596,7 +596,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
                 self.typeck_results.hidden_types.insert(opaque_type_key.def_id, hidden_type)
             {
                 let entry =
-                    self.typeck_results.hidden_types.get_mut(&opaque_type_key.def_id).expect("invariant: index/key is valid");
+                    self.typeck_results.hidden_types.get_mut(&opaque_type_key.def_id).unwrap();
                 if prev.ty != hidden_type.ty {
                     let guar = if let Some(guar) = self.typeck_results.tainted_by_errors {
                         guar
@@ -609,7 +609,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
                 }
 
                 // Pick a better span if there is one.
-                // NOTE(oli-obk): collecting multiple spans for better diagnostics is future work.
+                // FIXME(oli-obk): collect multiple spans for better diagnostics down the road.
                 entry.span = prev.span.substitute_dummy(hidden_type.span);
             }
         }
@@ -832,7 +832,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
                         &mut unexpected_goals,
                     ))
                 })
-                // NOTE: throwing away the param-env :(
+                // FIXME: throwing away the param-env :(
                 .map(|goal| (goal.predicate, self.fcx.misc(span.to_span(self.fcx.tcx)))),
         );
         assert_eq!(unexpected_goals, vec![]);
@@ -1022,7 +1022,7 @@ struct EagerlyNormalizeConsts<'tcx> {
 }
 impl<'tcx> EagerlyNormalizeConsts<'tcx> {
     fn new(fcx: &FnCtxt<'_, 'tcx>) -> Self {
-        // NOTE(#132279, generic_const_exprs): Using `try_normalize_erasing_regions` here
+        // FIXME(#132279, generic_const_exprs): Using `try_normalize_erasing_regions` here
         // means we can't handle opaque types in their defining scope.
         EagerlyNormalizeConsts { tcx: fcx.tcx, typing_env: fcx.typing_env(fcx.param_env) }
     }

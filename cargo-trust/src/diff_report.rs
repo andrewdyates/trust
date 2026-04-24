@@ -3,8 +3,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::env;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::ExitCode;
 
 use crate::cli::SubcommandArgs;
@@ -21,18 +20,11 @@ use crate::types::OutputFormat;
 ///   cargo trust diff main..feature                            # git ref comparison
 ///   cargo trust diff --baseline report.json                   # baseline vs empty
 ///   cargo trust diff --baseline base.json --current cur.json  # compare two reports
-pub(crate) fn run_diff(sub_args: &SubcommandArgs) -> ExitCode {
+pub(crate) fn run_diff(sub_args: &SubcommandArgs, repo_dir: &Path) -> ExitCode {
     // tRust #625: Git-aware diff mode when --from/--to or ref..ref is provided.
     if let Some(ref from) = sub_args.from_ref {
-        let to = sub_args
-            .to_ref
-            .clone()
-            .unwrap_or_else(|| "HEAD".to_string());
-        let repo_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let range = diff_git::GitRefRange {
-            from: from.clone(),
-            to,
-        };
+        let to = sub_args.to_ref.clone().unwrap_or_else(|| "HEAD".to_string());
+        let range = diff_git::GitRefRange { from: from.clone(), to };
 
         match diff_git::run_git_diff(&range, &repo_dir, sub_args.scope.as_deref()) {
             Ok(report) => {

@@ -107,7 +107,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                     );
                 }
                 Some(LangItem::PointeeSized) => {
-                    // tRust: invariant — `PointeeSized` is removed during lowering
                     bug!("`PointeeSized` is removed during lowering");
                 }
                 Some(LangItem::Unsize) => {
@@ -197,7 +196,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             // Excluding IATs and type aliases here as they don't have meaningful item bounds.
             ty::Alias(ty::Projection | ty::Opaque, _) => {}
             ty::Infer(ty::TyVar(_)) => {
-                // tRust: invariant — Self=_ should have been handled by assemble_candidates
                 span_bug!(
                     obligation.cause.span,
                     "Self=_ should have been handled by assemble_candidates"
@@ -416,7 +414,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         obligation: &PolyTraitObligation<'tcx>,
         candidates: &mut SelectionCandidateSet<'tcx>,
     ) {
-        let kind = self.tcx().fn_trait_kind_from_def_id(obligation.predicate.def_id()).expect("invariant: value is present");
+        let kind = self.tcx().fn_trait_kind_from_def_id(obligation.predicate.def_id()).unwrap();
 
         // Okay to skip binder because the args on closure types never
         // touch bound regions, they just capture the in-scope
@@ -480,7 +478,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         candidates: &mut SelectionCandidateSet<'tcx>,
     ) {
         let goal_kind =
-            self.tcx().async_fn_trait_kind_from_def_id(obligation.predicate.def_id()).expect("invariant: value is present");
+            self.tcx().async_fn_trait_kind_from_def_id(obligation.predicate.def_id()).unwrap();
 
         debug!("self_ty = {:?}", obligation.self_ty().skip_binder().kind());
         match *obligation.self_ty().skip_binder().kind() {
@@ -496,7 +494,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 let Some(coroutine_kind) =
                     self.tcx().coroutine_kind(self.tcx().coroutine_for_closure(def_id))
                 else {
-                    // tRust: invariant — Coroutine with no kind
                     bug!("coroutine with no kind");
                 };
 
@@ -712,7 +709,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 | ty::Never
                 | ty::Tuple(_)
                 | ty::Error(_) => return true,
-                // tRust: known issue — Function definitions could actually implement `FnPtr` by
+                // FIXME: Function definitions could actually implement `FnPtr` by
                 // casting the ZST function def to a function pointer.
                 ty::FnDef(_, _) => return true,
             }
@@ -832,7 +829,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 }
 
                 ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                    // tRust: invariant — self.tcx().coroutine_movability(coroutine_def_id) should not be ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) at this point in processing
                     bug!(
                         "asked to assemble auto trait candidates of unexpected type: {:?}",
                         self_ty
@@ -1042,8 +1038,8 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                     }
                 } else if principal_def_id_a.is_some() && principal_def_id_b.is_some() {
                     // not casual unsizing, now check whether this is trait upcasting coercion.
-                    let principal_a = a_data.principal().expect("invariant: value is present");
-                    let target_trait_did = principal_def_id_b.expect("invariant: value is present");
+                    let principal_a = a_data.principal().unwrap();
+                    let target_trait_did = principal_def_id_b.unwrap();
                     let source_trait_ref = principal_a.with_self_ty(self.tcx(), source);
 
                     for (idx, upcast_trait_ref) in
@@ -1161,7 +1157,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             | ty::Ref(_, _, hir::Mutability::Not)
             | ty::Array(..) => {}
 
-            // tRust: known issue (unsafe_binder) — Should we conditionally
+            // FIXME(unsafe_binder): Should we conditionally
             // (i.e. universally) implement copy/clone?
             ty::UnsafeBinder(_) => {}
 
@@ -1231,7 +1227,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             ty::Bound(..) => {}
 
             ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant — Asked to assemble builtin bounds of unexpected type
                 bug!("asked to assemble builtin bounds of unexpected type: {:?}", self_ty);
             }
         }
@@ -1303,7 +1298,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             ty::Bound(..) => {}
 
             ty::Infer(ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
-                // tRust: invariant — Asked to assemble builtin bounds of unexpected type
                 bug!("asked to assemble builtin bounds of unexpected type: {:?}", self_ty);
             }
         }

@@ -47,7 +47,7 @@ fn layout_of<'tcx>(
     let typing_env = typing_env.with_post_analysis_normalized(tcx);
     let unnormalized_ty = ty;
 
-    // tRust: known issue — We might want to have two different versions of `layout_of`:
+    // FIXME: We might want to have two different versions of `layout_of`:
     // One that can be called after typecheck has completed and can use
     // `normalize_erasing_regions` here and another one that can be called
     // before typecheck has completed and uses `try_normalize_erasing_regions`.
@@ -225,7 +225,7 @@ fn layout_of_uncached<'tcx>(
                             .try_to_bits(tcx, cx.typing_env)
                             .ok_or_else(|| error(cx, LayoutError::Unknown(ty)))?;
 
-                        // tRust: known issue (pattern_types) — create implied bounds from pattern types in signatures
+                        // FIXME(pattern_types): create implied bounds from pattern types in signatures
                         // that require that the range end is >= the range start so that we can't hit
                         // this error anymore without first having hit a trait solver error.
                         // Very fuzzy on the details here, but pattern types are an internal impl detail,
@@ -291,11 +291,11 @@ fn layout_of_uncached<'tcx>(
                                 .map(|pat| match *pat {
                                     ty::PatternKind::Range { start, end } => Ok((
                                         extract_const_value(cx, ty, start)
-                                            .expect("invariant: range pattern start must have extractable const value") // tRust: unwrap -> expect
+                                            .unwrap()
                                             .try_to_bits(tcx, cx.typing_env)
                                             .ok_or_else(|| error(cx, LayoutError::Unknown(ty)))?,
                                         extract_const_value(cx, ty, end)
-                                            .expect("invariant: range pattern end must have extractable const value") // tRust: unwrap -> expect
+                                            .unwrap()
                                             .try_to_bits(tcx, cx.typing_env)
                                             .ok_or_else(|| error(cx, LayoutError::Unknown(ty)))?,
                                     )),
@@ -710,8 +710,8 @@ fn layout_of_uncached<'tcx>(
                 && def.non_enum_variant().tail().ty(tcx, args).is_sized(tcx, cx.typing_env)
             {
                 let mut variants = variants;
-                let tail_replacement = cx.layout_of(Ty::new_slice(tcx, tcx.types.u8)).expect("invariant: [u8] layout computation must succeed"); // tRust: unwrap -> expect
-                *variants[FIRST_VARIANT].raw.last_mut().expect("invariant: variant must have at least one field (the tail)") = tail_replacement; // tRust: unwrap -> expect
+                let tail_replacement = cx.layout_of(Ty::new_slice(tcx, tcx.types.u8)).unwrap();
+                *variants[FIRST_VARIANT].raw.last_mut().unwrap() = tail_replacement;
 
                 let Ok(unsized_layout) = cx.calc.layout_of_struct_or_enum(
                     &def.repr(),
@@ -738,8 +738,8 @@ fn layout_of_uncached<'tcx>(
                     );
                 };
 
-                let (sized_tail, sized_fields) = sized_offsets.raw.split_last().expect("invariant: struct has at least one field (the tail)"); // tRust: unwrap -> expect
-                let (unsized_tail, unsized_fields) = unsized_offsets.raw.split_last().expect("invariant: unsized struct has at least one field (the tail)"); // tRust: unwrap -> expect
+                let (sized_tail, sized_fields) = sized_offsets.raw.split_last().unwrap();
+                let (unsized_tail, unsized_fields) = unsized_offsets.raw.split_last().unwrap();
 
                 if sized_fields != unsized_fields {
                     bug!("unsizing {ty:?} changed field order!\n{layout:?}\n{unsized_layout:?}");
@@ -923,7 +923,7 @@ fn variant_info_for_coroutine<'tcx>(
         return (vec![], None);
     };
 
-    let coroutine = cx.tcx().coroutine_layout(def_id, args).expect("invariant: coroutine def_id must have a coroutine layout"); // tRust: unwrap -> expect
+    let coroutine = cx.tcx().coroutine_layout(def_id, args).unwrap();
     let upvar_names = cx.tcx().closure_saved_names_of_captured_variables(def_id);
 
     let mut upvars_size = Size::ZERO;

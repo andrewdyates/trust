@@ -32,10 +32,7 @@ impl<'tcx> PreDefineCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
         symbol_name: &str,
     ) {
         let instance = Instance::mono(self.tcx, def_id);
-        let DefKind::Static { nested, .. } = self.tcx.def_kind(def_id) else {
-            // tRust: invariant — `predefine_static` is only called for definitions whose kind is `Static`
-            bug!()
-        };
+        let DefKind::Static { nested, .. } = self.tcx.def_kind(def_id) else { bug!() };
         // Nested statics do not have a type, so pick a dummy type and let `codegen_static` figure
         // out the llvm type from the actual evaluated initializer.
         let ty =
@@ -146,7 +143,7 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
                 ty,
                 AddressSpace::ZERO,
                 aliasee,
-                &CString::new(symbol_name.name).expect("invariant: CString::new failed - input contains null byte"),
+                &CString::new(symbol_name.name).unwrap(),
             );
 
             llvm::set_visibility(lldecl, base::visibility_to_llvm(*visibility));

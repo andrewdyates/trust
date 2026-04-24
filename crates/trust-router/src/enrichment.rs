@@ -78,7 +78,8 @@ pub fn enrich_counterexample(
 ) -> EnrichedDiagnostic {
     let violation_kind = classify_violation(&vc.kind);
     let violation_description = describe_violation(&vc.kind, counterexample);
-    let relevant_variables = find_relevant_variables(&violation_kind, counterexample, adapter_result);
+    let relevant_variables =
+        find_relevant_variables(&violation_kind, counterexample, adapter_result);
     let suggested_fixes = suggest_fixes(&violation_kind, counterexample, adapter_result);
     let closest_valid_state = compute_closest_valid_state(&violation_kind, counterexample);
 
@@ -114,7 +115,9 @@ fn describe_violation(kind: &VcKind, cex: &Counterexample) -> String {
 
     match kind {
         VcKind::DivisionByZero => {
-            format!("Division by zero detected. When {var_summary}, a division operation has a zero denominator.")
+            format!(
+                "Division by zero detected. When {var_summary}, a division operation has a zero denominator."
+            )
         }
         VcKind::ArithmeticOverflow { op, operand_tys } => {
             format!(
@@ -142,9 +145,7 @@ fn describe_violation(kind: &VcKind, cex: &Counterexample) -> String {
             )
         }
         _ => {
-            format!(
-                "Verification condition violated ({kind:?}). When {var_summary}."
-            )
+            format!("Verification condition violated ({kind:?}). When {var_summary}.")
         }
     }
 }
@@ -251,7 +252,8 @@ fn suggest_fixes(
                     variable: "<denominator>".into(),
                     current_value: "0".into(),
                     suggested_value: "!= 0".into(),
-                    explanation: "Add a guard: ensure the denominator is non-zero before dividing.".into(),
+                    explanation: "Add a guard: ensure the denominator is non-zero before dividing."
+                        .into(),
                 });
             }
         }
@@ -451,9 +453,10 @@ mod tests {
             contract_metadata: None,
         };
 
-        let cex = Counterexample::new(vec![
-            ("a".into(), CounterexampleValue::Int(i128::from(i64::MAX) + 1)),
-        ]);
+        let cex = Counterexample::new(vec![(
+            "a".into(),
+            CounterexampleValue::Int(i128::from(i64::MAX) + 1),
+        )]);
 
         let enriched = enrich_counterexample(&vc, &cex, &make_adapter_result());
         assert_eq!(enriched.violation_kind, ViolationKind::ArithmeticOverflow);
@@ -470,9 +473,7 @@ mod tests {
             contract_metadata: None,
         };
 
-        let cex = Counterexample::new(vec![
-            ("x".into(), CounterexampleValue::Int(-1)),
-        ]);
+        let cex = Counterexample::new(vec![("x".into(), CounterexampleValue::Int(-1))]);
 
         let enriched = enrich_counterexample(&vc, &cex, &make_adapter_result());
         assert_eq!(enriched.violation_kind, ViolationKind::PreconditionViolation);
@@ -525,7 +526,10 @@ mod tests {
             ViolationKind::ArithmeticOverflow
         );
         assert_eq!(classify_violation(&VcKind::IndexOutOfBounds), ViolationKind::IndexOutOfBounds);
-        assert_eq!(classify_violation(&VcKind::Postcondition), ViolationKind::PostconditionViolation);
+        assert_eq!(
+            classify_violation(&VcKind::Postcondition),
+            ViolationKind::PostconditionViolation
+        );
     }
 
     #[test]

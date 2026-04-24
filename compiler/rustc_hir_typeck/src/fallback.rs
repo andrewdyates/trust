@@ -538,8 +538,6 @@ pub(crate) enum UnsafeUseReason {
 /// For example, for this function `f`:
 /// ```ignore (demonstrative)
 /// fn f() {
-///     // SAFETY: The example uses `zeroed` only to demonstrate how this pass
-///     // records type variables that appear inside unsafe code.
 ///     unsafe {
 ///         let x /* ?X */ = core::mem::zeroed();
 ///         //               ^^^^^^^^^^^^^^^^^^^ -- hir_id, span, reason

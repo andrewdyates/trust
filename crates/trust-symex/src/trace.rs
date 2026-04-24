@@ -6,9 +6,9 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::fmt;
 use std::fmt::Write;
+use trust_types::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -37,25 +37,14 @@ impl TraceStep {
         stmt_index: usize,
         variable_snapshot: FxHashMap<String, SymbolicValue>,
     ) -> Self {
-        Self {
-            block_id,
-            stmt_index,
-            variable_snapshot,
-        }
+        Self { block_id, stmt_index, variable_snapshot }
     }
 
     /// Create a trace step from the current symbolic state.
     #[must_use]
     pub fn from_state(block_id: usize, stmt_index: usize, state: &SymbolicState) -> Self {
-        let variable_snapshot = state
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.clone()))
-            .collect();
-        Self {
-            block_id,
-            stmt_index,
-            variable_snapshot,
-        }
+        let variable_snapshot = state.iter().map(|(k, v)| (k.to_owned(), v.clone())).collect();
+        Self { block_id, stmt_index, variable_snapshot }
     }
 }
 
@@ -125,8 +114,7 @@ impl TraceRecorder {
 
     /// Record a step from the current execution state.
     pub fn record(&mut self, block_id: usize, stmt_index: usize, state: &SymbolicState) {
-        self.trace
-            .push(TraceStep::from_state(block_id, stmt_index, state));
+        self.trace.push(TraceStep::from_state(block_id, stmt_index, state));
     }
 
     /// Record a step with an explicit variable snapshot.
@@ -136,8 +124,7 @@ impl TraceRecorder {
         stmt_index: usize,
         snapshot: FxHashMap<String, SymbolicValue>,
     ) {
-        self.trace
-            .push(TraceStep::new(block_id, stmt_index, snapshot));
+        self.trace.push(TraceStep::new(block_id, stmt_index, snapshot));
     }
 
     /// Consume the recorder and return the completed trace.
@@ -270,11 +257,7 @@ impl fmt::Display for ConsistencyErrorKind {
 
 impl fmt::Display for ConsistencyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "step {}: {} ({})",
-            self.step_index, self.kind, self.variable
-        )
+        write!(f, "step {}: {} ({})", self.step_index, self.kind, self.variable)
     }
 }
 
@@ -303,21 +286,14 @@ impl TraceFormatter {
         if var_str.is_empty() {
             format!("Block {}, Stmt {}: (empty)", step.block_id, step.stmt_index)
         } else {
-            format!(
-                "Block {}, Stmt {}: {}",
-                step.block_id, step.stmt_index, var_str
-            )
+            format!("Block {}, Stmt {}: {}", step.block_id, step.stmt_index, var_str)
         }
     }
 
     /// Format an entire execution trace as a multi-line string.
     #[must_use]
     pub fn format_trace(trace: &ExecutionTrace) -> String {
-        trace
-            .iter()
-            .map(Self::format_step)
-            .collect::<Vec<_>>()
-            .join("\n")
+        trace.iter().map(Self::format_step).collect::<Vec<_>>().join("\n")
     }
 
     /// Format a symbolic value for display.
@@ -327,12 +303,7 @@ impl TraceFormatter {
             SymbolicValue::Concrete(n) => n.to_string(),
             SymbolicValue::Symbol(name) => name.clone(),
             SymbolicValue::BinOp(l, op, r) => {
-                format!(
-                    "({} {:?} {})",
-                    Self::format_value(l),
-                    op,
-                    Self::format_value(r)
-                )
+                format!("({} {:?} {})", Self::format_value(l), op, Self::format_value(r))
             }
             SymbolicValue::Ite(c, t, e) => {
                 format!(
@@ -420,12 +391,7 @@ impl CounterexampleTrace {
             }
         }
 
-        Self {
-            trace,
-            violation: violation.into(),
-            path_constraints,
-            concrete_assignments,
-        }
+        Self { trace, violation: violation.into(), path_constraints, concrete_assignments }
     }
 
     /// Format the counterexample for human consumption.
@@ -442,10 +408,7 @@ impl CounterexampleTrace {
             }
         }
 
-        let _ = writeln!(out, 
-            "Path depth: {}",
-            self.path_constraints.depth()
-        );
+        let _ = writeln!(out, "Path depth: {}", self.path_constraints.depth());
 
         if !self.trace.is_empty() {
             out.push_str("Trace:\n");
@@ -482,14 +445,8 @@ mod tests {
         let step = TraceStep::from_state(0, 1, &state);
         assert_eq!(step.block_id, 0);
         assert_eq!(step.stmt_index, 1);
-        assert_eq!(
-            step.variable_snapshot.get("x"),
-            Some(&SymbolicValue::Concrete(5))
-        );
-        assert_eq!(
-            step.variable_snapshot.get("y"),
-            Some(&SymbolicValue::Concrete(3))
-        );
+        assert_eq!(step.variable_snapshot.get("x"), Some(&SymbolicValue::Concrete(5)));
+        assert_eq!(step.variable_snapshot.get("y"), Some(&SymbolicValue::Concrete(3)));
     }
 
     #[test]
@@ -686,26 +643,17 @@ mod tests {
         trace.push(TraceStep::new(0, 1, s1));
 
         let formatted = TraceFormatter::format_trace(&trace);
-        assert_eq!(
-            formatted,
-            "Block 0, Stmt 0: x=5\nBlock 0, Stmt 1: x=5, y=3"
-        );
+        assert_eq!(formatted, "Block 0, Stmt 0: x=5\nBlock 0, Stmt 1: x=5, y=3");
     }
 
     #[test]
     fn test_trace_formatter_format_value_concrete() {
-        assert_eq!(
-            TraceFormatter::format_value(&SymbolicValue::Concrete(42)),
-            "42"
-        );
+        assert_eq!(TraceFormatter::format_value(&SymbolicValue::Concrete(42)), "42");
     }
 
     #[test]
     fn test_trace_formatter_format_value_symbol() {
-        assert_eq!(
-            TraceFormatter::format_value(&SymbolicValue::Symbol("arg0".into())),
-            "arg0"
-        );
+        assert_eq!(TraceFormatter::format_value(&SymbolicValue::Symbol("arg0".into())), "arg0");
     }
 
     #[test]
@@ -725,10 +673,7 @@ mod tests {
             SymbolicValue::Concrete(1),
             SymbolicValue::Concrete(0),
         );
-        assert_eq!(
-            TraceFormatter::format_value(&expr),
-            "(if cond then 1 else 0)"
-        );
+        assert_eq!(TraceFormatter::format_value(&expr), "(if cond then 1 else 0)");
     }
 
     #[test]
@@ -796,10 +741,7 @@ mod tests {
 
         let mut trace = ExecutionTrace::new();
         let mut snap = FxHashMap::default();
-        snap.insert(
-            "x".to_owned(),
-            SymbolicValue::Symbol("unknown_input".into()),
-        );
+        snap.insert("x".to_owned(), SymbolicValue::Symbol("unknown_input".into()));
         trace.push(TraceStep::new(0, 0, snap));
 
         let pc = PathConstraint::new();

@@ -79,7 +79,7 @@ pub(crate) fn function_body<W: Write>(writer: &mut W, body: &Body, name: &str) -
                 })
                 .collect::<Vec<_>>();
             pretty_terminator(writer, &block.terminator.kind)?;
-            writeln!(writer, "    }}").expect("invariant: write to String never fails"); // tRust: unwrap -> expect
+            writeln!(writer, "    }}").unwrap();
             Ok(())
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -95,7 +95,7 @@ fn pretty_statement<W: Write>(writer: &mut W, statement: &StatementKind) -> io::
             pretty_rvalue(writer, rval)?;
             writeln!(writer, ";")
         }
-        // tRust: known issue — Add rest of the statements
+        // FIXME: Add rest of the statements
         StatementKind::FakeRead(cause, place) => {
             writeln!(writer, "{INDENT}FakeRead({cause:?}, {place:?});")
         }
@@ -318,7 +318,7 @@ fn pretty_assert_message<W: Write>(writer: &mut W, msg: &AssertMessage) -> io::R
         AssertMessage::ResumedAfterReturn(_)
         | AssertMessage::ResumedAfterPanic(_)
         | AssertMessage::ResumedAfterDrop(_) => {
-            write!(writer, "{}", msg.description().expect("invariant: resumed-after message always has description")) // tRust: unwrap -> expect
+            write!(writer, "{}", msg.description().unwrap())
         }
     }
 }
@@ -350,7 +350,7 @@ fn pretty_rvalue<W: Write>(writer: &mut W, rval: &Rvalue) -> io::Result<()> {
             write!(writer, "&raw {} {:?}", pretty_raw_ptr_kind(*mutability), place)
         }
         Rvalue::Aggregate(aggregate_kind, operands) => {
-            // tRust: known issue — Add pretty_aggregate function that returns a pretty string
+            // FIXME: Add pretty_aggregate function that returns a pretty string
             pretty_aggregate(writer, aggregate_kind, operands)
         }
         Rvalue::BinaryOp(bin, op1, op2) => {
@@ -409,14 +409,14 @@ fn pretty_aggregate<W: Write>(
         }
         AggregateKind::Adt(def, var, _, _, _) => {
             if def.kind() == AdtKind::Enum {
-                write!(writer, "{}::{}", def.trimmed_name(), def.variant(*var).expect("invariant: variant index valid for this ADT").name())?; // tRust: unwrap -> expect
+                write!(writer, "{}::{}", def.trimmed_name(), def.variant(*var).unwrap().name())?;
             } else {
-                write!(writer, "{}", def.variant(*var).expect("invariant: variant index valid for this ADT").name())?; // tRust: unwrap -> expect
+                write!(writer, "{}", def.variant(*var).unwrap().name())?;
             }
             if operands.is_empty() {
                 return Ok(());
             }
-            // tRust: known issue — Change this once we have CtorKind in StableMIR.
+            // FIXME: Change this once we have CtorKind in StableMIR.
             write!(writer, "(")?;
             ")"
         }

@@ -81,7 +81,6 @@ struct TimeTraceProfiler {}
 
 impl TimeTraceProfiler {
     fn new() -> Self {
-        // SAFETY: Initializing the LLVM time trace profiler has no preconditions.
         unsafe { llvm::LLVMRustTimeTraceProfilerInitialize() }
         TimeTraceProfiler {}
     }
@@ -89,7 +88,6 @@ impl TimeTraceProfiler {
 
 impl Drop for TimeTraceProfiler {
     fn drop(&mut self) {
-        // SAFETY: Finalizing the thread-local time trace profiler is safe because the profiler was initialized for this thread.
         unsafe { llvm::LLVMRustTimeTraceProfilerFinishThread() }
     }
 }
@@ -104,7 +102,6 @@ impl ExtraBackendMethods for LlvmCodegenBackend {
         let module_llvm = ModuleLlvm::new_metadata(tcx, module_name);
         let cx =
             SimpleCx::new(module_llvm.llmod(), &module_llvm.llcx, tcx.data_layout.pointer_size());
-        // SAFETY: The type context, codegen context, module name, and allocator method list are all valid for the current compilation session.
         unsafe {
             allocator::codegen(tcx, cx, module_name, methods);
         }
@@ -256,25 +253,25 @@ impl CodegenBackend for LlvmCodegenBackend {
         use std::fmt::Write;
         match req.kind {
             PrintKind::RelocationModels => {
-                writeln!(out, "Available relocation models:").expect("invariant: write to string/buffer succeeds");
+                writeln!(out, "Available relocation models:").unwrap();
                 for name in RelocModel::ALL.iter().map(RelocModel::desc).chain(["default"]) {
-                    writeln!(out, "    {name}").expect("invariant: write to string/buffer succeeds");
+                    writeln!(out, "    {name}").unwrap();
                 }
-                writeln!(out).expect("invariant: write to string/buffer succeeds");
+                writeln!(out).unwrap();
             }
             PrintKind::CodeModels => {
-                writeln!(out, "Available code models:").expect("invariant: write to string/buffer succeeds");
+                writeln!(out, "Available code models:").unwrap();
                 for name in &["tiny", "small", "kernel", "medium", "large"] {
-                    writeln!(out, "    {name}").expect("invariant: write to string/buffer succeeds");
+                    writeln!(out, "    {name}").unwrap();
                 }
-                writeln!(out).expect("invariant: write to string/buffer succeeds");
+                writeln!(out).unwrap();
             }
             PrintKind::TlsModels => {
-                writeln!(out, "Available TLS models:").expect("invariant: write to string/buffer succeeds");
+                writeln!(out, "Available TLS models:").unwrap();
                 for name in TlsModel::ALL.iter().map(TlsModel::desc) {
-                    writeln!(out, "    {name}").expect("invariant: write to string/buffer succeeds");
+                    writeln!(out, "    {name}").unwrap();
                 }
-                writeln!(out).expect("invariant: write to string/buffer succeeds");
+                writeln!(out).unwrap();
             }
             PrintKind::StackProtectorStrategies => {
                 writeln!(
@@ -301,7 +298,7 @@ impl CodegenBackend for LlvmCodegenBackend {
         Do not generate stack canaries.
 "#
                 )
-                .expect("invariant: write to string/buffer succeeds");
+                .unwrap();
             }
             _other => llvm_util::print(req, out, sess),
         }
@@ -364,14 +361,12 @@ impl CodegenBackend for LlvmCodegenBackend {
     }
 
     fn print_pass_timings(&self) {
-        // SAFETY: The output string handle is valid. This reads LLVM accumulated pass timing data.
-        let timings = llvm::build_string(|s| unsafe { llvm::LLVMRustPrintPassTimings(s) }).expect("invariant: LLVM string build succeeds");
+        let timings = llvm::build_string(|s| unsafe { llvm::LLVMRustPrintPassTimings(s) }).unwrap();
         print!("{timings}");
     }
 
     fn print_statistics(&self) {
-        // SAFETY: The output string handle is valid. This reads LLVM accumulated statistics data.
-        let stats = llvm::build_string(|s| unsafe { llvm::LLVMRustPrintStatistics(s) }).expect("invariant: LLVM string build succeeds");
+        let stats = llvm::build_string(|s| unsafe { llvm::LLVMRustPrintStatistics(s) }).unwrap();
         print!("{stats}");
     }
 
@@ -415,7 +410,6 @@ unsafe impl Sync for ModuleLlvm {}
 
 impl ModuleLlvm {
     fn new(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
-        // SAFETY: Creating a new LLVM context has no preconditions.
         unsafe {
             let llcx = llvm::LLVMContextCreate();
             llvm::LLVMContextSetDiscardValueNames(llcx, tcx.sess.fewer_names().to_llvm_bool());
@@ -429,7 +423,6 @@ impl ModuleLlvm {
     }
 
     fn new_metadata(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
-        // SAFETY: Creating a new LLVM context has no preconditions.
         unsafe {
             let llcx = llvm::LLVMContextCreate();
             llvm::LLVMContextSetDiscardValueNames(llcx, tcx.sess.fewer_names().to_llvm_bool());
@@ -449,26 +442,23 @@ impl ModuleLlvm {
         buffer: &[u8],
         dcx: DiagCtxtHandle<'_>,
     ) -> Self {
-        // SAFETY: Creating a new LLVM context has no preconditions.
         unsafe {
             let llcx = llvm::LLVMContextCreate();
             llvm::LLVMContextSetDiscardValueNames(llcx, cgcx.fewer_names.to_llvm_bool());
             let llmod_raw = back::lto::parse_module(llcx, name, buffer, dcx);
-            let tm = tm_factory(dcx, TargetMachineFactoryConfig::new(cgcx, name.to_str().expect("invariant: string is valid UTF-8")));
+            let tm = tm_factory(dcx, TargetMachineFactoryConfig::new(cgcx, name.to_str().unwrap()));
 
             ModuleLlvm { llmod_raw, llcx, tm: ManuallyDrop::new(tm) }
         }
     }
 
     fn llmod(&self) -> &llvm::Module {
-        // SAFETY: `llmod_raw` was set to a valid LLVM module pointer during construction and remains live for the lifetime of this `ModuleLlvm`.
         unsafe { &*self.llmod_raw }
     }
 }
 
 impl Drop for ModuleLlvm {
     fn drop(&mut self) {
-        // SAFETY: The LLVM context is valid and exclusively owned. All values, types, and modules in this context have already been disposed.
         unsafe {
             ManuallyDrop::drop(&mut self.tm);
             llvm::LLVMContextDispose(&mut *(self.llcx as *mut _));

@@ -447,12 +447,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let ty = &steps
                     .steps
                     .last()
-                    // tRust: invariant — reaching the autoderef recursion limit requires at least the initial receiver step, so `steps.steps` cannot be empty here.
                     .unwrap_or_else(|| span_bug!(span, "reached the recursion limit in 0 steps?"))
                     .self_ty;
                 let ty = self
                     .probe_instantiate_query_response(span, &orig_values, ty)
-                    // tRust: invariant — the last recorded autoderef step was instantiated from `orig_values`, so re-instantiating it for the overflow diagnostic must succeed.
                     .unwrap_or_else(|_| span_bug!(span, "instantiating {:?} failed?", ty));
                 autoderef::report_autoderef_recursion_limit_error(self.tcx, span, ty.value);
             });
@@ -491,7 +489,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let ty = &bad_ty.ty;
                 let ty = self
                     .probe_instantiate_query_response(span, &orig_values, ty)
-                    // tRust: invariant — `bad_ty.ty` was recorded from this probe's canonical autoderef response, so re-instantiating it under `orig_values` must succeed.
                     .unwrap_or_else(|_| span_bug!(span, "instantiating {:?} failed?", ty));
                 let ty = self.resolve_vars_if_possible(ty.value);
                 let guar = match *ty.kind() {
@@ -526,7 +523,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         err.emit()
                     }
                     ty::Error(guar) => guar,
-                    // tRust: invariant — after autoderef stops on `bad_ty` and there are no prior errors, the resolved type must still be an inference variable or `ty::Error`.
                     _ => bug!("unexpected bad final type in method autoderef"),
                 };
                 self.demand_eqtype(span, ty, Ty::new_error(self.tcx, guar));
@@ -562,7 +558,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 ProbeScope::Single(def_id) => {
                     let item = self.tcx.associated_item(def_id);
-                    // NOTE(fn_delegation): Delegation to inherent methods is not yet supported.
+                    // FIXME(fn_delegation): Delegation to inherent methods is not yet supported.
                     assert_eq!(item.container, AssocContainer::Trait);
 
                     let trait_def_id = self.tcx.parent(def_id);
@@ -920,7 +916,6 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
         receiver_steps: usize,
     ) {
         let Some(simp) = simplify_type(self.tcx, self_ty, TreatParams::InstantiateWithInfer) else {
-            // tRust: invariant — incoherent inherent lookup is only invoked for receiver kinds that `simplify_type(..., InstantiateWithInfer)` can classify.
             bug!("unexpected incoherent type: {:?}", self_ty)
         };
         for &impl_def_id in self.tcx.incoherent_impls(simp).into_iter() {
@@ -966,7 +961,6 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
         }
         .and_then(|data| data.principal())
         .unwrap_or_else(|| {
-            // tRust: invariant — object candidate assembly is only called for `dyn` receivers with a principal trait; auto-trait-only objects have no inherent candidates.
             span_bug!(
                 self.span,
                 "non-object {:?} in assemble_inherent_candidates_from_object",
@@ -1304,7 +1298,6 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         &step.self_ty,
                     )
                     .unwrap_or_else(|_| {
-                        // tRust: invariant — each `reachable_via_deref` step came from a previously successful probe response, so re-instantiating it before confirmation cannot fail.
                         span_bug!(self.span, "{:?} was applicable but now isn't?", step.self_ty)
                     });
 
@@ -1843,7 +1836,7 @@ impl<'tcx> Pick<'tcx> {
 
                 match (this.item.kind, this.item.container) {
                     (ty::AssocKind::Fn { .. }, _) => {
-                        // NOTE: this should be a `span_suggestion` instead of `help`
+                        // FIXME: This should be a `span_suggestion` instead of `help`
                         // However `this.span` only
                         // highlights the method name, so we can't use it. Also consider reusing
                         // the code from `report_method_error()`.
@@ -1990,7 +1983,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                             return ProbeResult::NoMatch;
                         }
                     }
-                    // NOTE: weirdly, we normalize the ret ty in this candidate, but no other candidates.
+                    // FIXME: Weirdly, we normalize the ret ty in this candidate, but no other candidates.
                     xform_ret_ty = ocx.normalize(cause, self.param_env, xform_ret_ty);
                     // Check whether the impl imposes obligations we have to worry about.
                     let impl_def_id = probe.item.container_id(self.tcx);
@@ -2045,7 +2038,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         self.xform_self_ty(probe.item, trait_ref.self_ty(), trait_ref.args);
                     xform_self_ty = ocx.normalize(cause, self.param_env, xform_self_ty);
                     match self_ty.kind() {
-                        // tRust: known issue — opaque types will match anything for which their bounds hold.
+                        // HACK: opaque types will match anything for which their bounds hold.
                         // Thus we need to prevent them from trying to match the `&_` autoref
                         // candidates that get created for `&self` trait methods.
                         ty::Alias(ty::Opaque, alias_ty)
@@ -2146,7 +2139,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
             // This emulates, in a way, the predicates that fall out of
             // normalizing the return type in the old solver.
             //
-            // NOTE(-Znext-solver): We alternatively could check the predicates of
+            // FIXME(-Znext-solver): We alternatively could check the predicates of
             // the method itself hold, but we intentionally do not do this in the old
             // solver b/c of cycles, and doing it in the new solver would be stronger.
             // This should be fixed in the future, since it likely leads to much better
@@ -2343,7 +2336,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
             _ => false,
         };
 
-        // NOTE: check the return type here somehow.
+        // FIXME: check the return type here somehow.
         // If so, just use this trait and call it a day.
         Some(Pick {
             item: probes[0].0.item,
@@ -2487,7 +2480,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                         .collect::<Vec<Symbol>>();
                     find_best_match_for_name_with_substrings(
                         &names,
-                        self.method_name.expect("invariant: value is present").name,
+                        self.method_name.unwrap().name,
                         None,
                     )
                 }
@@ -2521,7 +2514,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
                 ty::AssocKind::Fn { .. } | ty::AssocKind::Const { .. } => true,
             },
         }
-        // NOTE: check for types that deref to `Self`,
+        // FIXME -- check for types that deref to `Self`,
         // like `Rc<Self>` and so on.
         //
         // Note also that the current code will break if this type

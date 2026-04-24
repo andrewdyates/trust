@@ -51,7 +51,6 @@ pub struct ReplayConfig {
     pub record_timing: bool,
 }
 
-
 /// The result of replaying a proof.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayResult {
@@ -155,10 +154,7 @@ impl ReplayAuditLog {
 
     /// Count invalid entries.
     pub fn count_invalid(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|e| matches!(&e.result, StepVerdict::Invalid(_)))
-            .count()
+        self.entries.iter().filter(|e| matches!(&e.result, StepVerdict::Invalid(_))).count()
     }
 
     /// Count skipped entries.
@@ -270,7 +266,8 @@ impl ReplayEngine {
                 StepVerdict::Invalid(reason) => format!("INVALID: {reason}"),
                 StepVerdict::Skipped => "SKIPPED".to_string(),
             };
-            let _ = write!(report, "Step {}: {} [t={}]", entry.step_id, verdict_str, entry.timestamp);
+            let _ =
+                write!(report, "Step {}: {} [t={}]", entry.step_id, verdict_str, entry.timestamp);
             if !entry.notes.is_empty() {
                 let _ = write!(report, " -- {}", entry.notes);
             }
@@ -494,10 +491,7 @@ mod tests {
 
     #[test]
     fn test_max_steps_limits_replay() {
-        let engine = ReplayEngine::new(ReplayConfig {
-            max_steps: 2,
-            ..Default::default()
-        });
+        let engine = ReplayEngine::new(ReplayConfig { max_steps: 2, ..Default::default() });
         let steps = vec![
             make_assume(0, "a"),
             make_assume(1, "b"),
@@ -558,7 +552,10 @@ mod tests {
         let engine = default_engine();
         let step = ProofStep {
             id: 1,
-            kind: StepKind::Apply("modus_ponens".to_string(), vec!["P".to_string(), "P -> Q".to_string()]),
+            kind: StepKind::Apply(
+                "modus_ponens".to_string(),
+                vec!["P".to_string(), "P -> Q".to_string()],
+            ),
             justification: "MP application".to_string(),
             dependencies: vec![0],
         };
@@ -597,10 +594,8 @@ mod tests {
     #[test]
     fn test_audit_certificate_all_valid() {
         let engine = default_engine();
-        let steps = vec![
-            make_assume(0, "x > 0"),
-            make_deduce(1, "x >= 1", "integer_bound", vec![0]),
-        ];
+        let steps =
+            vec![make_assume(0, "x > 0"), make_deduce(1, "x >= 1", "integer_bound", vec![0])];
         let log = engine.audit_certificate(&steps);
         assert_eq!(log.certificate_id, "proof-2-steps");
         assert_eq!(log.len(), 2);
@@ -635,10 +630,7 @@ mod tests {
     #[test]
     fn test_generate_audit_report_contains_summary() {
         let engine = default_engine();
-        let steps = vec![
-            make_assume(0, "x > 0"),
-            make_assert(1, "x >= 0", vec![0]),
-        ];
+        let steps = vec![make_assume(0, "x > 0"), make_assert(1, "x >= 0", vec![0])];
         let log = engine.audit_certificate(&steps);
         let report = engine.generate_audit_report(&log);
 
@@ -667,12 +659,8 @@ mod tests {
 
     #[test]
     fn test_replay_result_all_valid_true() {
-        let result = ReplayResult {
-            steps_replayed: 3,
-            steps_valid: 3,
-            steps_invalid: 0,
-            errors: vec![],
-        };
+        let result =
+            ReplayResult { steps_replayed: 3, steps_valid: 3, steps_invalid: 0, errors: vec![] };
         assert!(result.all_valid());
     }
 

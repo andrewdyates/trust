@@ -6,25 +6,25 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+pub(crate) mod borrow_encoding;
 pub(crate) mod contracts;
 pub(crate) mod smtlib;
 pub(crate) mod sort;
-pub(crate) mod vc;
-pub(crate) mod borrow_encoding;
 pub(crate) mod temporal;
-pub(crate) mod vc_kind;
 #[cfg(test)]
 mod tests;
+pub(crate) mod vc;
+pub(crate) mod vc_kind;
 
+pub use borrow_encoding::*;
 pub use contracts::*;
 pub use sort::Sort;
-pub use vc::*;
-pub use borrow_encoding::*;
 pub use temporal::*;
+pub use vc::*;
 pub use vc_kind::*;
 
-use serde::{Deserialize, Serialize};
 use crate::fx::FxHashSet;
+use serde::{Deserialize, Serialize};
 
 /// SMT-level formula (what solvers receive).
 ///
@@ -130,8 +130,9 @@ pub enum Formula {
     Ite(Box<Formula>, Box<Formula>, Box<Formula>),
 
     // Quantifiers
-    Forall(Vec<(String, Sort)>, Box<Formula>),
-    Exists(Vec<(String, Sort)>, Box<Formula>),
+    // tRust #883: Bindings use interned Symbol instead of heap-allocated String.
+    Forall(Vec<(crate::Symbol, Sort)>, Box<Formula>),
+    Exists(Vec<(crate::Symbol, Sort)>, Box<Formula>),
 
     // Arrays
     Select(Box<Formula>, Box<Formula>),
@@ -309,11 +310,7 @@ impl Formula {
         free
     }
 
-    fn free_variables_inner(
-        &self,
-        free: &mut FxHashSet<String>,
-        bound: &FxHashSet<String>,
-    ) {
+    fn free_variables_inner(&self, free: &mut FxHashSet<String>, bound: &FxHashSet<String>) {
         match self {
             Formula::Var(name, _) => {
                 if !bound.contains(name) {
@@ -327,10 +324,11 @@ impl Formula {
                     free.insert(name);
                 }
             }
+            // tRust #883: Quantifier bindings use Symbol; convert to String for tracking.
             Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
                 let mut new_bound = bound.clone();
-                for (name, _) in bindings {
-                    new_bound.insert(name.clone());
+                for (sym, _) in bindings {
+                    new_bound.insert(sym.as_str().to_string());
                 }
                 body.free_variables_inner(free, &new_bound);
             }
@@ -419,15 +417,11 @@ impl Formula {
                 return;
             }
             match f {
-                Formula::Int(n) => {
-                    if i64::try_from(*n).is_err() {
-                        found = true;
-                    }
+                Formula::Int(n) if i64::try_from(*n).is_err() => {
+                    found = true;
                 }
-                Formula::UInt(n) => {
-                    if i64::try_from(*n).is_err() {
-                        found = true;
-                    }
+                Formula::UInt(n) if i64::try_from(*n).is_err() => {
+                    found = true;
                 }
                 _ => {}
             }
@@ -435,13 +429,89 @@ impl Formula {
         found
     }
 
+    // tRust #883: Convenience constructors that produce SymVar (interned) instead
+    // of Var (heap-allocated String). New code should prefer these over raw
+    // Formula::Var(...) to reduce per-variable heap allocations.
+
+    /// Create a variable formula using an interned symbol.
+    ///
+    /// Create a variable formula from a string name.
+    ///
+    /// Equivalent to `Formula::Var(name.to_string(), sort)`.
+    /// For interned variables, use `var_sym()` with a `Symbol`.
+    #[must_use]
+    pub fn var(name: &str, sort: Sort) -> Formula {
+        Formula::Var(name.to_string(), sort)
+    }
+
+    /// Create a variable formula from an owned String.
+    ///
+    /// Takes ownership of the String to avoid an extra clone when the caller
+    /// already has an owned String (e.g. from `format!`).
+    #[must_use]
+    pub fn var_owned(name: String, sort: Sort) -> Formula {
+        Formula::Var(name, sort)
+    }
+
+    /// Create a variable formula from an already-interned Symbol.
+    #[must_use]
+    pub fn var_sym(sym: crate::Symbol, sort: Sort) -> Formula {
+        Formula::SymVar(sym, sort)
+    }
+
+    /// Return the variable name if this formula is a variable (Var or SymVar).
+    ///
+    /// Returns `None` for non-variable formulas. The returned `&str` has
+    /// `'static` lifetime for SymVar (interned) and borrows `self` for Var.
+    #[must_use]
+    pub fn var_name(&self) -> Option<&str> {
+        match self {
+            Formula::Var(name, _) => Some(name.as_str()),
+            Formula::SymVar(sym, _) => Some(sym.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Return the sort if this formula is a variable (Var or SymVar).
+    #[must_use]
+    pub fn var_sort(&self) -> Option<&Sort> {
+        match self {
+            Formula::Var(_, sort) | Formula::SymVar(_, sort) => Some(sort),
+            _ => None,
+        }
+    }
+
+    // tRust #883: Convenience constructors for quantifiers with interned bindings.
+
+    /// Create a universally quantified formula with interned bindings.
+    ///
+    /// Accepts `&str` binding names and interns them automatically.
+    #[must_use]
+    pub fn forall(bindings: &[(&str, Sort)], body: Formula) -> Formula {
+        let sym_bindings: Vec<(crate::Symbol, Sort)> = bindings
+            .iter()
+            .map(|(name, sort)| (crate::Symbol::intern(name), sort.clone()))
+            .collect();
+        Formula::Forall(sym_bindings, Box::new(body))
+    }
+
+    /// Create an existentially quantified formula with interned bindings.
+    ///
+    /// Accepts `&str` binding names and interns them automatically.
+    #[must_use]
+    pub fn exists(bindings: &[(&str, Sort)], body: Formula) -> Formula {
+        let sym_bindings: Vec<(crate::Symbol, Sort)> = bindings
+            .iter()
+            .map(|(name, sort)| (crate::Symbol::intern(name), sort.clone()))
+            .collect();
+        Formula::Exists(sym_bindings, Box::new(body))
+    }
+
     /// Rename a variable throughout the formula.
     #[must_use]
     pub fn rename_var(&self, from: &str, to: &str) -> Formula {
         match self {
-            Formula::Var(name, sort) if name == from => {
-                Formula::Var(to.to_string(), sort.clone())
-            }
+            Formula::Var(name, sort) if name == from => Formula::Var(to.to_string(), sort.clone()),
             // tRust #717: SymVar rename resolves symbol, produces new SymVar.
             Formula::SymVar(sym, sort) if sym.as_str() == from => {
                 Formula::SymVar(crate::Symbol::intern(to), sort.clone())

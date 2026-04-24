@@ -71,35 +71,35 @@ pub(super) fn mangle<'tcx>(
             let ty::Coroutine(_, cor_args) = ty.kind() else {
                 bug!();
             };
-            let drop_ty = cor_args.first().expect("invariant: coroutine args must have at least one arg").expect_ty(); // tRust: unwrap -> expect
+            let drop_ty = cor_args.first().unwrap().expect_ty();
             tcx.mk_args(&[GenericArg::from(drop_ty)])
         } else {
             &[]
         },
     )
-    .expect("invariant: print_def_path writing to String cannot fail"); // tRust: unwrap -> expect
+    .unwrap();
 
     match instance.def {
         ty::InstanceKind::ThreadLocalShim(..) => {
-            p.write_str("{{tls-shim}}").expect("invariant: write_str to String cannot fail"); // tRust: unwrap -> expect
+            p.write_str("{{tls-shim}}").unwrap();
         }
         ty::InstanceKind::VTableShim(..) => {
-            p.write_str("{{vtable-shim}}").expect("invariant: write_str to String cannot fail"); // tRust: unwrap -> expect
+            p.write_str("{{vtable-shim}}").unwrap();
         }
         ty::InstanceKind::ReifyShim(_, reason) => {
-            p.write_str("{{reify-shim").expect("invariant: write_str to String cannot fail"); // tRust: unwrap -> expect
+            p.write_str("{{reify-shim").unwrap();
             match reason {
-                Some(ReifyReason::FnPtr) => p.write_str("-fnptr").expect("invariant: write_str to String cannot fail"), // tRust: unwrap -> expect
-                Some(ReifyReason::Vtable) => p.write_str("-vtable").expect("invariant: write_str to String cannot fail"), // tRust: unwrap -> expect
+                Some(ReifyReason::FnPtr) => p.write_str("-fnptr").unwrap(),
+                Some(ReifyReason::Vtable) => p.write_str("-vtable").unwrap(),
                 None => (),
             }
-            p.write_str("}}").expect("invariant: write_str to String cannot fail"); // tRust: unwrap -> expect
+            p.write_str("}}").unwrap();
         }
-        // tRust: known issue (async_closures) — This shouldn't be needed when we fix
+        // FIXME(async_closures): This shouldn't be needed when we fix
         // `Instance::ty`/`Instance::def_id`.
         ty::InstanceKind::ConstructCoroutineInClosureShim { receiver_by_ref, .. } => {
             p.write_str(if receiver_by_ref { "{{by-move-shim}}" } else { "{{by-ref-shim}}" })
-                .expect("invariant: write_str to String cannot fail"); // tRust: unwrap -> expect
+                .unwrap();
         }
         _ => {}
     }
@@ -222,7 +222,7 @@ struct LegacySymbolMangler<'tcx> {
     keep_within_component: bool,
 }
 
-// tRust: known issue (eddyb) — this relies on using the `fmt` interface to get
+// HACK(eddyb) this relies on using the `fmt` interface to get
 // `PrettyPrinter` aka pretty printing of e.g. types in paths,
 // symbol names should have their own printing machinery.
 
@@ -342,7 +342,7 @@ impl<'tcx> Printer<'tcx> for LegacySymbolMangler<'tcx> {
                 print_prefix(cx)?;
 
                 if cx.keep_within_component {
-                    // tRust: known issue (eddyb) — print the path similarly to how `FmtPrinter` prints it.
+                    // HACK(eddyb) print the path similarly to how `FmtPrinter` prints it.
                     cx.write_str("::")?;
                 } else {
                     cx.path.finalize_pending_component();
@@ -368,7 +368,7 @@ impl<'tcx> Printer<'tcx> for LegacySymbolMangler<'tcx> {
         }
 
         if self.keep_within_component {
-            // tRust: known issue (eddyb) — print the path similarly to how `FmtPrinter` prints it.
+            // HACK(eddyb) print the path similarly to how `FmtPrinter` prints it.
             self.write_str("::")?;
         } else {
             self.path.finalize_pending_component();

@@ -135,13 +135,11 @@ pub(super) fn diagnostic_hir_wf_check<'tcx>(
             hir::Node::ImplItem(item) => match item.kind {
                 hir::ImplItemKind::Type(ty) => vec![ty],
                 hir::ImplItemKind::Const(ty, _) => vec![ty],
-                // tRust: invariant — all valid ImplItem kinds for WF check handled above
                 ref item => bug!("Unexpected ImplItem {:?}", item),
             },
             hir::Node::TraitItem(item) => match item.kind {
                 hir::TraitItemKind::Type(_, ty) => ty.into_iter().collect(),
                 hir::TraitItemKind::Const(ty, _, _) => vec![ty],
-                // tRust: invariant — all valid TraitItem kinds for WF check handled above
                 ref item => bug!("Unexpected TraitItem {:?}", item),
             },
             hir::Node::Item(item) => match item.kind {
@@ -169,7 +167,6 @@ pub(super) fn diagnostic_hir_wf_check<'tcx>(
                         vec![impl_.self_ty]
                     }
                 },
-                // tRust: invariant — all valid Item kinds for WF check handled above
                 ref item => bug!("Unexpected item {:?}", item),
             },
             hir::Node::Field(field) => vec![field.ty],
@@ -192,11 +189,10 @@ pub(super) fn diagnostic_hir_wf_check<'tcx>(
                     vec![]
                 }
             }
-            // tRust: invariant — WF check is only invoked on Item, ImplItem, or TraitItem nodes
             ref node => bug!("Unexpected node {:?}", node),
         },
         WellFormedLoc::Param { function: _, param_idx } => {
-            let fn_decl = tcx.hir_fn_decl_by_hir_id(hir_id).expect("invariant: value is present");
+            let fn_decl = tcx.hir_fn_decl_by_hir_id(hir_id).unwrap();
             // Get return type
             if param_idx as usize == fn_decl.inputs.len() {
                 match fn_decl.output {

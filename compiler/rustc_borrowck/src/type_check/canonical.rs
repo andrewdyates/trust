@@ -239,7 +239,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
 
         if self.infcx.next_trait_solver() {
             let param_env = self.infcx.param_env;
-            // // NOTE: this could be made into a real type op.
+            // FIXME: Make this into a real type op?
             self.fully_perform_op(
                 location.to_locations(),
                 ConstraintCategory::Boring,
@@ -251,7 +251,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                                 param_env,
                                 ty,
                             )
-                            // tRust: invariant — structural invariant — expected state must hold at this program point
                             .unwrap_or_else(|_| bug!("struct tail should have been computable, since we computed it in HIR"))
                         };
 
@@ -284,7 +283,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         if self.infcx.next_trait_solver() {
             let body = self.body;
             let param_env = self.infcx.param_env;
-            // NOTE: this could be made into a real type op.
+            // FIXME: Make this into a real type op?
             self.fully_perform_op(
                 location.to_locations(),
                 ConstraintCategory::Boring,
@@ -327,7 +326,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
 
     /// *Incorrectly* skips the WF checks we normally do in `ascribe_user_type`.
     ///
-    /// /// Accepted tradeoff(#104478, #104477): This is a hack for backward-compatibility..
+    /// FIXME(#104478, #104477): This is a hack for backward-compatibility.
     #[instrument(skip(self), level = "debug")]
     pub(super) fn ascribe_user_type_skip_wf(
         &mut self,
@@ -335,13 +334,12 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         user_ty: ty::UserType<'tcx>,
         span: Span,
     ) {
-        // tRust: invariant — type system guarantee
         let ty::UserTypeKind::Ty(user_ty) = user_ty.kind else { bug!() };
 
         // A fast path for a common case with closure input/output types.
         if let ty::Infer(_) = user_ty.kind() {
             self.eq_types(user_ty, mir_ty, Locations::All(span), ConstraintCategory::Boring)
-                .expect("invariant: eq_types must succeed for type annotation");
+                .unwrap();
             return;
         }
 

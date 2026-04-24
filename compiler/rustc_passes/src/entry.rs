@@ -63,7 +63,7 @@ fn check_and_search_item(id: ItemId, ctxt: &mut EntryContext<'_>) {
             } else {
                 ctxt.tcx.dcx().emit_err(MultipleRustcMain {
                     span: ctxt.tcx.def_span(id.owner_id.to_def_id()),
-                    first: ctxt.rustc_main_fn.expect("invariant: rustc_main_fn is Some in else branch").1, // tRust: unwrap -> expect
+                    first: ctxt.rustc_main_fn.unwrap().1,
                     additional: ctxt.tcx.def_span(id.owner_id.to_def_id()),
                 });
             }

@@ -130,7 +130,7 @@ where
 
     /// A `Tree` whose layout is a number of the given width.
     pub(crate) fn number(width_in_bytes: u64) -> Self {
-        Self::Seq(vec![Self::u8(); width_in_bytes.try_into().expect("invariant: width_in_bytes fits in usize")]) // tRust: unwrap -> expect
+        Self::Seq(vec![Self::u8(); width_in_bytes.try_into().unwrap()])
     }
 
     /// A `Tree` whose layout is entirely padding of the given width.
@@ -304,17 +304,17 @@ pub(crate) mod rustc {
 
                 ty::Float(nty) => {
                     let width = nty.bit_width() / 8;
-                    Ok(Self::number(width.try_into().expect("invariant: float bit width fits in u64"))) // tRust: unwrap -> expect
+                    Ok(Self::number(width.try_into().unwrap()))
                 }
 
                 ty::Int(nty) => {
-                    let width = nty.normalize(pointer_size.bits() as _).bit_width().expect("invariant: normalized int type has known bit width") / 8; // tRust: unwrap -> expect
-                    Ok(Self::number(width.try_into().expect("invariant: int byte width fits in u64"))) // tRust: unwrap -> expect
+                    let width = nty.normalize(pointer_size.bits() as _).bit_width().unwrap() / 8;
+                    Ok(Self::number(width.try_into().unwrap()))
                 }
 
                 ty::Uint(nty) => {
-                    let width = nty.normalize(pointer_size.bits() as _).bit_width().expect("invariant: normalized uint type has known bit width") / 8; // tRust: unwrap -> expect
-                    Ok(Self::number(width.try_into().expect("invariant: uint byte width fits in u64"))) // tRust: unwrap -> expect
+                    let width = nty.normalize(pointer_size.bits() as _).bit_width().unwrap() / 8;
+                    Ok(Self::number(width.try_into().unwrap()))
                 }
 
                 ty::Tuple(members) => Self::from_tuple((ty, layout), members, cx),
@@ -340,7 +340,7 @@ pub(crate) mod rustc {
                             Self::from_struct((ty, layout), *adt_def, cx)
                         }
                         (AdtKind::Struct, Included(1), Included(_hi)) if is_transparent => {
-                            // tRust: known issue (@joshlf) — Support `NonZero` types:
+                            // FIXME(@joshlf): Support `NonZero` types:
                             // - Check to make sure that the first field is
                             //   numerical
                             // - Check to make sure that the upper bound is the
@@ -437,7 +437,7 @@ pub(crate) mod rustc {
                 let variant_def = Def::Variant(def.variant(index));
                 Self::from_variant(
                     variant_def,
-                    tag.map(|tag| (tag, index, encoding.expect("invariant: tagged variant must have encoding"))), // tRust: unwrap -> expect
+                    tag.map(|tag| (tag, index, encoding.unwrap())),
                     (ty, variant_layout),
                     layout.size,
                     cx,

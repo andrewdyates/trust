@@ -89,10 +89,7 @@ impl Default for ReplayConfig {
     /// Conservative default: validates on replay. Prefer
     /// [`ReplayConfig::for_proof_level`] for proof-level-aware configuration.
     fn default() -> Self {
-        Self {
-            validate_on_replay: true,
-            max_age_seconds: 3600,
-        }
+        Self { validate_on_replay: true, max_age_seconds: 3600 }
     }
 }
 
@@ -117,11 +114,7 @@ impl ResultCache {
     /// Create a new result cache with the given caching policy.
     #[must_use]
     pub fn new(policy: CachePolicy) -> Self {
-        Self {
-            policy,
-            entries: FxHashMap::default(),
-            stats: CacheStats::default(),
-        }
+        Self { policy, entries: FxHashMap::default(), stats: CacheStats::default() }
     }
 
     /// Cache a solver result under the given key.
@@ -174,9 +167,7 @@ impl ResultCache {
     pub fn invalidate_stale(&mut self, max_age_seconds: u64) -> usize {
         let now = self.current_time_secs();
         let before = self.entries.len();
-        self.entries.retain(|_, entry| {
-            now.saturating_sub(entry.cached_at) <= max_age_seconds
-        });
+        self.entries.retain(|_, entry| now.saturating_sub(entry.cached_at) <= max_age_seconds);
         let evicted = before - self.entries.len();
         self.stats.evictions += evicted;
         self.stats.total_entries = self.entries.len();
@@ -249,10 +240,7 @@ mod tests {
     use super::*;
 
     fn make_key(formula: &str, solver: &str) -> ResultCacheKey {
-        ResultCacheKey {
-            formula_hash: hash_formula(formula),
-            solver_name: solver.to_string(),
-        }
+        ResultCacheKey { formula_hash: hash_formula(formula), solver_name: solver.to_string() }
     }
 
     #[test]

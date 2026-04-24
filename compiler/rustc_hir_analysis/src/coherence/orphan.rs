@@ -33,7 +33,6 @@ pub(crate) fn orphan_check_impl(
                     lint_uncovered_ty_params(tcx, uncovered_ty_params, impl_def_id)
                 }
                 OrphanCheckErr::NonLocalInputType(_) => {
-                    // tRust: invariant — in compatibility mode, all input types must be local
                     bug!("orphanck: shouldn't've gotten non-local input tys in compat mode")
                 }
             },
@@ -201,7 +200,7 @@ pub(crate) fn orphan_check_impl(
                     // }
                     // impl<T: ?Sized> AutoTrait for S<T>::This {}
                     // ```
-                    // tRust: known issue — (inherent_associated_types): The example code above currently leads to a cycle
+                    // FIXME(inherent_associated_types): The example code above currently leads to a cycle
                     ty::Inherent => "associated type",
                 };
                 (LocalImpl::Disallow { problematic_kind }, NonlocalImpl::DisallowOther)
@@ -232,7 +231,6 @@ pub(crate) fn orphan_check_impl(
             | ty::Placeholder(..)
             | ty::Infer(..) => {
                 let sp = tcx.def_span(impl_def_id);
-                // tRust: invariant — autotrait impls must have a valid self type (not a weird/unknown type)
                 span_bug!(sp, "weird self type for autotrait impl")
             }
 
@@ -344,7 +342,7 @@ fn orphan_check<'tcx>(
             let mut collector =
                 UncoveredTyParamCollector { infcx: &infcx, uncovered_params: Default::default() };
             uncovered.visit_with(&mut collector);
-            // tRust: known issue — (fmease): This is very likely reachable.
+            // FIXME(fmease): This is very likely reachable.
             debug_assert!(!collector.uncovered_params.is_empty());
 
             OrphanCheckErr::UncoveredTyParams(UncoveredTyParams {
@@ -382,7 +380,7 @@ fn emit_orphan_check_error<'tcx>(
         traits::OrphanCheckErr::NonLocalInputType(tys) => {
             let item = tcx.hir_expect_item(impl_def_id);
             let impl_ = item.expect_impl();
-            let of_trait = impl_.of_trait.expect("invariant: value is present");
+            let of_trait = impl_.of_trait.unwrap();
 
             let span = tcx.def_span(impl_def_id);
             let mut diag = tcx.dcx().create_err(match trait_ref.self_ty().kind() {
@@ -482,7 +480,7 @@ fn emit_orphan_check_error<'tcx>(
                     None => tcx.dcx().emit_err(errors::TyParamSome { span, note: (), param: name }),
                 });
             }
-            reported.expect("invariant: value is present") // tRust: known issue — (fmease): This is very likely reachable.
+            reported.unwrap() // FIXME(fmease): This is very likely reachable.
         }
     }
 }
@@ -495,7 +493,7 @@ fn lint_uncovered_ty_params<'tcx>(
     let hir_id = tcx.local_def_id_to_hir_id(impl_def_id);
 
     for param_def_id in uncovered {
-        let span = tcx.def_ident_span(param_def_id).expect("invariant: def has ident span");
+        let span = tcx.def_ident_span(param_def_id).unwrap();
         let name = tcx.item_ident(param_def_id);
 
         match local_ty {

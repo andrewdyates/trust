@@ -42,10 +42,7 @@ impl ChcPredicate {
     /// Create a new CHC predicate.
     #[must_use]
     pub fn new(name: impl Into<String>, arg_sorts: Vec<Sort>) -> Self {
-        Self {
-            name: name.into(),
-            arg_sorts,
-        }
+        Self { name: name.into(), arg_sorts }
     }
 
     /// The arity (number of arguments) of this predicate.
@@ -68,10 +65,7 @@ impl PredicateApp {
     /// Create a new predicate application.
     #[must_use]
     pub fn new(predicate: impl Into<String>, args: Vec<Formula>) -> Self {
-        Self {
-            predicate: predicate.into(),
-            args,
-        }
+        Self { predicate: predicate.into(), args }
     }
 }
 
@@ -166,10 +160,7 @@ impl ChcSystem {
     /// Create an empty CHC system.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            predicates: Vec::new(),
-            clauses: Vec::new(),
-        }
+        Self { predicates: Vec::new(), clauses: Vec::new() }
     }
 
     /// Add a predicate declaration to the system.
@@ -224,10 +215,7 @@ impl ChcSystem {
         let decl = self.predicates.iter().find(|p| p.name == app.predicate);
         match decl {
             None => Err(CegarError::InconsistentAbstraction {
-                reason: format!(
-                    "predicate `{}` used in clause but not declared",
-                    app.predicate
-                ),
+                reason: format!("predicate `{}` used in clause but not declared", app.predicate),
             }),
             Some(pred) if pred.arity() != app.args.len() => {
                 Err(CegarError::InconsistentAbstraction {
@@ -321,19 +309,12 @@ pub fn encode_loop(encoding: &LoopEncoding) -> Result<ChcSystem, CegarError> {
 
     // Clause 1: Init — precondition(x) => Inv(x)
     let init_head = PredicateApp::new(&encoding.invariant_name, var_terms.clone());
-    system.add_clause(HornClause::init(
-        encoding.precondition.clone(),
-        init_head,
-    ));
+    system.add_clause(HornClause::init(encoding.precondition.clone(), init_head));
 
     // Clause 2: Step — Inv(x) /\ body(x, x') => Inv(x')
     let step_body = PredicateApp::new(&encoding.invariant_name, var_terms.clone());
     let step_head = PredicateApp::new(&encoding.invariant_name, primed_terms);
-    system.add_clause(HornClause::step(
-        step_body,
-        encoding.body_constraint.clone(),
-        step_head,
-    ));
+    system.add_clause(HornClause::step(step_body, encoding.body_constraint.clone(), step_head));
 
     // Clause 3: Property — Inv(x) /\ exit(x) => post(x)
     let prop_body = PredicateApp::new(&encoding.invariant_name, var_terms);
@@ -364,10 +345,7 @@ mod tests {
     fn test_predicate_app_basic() {
         let app = PredicateApp::new(
             "Inv",
-            vec![
-                Formula::Var("x".into(), Sort::Int),
-                Formula::Var("y".into(), Sort::Int),
-            ],
+            vec![Formula::Var("x".into(), Sort::Int), Formula::Var("y".into(), Sort::Int)],
         );
         assert_eq!(app.predicate, "Inv");
         assert_eq!(app.args.len(), 2);
@@ -377,10 +355,7 @@ mod tests {
     fn test_horn_clause_init() {
         let head = PredicateApp::new("Inv", vec![Formula::Var("x".into(), Sort::Int)]);
         let clause = HornClause::init(
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
             head,
         );
         assert_eq!(clause.kind, ClauseKind::Init);
@@ -414,14 +389,8 @@ mod tests {
         let body = PredicateApp::new("Inv", vec![Formula::Var("x".into(), Sort::Int)]);
         let clause = HornClause::property(
             body,
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Le(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
         );
         assert_eq!(clause.kind, ClauseKind::Property);
         assert!(clause.head.is_none());
@@ -443,10 +412,7 @@ mod tests {
         let head = PredicateApp::new("Inv", vec![Formula::Int(0)]);
         system.add_clause(HornClause::init(Formula::Bool(true), head));
         let result = system.validate();
-        assert!(matches!(
-            result,
-            Err(CegarError::InconsistentAbstraction { .. })
-        ));
+        assert!(matches!(result, Err(CegarError::InconsistentAbstraction { .. })));
     }
 
     #[test]
@@ -457,10 +423,7 @@ mod tests {
         let head = PredicateApp::new("Inv", vec![Formula::Int(0), Formula::Int(1)]);
         system.add_clause(HornClause::init(Formula::Bool(true), head));
         let result = system.validate();
-        assert!(matches!(
-            result,
-            Err(CegarError::InconsistentAbstraction { .. })
-        ));
+        assert!(matches!(result, Err(CegarError::InconsistentAbstraction { .. })));
     }
 
     #[test]
@@ -520,10 +483,7 @@ mod tests {
             postcondition: Formula::Bool(true),
         };
         let result = encode_loop(&encoding);
-        assert!(matches!(
-            result,
-            Err(CegarError::InconsistentAbstraction { .. })
-        ));
+        assert!(matches!(result, Err(CegarError::InconsistentAbstraction { .. })));
     }
 
     #[test]
@@ -532,10 +492,7 @@ mod tests {
         let encoding = LoopEncoding {
             invariant_name: "Inv_2var".into(),
             variables: vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)],
-            primed_variables: vec![
-                ("x_prime".into(), Sort::Int),
-                ("y_prime".into(), Sort::Int),
-            ],
+            primed_variables: vec![("x_prime".into(), Sort::Int), ("y_prime".into(), Sort::Int)],
             precondition: Formula::And(vec![
                 Formula::Eq(
                     Box::new(Formula::Var("x".into(), Sort::Int)),

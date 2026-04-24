@@ -471,8 +471,8 @@ impl LinkerFeaturesCli {
         if !unstable_enabled.union(unstable_disabled).is_empty() {
             let unstable_features: Vec<_> = unstable_enabled
                 .iter()
-                .map(|f| format!("+{}", f.as_str().expect("invariant: linker feature must have a string representation"))) // tRust: unwrap -> expect
-                .chain(unstable_disabled.iter().map(|f| format!("-{}", f.as_str().expect("invariant: linker feature must have a string representation")))) // tRust: unwrap -> expect
+                .map(|f| format!("+{}", f.as_str().unwrap()))
+                .chain(unstable_disabled.iter().map(|f| format!("-{}", f.as_str().unwrap())))
                 .collect();
             return Err(format!(
                 "`-C linker-features={}` is unstable, and also requires the \
@@ -1152,7 +1152,7 @@ pub const MAX_FILENAME_LENGTH: usize = 143; // ecryptfs limits filenames to 143 
 /// This is a workaround for long crate names generating overly long filenames.
 fn maybe_strip_file_name(mut path: PathBuf) -> PathBuf {
     if path.file_name().map_or(0, |name| name.len()) > MAX_FILENAME_LENGTH {
-        let filename = path.file_name().expect("invariant: path has filename since length check above passed").to_string_lossy(); // tRust: unwrap -> expect
+        let filename = path.file_name().unwrap().to_string_lossy();
         let hash_len = 64 / 4; // Hash64 is 64 bits encoded in hex
         let hyphen_len = 1; // the '-' we insert between hash and suffix
 
@@ -1241,7 +1241,7 @@ impl OutputFilenames {
         let p = self.temp_path_ext_for_cgu(DWARF_OBJECT_EXT, codegen_unit_name, invocation_temp);
         if let Some(dwo_out) = &self.explicit_dwo_out_directory {
             let mut o = dwo_out.clone();
-            o.push(p.file_name().expect("invariant: temp path for codegen unit must have a filename")); // tRust: unwrap -> expect
+            o.push(p.file_name().unwrap());
             o
         } else {
             p
@@ -1264,7 +1264,7 @@ impl OutputFilenames {
             extension.push_str(rng);
         }
 
-        // tRust: known issue — This is sketchy that we're not appending `.rcgu` when the ext is empty.
+        // FIXME: This is sketchy that we're not appending `.rcgu` when the ext is empty.
         // Append `.rcgu.{ext}`.
         if !ext.is_empty() {
             extension.push('.');
@@ -1395,11 +1395,11 @@ impl Default for Options {
     fn default() -> Options {
         let unstable_opts = UnstableOptions::default();
 
-        // tRust: known issue (Urgau) — This is a hack that ideally shouldn't exist, but rustdoc
+        // FIXME(Urgau): This is a hack that ideally shouldn't exist, but rustdoc
         // currently uses this `Default` implementation, so we have no choice but
         // to create a default working directory.
         let working_dir = {
-            let working_dir = std::env::current_dir().expect("invariant: current directory must be accessible"); // tRust: unwrap -> expect
+            let working_dir = std::env::current_dir().unwrap();
             let file_mapping = file_path_mapping(Vec::new(), RemapPathScopeComponents::empty());
             file_mapping.to_real_filename(&RealFileName::empty(), &working_dir)
         };
@@ -2557,7 +2557,7 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
     }
 
     if let Ok(graphviz_font) = std::env::var("RUSTC_GRAPHVIZ_FONT") {
-        // tRust: known issue — this is only mutation of UnstableOptions here, move into
+        // FIXME: this is only mutation of UnstableOptions here, move into
         // UnstableOptions::build?
         unstable_opts.graphviz_font = graphviz_font;
     }
@@ -2611,7 +2611,7 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
     if let Some(erroneous_components) = cg.link_self_contained.check_consistency() {
         let names: String = erroneous_components
             .into_iter()
-            .map(|c| c.as_str().expect("invariant: link-self-contained component must have a string representation")) // tRust: unwrap -> expect
+            .map(|c| c.as_str().unwrap())
             .intersperse(", ")
             .collect();
         early_dcx.early_fatal(format!(

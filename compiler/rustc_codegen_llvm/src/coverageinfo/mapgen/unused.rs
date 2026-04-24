@@ -76,7 +76,7 @@ fn gather_unused_function_instances<'tcx>(cx: &CodegenCx<'_, 'tcx>) -> Vec<Unuse
             && !usage.used_via_inlining.contains(&d)
     };
 
-    // tRust: known issue (#79651) — Consider trying to filter out dummy instantiations of
+    // FIXME(#79651): Consider trying to filter out dummy instantiations of
     // unused generic functions from library crates, because they can produce
     // "unused instantiation" in coverage reports even when they are actually
     // used by some downstream crate in the same binary.

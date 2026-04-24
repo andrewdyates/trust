@@ -131,7 +131,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             });
         }
 
-        let category = Category::of(&expr.kind).expect("invariant: expression has a category"); // tRust: unwrap -> expect
+        let category = Category::of(&expr.kind).unwrap();
         debug!(?category, ?expr.kind);
         match category {
             Category::Constant

@@ -29,11 +29,7 @@ impl SymbolicPointer {
     /// Create a new symbolic pointer.
     #[must_use]
     pub fn new(base: &str, offset: i64, region_id: usize) -> Self {
-        Self {
-            base: base.to_owned(),
-            offset,
-            region_id,
-        }
+        Self { base: base.to_owned(), offset, region_id }
     }
 }
 
@@ -52,11 +48,7 @@ impl MemoryCell {
     /// Create a new memory cell.
     #[must_use]
     pub fn new(value: &str, symbolic: bool) -> Self {
-        Self {
-            value: value.to_owned(),
-            symbolic,
-            write_count: 0,
-        }
+        Self { value: value.to_owned(), symbolic, write_count: 0 }
     }
 }
 
@@ -77,12 +69,7 @@ impl MemoryRegionModel {
     /// Create a new memory region.
     #[must_use]
     pub fn new(id: usize, name: &str, size: usize) -> Self {
-        Self {
-            id,
-            name: name.to_owned(),
-            cells: FxHashMap::default(),
-            size,
-        }
+        Self { id, name: name.to_owned(), cells: FxHashMap::default(), size }
     }
 
     /// Check whether an offset is within bounds.
@@ -128,11 +115,7 @@ pub struct MemoryModelConfig {
 
 impl Default for MemoryModelConfig {
     fn default() -> Self {
-        Self {
-            max_regions: 256,
-            max_region_size: 4096,
-            enable_cow: true,
-        }
+        Self { max_regions: 256, max_region_size: 4096, enable_cow: true }
     }
 }
 
@@ -203,9 +186,7 @@ impl MemoryModel {
         size: usize,
     ) -> Result<SymbolicPointer, MemoryModelError> {
         if self.regions.len() >= self.config.max_regions {
-            return Err(MemoryModelError::RegionLimitExceeded(
-                self.config.max_regions,
-            ));
+            return Err(MemoryModelError::RegionLimitExceeded(self.config.max_regions));
         }
         let effective_size = size.min(self.config.max_region_size);
         let id = self.next_region_id;
@@ -222,20 +203,14 @@ impl MemoryModel {
             .regions
             .get(&ptr.region_id)
             .ok_or(MemoryModelError::UnknownRegion(ptr.region_id))?;
-        region
-            .cells
-            .get(&ptr.offset)
-            .ok_or(MemoryModelError::OutOfBounds {
-                ptr: format!("{}+{}", ptr.base, ptr.offset),
-                region: ptr.region_id,
-            })
+        region.cells.get(&ptr.offset).ok_or(MemoryModelError::OutOfBounds {
+            ptr: format!("{}+{}", ptr.base, ptr.offset),
+            region: ptr.region_id,
+        })
     }
 
     /// Read a cell, logging the access. Returns a clone of the cell.
-    pub fn read_logged(
-        &mut self,
-        ptr: &SymbolicPointer,
-    ) -> Result<MemoryCell, MemoryModelError> {
+    pub fn read_logged(&mut self, ptr: &SymbolicPointer) -> Result<MemoryCell, MemoryModelError> {
         let cell = self.read(ptr)?.clone();
         self.log.push(MemoryAccess {
             pointer: ptr.clone(),
@@ -248,11 +223,7 @@ impl MemoryModel {
     }
 
     /// Write a value to the memory cell at the given symbolic pointer.
-    pub fn write(
-        &mut self,
-        ptr: &SymbolicPointer,
-        value: &str,
-    ) -> Result<(), MemoryModelError> {
+    pub fn write(&mut self, ptr: &SymbolicPointer, value: &str) -> Result<(), MemoryModelError> {
         self.check_pointer(ptr)?;
         let region = self
             .regions
@@ -264,10 +235,8 @@ impl MemoryModel {
                 region: ptr.region_id,
             });
         }
-        let cell = region
-            .cells
-            .entry(ptr.offset)
-            .or_insert_with(|| MemoryCell::new("uninit", false));
+        let cell =
+            region.cells.entry(ptr.offset).or_insert_with(|| MemoryCell::new("uninit", false));
         cell.value = value.to_owned();
         cell.symbolic = true;
         cell.write_count += 1;
@@ -339,11 +308,7 @@ impl MemoryModel {
             return vec![ptr.region_id];
         }
         // Symbolic: find all regions whose name matches the base.
-        self.regions
-            .values()
-            .filter(|r| r.name == ptr.base)
-            .map(|r| r.id)
-            .collect()
+        self.regions.values().filter(|r| r.name == ptr.base).map(|r| r.id).collect()
     }
 
     /// Validate a pointer before access.
@@ -363,11 +328,7 @@ mod tests {
     use super::*;
 
     fn default_config() -> MemoryModelConfig {
-        MemoryModelConfig {
-            max_regions: 16,
-            max_region_size: 1024,
-            enable_cow: true,
-        }
+        MemoryModelConfig { max_regions: 16, max_region_size: 1024, enable_cow: true }
     }
 
     #[test]
@@ -551,19 +512,12 @@ mod tests {
 
     #[test]
     fn test_memory_model_region_limit_exceeded() {
-        let config = MemoryModelConfig {
-            max_regions: 2,
-            max_region_size: 8,
-            enable_cow: false,
-        };
+        let config = MemoryModelConfig { max_regions: 2, max_region_size: 8, enable_cow: false };
         let mut model = MemoryModel::new(config);
         model.allocate("a", 4).expect("first");
         model.allocate("b", 4).expect("second");
         let result = model.allocate("c", 4);
-        assert!(matches!(
-            result,
-            Err(MemoryModelError::RegionLimitExceeded(2))
-        ));
+        assert!(matches!(result, Err(MemoryModelError::RegionLimitExceeded(2))));
     }
 
     #[test]

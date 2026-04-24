@@ -105,7 +105,7 @@ pub(crate) fn expand_deriving_from(
                             self_kw,
                             thin_vec![cx.field_imm(
                                 span,
-                                field.ident.expect("invariant: struct field in derive(From) must have an ident"), // tRust: unwrap -> expect
+                                field.ident.unwrap(),
                                 cx.expr_ident(span, Ident::new(sym::value, span))
                             )],
                         ),

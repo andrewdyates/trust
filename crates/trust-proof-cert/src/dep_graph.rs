@@ -8,7 +8,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -63,27 +63,22 @@ pub struct DepGraphAnalysis {
 /// then callers can assume callee contracts.
 #[derive(Debug, Clone)]
 pub struct DepGraph {
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Nodes indexed by function name.
-    nodes: FxHashMap<String, DepNode>,
+    nodes: BTreeMap<String, DepNode>,
 }
 
 impl DepGraph {
     /// Create a new empty dependency graph.
     pub fn new() -> Self {
-        DepGraph {
-            nodes: FxHashMap::default(),
-        }
+        DepGraph { nodes: BTreeMap::new() }
     }
 
     /// Add a function node with its callees.
     pub fn add_function(&mut self, function: &str, callees: Vec<String>, has_proof: bool) {
         self.nodes.insert(
             function.to_string(),
-            DepNode {
-                function: function.to_string(),
-                callees,
-                has_proof,
-            },
+            DepNode { function: function.into(), callees, has_proof },
         );
     }
 
@@ -115,7 +110,7 @@ impl DepGraph {
     /// Returns `Err` if the graph contains cycles.
     pub fn topological_sort(&self) -> Result<Vec<String>, CertError> {
         // Compute in-degree for each node (only counting edges within the graph)
-        let mut in_degree: FxHashMap<&str, usize> = FxHashMap::default();
+        let mut in_degree: BTreeMap<&str, usize> = BTreeMap::new();
         for name in self.nodes.keys() {
             in_degree.entry(name.as_str()).or_insert(0);
         }
@@ -138,7 +133,7 @@ impl DepGraph {
         // Recompute: for "callees before callers", we reverse edges.
         // In reversed graph: edge goes callee -> caller.
         // Topological sort of reversed graph gives callees first.
-        let mut rev_in_degree: FxHashMap<&str, usize> = FxHashMap::default();
+        let mut rev_in_degree: BTreeMap<&str, usize> = BTreeMap::new();
         for name in self.nodes.keys() {
             rev_in_degree.entry(name.as_str()).or_insert(0);
         }
@@ -166,13 +161,14 @@ impl DepGraph {
             // Original edge: caller -> callee. So find all callers of `func`.
             for node in self.nodes.values() {
                 if node.callees.contains(&func)
-                    && let Some(deg) = rev_in_degree.get_mut(node.function.as_str()) {
-                        *deg = deg.saturating_sub(1);
-                        if *deg == 0 {
-                            queue.push(node.function.clone());
-                            queue.sort();
-                        }
+                    && let Some(deg) = rev_in_degree.get_mut(node.function.as_str())
+                {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 {
+                        queue.push(node.function.clone());
+                        queue.sort();
                     }
+                }
             }
         }
 
@@ -240,7 +236,9 @@ impl DepGraph {
             loop {
                 // SAFETY: Tarjan's algorithm guarantees the stack contains this node.
                 // Invariant: Tarjan's algorithm guarantees the stack contains this node.
-                let w = state.stack.pop()
+                let w = state
+                    .stack
+                    .pop()
                     .expect("invariant: Tarjan stack must contain current SCC root");
                 state.on_stack.remove(w);
                 scc_functions.push(w.to_string());
@@ -249,9 +247,7 @@ impl DepGraph {
                 }
             }
             scc_functions.sort(); // deterministic ordering
-            state.sccs.push(StronglyConnectedComponent {
-                functions: scc_functions,
-            });
+            state.sccs.push(StronglyConnectedComponent { functions: scc_functions });
         }
     }
 
@@ -263,12 +259,8 @@ impl DepGraph {
 
         let mut unproven = Vec::new();
         let mut fully_discharged = Vec::new();
-        let proven_set: FxHashSet<&str> = self
-            .nodes
-            .values()
-            .filter(|n| n.has_proof)
-            .map(|n| n.function.as_str())
-            .collect();
+        let proven_set: BTreeSet<&str> =
+            self.nodes.values().filter(|n| n.has_proof).map(|n| n.function.as_str()).collect();
 
         for node in self.nodes.values() {
             if !node.has_proof {
@@ -293,19 +285,9 @@ impl DepGraph {
 
         let total = self.nodes.len();
         let proven_count = total - unproven.len();
-        let coverage = if total == 0 {
-            0.0
-        } else {
-            proven_count as f64 / total as f64
-        };
+        let coverage = if total == 0 { 0.0 } else { proven_count as f64 / total as f64 };
 
-        DepGraphAnalysis {
-            topological_order,
-            sccs,
-            unproven,
-            fully_discharged,
-            coverage,
-        }
+        DepGraphAnalysis { topological_order, sccs, unproven, fully_discharged, coverage }
     }
 }
 
@@ -318,11 +300,11 @@ impl Default for DepGraph {
 /// Internal state for Tarjan's SCC algorithm.
 struct TarjanState<'a> {
     next_index: usize,
-    index: FxHashMap<&'a str, usize>,
-    lowlink: FxHashMap<&'a str, usize>,
-    visited: FxHashSet<&'a str>,
+    index: BTreeMap<&'a str, usize>,
+    lowlink: BTreeMap<&'a str, usize>,
+    visited: BTreeSet<&'a str>,
     stack: Vec<&'a str>,
-    on_stack: FxHashSet<&'a str>,
+    on_stack: BTreeSet<&'a str>,
     sccs: Vec<StronglyConnectedComponent>,
 }
 
@@ -330,11 +312,11 @@ impl<'a> TarjanState<'a> {
     fn new() -> Self {
         TarjanState {
             next_index: 0,
-            index: FxHashMap::default(),
-            lowlink: FxHashMap::default(),
-            visited: FxHashSet::default(),
+            index: BTreeMap::new(),
+            lowlink: BTreeMap::new(),
+            visited: BTreeSet::new(),
             stack: Vec::new(),
-            on_stack: FxHashSet::default(),
+            on_stack: BTreeSet::new(),
             sccs: Vec::new(),
         }
     }

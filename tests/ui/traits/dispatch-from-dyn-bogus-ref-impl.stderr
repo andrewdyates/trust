@@ -1,0 +1,9 @@
+error[E0277]: the trait bound `Ptr<T>: DispatchFromDyn<Ptr<U>>` is not satisfied
+  --> $DIR/dispatch-from-dyn-bogus-ref-impl.rs:15:1
+   |
+LL | impl<'a, T: ?Sized, U: ?Sized> DispatchFromDyn<&'a Ptr<U>> for &'a Ptr<T> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.

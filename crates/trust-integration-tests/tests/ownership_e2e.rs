@@ -40,9 +40,7 @@ fn test_use_after_free_buggy() {
     // Read through the freed pointer — should detect UseAfterFree.
     let violations = tracker.read_through(0, &SourceSpan::default());
     assert!(
-        violations
-            .iter()
-            .any(|v| v.kind == ProvenanceViolationKind::UseAfterFree),
+        violations.iter().any(|v| v.kind == ProvenanceViolationKind::UseAfterFree),
         "Should detect UseAfterFree when reading through freed pointer, got: {violations:?}"
     );
 }
@@ -59,24 +57,13 @@ fn test_use_after_free_mir_buggy() {
         span: SourceSpan::default(),
         body: VerifiableBody {
             locals: vec![
-                LocalDecl {
-                    index: 0,
-                    ty: Ty::Unit,
-                    name: None,
-                },
+                LocalDecl { index: 0, ty: Ty::Unit, name: None },
                 LocalDecl {
                     index: 1,
-                    ty: Ty::Ref {
-                        mutable: true,
-                        inner: Box::new(Ty::u32()),
-                    },
+                    ty: Ty::Ref { mutable: true, inner: Box::new(Ty::u32()) },
                     name: Some("x".into()),
                 },
-                LocalDecl {
-                    index: 2,
-                    ty: Ty::u32(),
-                    name: Some("val".into()),
-                },
+                LocalDecl { index: 2, ty: Ty::u32(), name: Some("val".into()) },
             ],
             blocks: vec![
                 BasicBlock {
@@ -111,10 +98,7 @@ fn test_use_after_free_mir_buggy() {
     };
 
     let vcs = trust_vcgen::memory_provenance::check_provenance(&func);
-    assert!(
-        !vcs.is_empty(),
-        "check_provenance should detect use-after-free in MIR, got 0 VCs"
-    );
+    assert!(!vcs.is_empty(), "check_provenance should detect use-after-free in MIR, got 0 VCs");
 }
 
 /// Buggy: use-after-move detected by ownership scanner.
@@ -128,26 +112,10 @@ fn test_use_after_move_mir_buggy() {
         span: SourceSpan::default(),
         body: VerifiableBody {
             locals: vec![
-                LocalDecl {
-                    index: 0,
-                    ty: Ty::Unit,
-                    name: None,
-                },
-                LocalDecl {
-                    index: 1,
-                    ty: Ty::u32(),
-                    name: Some("x".into()),
-                },
-                LocalDecl {
-                    index: 2,
-                    ty: Ty::u32(),
-                    name: Some("y".into()),
-                },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::u32(),
-                    name: Some("z".into()),
-                },
+                LocalDecl { index: 0, ty: Ty::Unit, name: None },
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) },
+                LocalDecl { index: 2, ty: Ty::u32(), name: Some("y".into()) },
+                LocalDecl { index: 3, ty: Ty::u32(), name: Some("z".into()) },
             ],
             blocks: vec![BasicBlock {
                 id: BlockId(0),
@@ -176,9 +144,7 @@ fn test_use_after_move_mir_buggy() {
 
     let violations = scan_body(&func);
     assert!(
-        violations
-            .iter()
-            .any(|v| matches!(v, BorrowViolation::UseAfterMove { local: 1 })),
+        violations.iter().any(|v| matches!(v, BorrowViolation::UseAfterMove { local: 1 })),
         "scan_body should detect use-after-move on local 1, got: {violations:?}"
     );
 }
@@ -220,9 +186,7 @@ fn test_double_free_buggy() {
     // Write through detects use-after-free (the provenance-level manifestation of double-free).
     let violations = tracker.write_through(0, &SourceSpan::default());
     assert!(
-        violations
-            .iter()
-            .any(|v| v.kind == ProvenanceViolationKind::UseAfterFree),
+        violations.iter().any(|v| v.kind == ProvenanceViolationKind::UseAfterFree),
         "Should detect violation on double-free (write to freed region), got: {violations:?}"
     );
 }
@@ -239,22 +203,11 @@ fn test_double_free_dangling_ref_mir_buggy() {
         span: SourceSpan::default(),
         body: VerifiableBody {
             locals: vec![
-                LocalDecl {
-                    index: 0,
-                    ty: Ty::Unit,
-                    name: None,
-                },
-                LocalDecl {
-                    index: 1,
-                    ty: Ty::u32(),
-                    name: Some("x".into()),
-                },
+                LocalDecl { index: 0, ty: Ty::Unit, name: None },
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) },
                 LocalDecl {
                     index: 2,
-                    ty: Ty::Ref {
-                        mutable: false,
-                        inner: Box::new(Ty::u32()),
-                    },
+                    ty: Ty::Ref { mutable: false, inner: Box::new(Ty::u32()) },
                     name: Some("r".into()),
                 },
             ],
@@ -263,10 +216,7 @@ fn test_double_free_dangling_ref_mir_buggy() {
                     id: BlockId(0),
                     stmts: vec![Statement::Assign {
                         place: Place::local(2),
-                        rvalue: Rvalue::Ref {
-                            mutable: false,
-                            place: Place::local(1),
-                        },
+                        rvalue: Rvalue::Ref { mutable: false, place: Place::local(1) },
                         span: SourceSpan::default(),
                     }],
                     terminator: Terminator::Drop {
@@ -275,11 +225,7 @@ fn test_double_free_dangling_ref_mir_buggy() {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,
@@ -294,13 +240,7 @@ fn test_double_free_dangling_ref_mir_buggy() {
     assert!(
         violations
             .iter()
-            .any(|v| matches!(
-                v,
-                BorrowViolation::DanglingReference {
-                    local: 1,
-                    borrower: 2
-                }
-            )),
+            .any(|v| matches!(v, BorrowViolation::DanglingReference { local: 1, borrower: 2 })),
         "scan_body should detect dangling reference on drop, got: {violations:?}"
     );
 }
@@ -317,11 +257,7 @@ fn test_double_free_safe() {
     tracker.free_region(region, SourceSpan::default());
 
     // No further access — should be clean.
-    assert_eq!(
-        tracker.region_count(),
-        1,
-        "Should have exactly 1 region tracked"
-    );
+    assert_eq!(tracker.region_count(), 1, "Should have exactly 1 region tracked");
 }
 
 // ===========================================================================
@@ -341,10 +277,7 @@ fn test_aliasing_violation_buggy() {
     // Create a mutable borrow: _3 = &mut _1 (conflicts with shared borrow)
     let result2 = state.create_ref(1, 3, OwnershipBorrowKind::Mutable);
     assert!(
-        matches!(
-            result2,
-            Err(BorrowViolation::AliasingViolation { .. })
-        ),
+        matches!(result2, Err(BorrowViolation::AliasingViolation { .. })),
         "Mutable borrow should conflict with existing shared borrow, got: {result2:?}"
     );
 }
@@ -360,30 +293,16 @@ fn test_aliasing_violation_mir_buggy() {
         span: SourceSpan::default(),
         body: VerifiableBody {
             locals: vec![
-                LocalDecl {
-                    index: 0,
-                    ty: Ty::Unit,
-                    name: None,
-                },
-                LocalDecl {
-                    index: 1,
-                    ty: Ty::u32(),
-                    name: Some("x".into()),
-                },
+                LocalDecl { index: 0, ty: Ty::Unit, name: None },
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) },
                 LocalDecl {
                     index: 2,
-                    ty: Ty::Ref {
-                        mutable: false,
-                        inner: Box::new(Ty::u32()),
-                    },
+                    ty: Ty::Ref { mutable: false, inner: Box::new(Ty::u32()) },
                     name: Some("r".into()),
                 },
                 LocalDecl {
                     index: 3,
-                    ty: Ty::Ref {
-                        mutable: true,
-                        inner: Box::new(Ty::u32()),
-                    },
+                    ty: Ty::Ref { mutable: true, inner: Box::new(Ty::u32()) },
                     name: Some("m".into()),
                 },
             ],
@@ -392,18 +311,12 @@ fn test_aliasing_violation_mir_buggy() {
                 stmts: vec![
                     Statement::Assign {
                         place: Place::local(2),
-                        rvalue: Rvalue::Ref {
-                            mutable: false,
-                            place: Place::local(1),
-                        },
+                        rvalue: Rvalue::Ref { mutable: false, place: Place::local(1) },
                         span: SourceSpan::default(),
                     },
                     Statement::Assign {
                         place: Place::local(3),
-                        rvalue: Rvalue::Ref {
-                            mutable: true,
-                            place: Place::local(1),
-                        },
+                        rvalue: Rvalue::Ref { mutable: true, place: Place::local(1) },
                         span: SourceSpan::default(),
                     },
                 ],
@@ -420,9 +333,7 @@ fn test_aliasing_violation_mir_buggy() {
 
     let violations = scan_body(&func);
     assert!(
-        violations
-            .iter()
-            .any(|v| matches!(v, BorrowViolation::AliasingViolation { .. })),
+        violations.iter().any(|v| matches!(v, BorrowViolation::AliasingViolation { .. })),
         "scan_body should detect aliasing violation (mutable + shared borrow), got: {violations:?}"
     );
 }
@@ -475,30 +386,16 @@ fn test_aliasing_violation_mir_safe() {
         span: SourceSpan::default(),
         body: VerifiableBody {
             locals: vec![
-                LocalDecl {
-                    index: 0,
-                    ty: Ty::Unit,
-                    name: None,
-                },
-                LocalDecl {
-                    index: 1,
-                    ty: Ty::u32(),
-                    name: Some("x".into()),
-                },
+                LocalDecl { index: 0, ty: Ty::Unit, name: None },
+                LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) },
                 LocalDecl {
                     index: 2,
-                    ty: Ty::Ref {
-                        mutable: false,
-                        inner: Box::new(Ty::u32()),
-                    },
+                    ty: Ty::Ref { mutable: false, inner: Box::new(Ty::u32()) },
                     name: Some("r1".into()),
                 },
                 LocalDecl {
                     index: 3,
-                    ty: Ty::Ref {
-                        mutable: false,
-                        inner: Box::new(Ty::u32()),
-                    },
+                    ty: Ty::Ref { mutable: false, inner: Box::new(Ty::u32()) },
                     name: Some("r2".into()),
                 },
             ],
@@ -507,18 +404,12 @@ fn test_aliasing_violation_mir_safe() {
                 stmts: vec![
                     Statement::Assign {
                         place: Place::local(2),
-                        rvalue: Rvalue::Ref {
-                            mutable: false,
-                            place: Place::local(1),
-                        },
+                        rvalue: Rvalue::Ref { mutable: false, place: Place::local(1) },
                         span: SourceSpan::default(),
                     },
                     Statement::Assign {
                         place: Place::local(3),
-                        rvalue: Rvalue::Ref {
-                            mutable: false,
-                            place: Place::local(1),
-                        },
+                        rvalue: Rvalue::Ref { mutable: false, place: Place::local(1) },
                         span: SourceSpan::default(),
                     },
                 ],
@@ -566,7 +457,7 @@ fn test_lifetime_violation_properties() {
 #[test]
 fn test_lifetime_violation_vc_construction() {
     let vc = VerificationCondition {
-        function: "test::dangling_ref".to_string(),
+        function: "test::dangling_ref".into(),
         kind: VcKind::LifetimeViolation,
         location: SourceSpan::default(),
         formula: Formula::Var("lifetime_check".into(), Sort::Bool),
@@ -595,7 +486,7 @@ fn test_send_violation_properties() {
 #[test]
 fn test_send_violation_vc_construction() {
     let vc = VerificationCondition {
-        function: "test::spawn_with_rc".to_string(),
+        function: "test::spawn_with_rc".into(),
         kind: VcKind::SendViolation,
         location: SourceSpan::default(),
         formula: Formula::Var("send_check".into(), Sort::Bool),
@@ -624,7 +515,7 @@ fn test_sync_violation_properties() {
 #[test]
 fn test_sync_violation_vc_construction() {
     let vc = VerificationCondition {
-        function: "test::share_cell_across_threads".to_string(),
+        function: "test::share_cell_across_threads".into(),
         kind: VcKind::SyncViolation,
         location: SourceSpan::default(),
         formula: Formula::Var("sync_check".into(), Sort::Bool),
@@ -654,12 +545,7 @@ fn test_all_ownership_vckind_proof_levels() {
     ];
 
     for kind in &kinds {
-        assert_eq!(
-            kind.proof_level(),
-            ProofLevel::L0Safety,
-            "{:?} should be L0Safety",
-            kind
-        );
+        assert_eq!(kind.proof_level(), ProofLevel::L0Safety, "{:?} should be L0Safety", kind);
     }
 }
 
@@ -678,15 +564,13 @@ fn test_all_ownership_vckind_descriptions() {
 
     for (kind, expected_substr) in &test_cases {
         let desc = kind.description();
-        assert!(
-            !desc.is_empty(),
-            "{:?} description should not be empty",
-            kind
-        );
+        assert!(!desc.is_empty(), "{:?} description should not be empty", kind);
         assert!(
             desc.contains(expected_substr),
             "{:?} description should contain '{}', got: '{}'",
-            kind, expected_substr, desc
+            kind,
+            expected_substr,
+            desc
         );
     }
 }
@@ -705,12 +589,7 @@ fn test_all_ownership_vckind_no_runtime_check() {
     ];
 
     for kind in &kinds {
-        assert_eq!(
-            kind.proof_level(),
-            ProofLevel::L0Safety,
-            "{:?} should be L0Safety",
-            kind
-        );
+        assert_eq!(kind.proof_level(), ProofLevel::L0Safety, "{:?} should be L0Safety", kind);
     }
 }
 
@@ -769,11 +648,7 @@ fn test_construct_all_6_ownership_vcs() {
         },
     ];
 
-    assert_eq!(
-        vcs.len(),
-        7,
-        "should have 7 VCs (6 kinds, AliasingViolation has 2 variants)"
-    );
+    assert_eq!(vcs.len(), 7, "should have 7 VCs (6 kinds, AliasingViolation has 2 variants)");
 
     // All should be L0Safety
     for vc in &vcs {

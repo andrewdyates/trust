@@ -763,12 +763,12 @@ impl<'a> State<'a> {
                 self.print_expr(result, fixup.rightmost_subexpression());
             }
             ast::ExprKind::InlineAsm(a) => {
-                // tRust: known issue — Print `builtin # asm` once macro `asm` uses `builtin_syntax`.
+                // FIXME: Print `builtin # asm` once macro `asm` uses `builtin_syntax`.
                 self.word("asm!");
                 self.print_inline_asm(a);
             }
             ast::ExprKind::FormatArgs(fmt) => {
-                // tRust: known issue — Print `builtin # format_args` once macro `format_args` uses `builtin_syntax`.
+                // FIXME: Print `builtin # format_args` once macro `format_args` uses `builtin_syntax`.
                 self.word("format_args!");
                 self.popen();
                 let ib = self.ibox(0);
@@ -967,7 +967,7 @@ fn reconstruct_format_args_template_string(pieces: &[FormatArgsPiece]) -> String
             FormatArgsPiece::Placeholder(p) => {
                 template.push('{');
                 let (Ok(n) | Err(n)) = p.argument.index;
-                write!(template, "{n}").expect("invariant: write to String never fails"); // tRust: unwrap -> expect
+                write!(template, "{n}").unwrap();
                 if p.format_options != Default::default() || p.format_trait != FormatTrait::Display
                 {
                     template.push(':');
@@ -994,22 +994,22 @@ fn reconstruct_format_args_template_string(pieces: &[FormatArgsPiece]) -> String
                 }
                 if let Some(width) = &p.format_options.width {
                     match width {
-                        FormatCount::Literal(n) => write!(template, "{n}").expect("invariant: write to String never fails"), // tRust: unwrap -> expect
+                        FormatCount::Literal(n) => write!(template, "{n}").unwrap(),
                         FormatCount::Argument(FormatArgPosition {
                             index: Ok(n) | Err(n), ..
                         }) => {
-                            write!(template, "{n}$").expect("invariant: write to String never fails"); // tRust: unwrap -> expect
+                            write!(template, "{n}$").unwrap();
                         }
                     }
                 }
                 if let Some(precision) = &p.format_options.precision {
                     template.push('.');
                     match precision {
-                        FormatCount::Literal(n) => write!(template, "{n}").expect("invariant: write to String never fails"), // tRust: unwrap -> expect
+                        FormatCount::Literal(n) => write!(template, "{n}").unwrap(),
                         FormatCount::Argument(FormatArgPosition {
                             index: Ok(n) | Err(n), ..
                         }) => {
-                            write!(template, "{n}$").expect("invariant: write to String never fails"); // tRust: unwrap -> expect
+                            write!(template, "{n}$").unwrap();
                         }
                     }
                 }

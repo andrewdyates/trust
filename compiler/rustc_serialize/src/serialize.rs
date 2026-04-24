@@ -126,7 +126,7 @@ pub trait Decoder {
     #[inline]
     fn read_char(&mut self) -> char {
         let bits = self.read_u32();
-        std::char::from_u32(bits).expect("invariant: encoded u32 is a valid Unicode scalar value") // tRust: unwrap -> expect
+        std::char::from_u32(bits).unwrap()
     }
 
     #[inline]
@@ -249,7 +249,7 @@ impl<S: Encoder> Encodable<S> for NonZero<u32> {
 
 impl<D: Decoder> Decodable<D> for NonZero<u32> {
     fn decode(d: &mut D) -> Self {
-        NonZero::new(d.read_u32()).expect("invariant: encoded NonZero<u32> value is non-zero") // tRust: unwrap -> expect
+        NonZero::new(d.read_u32()).unwrap()
     }
 }
 
@@ -456,7 +456,7 @@ tuple! { T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, }
 
 impl<S: Encoder> Encodable<S> for path::Path {
     fn encode(&self, e: &mut S) {
-        self.to_str().expect("invariant: path is valid UTF-8 for encoding").encode(e); // tRust: unwrap -> expect
+        self.to_str().unwrap().encode(e);
     }
 }
 
@@ -757,13 +757,13 @@ impl<S: Encoder> Encodable<S> for Hash128 {
 impl<D: Decoder> Decodable<D> for Hash64 {
     #[inline]
     fn decode(d: &mut D) -> Self {
-        Self::new(u64::from_le_bytes(d.read_raw_bytes(8).try_into().expect("invariant: 8-byte slice converts to [u8; 8]"))) // tRust: unwrap -> expect
+        Self::new(u64::from_le_bytes(d.read_raw_bytes(8).try_into().unwrap()))
     }
 }
 
 impl<D: Decoder> Decodable<D> for Hash128 {
     #[inline]
     fn decode(d: &mut D) -> Self {
-        Self::new(u128::from_le_bytes(d.read_raw_bytes(16).try_into().expect("invariant: 16-byte slice converts to [u8; 16]"))) // tRust: unwrap -> expect
+        Self::new(u128::from_le_bytes(d.read_raw_bytes(16).try_into().unwrap()))
     }
 }

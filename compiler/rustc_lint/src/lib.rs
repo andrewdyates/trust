@@ -295,7 +295,7 @@ fn register_builtins(store: &mut LintStore) {
         UNUSED_ASSIGNMENTS,
         DEAD_CODE,
         UNUSED_MUT,
-        // tRust: known issue — add this lint when it becomes stable,
+        // FIXME: add this lint when it becomes stable,
         // see https://github.com/rust-lang/rust/issues/115585.
         // UNREACHABLE_CFG_SELECT_PREDICATES,
         UNREACHABLE_CODE,
@@ -325,11 +325,11 @@ fn register_builtins(store: &mut LintStore) {
         UNUSED_EXTERN_CRATES,
         ELLIPSIS_INCLUSIVE_RANGE_PATTERNS,
         ELIDED_LIFETIMES_IN_PATHS,
-        EXPLICIT_OUTLIVES_REQUIREMENTS // tRust: known issue — (#52665, #47816) not always applicable and not all
+        EXPLICIT_OUTLIVES_REQUIREMENTS // FIXME(#52665, #47816) not always applicable and not all
                                        // macros are ready for this yet.
                                        // UNREACHABLE_PUB,
 
-                                       // tRust: known issue — macro crates are not up for this yet, too much
+                                       // FIXME macro crates are not up for this yet, too much
                                        // breakage is seen if we try to encourage this lint.
                                        // MACRO_USE_EXTERN_CRATE
     );

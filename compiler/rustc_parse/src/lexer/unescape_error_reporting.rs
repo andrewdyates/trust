@@ -28,7 +28,7 @@ pub(crate) fn emit_unescape_error(
         lit, full_lit_span, mode, range, error
     );
     let last_char = || {
-        let c = lit[range.clone()].chars().next_back().expect("invariant: string is non-empty, has at least one char"); // tRust: unwrap -> expect
+        let c = lit[range.clone()].chars().next_back().unwrap();
         let span = err_span.with_lo(err_span.hi() - BytePos(c.len_utf8() as u32));
         (c, span)
     };
@@ -46,11 +46,11 @@ pub(crate) fn emit_unescape_error(
             let mut note = None;
 
             let lit_chars = lit.chars().collect::<Vec<_>>();
-            let (first, rest) = lit_chars.split_first().expect("invariant: slice is non-empty"); // tRust: unwrap -> expect
+            let (first, rest) = lit_chars.split_first().unwrap();
             if rest.iter().copied().all(is_combining_mark) {
                 let normalized = lit.nfc().to_string();
                 if normalized.chars().count() == 1 {
-                    let ch = normalized.chars().next().expect("invariant: string is non-empty, has at least one char").escape_default().to_string(); // tRust: unwrap -> expect
+                    let ch = normalized.chars().next().unwrap().escape_default().to_string();
                     sugg = Some(MoreThanOneCharSugg::NormalizedForm {
                         span: err_span,
                         ch,

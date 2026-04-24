@@ -8,7 +8,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use trust_types::fx::FxHashMap;
 
 use sha2::{Digest, Sha256};
 
@@ -61,18 +61,12 @@ impl SpecFingerprint {
             hasher.update(clause.as_bytes());
             hasher.update(b"\n");
         }
-        Self {
-            def_path: def_path.to_string(),
-            hash: format!("{:x}", hasher.finalize()),
-        }
+        Self { def_path: def_path.to_string(), hash: format!("{:x}", hasher.finalize()) }
     }
 
     /// Compute a fingerprint from contracts (the existing pipeline type).
     #[must_use]
-    pub fn from_contracts(
-        def_path: &str,
-        contracts: &[trust_types::Contract],
-    ) -> Self {
+    pub fn from_contracts(def_path: &str, contracts: &[trust_types::Contract]) -> Self {
         use trust_types::ContractKind;
         let mut requires = Vec::new();
         let mut ensures = Vec::new();
@@ -149,10 +143,8 @@ impl SpecChangeDetector {
 
     /// Create a detector pre-loaded with previous fingerprints.
     pub fn with_previous(fingerprints: &[SpecFingerprint]) -> Self {
-        let previous = fingerprints
-            .iter()
-            .map(|fp| (fp.def_path.clone(), fp.hash.clone()))
-            .collect();
+        let previous =
+            fingerprints.iter().map(|fp| (fp.def_path.clone(), fp.hash.clone())).collect();
         Self { previous }
     }
 
@@ -162,10 +154,8 @@ impl SpecChangeDetector {
     pub fn detect_changes(&mut self, current: &[SpecFingerprint]) -> SpecChangeSummary {
         let mut summary = SpecChangeSummary::default();
 
-        let current_map: FxHashMap<&str, &str> = current
-            .iter()
-            .map(|fp| (fp.def_path.as_str(), fp.hash.as_str()))
-            .collect();
+        let current_map: FxHashMap<&str, &str> =
+            current.iter().map(|fp| (fp.def_path.as_str(), fp.hash.as_str())).collect();
 
         // Check each current function against previous
         for fp in current {
@@ -193,10 +183,7 @@ impl SpecChangeDetector {
         summary.removed.sort();
 
         // Update snapshot
-        self.previous = current
-            .iter()
-            .map(|fp| (fp.def_path.clone(), fp.hash.clone()))
-            .collect();
+        self.previous = current.iter().map(|fp| (fp.def_path.clone(), fp.hash.clone())).collect();
 
         summary
     }
@@ -222,36 +209,35 @@ pub(crate) fn affected_vcs(
     plan_invalidation(&roots, deps)
 }
 
-/// Convenience: detect changes and compute affected VCs in one step.
-#[must_use]
-pub(crate) fn detect_and_plan(
-    detector: &mut SpecChangeDetector,
-    current_fingerprints: &[SpecFingerprint],
-    deps: &DependencyTracker,
-) -> (SpecChangeSummary, InvalidationPlan) {
-    let summary = detector.detect_changes(current_fingerprints);
-    let plan = affected_vcs(&summary, deps);
-    (summary, plan)
-}
-
-/// Compute the set of all def_paths that should be invalidated in the cache
-/// given spec changes and a dependency graph.
-///
-/// Returns a `HashSet` for efficient membership testing.
-#[must_use]
-pub(crate) fn invalidation_set(
-    changes: &SpecChangeSummary,
-    deps: &DependencyTracker,
-) -> FxHashSet<String> {
-    let plan = affected_vcs(changes, deps);
-    plan.functions.into_iter().collect()
-}
-
 #[cfg(test)]
 mod tests {
+    use trust_types::fx::FxHashSet;
     use trust_types::{Contract, ContractKind, SourceSpan};
 
     use super::*;
+
+    // tRust: test-only convenience functions moved from production code.
+
+    /// Convenience: detect changes and compute affected VCs in one step.
+    fn detect_and_plan(
+        detector: &mut SpecChangeDetector,
+        current_fingerprints: &[SpecFingerprint],
+        deps: &DependencyTracker,
+    ) -> (SpecChangeSummary, InvalidationPlan) {
+        let summary = detector.detect_changes(current_fingerprints);
+        let plan = affected_vcs(&summary, deps);
+        (summary, plan)
+    }
+
+    /// Compute the set of all def_paths that should be invalidated in the cache
+    /// given spec changes and a dependency graph.
+    fn invalidation_set(
+        changes: &SpecChangeSummary,
+        deps: &DependencyTracker,
+    ) -> FxHashSet<String> {
+        let plan = affected_vcs(changes, deps);
+        plan.functions.into_iter().collect()
+    }
 
     // -----------------------------------------------------------------------
     // SpecFingerprint tests
@@ -304,18 +290,8 @@ mod tests {
 
     #[test]
     fn test_fingerprint_order_independent_within_category() {
-        let fp1 = SpecFingerprint::from_clauses(
-            "f",
-            &["a > 0".into(), "b > 0".into()],
-            &[],
-            &[],
-        );
-        let fp2 = SpecFingerprint::from_clauses(
-            "f",
-            &["b > 0".into(), "a > 0".into()],
-            &[],
-            &[],
-        );
+        let fp1 = SpecFingerprint::from_clauses("f", &["a > 0".into(), "b > 0".into()], &[], &[]);
+        let fp2 = SpecFingerprint::from_clauses("f", &["b > 0".into(), "a > 0".into()], &[], &[]);
         assert_eq!(fp1.hash, fp2.hash, "clause order should not matter");
     }
 
@@ -396,9 +372,7 @@ mod tests {
 
     #[test]
     fn test_detector_no_changes() {
-        let fps = vec![
-            SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
-        ];
+        let fps = vec![SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[])];
         let mut detector = SpecChangeDetector::with_previous(&fps);
         let summary = detector.detect_changes(&fps);
         assert!(!summary.has_changes());
@@ -407,12 +381,8 @@ mod tests {
 
     #[test]
     fn test_detector_modified_spec() {
-        let fps_v1 = vec![
-            SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
-        ];
-        let fps_v2 = vec![
-            SpecFingerprint::from_clauses("f", &["x > 1".into()], &[], &[]),
-        ];
+        let fps_v1 = vec![SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[])];
+        let fps_v2 = vec![SpecFingerprint::from_clauses("f", &["x > 1".into()], &[], &[])];
         let mut detector = SpecChangeDetector::with_previous(&fps_v1);
         let summary = detector.detect_changes(&fps_v2);
         assert_eq!(summary.modified, vec!["f"]);
@@ -422,9 +392,7 @@ mod tests {
 
     #[test]
     fn test_detector_added_function() {
-        let fps_v1 = vec![
-            SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
-        ];
+        let fps_v1 = vec![SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[])];
         let fps_v2 = vec![
             SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
             SpecFingerprint::from_clauses("g", &["y > 0".into()], &[], &[]),
@@ -442,9 +410,7 @@ mod tests {
             SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
             SpecFingerprint::from_clauses("g", &["y > 0".into()], &[], &[]),
         ];
-        let fps_v2 = vec![
-            SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
-        ];
+        let fps_v2 = vec![SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[])];
         let mut detector = SpecChangeDetector::with_previous(&fps_v1);
         let summary = detector.detect_changes(&fps_v2);
         assert!(summary.modified.is_empty());
@@ -461,7 +427,7 @@ mod tests {
         let fps_v2 = vec![
             SpecFingerprint::from_clauses("f", &["x > 1".into()], &[], &[]), // modified
             SpecFingerprint::from_clauses("h", &["z > 0".into()], &[], &[]), // added
-            // g removed
+                                                                             // g removed
         ];
         let mut detector = SpecChangeDetector::with_previous(&fps_v1);
         let summary = detector.detect_changes(&fps_v2);
@@ -473,9 +439,7 @@ mod tests {
 
     #[test]
     fn test_detector_updates_snapshot() {
-        let fps_v1 = vec![
-            SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]),
-        ];
+        let fps_v1 = vec![SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[])];
         let mut detector = SpecChangeDetector::new();
         let _ = detector.detect_changes(&fps_v1);
         assert_eq!(detector.tracked_count(), 1);
@@ -569,11 +533,8 @@ mod tests {
         deps.add_dependency("A", "B");
         deps.add_dependency("B", "C");
 
-        let summary = SpecChangeSummary {
-            modified: vec!["C".to_string()],
-            added: vec![],
-            removed: vec![],
-        };
+        let summary =
+            SpecChangeSummary { modified: vec!["C".to_string()], added: vec![], removed: vec![] };
         let set = invalidation_set(&summary, &deps);
         assert!(set.contains("A"));
         assert!(set.contains("B"));
@@ -594,23 +555,13 @@ mod tests {
     #[test]
     fn test_fingerprint_adding_clause_changes_hash() {
         let fp1 = SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]);
-        let fp2 = SpecFingerprint::from_clauses(
-            "f",
-            &["x > 0".into(), "y > 0".into()],
-            &[],
-            &[],
-        );
+        let fp2 = SpecFingerprint::from_clauses("f", &["x > 0".into(), "y > 0".into()], &[], &[]);
         assert_ne!(fp1.hash, fp2.hash, "adding a clause must change hash");
     }
 
     #[test]
     fn test_fingerprint_removing_clause_changes_hash() {
-        let fp1 = SpecFingerprint::from_clauses(
-            "f",
-            &["x > 0".into(), "y > 0".into()],
-            &[],
-            &[],
-        );
+        let fp1 = SpecFingerprint::from_clauses("f", &["x > 0".into(), "y > 0".into()], &[], &[]);
         let fp2 = SpecFingerprint::from_clauses("f", &["x > 0".into()], &[], &[]);
         assert_ne!(fp1.hash, fp2.hash, "removing a clause must change hash");
     }

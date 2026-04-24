@@ -5,7 +5,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{CertificationStatus, ProofCertificate};
 
@@ -26,15 +26,16 @@ use super::types::{ComposedProof, CompositionError, FunctionStrength};
 /// If `call_graph` is empty, only direct self-reference (caller in its own
 /// `required_callees`) is detectable. Pass the full call graph for sound
 /// cycle detection.
+// tRust: BTreeMap for deterministic certificate output (#827)
 pub fn modular_composition(
     caller_cert: &ProofCertificate,
     callee_certs: &[&ProofCertificate],
     required_callees: &[String],
-    call_graph: &FxHashMap<String, Vec<String>>,
+    call_graph: &BTreeMap<String, Vec<String>>,
 ) -> Result<ComposedProof, CompositionError> {
     // Build callee_deps from the call_graph: for each callee (and any
     // transitively reachable function), look up its own callees in the graph.
-    let mut callee_deps: FxHashMap<String, Vec<String>> = FxHashMap::default();
+    let mut callee_deps: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for callee_name in required_callees {
         if let Some(deps) = call_graph.get(callee_name) {
             callee_deps.insert(callee_name.clone(), deps.clone());
@@ -42,7 +43,7 @@ pub fn modular_composition(
     }
     // Propagate transitive dependencies so the DFS can walk the full graph.
     let mut frontier: Vec<String> = callee_deps.values().flatten().cloned().collect();
-    let mut seen: FxHashSet<String> = callee_deps.keys().cloned().collect();
+    let mut seen: BTreeSet<String> = callee_deps.keys().cloned().collect();
     seen.insert(caller_cert.function.clone());
     while let Some(func) = frontier.pop() {
         if seen.contains(&func) {
@@ -67,16 +68,15 @@ pub fn modular_composition_with_deps(
     caller_cert: &ProofCertificate,
     callee_certs: &[&ProofCertificate],
     required_callees: &[String],
-    callee_deps: &FxHashMap<String, Vec<String>>,
+    callee_deps: &BTreeMap<String, Vec<String>>,
 ) -> Result<ComposedProof, CompositionError> {
     // Check that all required callees have certificates
-    let proved_functions: FxHashSet<&str> = callee_certs.iter().map(|c| c.function.as_str()).collect();
+    let proved_functions: BTreeSet<&str> =
+        callee_certs.iter().map(|c| c.function.as_str()).collect();
 
     for callee in required_callees {
         if !proved_functions.contains(callee.as_str()) {
-            return Err(CompositionError::MissingLink {
-                function: callee.clone(),
-            });
+            return Err(CompositionError::MissingLink { function: callee.clone() });
         }
     }
 
@@ -84,7 +84,7 @@ pub fn modular_composition_with_deps(
     // Build adjacency list: caller -> required_callees, plus any
     // callee -> callee edges from callee_deps.
     {
-        let mut adj: FxHashMap<&str, Vec<&str>> = FxHashMap::default();
+        let mut adj: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
         adj.insert(
             caller_cert.function.as_str(),
             required_callees.iter().map(|s| s.as_str()).collect(),
@@ -98,7 +98,7 @@ pub fn modular_composition_with_deps(
 
         // DFS with coloring: White=0, Gray=1, Black=2.
         // A back-edge to a Gray node indicates a cycle.
-        let mut color: FxHashMap<&str, u8> = FxHashMap::default();
+        let mut color: BTreeMap<&str, u8> = BTreeMap::new();
         for key in adj.keys() {
             color.insert(*key, 0);
         }
@@ -111,8 +111,8 @@ pub fn modular_composition_with_deps(
 
         fn dfs_find_cycle<'a>(
             node: &'a str,
-            adj: &FxHashMap<&'a str, Vec<&'a str>>,
-            color: &mut FxHashMap<&'a str, u8>,
+            adj: &BTreeMap<&'a str, Vec<&'a str>>,
+            color: &mut BTreeMap<&'a str, u8>,
             path: &mut Vec<&'a str>,
         ) -> Option<Vec<String>> {
             color.insert(node, 1); // Gray
@@ -124,7 +124,8 @@ pub fn modular_composition_with_deps(
                         Some(1) => {
                             // Back-edge to Gray node: cycle found.
                             let start = path.iter().position(|&p| p == neighbor).unwrap_or(0);
-                            let mut cycle: Vec<String> = path[start..].iter().map(|s| s.to_string()).collect();
+                            let mut cycle: Vec<String> =
+                                path[start..].iter().map(|s| s.to_string()).collect();
                             cycle.push(neighbor.to_string());
                             return Some(cycle);
                         }
@@ -132,9 +133,7 @@ pub fn modular_composition_with_deps(
                             if color.get(neighbor).copied().unwrap_or(0) == 0
                                 && let Some(cycle) = dfs_find_cycle(neighbor, adj, color, path)
                             {
-
-                                    return Some(cycle);
-
+                                return Some(cycle);
                             }
                         }
                         _ => {} // Black, already fully processed
@@ -150,11 +149,10 @@ pub fn modular_composition_with_deps(
         let mut path = Vec::new();
         for &node in color.clone().keys() {
             if color[node] == 0
-                && let Some(cycle) = dfs_find_cycle(node, &adj, &mut color, &mut path) {
-                    return Err(CompositionError::CircularDependency {
-                        cycle: cycle.join(" -> "),
-                    });
-                }
+                && let Some(cycle) = dfs_find_cycle(node, &adj, &mut color, &mut path)
+            {
+                return Err(CompositionError::CircularDependency { cycle: cycle.join(" -> ") });
+            }
         }
     }
 
@@ -169,20 +167,17 @@ pub fn modular_composition_with_deps(
     functions.dedup();
 
     let combined_strength = weakest_strength(all_certs.iter().map(|c| &c.solver));
-    let combined_status =
-        if all_certs.iter().all(|c| c.status == CertificationStatus::Certified) {
-            CertificationStatus::Certified
-        } else {
-            CertificationStatus::Trusted
-        };
+    let combined_status = if all_certs.iter().all(|c| c.status == CertificationStatus::Certified) {
+        CertificationStatus::Certified
+    } else {
+        CertificationStatus::Trusted
+    };
 
     let total_time_ms: u64 = all_certs.iter().map(|c| c.solver.time_ms).sum();
 
     // Build call edges
-    let call_edges: Vec<(String, String)> = callee_certs
-        .iter()
-        .map(|c| (caller_cert.function.clone(), c.function.clone()))
-        .collect();
+    let call_edges: Vec<(String, String)> =
+        callee_certs.iter().map(|c| (caller_cert.function.clone(), c.function.clone())).collect();
     let function_strengths: Vec<FunctionStrength> = all_certs
         .iter()
         .map(|c| FunctionStrength {
@@ -203,4 +198,3 @@ pub fn modular_composition_with_deps(
         function_strengths,
     })
 }
-

@@ -151,7 +151,7 @@ impl<D: Decoder> Decodable<D> for AllocFlags {
         let mutability = flags & 0b0100_0000;
         let all_zero = flags & 0b1000_0000;
 
-        let align = Align::from_bytes(1 << align).expect("invariant: alignment is a valid power of 2");
+        let align = Align::from_bytes(1 << align).unwrap();
         let mutability = match mutability {
             0 => Mutability::Not,
             _ => Mutability::Mut,
@@ -488,7 +488,7 @@ impl<Prov: Provenance, Bytes: AllocBytes> Allocation<Prov, (), Bytes> {
                     size.bytes().min(isize::MAX as u64) as usize,
                     align.bytes_usize(),
                 )
-                .expect("invariant: size and alignment are valid for Layout"),
+                .unwrap(),
             )
         }) {
             Ok(x) => x,
@@ -527,10 +527,10 @@ impl Allocation {
         for &(offset, alloc_id) in self.provenance.ptrs().iter() {
             let idx = offset.bytes_usize();
             let ptr_bytes = &mut bytes[idx..idx + ptr_size];
-            let bits = read_target_uint(endian, ptr_bytes).expect("invariant: byte slice has valid length for target uint");
+            let bits = read_target_uint(endian, ptr_bytes).unwrap();
             let (ptr_prov, ptr_offset) =
                 adjust_ptr(Pointer::new(alloc_id, Size::from_bytes(bits)))?.into_raw_parts();
-            write_target_uint(endian, ptr_bytes, ptr_offset.bytes().into()).expect("invariant: byte slice has valid length for target uint");
+            write_target_uint(endian, ptr_bytes, ptr_offset.bytes().into()).unwrap();
             new_provenance.push((offset, ptr_prov));
         }
         // Create allocation.
@@ -711,7 +711,7 @@ impl<Prov: Provenance, Extra, Bytes: AllocBytes> Allocation<Prov, Extra, Bytes> 
 
         // Get the integer part of the result. We HAVE TO check provenance before returning this!
         let bytes = self.get_bytes_unchecked(range);
-        let bits = read_target_uint(cx.data_layout().endian, bytes).expect("invariant: byte slice has valid length for target uint");
+        let bits = read_target_uint(cx.data_layout().endian, bytes).unwrap();
 
         if read_provenance {
             assert_eq!(range.size, cx.data_layout().pointer_size());
@@ -764,7 +764,7 @@ impl<Prov: Provenance, Extra, Bytes: AllocBytes> Allocation<Prov, Extra, Bytes> 
         let endian = cx.data_layout().endian;
         // Yes we do overwrite all the bytes in `dst`.
         let dst = self.get_bytes_unchecked_for_overwrite(cx, range);
-        write_target_uint(endian, dst, bytes).expect("invariant: destination slice has valid length for target uint");
+        write_target_uint(endian, dst, bytes).unwrap();
 
         // See if we have to also store some provenance.
         if let Some(provenance) = provenance {

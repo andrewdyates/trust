@@ -173,7 +173,7 @@ where
     type Result = V::Result;
 
     fn visit_predicate(&mut self, p: ty::Predicate<'tcx>) -> Self::Result {
-        self.visit_clause(p.as_clause().expect("invariant: predicate is a clause in DefIdVisitor")) // tRust: unwrap -> expect
+        self.visit_clause(p.as_clause().unwrap())
     }
 
     fn visit_ty(&mut self, ty: Ty<'tcx>) -> Self::Result {
@@ -196,7 +196,7 @@ where
                 // Something like `fn() -> Priv {my_func}` is considered a private type even if
                 // `my_func` is public, so we need to visit signatures.
                 if let ty::FnDef(..) = ty_kind {
-                    // tRust: known issue -- this should probably use `args` from `FnDef`
+                    // FIXME: this should probably use `args` from `FnDef`
                     try_visit!(tcx.fn_sig(def_id).instantiate_identity().visit_with(self));
                 }
                 // Inherent static methods don't have self type in args.
@@ -454,7 +454,7 @@ impl<'tcx> EmbargoVisitor<'tcx> {
         max_vis: Option<ty::Visibility>,
         level: Level,
     ) {
-        // tRust: known issue (typed_def_id) -- Make `Visibility::Restricted` use a `LocalModDefId` by default.
+        // FIXME(typed_def_id): Make `Visibility::Restricted` use a `LocalModDefId` by default.
         let private_vis =
             ty::Visibility::Restricted(self.tcx.parent_module_from_def_id(def_id).into());
         if max_vis != Some(private_vis) {
@@ -519,7 +519,7 @@ impl<'tcx> EmbargoVisitor<'tcx> {
             // The macro's parent doesn't correspond to a `mod`, return early (#63164, #65252).
             return;
         }
-        // tRust: known issue (typed_def_id) -- Introduce checked constructors that check def_kind.
+        // FIXME(typed_def_id): Introduce checked constructors that check def_kind.
         let macro_module_def_id = LocalModDefId::new_unchecked(macro_module_def_id);
 
         if self.effective_visibilities.public_at_level(local_def_id).is_none() {
@@ -1074,7 +1074,7 @@ impl<'tcx> Visitor<'tcx> for NamePrivacyVisitor<'tcx> {
     fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
         if let hir::ExprKind::Struct(qpath, fields, ref base) = expr.kind {
             let res = self.typeck_results().qpath_res(qpath, expr.hir_id);
-            let adt = self.typeck_results().expr_ty(expr).ty_adt_def().expect("invariant: struct expression type has ADT def"); // tRust: unwrap -> expect
+            let adt = self.typeck_results().expr_ty(expr).ty_adt_def().unwrap();
             let variant = adt.variant_of_res(res);
             match *base {
                 hir::StructTailExpr::Base(base) => {
@@ -1120,7 +1120,7 @@ impl<'tcx> Visitor<'tcx> for NamePrivacyVisitor<'tcx> {
     fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
         if let PatKind::Struct(ref qpath, fields, _) = pat.kind {
             let res = self.typeck_results().qpath_res(qpath, pat.hir_id);
-            let adt = self.typeck_results().pat_ty(pat).ty_adt_def().expect("invariant: struct pattern type has ADT def"); // tRust: unwrap -> expect
+            let adt = self.typeck_results().pat_ty(pat).ty_adt_def().unwrap();
             let variant = adt.variant_of_res(res);
             let mut failed_fields = vec![];
             for field in fields {
@@ -1226,7 +1226,7 @@ impl<'tcx> Visitor<'tcx> for TypePrivacyVisitor<'tcx> {
                 return;
             }
         } else {
-            // tRust: known issue -- check types of const infers here.
+            // FIXME: check types of const infers here.
         }
 
         self.visit_id(inf_id)
@@ -1282,7 +1282,7 @@ impl<'tcx> Visitor<'tcx> for TypePrivacyVisitor<'tcx> {
             hir::QPath::TypeRelative(..) => {
                 match self.maybe_typeck_results {
                     Some(typeck_results) => typeck_results.type_dependent_def(id),
-                    // tRust: known issue -- Check type-relative associated types in signatures.
+                    // FIXME: Check type-relative associated types in signatures.
                     None => None,
                 }
             }
@@ -1601,7 +1601,7 @@ impl<'tcx> PrivateItemsInPublicInterfacesChecker<'_, 'tcx> {
             check.ty();
         }
         if is_assoc_ty && item.container == AssocContainer::Trait {
-            // tRust: known issue -- too much breakage from reporting hard errors here, better wait for a fix
+            // FIXME: too much breakage from reporting hard errors here, better wait for a fix
             // from proper associated type normalization.
             check.hard_error = false;
             check.bounds();
@@ -1703,7 +1703,7 @@ impl<'tcx> PrivateItemsInPublicInterfacesChecker<'_, 'tcx> {
 
                 // Skip checking private components in associated types, due to lack of full
                 // normalization they produce very ridiculous false positives.
-                // tRust: known issue -- Remove this when full normalization is implemented.
+                // FIXME: Remove this when full normalization is implemented.
                 check.skip_assoc_tys = true;
                 check.ty();
                 if of_trait {
@@ -1776,7 +1776,7 @@ fn check_mod_privacy(tcx: TyCtxt<'_>, module_def_id: LocalModDefId) {
             let trait_ref = tcx.impl_trait_ref(def_id);
             let trait_ref = trait_ref.instantiate_identity();
             visitor.span =
-                tcx.hir_expect_item(def_id).expect_impl().of_trait.expect("invariant: trait impl has of_trait set").trait_ref.path.span; // tRust: unwrap -> expect
+                tcx.hir_expect_item(def_id).expect_impl().of_trait.unwrap().trait_ref.path.span;
             let _ =
                 visitor.visit_def_id(trait_ref.def_id, "trait", &trait_ref.print_only_trait_path());
         }
@@ -1795,7 +1795,7 @@ fn effective_visibilities(tcx: TyCtxt<'_>, (): ()) -> &EffectiveVisibilities {
 
     visitor.effective_visibilities.check_invariants(tcx);
 
-    // tRust: known upstream workaround (jynelson) -- trying to infer the type of `impl Trait` breaks `async-std` (and
+    // HACK(jynelson): trying to infer the type of `impl Trait` breaks `async-std` (and
     // `pub async fn` in general). Since rustdoc never needs to do codegen and doesn't
     // care about link-time reachability, keep them unreachable (issue #75100).
     let impl_trait_pass = !tcx.sess.opts.actually_rustdoc;
@@ -1831,7 +1831,7 @@ fn effective_visibilities(tcx: TyCtxt<'_>, (): ()) -> &EffectiveVisibilities {
                 | hir::OpaqueTyOrigin::TyAlias { .. } => true,
             };
             if should_visit {
-                // tRust: known issue -- This is some serious pessimization intended to workaround deficiencies
+                // FIXME: This is some serious pessimization intended to workaround deficiencies
                 // in the reachability pass (`middle/reachable.rs`). Types are marked as link-time
                 // reachable if they are returned via `impl Trait`, even from private functions.
                 let pub_ev = EffectiveVisibility::from_vis(ty::Visibility::Public);

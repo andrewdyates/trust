@@ -29,7 +29,6 @@ fn one() -> isize {
 extern "C" fn main(argc: i32, _argv: *const *const u8) -> i32 {
     let test = Test { field: one() };
     let two = Two { two: 2 };
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, test.field);
         libc::printf(b"%ld\n\0" as *const u8 as *const i8, two.two);

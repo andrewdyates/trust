@@ -742,6 +742,7 @@
 //! <code>[Pin]<[&mut] Field></code>, you do not need to be careful about other code
 //! moving out of that field, you just have to ensure is that you never create pinning
 //! reference to that field. This does of course also mean that if you decide a field does not
+
 //! field *is* structurally pinned!
 //!
 //! Fields without structural pinning may have a projection method that turns
@@ -818,6 +819,7 @@
 //!     to provide such structural pinning, its destructor would need to abort the process if any
 //!     of the destructors panicked.
 //!
+
 //!     the structural fields when your type is pinned. For example, if the struct contains an
 //!     [`Option<T>`] and there is a [`take`][Option::take]-like operation with type
 //!     <code>fn([Pin]<[&mut Struct\<T>][&mut]>) -> [`Option<T>`]</code>,
@@ -2023,25 +2025,10 @@ unsafe impl<T: PinCoerceUnsized> PinCoerceUnsized for Pin<T> {}
 #[rustc_diagnostic_item = "pin_macro"]
 // `super` gets removed by rustfmt
 #[rustfmt::skip]
-// tRust: Fix for rust-lang#153438 — prevent deref coercions in pin!()
-// Ported from upstream PR rust-lang/rust#153457 (by @dianne).
-// Without the type constraint, a type annotation on pin!()'s result can
-// add deref coercions (e.g. `pin!(&mut T)` coercing to `Pin<&mut T>`),
-// violating the pinning invariant.
 pub macro pin($value:expr $(,)?) {
-    'pin: {
+    {
         super let mut pinned = $value;
         // SAFETY: The value is pinned: it is the local above which cannot be named outside this macro.
-        break 'pin unsafe { $crate::pin::Pin::new_unchecked(&mut pinned) };
-
-        // tRust: HACK from upstream — ensure that given `$value: T`, `pin!($value)` has type
-        // `Pin<&mut T>`. Otherwise, a type annotation on pin!()'s result can unsoundly add deref
-        // coercions. E.g. for `$value: &mut T`, we could get `pin!($value): Pin<&mut T>`,
-        // violating the pinning invariant. See rust-lang#153438.
-        fn unreachable_type_constraint<'a, T>(_: T) -> $crate::pin::Pin<&'a mut T> {
-            unreachable!()
-        }
-        #[expect(unreachable_code)]
-        unreachable_type_constraint(pinned)
+        unsafe { $crate::pin::Pin::new_unchecked(&mut pinned) }
     }
 }

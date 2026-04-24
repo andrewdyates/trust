@@ -22,5 +22,5 @@ mod types;
 mod tests;
 
 // Re-export all public items at the module root for backward compatibility.
-pub use arena::FormulaArena;
+pub use arena::{FormulaArena, HashConsMetrics};
 pub use types::{FormulaNode, FormulaRef};

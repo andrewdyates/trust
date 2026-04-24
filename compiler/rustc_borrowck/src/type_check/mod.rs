@@ -246,7 +246,7 @@ pub(crate) struct MirTypeckResults<'tcx> {
 
 /// A collection of region constraints that must be satisfied for the
 /// program to be considered well-typed.
-#[derive(Clone)] // Accepted: Clone derive needed for type checker (upstream #146079)
+#[derive(Clone)] // FIXME(#146079)
 pub(crate) struct MirTypeckRegionConstraints<'tcx> {
     /// Maps from a `ty::Placeholder` to the corresponding
     /// `PlaceholderIndex` bit that we will use for it.
@@ -626,7 +626,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 if let Err(terr) =
                     self.sub_types(rv_ty, place_ty, location.to_locations(), category)
                 {
-                    // tRust: invariant — MIR validation — type check detected inconsistency in MIR
                     span_mirbug!(
                         self,
                         stmt,
@@ -647,7 +646,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     )
                 {
                     let annotation = &self.user_type_annotations[annotation_index];
-                    // tRust: invariant — type system guarantee — types must match expected forms after type checking
                     span_mirbug!(
                         self,
                         stmt,
@@ -681,7 +679,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     ConstraintCategory::TypeAnnotation(AnnotationSource::Ascription),
                 ) {
                     let annotation = &self.user_type_annotations[projection.base];
-                    // tRust: invariant — MIR validation — type check detected inconsistency in MIR
                     span_mirbug!(
                         self,
                         stmt,
@@ -705,7 +702,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             | StatementKind::Nop => {}
             StatementKind::Intrinsic(box NonDivergingIntrinsic::CopyNonOverlapping(..))
             | StatementKind::SetDiscriminant { .. } => {
-                // tRust: invariant — MIR phase guarantee
                 bug!("Statement not allowed in this MIR phase")
             }
         }
@@ -733,10 +729,9 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             TerminatorKind::SwitchInt { discr, .. } => {
                 let switch_ty = discr.ty(self.body, tcx);
                 if !switch_ty.is_integral() && !switch_ty.is_char() && !switch_ty.is_bool() {
-                    // tRust: invariant — MIR validation — type check detected inconsistency in MIR
                     span_mirbug!(self, term, "bad SwitchInt discr ty {:?}", switch_ty);
                 }
-                // // NOTE: checking values here would add additional validation.
+                // FIXME: check the values
             }
             TerminatorKind::Call { func, args, .. }
             | TerminatorKind::TailCall { func, args, .. } => {
@@ -756,7 +751,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 let sig = match func_ty.kind() {
                     ty::FnDef(..) | ty::FnPtr(..) => func_ty.fn_sig(tcx),
                     _ => {
-                        // tRust: invariant — type system guarantee — callee must be a function type
                         span_mirbug!(self, term, "call to non-function {:?}", func_ty);
                         return;
                     }
@@ -770,7 +764,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             ty::BoundRegionKind::Named(def_id) => tcx.item_name(def_id),
                             ty::BoundRegionKind::ClosureEnv => sym::env,
                             ty::BoundRegionKind::NamedForPrinting(_) => {
-                                // tRust: invariant — pretty-printing only
                                 bug!("only used for pretty printing")
                             }
                         };
@@ -807,7 +800,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 );
 
                 let sig = self.deeply_normalize(unnormalized_sig, term_location);
-                // tRust: known issue — `WF(sig)` does not imply `WF(normalized(sig))` (upstream #114936)
+                // HACK(#114936): `WF(sig)` does not imply `WF(normalized(sig))`
                 // with built-in `Fn` implementations, since the impl may not be
                 // well-formed itself.
                 if sig != unnormalized_sig {
@@ -841,24 +834,20 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             TerminatorKind::Assert { cond, msg, .. } => {
                 let cond_ty = cond.ty(self.body, tcx);
                 if cond_ty != tcx.types.bool {
-                    // tRust: invariant — region inference guarantee — region constraints must be satisfiable
                     span_mirbug!(self, term, "bad Assert ({:?}, not bool", cond_ty);
                 }
 
                 if let AssertKind::BoundsCheck { len, index } = &**msg {
                     if len.ty(self.body, tcx) != tcx.types.usize {
-                        // tRust: invariant — region inference guarantee — region constraints must be satisfiable
                         span_mirbug!(self, len, "bounds-check length non-usize {:?}", len)
                     }
                     if index.ty(self.body, tcx) != tcx.types.usize {
-                        // tRust: invariant — region inference guarantee — region constraints must be satisfiable
                         span_mirbug!(self, index, "bounds-check index non-usize {:?}", index)
                     }
                 }
             }
             TerminatorKind::Yield { value, resume_arg, .. } => {
                 match self.body.yield_ty() {
-                    // tRust: invariant — type system guarantee — coroutine type must be present for yield terminators
                     None => span_mirbug!(self, term, "yield in non-coroutine"),
                     Some(ty) => {
                         let value_ty = value.ty(self.body, tcx);
@@ -868,7 +857,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             term_location.to_locations(),
                             ConstraintCategory::Yield,
                         ) {
-                            // tRust: invariant — type system guarantee — coroutine type must be present for yield terminators
                             span_mirbug!(
                                 self,
                                 term,
@@ -882,7 +870,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 }
 
                 match self.body.resume_ty() {
-                    // tRust: invariant — type system guarantee — coroutine type must be present for yield terminators
                     None => span_mirbug!(self, term, "yield in non-coroutine"),
                     Some(ty) => {
                         let resume_ty = resume_arg.ty(self.body, tcx);
@@ -892,7 +879,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             term_location.to_locations(),
                             ConstraintCategory::Yield,
                         ) {
-                            // tRust: invariant — MIR validation — type check detected inconsistency in MIR
                             span_mirbug!(
                                 self,
                                 term,
@@ -924,7 +910,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 // type annotation for the remaining type.
                 rty
             } else {
-                // tRust: invariant — type system guarantee — types must match expected forms after type checking
                 bug!("{:?} with ref binding has wrong type {}", local, local_decl.ty);
             };
 
@@ -935,7 +920,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 Locations::All(span),
                 ConstraintCategory::TypeAnnotation(AnnotationSource::Declaration),
             ) {
-                // tRust: invariant — type system guarantee — types must match expected forms after type checking
                 span_mirbug!(
                     self,
                     local,
@@ -1042,7 +1026,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             src_sig = tcx.safe_to_unsafe_sig(src_sig);
                         }
 
-                        // tRust: known issue — This shouldn't be necessary... We can remove this when we actually
+                        // HACK: This shouldn't be necessary... We can remove this when we actually
                         // get binders with where clauses, then elaborate implied bounds into that
                         // binder, and implement a higher-ranked subtyping algorithm that actually
                         // respects these implied bounds.
@@ -1088,7 +1072,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                     unsize_to: None,
                                 },
                             ) {
-                                // tRust: invariant — type system guarantee
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1101,7 +1084,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         }
 
                         let src_ty = Ty::new_fn_ptr(tcx, src_sig);
-                        // tRust: known issue — We want to assert that the signature of the source fn is
+                        // HACK: We want to assert that the signature of the source fn is
                         // well-formed, because we don't enforce that via the WF of FnDef
                         // types normally. This should be removed when we improve the tracking
                         // of implied bounds of fn signatures.
@@ -1131,7 +1114,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                 unsize_to: None,
                             },
                         ) {
-                            // tRust: invariant — type system guarantee
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1149,7 +1131,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     ) => {
                         let sig = match op.ty(self.body, tcx).kind() {
                             ty::Closure(_, args) => args.as_closure().sig(),
-                            // tRust: invariant — type system guarantee
                             _ => bug!(),
                         };
                         let ty_fn_ptr_from =
@@ -1166,7 +1147,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                 unsize_to: None,
                             },
                         ) {
-                            // tRust: invariant — type system guarantee
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1204,7 +1184,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                 unsize_to: None,
                             },
                         ) {
-                            // tRust: invariant — type system guarantee
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1246,12 +1225,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         let ty::RawPtr(ty_from, hir::Mutability::Mut) =
                             op.ty(self.body, tcx).kind()
                         else {
-                            // tRust: invariant — type system guarantee — cast types must be compatible at this point
                             span_mirbug!(self, rvalue, "unexpected base type for cast {:?}", ty,);
                             return;
                         };
                         let ty::RawPtr(ty_to, hir::Mutability::Not) = ty.kind() else {
-                            // tRust: invariant — type system guarantee — cast types must be compatible at this point
                             span_mirbug!(self, rvalue, "unexpected target type for cast {:?}", ty,);
                             return;
                         };
@@ -1266,7 +1243,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                 unsize_to: None,
                             },
                         ) {
-                            // tRust: invariant — type system guarantee
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1290,7 +1266,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         };
 
                         let Some((ty_elem, ty_mut)) = opt_ty_elem_mut else {
-                            // tRust: invariant — type system guarantee — cast types must be compatible at this point
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1303,7 +1278,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         let (ty_to, ty_to_mut) = match ty.kind() {
                             ty::RawPtr(ty_to, ty_to_mut) => (ty_to, *ty_to_mut),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1315,7 +1289,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         };
 
                         if ty_to_mut.is_mut() && ty_mut.is_not() {
-                            // tRust: invariant — type system guarantee — cast types must be compatible at this point
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1337,7 +1310,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                 unsize_to: None,
                             },
                         ) {
-                            // tRust: invariant — type system guarantee
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1356,7 +1328,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::Ptr(_) | CastTy::FnPtr), Some(CastTy::Int(_))) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1375,7 +1346,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::Int(_)), Some(CastTy::Ptr(_))) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1393,7 +1363,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::Int(_)), Some(CastTy::Int(_))) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1411,7 +1380,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::Int(_)), Some(CastTy::Float)) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1429,7 +1397,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::Float), Some(CastTy::Int(_))) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1447,7 +1414,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::Float), Some(CastTy::Float)) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1465,7 +1431,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         match (cast_ty_from, cast_ty_to) {
                             (Some(CastTy::FnPtr), Some(CastTy::Ptr(_))) => (),
                             _ => {
-                                // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                 span_mirbug!(
                                     self,
                                     rvalue,
@@ -1556,7 +1521,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                             unsize_to: None,
                                         },
                                     )
-                                    .expect("invariant: type relation/sub_types must succeed");
+                                    .unwrap();
                                 }
                                 (None, None) => {
                                     // `struct_tail` returns regions which haven't been mapped
@@ -1583,12 +1548,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                         },
                                     );
                                 }
-                                // tRust: invariant — type system guarantee
                                 (None, Some(_)) => bug!(
                                     "introducing a principal should have errored in HIR typeck"
                                 ),
                                 (Some(_), None) => {
-                                    // tRust: invariant — type system guarantee — cast types must be compatible at this point
                                     bug!("dropping the principal should have been an unsizing cast")
                                 }
                             }
@@ -1598,7 +1561,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         let ty_from = op.ty(self.body, tcx);
                         match ty_from.kind() {
                             ty::Pat(base, _) if base == ty => {}
-                            // tRust: invariant — type system guarantee — cast types must be compatible at this point
                             _ => span_mirbug!(
                                 self,
                                 rvalue,
@@ -1607,7 +1569,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         }
                     }
                     CastKind::Subtype => {
-                        // tRust: invariant — type system guarantee — cast types must be compatible at this point
                         bug!("CastKind::Subtype shouldn't exist in borrowck")
                     }
                 }
@@ -1635,7 +1596,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             ConstraintCategory::CallArgument(None),
                         )
                         .unwrap_or_else(|err| {
-                            // tRust: invariant — type system guarantee
                             bug!("Could not equate type variable with {:?}: {:?}", ty_left, err)
                         });
                         if let Err(terr) = self.sub_types(
@@ -1644,7 +1604,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             location.to_locations(),
                             ConstraintCategory::CallArgument(None),
                         ) {
-                            // tRust: invariant — type system guarantee
                             span_mirbug!(
                                 self,
                                 rvalue,
@@ -1661,7 +1620,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         if ty_left == right.ty(self.body, tcx) => {}
                     // Other types are compared by trait methods, not by
                     // `Rvalue::BinaryOp`.
-                    // tRust: invariant — type system guarantee
                     _ => span_mirbug!(
                         self,
                         rvalue,
@@ -1688,7 +1646,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     location.to_locations(),
                     ConstraintCategory::Boring,
                 )
-                .expect("invariant: type relation/sub_types must succeed");
+                .unwrap();
             }
 
             Rvalue::Use(_)
@@ -1748,7 +1706,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 ConstraintCategory::TypeAnnotation(AnnotationSource::GenericArg),
             ) {
                 let annotation = &self.user_type_annotations[annotation_index];
-                // tRust: invariant — type system guarantee — types must match expected forms after type checking
                 span_mirbug!(
                     self,
                     constant,
@@ -1779,7 +1736,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     if let Err(terr) =
                         self.eq_types(ty, promoted_ty, locations, ConstraintCategory::Boring)
                     {
-                        // tRust: invariant — type system guarantee — types must match expected forms after type checking
                         span_mirbug!(
                             self,
                             promoted,
@@ -1802,12 +1758,11 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             } else if let Some(static_def_id) = constant.check_static_ptr(tcx) {
                 let unnormalized_ty = tcx.type_of(static_def_id).instantiate_identity();
                 let normalized_ty = self.normalize(unnormalized_ty, locations);
-                let literal_ty = constant.const_.ty().builtin_deref(true).expect("invariant: type must be a reference or pointer");
+                let literal_ty = constant.const_.ty().builtin_deref(true).unwrap();
 
                 if let Err(terr) =
                     self.eq_types(literal_ty, normalized_ty, locations, ConstraintCategory::Boring)
                 {
-                    // tRust: invariant — type system guarantee — types must match expected forms after type checking
                     span_mirbug!(self, constant, "bad static type {:?} ({:?})", constant, terr);
                 }
             } else if let Const::Ty(_, ct) = constant.const_
@@ -1902,7 +1857,6 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     location.to_locations(),
                     ConstraintCategory::Boring,
                 ) {
-                    // tRust: invariant — type system guarantee — types must match expected forms after type checking
                     span_mirbug!(self, place, "bad field access ({:?}: {:?}): {:?}", ty, fty, terr);
                 }
             }
@@ -1915,7 +1869,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     location.to_locations(),
                     ConstraintCategory::TypeAnnotation(AnnotationSource::OpaqueCast),
                 )
-                .expect("invariant: type relation/sub_types must succeed");
+                .unwrap();
             }
             ProjectionElem::UnwrapUnsafeBinder(ty) => {
                 let ty::UnsafeBinder(binder_ty) = *base_ty.ty.kind() else {
@@ -1933,7 +1887,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     location.to_locations(),
                     ConstraintCategory::Boring,
                 )
-                .expect("invariant: type relation/sub_types must succeed");
+                .unwrap();
             }
         }
     }
@@ -1956,7 +1910,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             if !output_ty
                 .is_privately_uninhabited(self.tcx(), self.infcx.typing_env(self.infcx.param_env))
             {
-                // tRust: invariant — type system guarantee — callee must be a function type
                 span_mirbug!(self, term, "call to non-diverging function {:?} w/o dest", sig);
             }
         } else {
@@ -1986,7 +1939,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             let locations = term_location.to_locations();
 
             if let Err(terr) = self.sub_types(sig.output(), dest_ty, locations, category) {
-                // tRust: invariant — MIR validation — type check detected inconsistency in MIR
                 span_mirbug!(
                     self,
                     term,
@@ -2017,7 +1969,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         call_source: CallSource,
     ) {
         if args.len() < sig.inputs().len() || (args.len() > sig.inputs().len() && !sig.c_variadic) {
-            // tRust: invariant — type system guarantee
             span_mirbug!(self, term, "call to {:?} with wrong # of args", sig);
         }
 
@@ -2058,7 +2009,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             if let Err(terr) =
                 self.sub_types(op_arg_ty, *fn_arg, term_location.to_locations(), category)
             {
-                // tRust: invariant — type system guarantee — types must match expected forms after type checking
                 span_mirbug!(
                     self,
                     term,
@@ -2085,37 +2035,31 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             }
             TerminatorKind::UnwindResume => {
                 if !is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, block_data, "resume on non-cleanup block!")
                 }
             }
             TerminatorKind::UnwindTerminate(_) => {
                 if !is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, block_data, "terminate on non-cleanup block!")
                 }
             }
             TerminatorKind::Return => {
                 if is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, block_data, "return on cleanup block")
                 }
             }
             TerminatorKind::TailCall { .. } => {
                 if is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, block_data, "tailcall on cleanup block")
                 }
             }
             TerminatorKind::CoroutineDrop { .. } => {
                 if is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, block_data, "coroutine_drop in cleanup block")
                 }
             }
             TerminatorKind::Yield { resume, drop, .. } => {
                 if is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, block_data, "yield in cleanup block")
                 }
                 self.assert_iscleanup(block_data, resume, is_cleanup);
@@ -2160,7 +2104,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
 
     fn assert_iscleanup(&mut self, ctxt: &dyn fmt::Debug, bb: BasicBlock, iscleanuppad: bool) {
         if self.body[bb].is_cleanup != iscleanuppad {
-            // tRust: invariant — MIR validation — type check detected inconsistency in MIR
             span_mirbug!(self, ctxt, "cleanuppad mismatch: {:?} should be {:?}", bb, iscleanuppad);
         }
     }
@@ -2174,14 +2117,12 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         match unwind {
             UnwindAction::Cleanup(unwind) => {
                 if is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, ctxt, "unwind on cleanup block")
                 }
                 self.assert_iscleanup(ctxt, unwind, true);
             }
             UnwindAction::Continue => {
                 if is_cleanup {
-                    // tRust: invariant — structural invariant — cleanup flag must match block terminator kind
                     span_mirbug!(self, ctxt, "unwind on cleanup block")
                 }
             }
@@ -2196,7 +2137,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         // `Sized` bound in no way depends on precise regions, so this
         // shouldn't affect `is_sized`.
         let erased_ty = tcx.erase_and_anonymize_regions(ty);
-        // // NOTE(#132279): Using `Ty::is_sized` causes us to incorrectly handle opaques here. causes us to incorrectly handle opaques here.
+        // FIXME(#132279): Using `Ty::is_sized` causes us to incorrectly handle opaques here.
         if !erased_ty.is_sized(tcx, self.infcx.typing_env(self.infcx.param_env)) {
             // in current MIR construction, all non-control-flow rvalue
             // expressions evaluate through `as_temp` or `into` a return
@@ -2310,7 +2251,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         }
 
         if let AggregateKind::RawPtr(..) = aggregate_kind {
-            // tRust: invariant — MIR phase guarantee
             bug!("RawPtr should only be in runtime MIR");
         }
 
@@ -2318,7 +2258,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             let field_ty = match self.aggregate_field_ty(aggregate_kind, i, location) {
                 Ok(field_ty) => field_ty,
                 Err(FieldAccessError::OutOfRange { field_count }) => {
-                    // tRust: invariant — MIR phase guarantee
                     span_mirbug!(
                         self,
                         rvalue,
@@ -2338,7 +2277,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                 location.to_locations(),
                 ConstraintCategory::Boring,
             ) {
-                // tRust: invariant — type system guarantee
                 span_mirbug!(
                     self,
                     rvalue,
@@ -2464,7 +2402,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                         ty::Adt(def, _) if def.is_box() => {
                             // deref of `Box`, need the base to be valid - propagate
                         }
-                        // tRust: invariant — type system guarantee
                         _ => bug!("unexpected deref ty {:?} in {:?}", base_ty, borrowed_place),
                     }
                 }
@@ -2555,13 +2492,12 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             // advantage of the fact that the `parent_args` is the same length as the
             // `typeck_root_args`.
             DefKind::Closure => {
-                // // NOTE(async_closures): It may be useful to add a debug assert here here
+                // FIXME(async_closures): It may be useful to add a debug assert here
                 // to actually call `type_of` and check the `parent_args` are the same
                 // length as the `typeck_root_args`.
                 &args[..typeck_root_args.len()]
             }
             DefKind::InlineConst => args.as_inline_const().parent_args(),
-            // tRust: invariant — type system guarantee
             other => bug!("unexpected item {:?}", other),
         };
         let parent_args = tcx.mk_args(parent_args);
@@ -2573,7 +2509,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             location.to_locations(),
             ConstraintCategory::BoringNoLocation,
         ) {
-            // tRust: invariant — type system guarantee
             span_mirbug!(
                 self,
                 def_id,

@@ -19,7 +19,6 @@ pub(crate) fn insert_reference_to_gdb_debug_scripts_section_global(bx: &mut Buil
         // Load just the first byte as that's all that's necessary to force
         // LLVM to keep around the reference to the global.
         let volatile_load_instruction = bx.volatile_load(bx.type_i8(), gdb_debug_scripts_section);
-        // SAFETY: The value is a valid LLVM global, alloca, load, or store instruction, and the alignment is a valid power of two.
         unsafe {
             llvm::LLVMSetAlignment(volatile_load_instruction, 1);
         }
@@ -32,9 +31,8 @@ pub(crate) fn get_or_insert_gdb_debug_scripts_section_global<'ll>(
     cx: &CodegenCx<'ll, '_>,
 ) -> &'ll Value {
     let c_section_var_name = c"__rustc_debug_gdb_scripts_section__";
-    let section_var_name = c_section_var_name.to_str().expect("invariant: string is valid UTF-8");
+    let section_var_name = c_section_var_name.to_str().unwrap();
 
-    // SAFETY: The module is valid, and the name is a valid C string.
     let section_var = unsafe { llvm::LLVMGetNamedGlobal(cx.llmod, c_section_var_name.as_ptr()) };
 
     section_var.unwrap_or_else(|| {
@@ -64,17 +62,13 @@ pub(crate) fn get_or_insert_gdb_debug_scripts_section_global<'ll>(
             section_contents.extend_from_slice(b"\0");
         }
 
-        // SAFETY: The global variable is a valid LLVM global value reference.
         unsafe {
             let section_contents = section_contents.as_slice();
             let llvm_type = cx.type_array(cx.type_i8(), section_contents.len() as u64);
 
             let section_var = cx
                 .define_global(section_var_name, llvm_type)
-                .unwrap_or_else(|| {
-                    // tRust: invariant — the synthesized `.debug_gdb_scripts` symbol name is unique within the module
-                    bug!("symbol `{}` is already defined", section_var_name)
-                });
+                .unwrap_or_else(|| bug!("symbol `{}` is already defined", section_var_name));
             llvm::set_section(section_var, c".debug_gdb_scripts");
             llvm::set_initializer(section_var, cx.const_bytes(section_contents));
             llvm::LLVMSetGlobalConstant(section_var, llvm::TRUE);

@@ -26,11 +26,7 @@ pub struct ProofStrategy {
 
 impl ProofStrategy {
     pub fn new(solver: impl Into<String>, timeout_ms: u64) -> Self {
-        Self {
-            solver: solver.into(),
-            timeout_ms,
-            hints: Vec::new(),
-        }
+        Self { solver: solver.into(), timeout_ms, hints: Vec::new() }
     }
 
     pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
@@ -57,13 +53,13 @@ pub struct StrategyKey {
 }
 
 impl StrategyKey {
-    pub fn new(kind: impl Into<String>, structure_hash: u64, var_count: usize, depth: usize) -> Self {
-        Self {
-            kind: kind.into(),
-            structure_hash,
-            var_count,
-            depth,
-        }
+    pub fn new(
+        kind: impl Into<String>,
+        structure_hash: u64,
+        var_count: usize,
+        depth: usize,
+    ) -> Self {
+        Self { kind: kind.into(), structure_hash, var_count, depth }
     }
 }
 
@@ -127,8 +123,11 @@ impl ReplayCacheStats {
     /// Hit rate (exact + partial).
     #[must_use]
     pub fn hit_rate(&self) -> f64 {
-        if self.lookups == 0 { 0.0 }
-        else { (self.exact_hits + self.partial_hits) as f64 / self.lookups as f64 }
+        if self.lookups == 0 {
+            0.0
+        } else {
+            (self.exact_hits + self.partial_hits) as f64 / self.lookups as f64
+        }
     }
 }
 
@@ -168,13 +167,13 @@ impl ReplayCache {
 
         // Try partial match by kind.
         if let Some(entries) = self.by_kind.get(&key.kind)
-            && let Some(best) = entries.iter()
-                .filter(|e| e.success_rate() > 0.5)
-                .max_by(|a, b| a.success_rate().partial_cmp(&b.success_rate()).unwrap_or(std::cmp::Ordering::Equal))
-            {
-                self.stats.partial_hits += 1;
-                return ReplayResult::PartialMatch(best.strategy.clone());
-            }
+            && let Some(best) = entries.iter().filter(|e| e.success_rate() > 0.5).max_by(|a, b| {
+                a.success_rate().partial_cmp(&b.success_rate()).unwrap_or(std::cmp::Ordering::Equal)
+            })
+        {
+            self.stats.partial_hits += 1;
+            return ReplayResult::PartialMatch(best.strategy.clone());
+        }
 
         self.stats.misses += 1;
         ReplayResult::Miss
@@ -307,7 +306,7 @@ mod tests {
         let diff_key = StrategyKey::new("Overflow", 0, 0, 0);
         cache.lookup(&diff_key);
         let stats = cache.stats();
-        assert!((stats.hit_rate() - 2.0/3.0).abs() < 0.01);
+        assert!((stats.hit_rate() - 2.0 / 3.0).abs() < 0.01);
     }
 
     #[test]
@@ -331,9 +330,7 @@ mod tests {
 
     #[test]
     fn test_strategy_builder() {
-        let s = ProofStrategy::new("z4", 5000)
-            .with_hint("simplify")
-            .with_hint("elim-quantifiers");
+        let s = ProofStrategy::new("z4", 5000).with_hint("simplify").with_hint("elim-quantifiers");
         assert_eq!(s.hints.len(), 2);
         assert_eq!(s.solver, "z4");
         assert_eq!(s.timeout_ms, 5000);

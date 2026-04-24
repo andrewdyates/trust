@@ -24,8 +24,6 @@ trait Termination {
 
 impl Termination for () {
     fn report(self) -> i32 {
-        // SAFETY: writing to a mutable static and reading its reference is safe here because
-        // this runs single-threaded during initialization; no data race is possible.
         unsafe {
             NUM = 6 * 7 + 1 + (1u8 == 1u8) as u8; // 44
             *NUM_REF as i32
@@ -39,7 +37,6 @@ trait SomeTrait {
 
 impl SomeTrait for &'static str {
     fn object_safe(&self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(*self as *const str as *const u8);
         }
@@ -60,7 +57,6 @@ struct NoisyDropInner;
 
 impl Drop for NoisyDrop {
     fn drop(&mut self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(self.text as *const str as *const u8);
         }
@@ -69,7 +65,6 @@ impl Drop for NoisyDrop {
 
 impl Drop for NoisyDropInner {
     fn drop(&mut self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts("Inner got dropped!\0" as *const str as *const u8);
         }
@@ -94,11 +89,8 @@ fn start<T: Termination + 'static>(
     _sigpipe: u8,
 ) -> isize {
     if argc == 3 {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe { puts(*argv); }
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe { puts(*((argv as usize + size_of::<*const u8>()) as *const *const u8)); }
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe { puts(*((argv as usize + 2 * size_of::<*const u8>()) as *const *const u8)); }
     }
 
@@ -108,7 +100,6 @@ fn start<T: Termination + 'static>(
 
 static mut NUM: u8 = 6 * 7;
 
-// SAFETY: the invariants required by this unsafe operation are upheld by the caller/context.
 static NUM_REF: &'static u8 = unsafe { &* &raw const NUM };
 
 macro_rules! assert {
@@ -168,7 +159,6 @@ fn main() {
 
     //return;
 
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         printf("Hello %s\n\0" as *const str as *const i8, "printf\0" as *const str as *const i8);
 
@@ -358,14 +348,12 @@ static mut TLS: u8 = 42;
 
 #[cfg(not(jit))]
 extern "C" fn mutate_tls(_: *mut c_void) -> *mut c_void {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe { TLS = 0; }
     0 as *mut c_void
 }
 
 #[cfg(not(jit))]
 fn test_tls() {
-    // SAFETY: the invariants required by this unsafe operation are upheld by the caller/context.
     unsafe {
         let mut attr: pthread_attr_t = zeroed();
         let mut thread: pthread_t = 0;

@@ -30,7 +30,7 @@ use trust_types::{
 fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         // Formula with a free variable — MockBackend cannot decide this.
         formula: Formula::Eq(
@@ -45,7 +45,7 @@ fn make_vc(kind: VcKind, function: &str) -> VerificationCondition {
 fn make_vc_trivial(kind: VcKind, function: &str) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -80,10 +80,7 @@ fn test_functional_correctness_description() {
         desc.contains("result_correctness"),
         "description should contain property name, got: {desc}"
     );
-    assert!(
-        desc.contains("binary_search"),
-        "description should contain context, got: {desc}"
-    );
+    assert!(desc.contains("binary_search"), "description should contain context, got: {desc}");
 }
 
 // NOTE: FunctionalCorrectness cannot be routed through Router::verify_one() because
@@ -103,10 +100,11 @@ fn test_functional_correctness_report_proved() {
 
     // Bypass Router — construct a Proved result directly
     let result = VerificationResult::Proved {
-        solver: "mock".to_string(),
+        solver: "mock".into(),
         time_ms: 1,
         strength: ProofStrength::smt_unsat(),
-        proof_certificate: None, solver_warnings: None,
+        proof_certificate: None,
+        solver_warnings: None,
     };
     let results = vec![(vc, result)];
     let report = trust_report::build_json_report("fc_crate", &results);
@@ -142,7 +140,7 @@ fn test_functional_correctness_report_unknown() {
     );
 
     let result = VerificationResult::Unknown {
-        solver: "mock".to_string(),
+        solver: "mock".into(),
         time_ms: 1,
         reason: "variable formula".to_string(),
     };
@@ -188,18 +186,9 @@ fn test_taint_violation_description() {
         desc.contains("taint violation"),
         "description should contain 'taint violation', got: {desc}"
     );
-    assert!(
-        desc.contains("user_input"),
-        "description should contain source label, got: {desc}"
-    );
-    assert!(
-        desc.contains("sql_query"),
-        "description should contain sink kind, got: {desc}"
-    );
-    assert!(
-        desc.contains("3"),
-        "description should contain path length, got: {desc}"
-    );
+    assert!(desc.contains("user_input"), "description should contain source label, got: {desc}");
+    assert!(desc.contains("sql_query"), "description should contain sink kind, got: {desc}");
+    assert!(desc.contains("3"), "description should contain path length, got: {desc}");
 }
 
 #[test]
@@ -275,22 +264,13 @@ fn test_resilience_violation_description() {
         reason: "no retry logic".to_string(),
     };
     let desc = kind.description();
-    assert!(
-        desc.contains("resilience"),
-        "description should contain 'resilience', got: {desc}"
-    );
+    assert!(desc.contains("resilience"), "description should contain 'resilience', got: {desc}");
     assert!(
         desc.contains("payment_service"),
         "description should contain service name, got: {desc}"
     );
-    assert!(
-        desc.contains("timeout"),
-        "description should contain failure mode, got: {desc}"
-    );
-    assert!(
-        desc.contains("no retry logic"),
-        "description should contain reason, got: {desc}"
-    );
+    assert!(desc.contains("timeout"), "description should contain failure mode, got: {desc}");
+    assert!(desc.contains("no retry logic"), "description should contain reason, got: {desc}");
 }
 
 #[test]
@@ -350,41 +330,27 @@ fn test_resilience_violation_report() {
 
 #[test]
 fn test_non_termination_proof_level() {
-    let kind = VcKind::NonTermination {
-        context: "loop".to_string(),
-        measure: "n".to_string(),
-    };
+    let kind = VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() };
     assert_eq!(kind.proof_level(), ProofLevel::L1Functional);
 }
 
 #[test]
 fn test_non_termination_description() {
-    let kind = VcKind::NonTermination {
-        context: "recursion".to_string(),
-        measure: "len - i".to_string(),
-    };
+    let kind =
+        VcKind::NonTermination { context: "recursion".to_string(), measure: "len - i".to_string() };
     let desc = kind.description();
     assert!(
         desc.contains("non-termination"),
         "description should contain 'non-termination', got: {desc}"
     );
-    assert!(
-        desc.contains("recursion"),
-        "description should contain context, got: {desc}"
-    );
-    assert!(
-        desc.contains("len - i"),
-        "description should contain measure, got: {desc}"
-    );
+    assert!(desc.contains("recursion"), "description should contain context, got: {desc}");
+    assert!(desc.contains("len - i"), "description should contain measure, got: {desc}");
 }
 
 #[test]
 fn test_non_termination_router_unknown() {
     let vc = make_vc(
-        VcKind::NonTermination {
-            context: "loop".to_string(),
-            measure: "counter".to_string(),
-        },
+        VcKind::NonTermination { context: "loop".to_string(), measure: "counter".to_string() },
         "infinite_loop",
     );
 
@@ -399,10 +365,7 @@ fn test_non_termination_router_unknown() {
 #[test]
 fn test_non_termination_report() {
     let vc = make_vc_trivial(
-        VcKind::NonTermination {
-            context: "loop".to_string(),
-            measure: "items.len()".to_string(),
-        },
+        VcKind::NonTermination { context: "loop".to_string(), measure: "items.len()".to_string() },
         "drain_loop",
     );
 
@@ -451,10 +414,7 @@ fn test_translation_validation_description() {
         desc.contains("translation validation"),
         "description should contain 'translation validation', got: {desc}"
     );
-    assert!(
-        desc.contains("dce"),
-        "description should contain pass name, got: {desc}"
-    );
+    assert!(desc.contains("dce"), "description should contain pass name, got: {desc}");
     assert!(
         desc.contains("side-effect preservation"),
         "description should contain check description, got: {desc}"
@@ -536,10 +496,7 @@ fn test_all_five_misc_vcs_multi_function_report() {
             "resilience_fn",
         ),
         make_vc_trivial(
-            VcKind::NonTermination {
-                context: "loop".to_string(),
-                measure: "fuel".to_string(),
-            },
+            VcKind::NonTermination { context: "loop".to_string(), measure: "fuel".to_string() },
             "termination_fn",
         ),
         make_vc_trivial(
@@ -564,10 +521,11 @@ fn test_all_five_misc_vcs_multi_function_report() {
         "fc_fn",
     );
     let fc_result = VerificationResult::Proved {
-        solver: "mock".to_string(),
+        solver: "mock".into(),
         time_ms: 1,
         strength: ProofStrength::smt_unsat(),
-        proof_certificate: None, solver_warnings: None,
+        proof_certificate: None,
+        solver_warnings: None,
     };
     results.push((fc_vc, fc_result));
 
@@ -585,11 +543,7 @@ fn test_all_five_misc_vcs_multi_function_report() {
 
     // All should be proved
     for (vc, result) in &results {
-        assert!(
-            result.is_proved(),
-            "should be proved for {}: {result:?}",
-            vc.function
-        );
+        assert!(result.is_proved(), "should be proved for {}: {result:?}", vc.function);
     }
 
     let report = trust_report::build_json_report("misc_l1_crate", &results);
@@ -619,8 +573,7 @@ fn test_all_five_misc_vcs_multi_function_report() {
 
     // Verify JSON serialization roundtrip
     let json = serde_json::to_string_pretty(&report).expect("serialize");
-    let roundtrip: trust_types::JsonProofReport =
-        serde_json::from_str(&json).expect("deserialize");
+    let roundtrip: trust_types::JsonProofReport = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(roundtrip.summary.total_obligations, 5);
     assert_eq!(roundtrip.summary.total_proved, 5);
 

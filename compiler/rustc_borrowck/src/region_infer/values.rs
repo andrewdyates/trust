@@ -37,7 +37,7 @@ pub(crate) enum RegionElement<'tcx> {
 
 /// Records the CFG locations where each region is live. When we initially compute liveness, we use
 /// an interval matrix storing liveness ranges for each region-vid.
-#[derive(Clone)] // Accepted: Clone derive needed for region inference (upstream #146079)
+#[derive(Clone)] // FIXME(#146079)
 pub(crate) struct LivenessValues {
     /// The map from locations to points.
     location_map: Rc<DenseLocationMap>,
@@ -98,7 +98,7 @@ impl LivenessValues {
     #[rustc_lint_query_instability]
     #[allow(rustc::potential_query_instability)]
     pub(crate) fn live_regions_unordered(&self) -> impl Iterator<Item = RegionVid> {
-        self.live_regions.as_ref().expect("invariant: live_regions must be initialized").iter().copied()
+        self.live_regions.as_ref().unwrap().iter().copied()
     }
 
     /// Records `region` as being live at the given `location`.
@@ -108,7 +108,7 @@ impl LivenessValues {
         if let Some(points) = &mut self.points {
             points.insert(region, point);
         } else if self.location_map.point_in_range(point) {
-            self.live_regions.as_mut().expect("invariant: live_regions must be initialized").insert(region);
+            self.live_regions.as_mut().unwrap().insert(region);
         }
     }
 
@@ -118,7 +118,7 @@ impl LivenessValues {
         if let Some(this) = &mut self.points {
             this.union_row(region, points);
         } else if points.iter().any(|point| self.location_map.point_in_range(point)) {
-            self.live_regions.as_mut().expect("invariant: live_regions must be initialized").insert(region);
+            self.live_regions.as_mut().unwrap().insert(region);
         }
     }
 
@@ -127,7 +127,7 @@ impl LivenessValues {
         if let Some(points) = &mut self.points {
             points.insert_all_into_row(region);
         } else {
-            self.live_regions.as_mut().expect("invariant: live_regions must be initialized").insert(region);
+            self.live_regions.as_mut().unwrap().insert(region);
         }
     }
 
@@ -203,7 +203,7 @@ impl LivenessValues {
 /// rustc to the internal `PlaceholderIndex` values that are used in
 /// NLL.
 #[derive(Debug, Default)]
-#[derive(Clone)] // Accepted: Clone derive needed for region values (upstream #146079)
+#[derive(Clone)] // FIXME(#146079)
 pub(crate) struct PlaceholderIndices<'tcx> {
     indices: FxIndexSet<ty::PlaceholderRegion<'tcx>>,
 }
@@ -219,7 +219,7 @@ impl<'tcx> PlaceholderIndices<'tcx> {
         &self,
         placeholder: ty::PlaceholderRegion<'tcx>,
     ) -> PlaceholderIndex {
-        self.indices.get_index_of(&placeholder).expect("invariant: placeholder must exist in index").into()
+        self.indices.get_index_of(&placeholder).unwrap().into()
     }
 
     pub(crate) fn lookup_placeholder(

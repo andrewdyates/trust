@@ -7,12 +7,12 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::{FxHashMap, FxHashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::dep_graph::DepGraph;
 use crate::ProofCertificate;
+use crate::dep_graph::DepGraph;
 
 /// A chain of proof certificates forming a whole-program verification.
 ///
@@ -21,10 +21,11 @@ use crate::ProofCertificate;
 /// are discharged by other certificates in the chain.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProofChain {
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Certificates in this chain, keyed by function name.
-    pub certificates: FxHashMap<String, ProofCertificate>,
+    pub certificates: BTreeMap<String, ProofCertificate>,
     /// Call graph edges: caller -> list of callees.
-    pub call_graph: FxHashMap<String, Vec<String>>,
+    pub call_graph: BTreeMap<String, Vec<String>>,
     /// Name of this proof chain (e.g., crate name).
     pub name: String,
     /// Format version for serialization compatibility.
@@ -38,8 +39,8 @@ impl ProofChain {
     /// Create a new empty proof chain.
     pub fn new(name: &str) -> Self {
         ProofChain {
-            certificates: FxHashMap::default(),
-            call_graph: FxHashMap::default(),
+            certificates: BTreeMap::new(),
+            call_graph: BTreeMap::new(),
             name: name.to_string(),
             version: PROOF_CHAIN_VERSION,
         }
@@ -78,23 +79,15 @@ impl ProofChain {
     pub fn to_dep_graph(&self) -> DepGraph {
         let mut graph = DepGraph::new();
         // Add all functions from the call graph
-        let all_functions: FxHashSet<&str> = self
+        let all_functions: BTreeSet<&str> = self
             .call_graph
             .keys()
             .map(|s| s.as_str())
-            .chain(
-                self.call_graph
-                    .values()
-                    .flat_map(|v| v.iter().map(|s| s.as_str())),
-            )
+            .chain(self.call_graph.values().flat_map(|v| v.iter().map(|s| s.as_str())))
             .collect();
 
         for func in all_functions {
-            let callees = self
-                .call_graph
-                .get(func)
-                .cloned()
-                .unwrap_or_default();
+            let callees = self.call_graph.get(func).cloned().unwrap_or_default();
             let has_proof = self.certificates.contains_key(func);
             graph.add_function(func, callees, has_proof);
         }
@@ -155,7 +148,7 @@ pub fn verify_proof_chain(chain: &ProofChain) -> ChainVerificationResult {
 
     // Find gaps: functions in the call graph without certificates
     let mut gaps: Vec<ChainGap> = Vec::new();
-    let mut gap_set: FxHashSet<String> = FxHashSet::default();
+    let mut gap_set: BTreeSet<String> = BTreeSet::new();
     for (caller, callees) in &chain.call_graph {
         for callee in callees {
             if !chain.certificates.contains_key(callee) && !gap_set.contains(callee) {
@@ -169,9 +162,7 @@ pub fn verify_proof_chain(chain: &ProofChain) -> ChainVerificationResult {
                 if let Some(gap) = gaps.iter_mut().find(|g| g.function == *callee)
                     && !gap.depended_on_by.contains(caller)
                 {
-
-                        gap.depended_on_by.push(caller.clone());
-
+                    gap.depended_on_by.push(caller.clone());
                 }
             }
         }
@@ -193,25 +184,17 @@ pub fn verify_proof_chain(chain: &ProofChain) -> ChainVerificationResult {
     let discharged = analysis.fully_discharged;
 
     // Total functions includes both proven and gap functions
-    let all_functions: FxHashSet<&str> = chain
+    let all_functions: BTreeSet<&str> = chain
         .call_graph
         .keys()
         .map(|s| s.as_str())
-        .chain(
-            chain
-                .call_graph
-                .values()
-                .flat_map(|v| v.iter().map(|s| s.as_str())),
-        )
+        .chain(chain.call_graph.values().flat_map(|v| v.iter().map(|s| s.as_str())))
         .collect();
     let total_functions = all_functions.len();
     let proven_count = chain.certificates.len() - invalid_certs.len();
 
-    let coverage = if total_functions == 0 {
-        0.0
-    } else {
-        proven_count as f64 / total_functions as f64
-    };
+    let coverage =
+        if total_functions == 0 { 0.0 } else { proven_count as f64 / total_functions as f64 };
 
     // Sound if: no gaps, no invalid certs, no cycles
     let sound = gaps.is_empty() && invalid_certs.is_empty() && cycles.is_empty();
@@ -253,10 +236,8 @@ mod tests {
 
     fn sample_vc(function: &str) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "test".to_string(),
-            },
-            function: function.to_string(),
+            kind: VcKind::Assertion { message: "test".to_string() },
+            function: function.into(),
             location: SourceSpan {
                 file: "src/lib.rs".to_string(),
                 line_start: 1,
@@ -423,10 +404,7 @@ mod tests {
     #[test]
     fn test_verify_chain_partial_discharge() {
         let mut chain = ProofChain::new("test");
-        chain.add_certificate(
-            make_cert("foo"),
-            vec!["bar".to_string(), "baz".to_string()],
-        );
+        chain.add_certificate(make_cert("foo"), vec!["bar".to_string(), "baz".to_string()]);
         chain.add_certificate(make_cert("bar"), vec![]);
         // baz is missing
 

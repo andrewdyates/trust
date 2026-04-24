@@ -63,7 +63,6 @@ pub(crate) fn bin_op_to_icmp_predicate(op: BinOp, signed: bool) -> IntPredicate 
         (BinOp::Gt, false) => IntPredicate::IntUGT,
         (BinOp::Ge, true) => IntPredicate::IntSGE,
         (BinOp::Ge, false) => IntPredicate::IntUGE,
-        // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
         op => bug!("bin_op_to_icmp_predicate: expected comparison operator, found {:?}", op),
     }
 }
@@ -76,7 +75,6 @@ pub(crate) fn bin_op_to_fcmp_predicate(op: BinOp) -> RealPredicate {
         BinOp::Le => RealPredicate::RealOLE,
         BinOp::Gt => RealPredicate::RealOGT,
         BinOp::Ge => RealPredicate::RealOGE,
-        // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
         op => bug!("bin_op_to_fcmp_predicate: expected comparison operator, found {:?}", op),
     }
 }
@@ -97,7 +95,6 @@ pub fn compare_simd_types<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         }
         ty::Uint(_) => false,
         ty::Int(_) => true,
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         _ => bug!("compare_simd_types: invalid SIMD type"),
     };
 
@@ -204,7 +201,7 @@ fn unsized_info<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
             if let Some(entry_idx) = vptr_entry_idx {
                 let ptr_size = bx.data_layout().pointer_size();
-                let vtable_byte_offset = u64::try_from(entry_idx).expect("invariant: vtable entry index must fit in u64") * ptr_size.bytes();
+                let vtable_byte_offset = u64::try_from(entry_idx).unwrap() * ptr_size.bytes();
                 load_vtable(bx, old_info, bx.type_ptr(), vtable_byte_offset, source, true)
             } else {
                 old_info
@@ -216,7 +213,6 @@ fn unsized_info<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             data.principal()
                 .map(|principal| bx.tcx().instantiate_bound_regions_with_erased(principal)),
         ),
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         _ => bug!("unsized_info: invalid unsizing {:?} -> {:?}", source, target),
     }
 }
@@ -242,7 +238,7 @@ pub(crate) fn unsize_ptr<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             let src_layout = bx.cx().layout_of(src_ty);
             let dst_layout = bx.cx().layout_of(dst_ty);
             if src_ty == dst_ty {
-                return (src, old_info.expect("invariant: unsizing must preserve vtable metadata"));
+                return (src, old_info.unwrap());
             }
             let mut result = None;
             for i in 0..src_layout.fields.count() {
@@ -261,9 +257,8 @@ pub(crate) fn unsize_ptr<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 assert_eq!(result, None);
                 result = Some(unsize_ptr(bx, src, src_f.ty, dst_f.ty, old_info));
             }
-            result.expect("invariant: checked binary operation must produce result")
+            result.unwrap()
         }
-        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
         _ => bug!("unsize_ptr: called on bad types"),
     }
 }
@@ -282,7 +277,6 @@ pub(crate) fn coerce_unsized_into<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             let (base, info) = match bx.load_operand(src).val {
                 OperandValue::Pair(base, info) => unsize_ptr(bx, base, src_ty, dst_ty, Some(info)),
                 OperandValue::Immediate(base) => unsize_ptr(bx, base, src_ty, dst_ty, None),
-                // tRust: invariant: structural invariant — codegen base requires fully monomorphized and validated MIR
                 OperandValue::Ref(..) | OperandValue::ZeroSized => bug!(),
             };
             OperandValue::Pair(base, info).store(bx, dst);
@@ -307,7 +301,6 @@ pub(crate) fn coerce_unsized_into<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 }
             }
         }
-        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
         _ => bug!("coerce_unsized_into: invalid coercion {:?} -> {:?}", src_ty, dst_ty,),
     }
 }
@@ -357,7 +350,7 @@ pub(crate) fn build_shift_expr_rhs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         // RHS to `255i32`. But then we mask the shift amount to be within the size of the LHS
         // anyway so the result is `31` as it should be. All the extra bits introduced by zext
         // are masked off so their value does not matter.
-        // NOTE: Assumes max 128-bit integers; 512-bit integers would need different handling.
+        // FIXME: if we ever support 512bit integers, this will be wrong! For such large integers,
         // the extra bits introduced by zext are *not* all masked away any more.
         assert!(lhs_sz <= 256);
         bx.zext(rhs, lhs_llty)
@@ -433,7 +426,6 @@ where
                             GlobalAsmOperandRef::Const { string: String::new() }
                         }
                         Err(ErrorHandled::TooGeneric(_)) => {
-                            // tRust: invariant: structural invariant — codegen base requires fully monomorphized and validated MIR
                             span_bug!(*op_sp, "asm const cannot be resolved; too generic")
                         }
                     }
@@ -448,7 +440,6 @@ where
                             args,
                             expr.span,
                         ),
-                        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                         _ => span_bug!(*op_sp, "asm sym is not a function"),
                     };
 
@@ -462,7 +453,6 @@ where
                 | rustc_hir::InlineAsmOperand::InOut { .. }
                 | rustc_hir::InlineAsmOperand::SplitInOut { .. }
                 | rustc_hir::InlineAsmOperand::Label { .. } => {
-                    // tRust: invariant: structural invariant — operand variant is constrained by the match context
                     span_bug!(*op_sp, "invalid operand type for global_asm!")
                 }
             })
@@ -470,7 +460,6 @@ where
 
         cx.codegen_global_asm(asm.template, &operands, asm.options, asm.line_spans);
     } else {
-        // tRust: invariant: structural invariant — operand variant is constrained by the match context
         span_bug!(item.span, "Mismatch between hir::Item type and MonoItem type")
     }
 }
@@ -517,7 +506,7 @@ pub fn maybe_create_entry_wrapper<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             cx.type_func(&[], cx.type_int())
         };
 
-        let main_ret_ty = cx.tcx().fn_sig(rust_main_def_id).no_bound_vars().expect("invariant: main function signature must not have bound vars").output();
+        let main_ret_ty = cx.tcx().fn_sig(rust_main_def_id).no_bound_vars().unwrap().output();
         // Given that `main()` has no arguments,
         // then its return type cannot have
         // late-bound regions, since late-bound
@@ -525,10 +514,10 @@ pub fn maybe_create_entry_wrapper<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         // listing.
         let main_ret_ty = cx
             .tcx()
-            .normalize_erasing_regions(cx.typing_env(), main_ret_ty.no_bound_vars().expect("invariant: main return type must not have bound vars"));
+            .normalize_erasing_regions(cx.typing_env(), main_ret_ty.no_bound_vars().unwrap());
 
         let Some(llfn) = cx.declare_c_main(llfty) else {
-            // NOTE: Diagnostic could be more informative about the layout error cause.
+            // FIXME: We should be smart and show a better diagnostic here.
             let span = cx.tcx().def_span(rust_main_def_id);
             cx.tcx().dcx().emit_fatal(errors::MultipleMainFunctions { span });
         };
@@ -677,7 +666,7 @@ pub fn allocator_shim_contents(tcx: TyCtxt<'_>, kind: AllocatorKind) -> Vec<Allo
 
     // If the return value of allocator_kind_for_codegen is Some then
     // alloc_error_handler_kind must also be Some.
-    if tcx.alloc_error_handler_kind(()).expect("invariant: alloc error handler kind must be set") == AllocatorKind::Default {
+    if tcx.alloc_error_handler_kind(()).unwrap() == AllocatorKind::Default {
         methods.push(AllocatorMethod {
             name: ALLOC_ERROR_HANDLER,
             special: None,
@@ -857,7 +846,7 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
         print_time_passes_entry(
             "codegen_to_LLVM_IR",
             total_codegen_time,
-            start_rss.expect("invariant: start RSS measurement must succeed"),
+            start_rss.unwrap(),
             end_rss,
             tcx.sess.opts.unstable_opts.time_passes_format,
         );
@@ -1005,7 +994,6 @@ impl CrateInfo {
                     let export_kind = match l.target() {
                         Target::Fn => SymbolExportKind::Text,
                         Target::Static => SymbolExportKind::Data,
-                        // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                         _ => bug!(
                             "Don't know what the export kind is for lang item of kind {:?}",
                             l.target()

@@ -305,7 +305,6 @@ impl<'tcx> InferCtxt<'tcx> {
                 }
 
                 _ => {
-                    // tRust: invariant — canonical query result values must have matching GenericArgKind
                     bug!("kind mismatch, cannot unify {:?} and {:?}", original_value, result_value);
                 }
             }
@@ -322,7 +321,7 @@ impl<'tcx> InferCtxt<'tcx> {
             }),
         );
 
-        // tRust: known issue —(higher_ranked_auto): Optimize this to instantiate all assumptions
+        // FIXME(higher_ranked_auto): Optimize this to instantiate all assumptions
         // at once, rather than calling `instantiate_value` repeatedly which may
         // create more universes.
         output_query_region_constraints.assumptions.extend(
@@ -591,7 +590,6 @@ impl<'tcx> InferCtxt<'tcx> {
                     obligations.extend(ok.into_obligations());
                 }
                 _ => {
-                    // tRust: invariant — canonical values being unified must have matching GenericArgKind
                     bug!("kind mismatch, cannot unify {:?} and {:?}", value1, value2,);
                 }
             }

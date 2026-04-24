@@ -40,10 +40,7 @@ impl SimplificationPipeline {
     #[must_use]
     pub fn default_pipeline() -> Self {
         Self {
-            passes: vec![
-                Box::new(ConstantFoldPass),
-                Box::new(BooleanSimplifyPass),
-            ],
+            passes: vec![Box::new(ConstantFoldPass), Box::new(BooleanSimplifyPass)],
             max_iters: 10,
         }
     }
@@ -250,9 +247,9 @@ pub fn boolean_simplify(formula: Formula) -> Formula {
             let mut flat = Vec::with_capacity(terms.len());
             for t in terms {
                 match t {
-                    Formula::Bool(true) => {} // identity: skip
+                    Formula::Bool(true) => {}                            // identity: skip
                     Formula::Bool(false) => return Formula::Bool(false), // annihilation
-                    Formula::And(inner) => flat.extend(inner), // flatten
+                    Formula::And(inner) => flat.extend(inner),           // flatten
                     other => flat.push(other),
                 }
             }
@@ -263,7 +260,9 @@ pub fn boolean_simplify(formula: Formula) -> Formula {
             match flat.len() {
                 0 => Formula::Bool(true),
                 // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-                1 => flat.into_iter().next()
+                1 => flat
+                    .into_iter()
+                    .next()
                     .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
                 _ => Formula::And(flat),
             }
@@ -275,9 +274,9 @@ pub fn boolean_simplify(formula: Formula) -> Formula {
             let mut flat = Vec::with_capacity(terms.len());
             for t in terms {
                 match t {
-                    Formula::Bool(false) => {} // identity: skip
+                    Formula::Bool(false) => {}                         // identity: skip
                     Formula::Bool(true) => return Formula::Bool(true), // annihilation
-                    Formula::Or(inner) => flat.extend(inner), // flatten
+                    Formula::Or(inner) => flat.extend(inner),          // flatten
                     other => flat.push(other),
                 }
             }
@@ -288,7 +287,9 @@ pub fn boolean_simplify(formula: Formula) -> Formula {
             match flat.len() {
                 0 => Formula::Bool(false),
                 // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-                1 => flat.into_iter().next()
+                1 => flat
+                    .into_iter()
+                    .next()
                     .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
                 _ => Formula::Or(flat),
             }
@@ -367,25 +368,21 @@ pub fn dead_var_elimination(formula: Formula, live_vars: &FxHashSet<String>) -> 
             let body_vars = body.free_variables();
             let kept: Vec<_> = bindings
                 .into_iter()
-                .filter(|(name, _)| body_vars.contains(name) || live_vars.contains(name))
+                .filter(|(name, _)| {
+                    body_vars.contains(name.as_str()) || live_vars.contains(name.as_str())
+                })
                 .collect();
-            if kept.is_empty() {
-                *body
-            } else {
-                Formula::Forall(kept, body)
-            }
+            if kept.is_empty() { *body } else { Formula::Forall(kept, body) }
         }
         Formula::Exists(bindings, body) => {
             let body_vars = body.free_variables();
             let kept: Vec<_> = bindings
                 .into_iter()
-                .filter(|(name, _)| body_vars.contains(name) || live_vars.contains(name))
+                .filter(|(name, _)| {
+                    body_vars.contains(name.as_str()) || live_vars.contains(name.as_str())
+                })
                 .collect();
-            if kept.is_empty() {
-                *body
-            } else {
-                Formula::Exists(kept, body)
-            }
+            if kept.is_empty() { *body } else { Formula::Exists(kept, body) }
         }
         other => other,
     })
@@ -558,10 +555,7 @@ mod tests {
     fn test_constant_fold_nested() {
         // Not(Eq(Add(1,2), Int(3))) -> Not(Eq(3,3)) -> Not(true) -> false
         let f = Formula::Not(Box::new(Formula::Eq(
-            Box::new(Formula::Add(
-                Box::new(Formula::Int(1)),
-                Box::new(Formula::Int(2)),
-            )),
+            Box::new(Formula::Add(Box::new(Formula::Int(1)), Box::new(Formula::Int(2)))),
             Box::new(Formula::Int(3)),
         )));
         assert_eq!(constant_fold(f), Formula::Bool(false));
@@ -587,48 +581,30 @@ mod tests {
     #[test]
     fn test_constant_fold_add_overflow_unchanged() {
         // i128::MAX + 1 would wrap; must be left unsimplified for SMT.
-        let f = Formula::Add(
-            Box::new(Formula::Int(i128::MAX)),
-            Box::new(Formula::Int(1)),
-        );
+        let f = Formula::Add(Box::new(Formula::Int(i128::MAX)), Box::new(Formula::Int(1)));
         assert_eq!(
             constant_fold(f),
-            Formula::Add(
-                Box::new(Formula::Int(i128::MAX)),
-                Box::new(Formula::Int(1)),
-            )
+            Formula::Add(Box::new(Formula::Int(i128::MAX)), Box::new(Formula::Int(1)),)
         );
     }
 
     #[test]
     fn test_constant_fold_sub_overflow_unchanged() {
         // i128::MIN - 1 would wrap; must be left unsimplified.
-        let f = Formula::Sub(
-            Box::new(Formula::Int(i128::MIN)),
-            Box::new(Formula::Int(1)),
-        );
+        let f = Formula::Sub(Box::new(Formula::Int(i128::MIN)), Box::new(Formula::Int(1)));
         assert_eq!(
             constant_fold(f),
-            Formula::Sub(
-                Box::new(Formula::Int(i128::MIN)),
-                Box::new(Formula::Int(1)),
-            )
+            Formula::Sub(Box::new(Formula::Int(i128::MIN)), Box::new(Formula::Int(1)),)
         );
     }
 
     #[test]
     fn test_constant_fold_mul_overflow_unchanged() {
         // i128::MAX * 2 would wrap; must be left unsimplified.
-        let f = Formula::Mul(
-            Box::new(Formula::Int(i128::MAX)),
-            Box::new(Formula::Int(2)),
-        );
+        let f = Formula::Mul(Box::new(Formula::Int(i128::MAX)), Box::new(Formula::Int(2)));
         assert_eq!(
             constant_fold(f),
-            Formula::Mul(
-                Box::new(Formula::Int(i128::MAX)),
-                Box::new(Formula::Int(2)),
-            )
+            Formula::Mul(Box::new(Formula::Int(i128::MAX)), Box::new(Formula::Int(2)),)
         );
     }
 
@@ -636,41 +612,26 @@ mod tests {
     fn test_constant_fold_neg_overflow_unchanged() {
         // -i128::MIN would wrap; must be left unsimplified.
         let f = Formula::Neg(Box::new(Formula::Int(i128::MIN)));
-        assert_eq!(
-            constant_fold(f),
-            Formula::Neg(Box::new(Formula::Int(i128::MIN)))
-        );
+        assert_eq!(constant_fold(f), Formula::Neg(Box::new(Formula::Int(i128::MIN))));
     }
 
     #[test]
     fn test_constant_fold_div_overflow_unchanged() {
         // i128::MIN / -1 overflows; must be left unsimplified.
-        let f = Formula::Div(
-            Box::new(Formula::Int(i128::MIN)),
-            Box::new(Formula::Int(-1)),
-        );
+        let f = Formula::Div(Box::new(Formula::Int(i128::MIN)), Box::new(Formula::Int(-1)));
         assert_eq!(
             constant_fold(f),
-            Formula::Div(
-                Box::new(Formula::Int(i128::MIN)),
-                Box::new(Formula::Int(-1)),
-            )
+            Formula::Div(Box::new(Formula::Int(i128::MIN)), Box::new(Formula::Int(-1)),)
         );
     }
 
     #[test]
     fn test_constant_fold_rem_overflow_unchanged() {
         // i128::MIN % -1 overflows; must be left unsimplified.
-        let f = Formula::Rem(
-            Box::new(Formula::Int(i128::MIN)),
-            Box::new(Formula::Int(-1)),
-        );
+        let f = Formula::Rem(Box::new(Formula::Int(i128::MIN)), Box::new(Formula::Int(-1)));
         assert_eq!(
             constant_fold(f),
-            Formula::Rem(
-                Box::new(Formula::Int(i128::MIN)),
-                Box::new(Formula::Int(-1)),
-            )
+            Formula::Rem(Box::new(Formula::Int(i128::MIN)), Box::new(Formula::Int(-1)),)
         );
     }
 
@@ -738,27 +699,15 @@ mod tests {
     #[test]
     fn test_boolean_simplify_and_flatten() {
         // And(And(a, b), c) -> And(a, b, c)
-        let f = Formula::And(vec![
-            Formula::And(vec![var("a"), var("b")]),
-            var("c"),
-        ]);
-        assert_eq!(
-            boolean_simplify(f),
-            Formula::And(vec![var("a"), var("b"), var("c")])
-        );
+        let f = Formula::And(vec![Formula::And(vec![var("a"), var("b")]), var("c")]);
+        assert_eq!(boolean_simplify(f), Formula::And(vec![var("a"), var("b"), var("c")]));
     }
 
     #[test]
     fn test_boolean_simplify_or_flatten() {
         // Or(Or(a, b), c) -> Or(a, b, c)
-        let f = Formula::Or(vec![
-            Formula::Or(vec![var("a"), var("b")]),
-            var("c"),
-        ]);
-        assert_eq!(
-            boolean_simplify(f),
-            Formula::Or(vec![var("a"), var("b"), var("c")])
-        );
+        let f = Formula::Or(vec![Formula::Or(vec![var("a"), var("b")]), var("c")]);
+        assert_eq!(boolean_simplify(f), Formula::Or(vec![var("a"), var("b"), var("c")]));
     }
 
     #[test]
@@ -813,10 +762,7 @@ mod tests {
     #[test]
     fn test_dead_var_elimination_removes_all_unused() {
         // Forall([x], true) -> true
-        let f = Formula::Forall(
-            vec![("x".into(), Sort::Int)],
-            Box::new(Formula::Bool(true)),
-        );
+        let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(Formula::Bool(true)));
         let result = dead_var_elimination(f, &FxHashSet::default());
         assert_eq!(result, Formula::Bool(true));
     }
@@ -828,10 +774,8 @@ mod tests {
             Box::new(Formula::Add(Box::new(var("x")), Box::new(var("y")))),
             Box::new(Formula::Int(0)),
         );
-        let f = Formula::Forall(
-            vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)],
-            Box::new(body),
-        );
+        let f =
+            Formula::Forall(vec![("x".into(), Sort::Int), ("y".into(), Sort::Int)], Box::new(body));
         let result = dead_var_elimination(f, &FxHashSet::default());
         match result {
             Formula::Forall(bindings, _) => assert_eq!(bindings.len(), 2),
@@ -913,10 +857,7 @@ mod tests {
         let f = Formula::And(vec![
             Formula::Bool(true),
             Formula::Not(Box::new(Formula::Not(Box::new(Formula::Eq(
-                Box::new(Formula::Add(
-                    Box::new(Formula::Int(1)),
-                    Box::new(Formula::Int(2)),
-                )),
+                Box::new(Formula::Add(Box::new(Formula::Int(1)), Box::new(Formula::Int(2)))),
                 Box::new(Formula::Int(3)),
             ))))),
         ]);
@@ -1021,10 +962,7 @@ mod tests {
     #[test]
     fn test_constant_fold_eq_different_vars_not_folded() {
         let f = Formula::Eq(Box::new(var("x")), Box::new(var("y")));
-        assert_eq!(
-            constant_fold(f),
-            Formula::Eq(Box::new(var("x")), Box::new(var("y")))
-        );
+        assert_eq!(constant_fold(f), Formula::Eq(Box::new(var("x")), Box::new(var("y"))));
     }
 
     // --- Contradiction detection: And([P, Not(P)]) -> false ---
@@ -1032,21 +970,14 @@ mod tests {
     #[test]
     fn test_boolean_simplify_and_contradiction() {
         // And(x, Not(x)) -> false
-        let f = Formula::And(vec![
-            var("x"),
-            Formula::Not(Box::new(var("x"))),
-        ]);
+        let f = Formula::And(vec![var("x"), Formula::Not(Box::new(var("x")))]);
         assert_eq!(boolean_simplify(f), Formula::Bool(false));
     }
 
     #[test]
     fn test_boolean_simplify_and_contradiction_with_extra_terms() {
         // And(y, x, Not(x)) -> false
-        let f = Formula::And(vec![
-            var("y"),
-            var("x"),
-            Formula::Not(Box::new(var("x"))),
-        ]);
+        let f = Formula::And(vec![var("y"), var("x"), Formula::Not(Box::new(var("x")))]);
         assert_eq!(boolean_simplify(f), Formula::Bool(false));
     }
 
@@ -1054,20 +985,14 @@ mod tests {
     fn test_boolean_simplify_and_contradiction_complex_formula() {
         // And(Gt(x, 0), Not(Gt(x, 0))) -> false
         let gt = Formula::Gt(Box::new(var("x")), Box::new(Formula::Int(0)));
-        let f = Formula::And(vec![
-            gt.clone(),
-            Formula::Not(Box::new(gt)),
-        ]);
+        let f = Formula::And(vec![gt.clone(), Formula::Not(Box::new(gt))]);
         assert_eq!(boolean_simplify(f), Formula::Bool(false));
     }
 
     #[test]
     fn test_boolean_simplify_and_no_false_contradiction_different_terms() {
         // And(x, Not(y)) should NOT simplify to false (different formulas)
-        let f = Formula::And(vec![
-            var("x"),
-            Formula::Not(Box::new(var("y"))),
-        ]);
+        let f = Formula::And(vec![var("x"), Formula::Not(Box::new(var("y")))]);
         assert_eq!(
             boolean_simplify(f),
             Formula::And(vec![var("x"), Formula::Not(Box::new(var("y")))])
@@ -1079,31 +1004,21 @@ mod tests {
     #[test]
     fn test_boolean_simplify_or_excluded_middle() {
         // Or(x, Not(x)) -> true
-        let f = Formula::Or(vec![
-            var("x"),
-            Formula::Not(Box::new(var("x"))),
-        ]);
+        let f = Formula::Or(vec![var("x"), Formula::Not(Box::new(var("x")))]);
         assert_eq!(boolean_simplify(f), Formula::Bool(true));
     }
 
     #[test]
     fn test_boolean_simplify_or_excluded_middle_with_extra_terms() {
         // Or(y, x, Not(x)) -> true
-        let f = Formula::Or(vec![
-            var("y"),
-            var("x"),
-            Formula::Not(Box::new(var("x"))),
-        ]);
+        let f = Formula::Or(vec![var("y"), var("x"), Formula::Not(Box::new(var("x")))]);
         assert_eq!(boolean_simplify(f), Formula::Bool(true));
     }
 
     #[test]
     fn test_boolean_simplify_or_no_tautology_different_terms() {
         // Or(x, Not(y)) should NOT simplify to true
-        let f = Formula::Or(vec![
-            var("x"),
-            Formula::Not(Box::new(var("y"))),
-        ]);
+        let f = Formula::Or(vec![var("x"), Formula::Not(Box::new(var("y")))]);
         assert_eq!(
             boolean_simplify(f),
             Formula::Or(vec![var("x"), Formula::Not(Box::new(var("y")))])
@@ -1129,11 +1044,7 @@ mod tests {
     #[test]
     fn test_pipeline_contradiction_simplifies() {
         // And(x, Not(x), y) -> false
-        let f = Formula::And(vec![
-            var("x"),
-            Formula::Not(Box::new(var("x"))),
-            var("y"),
-        ]);
+        let f = Formula::And(vec![var("x"), Formula::Not(Box::new(var("x"))), var("y")]);
         let pipeline = SimplificationPipeline::default_pipeline();
         let (result, _) = pipeline.run(f);
         assert_eq!(result, Formula::Bool(false));
@@ -1142,11 +1053,7 @@ mod tests {
     #[test]
     fn test_pipeline_excluded_middle_simplifies() {
         // Or(x, Not(x), y) -> true
-        let f = Formula::Or(vec![
-            var("x"),
-            Formula::Not(Box::new(var("x"))),
-            var("y"),
-        ]);
+        let f = Formula::Or(vec![var("x"), Formula::Not(Box::new(var("x"))), var("y")]);
         let pipeline = SimplificationPipeline::default_pipeline();
         let (result, _) = pipeline.run(f);
         assert_eq!(result, Formula::Bool(true));

@@ -7,9 +7,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::BTreeSet};
 
-use trust_types::fx::FxHashSet;
 use trust_types::{Formula, Sort};
 
 // ---------------------------------------------------------------------------
@@ -72,7 +71,8 @@ fn variant_tag(f: &Formula) -> u16 {
         Formula::Select(..) => 100,
         Formula::Store(..) => 101,
         // Catch-all for #[non_exhaustive] future variants
-        _ => 999}
+        _ => 999,
+    }
 }
 
 /// Custom sort key for normalization ordering.
@@ -95,9 +95,7 @@ pub(crate) fn formula_sort_key(a: &Formula, b: &Formula) -> Ordering {
         (Formula::BitVec { value: v1, width: w1 }, Formula::BitVec { value: v2, width: w2 }) => {
             w1.cmp(w2).then_with(|| v1.cmp(v2))
         }
-        (Formula::Var(n1, s1), Formula::Var(n2, s2)) => {
-            n1.cmp(n2).then_with(|| sort_cmp(s1, s2))
-        }
+        (Formula::Var(n1, s1), Formula::Var(n2, s2)) => n1.cmp(n2).then_with(|| sort_cmp(s1, s2)),
         // For compound formulas, compare children recursively
         _ => {
             let ca = a.children();
@@ -148,8 +146,11 @@ fn normalize_inner(formula: &Formula, counter: &mut usize) -> Formula {
     // Bottom-up: normalize children first, then apply rules at this node
     let normalized_children = match formula {
         // Leaves
-        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_)
-        | Formula::BitVec { .. } | Formula::Var(..) => {
+        Formula::Bool(_)
+        | Formula::Int(_)
+        | Formula::UInt(_)
+        | Formula::BitVec { .. }
+        | Formula::Var(..) => {
             return formula.clone();
         }
 
@@ -162,7 +163,8 @@ fn normalize_inner(formula: &Formula, counter: &mut usize) -> Formula {
         }
 
         // Everything else: normalize children via map_children
-        _ => formula.clone().map_children(&mut |child| normalize_inner(&child, counter))};
+        _ => formula.clone().map_children(&mut |child| normalize_inner(&child, counter)),
+    };
 
     // Apply simplification rules at this node
     simplify(normalized_children)
@@ -171,19 +173,19 @@ fn normalize_inner(formula: &Formula, counter: &mut usize) -> Formula {
 /// Alpha-normalize quantifiers by renaming bound variables to `_q0`, `_q1`, ...
 fn normalize_quantifier(
     is_forall: bool,
-    bindings: &[(String, Sort)],
+    bindings: &[(trust_types::Symbol, Sort)],
     body: &Formula,
     counter: &mut usize,
 ) -> Formula {
     // Build renamed bindings and substitution map
     let mut renamed_body = body.clone();
-    let mut new_bindings: Vec<(String, Sort)> = Vec::with_capacity(bindings.len());
+    let mut new_bindings: Vec<(trust_types::Symbol, Sort)> = Vec::with_capacity(bindings.len());
 
     for (name, sort) in bindings {
         let new_name = format!("_q{counter}");
         *counter += 1;
-        renamed_body = renamed_body.rename_var(name, &new_name);
-        new_bindings.push((new_name, sort.clone()));
+        renamed_body = renamed_body.rename_var(name.as_str(), &new_name);
+        new_bindings.push((trust_types::Symbol::intern(&new_name), sort.clone()));
     }
 
     // Normalize the renamed body
@@ -225,8 +227,12 @@ fn simplify(f: Formula) -> Formula {
         // Add: commutative normalization + identity
         Formula::Add(a, b) => {
             // x + 0 -> x
-            if is_zero(&b) { return *a; }
-            if is_zero(&a) { return *b; }
+            if is_zero(&b) {
+                return *a;
+            }
+            if is_zero(&a) {
+                return *b;
+            }
             // Sort operands
             if formula_sort_key(&a, &b) == Ordering::Greater {
                 Formula::Add(b, a)
@@ -238,11 +244,19 @@ fn simplify(f: Formula) -> Formula {
         // Mul: commutative normalization + identity
         Formula::Mul(a, b) => {
             // x * 0 -> 0
-            if is_zero(&a) { return *a; }
-            if is_zero(&b) { return *b; }
+            if is_zero(&a) {
+                return *a;
+            }
+            if is_zero(&b) {
+                return *b;
+            }
             // x * 1 -> x
-            if is_one(&b) { return *a; }
-            if is_one(&a) { return *b; }
+            if is_one(&b) {
+                return *a;
+            }
+            if is_one(&a) {
+                return *b;
+            }
             // Sort operands
             if formula_sort_key(&a, &b) == Ordering::Greater {
                 Formula::Mul(b, a)
@@ -297,7 +311,8 @@ fn simplify(f: Formula) -> Formula {
         }
 
         // Everything else passes through
-        other => other}
+        other => other,
+    }
 }
 
 /// Flatten and simplify And.
@@ -307,7 +322,8 @@ fn simplify_and(terms: Vec<Formula>) -> Formula {
         match t {
             Formula::And(inner) => flat.extend(inner),
             Formula::Bool(true) => {} // identity: skip
-            f => flat.push(f)}
+            f => flat.push(f),
+        }
     }
 
     // Short-circuit: if any is false, result is false
@@ -332,7 +348,8 @@ fn simplify_or(terms: Vec<Formula>) -> Formula {
         match t {
             Formula::Or(inner) => flat.extend(inner),
             Formula::Bool(false) => {} // identity: skip
-            f => flat.push(f)}
+            f => flat.push(f),
+        }
     }
 
     // Short-circuit: if any is true, result is true
@@ -392,20 +409,16 @@ fn formula_subsumes_normalized(stronger: &Formula, weaker: &Formula) -> bool {
     }
 
     if let Formula::And(terms) = stronger
-        && terms
-            .iter()
-            .any(|term| formula_subsumes_normalized(term, weaker))
-        {
-            return true;
-        }
+        && terms.iter().any(|term| formula_subsumes_normalized(term, weaker))
+    {
+        return true;
+    }
 
     if let Formula::Or(terms) = weaker
-        && terms
-            .iter()
-            .any(|term| formula_subsumes_normalized(stronger, term))
-        {
-            return true;
-        }
+        && terms.iter().any(|term| formula_subsumes_normalized(stronger, term))
+    {
+        return true;
+    }
 
     false
 }
@@ -428,7 +441,8 @@ pub struct SemanticProperty {
     /// The formula expressing this property.
     pub formula: Formula,
     /// The semantic category of this property.
-    pub kind: PropertyKind}
+    pub kind: PropertyKind,
+}
 
 /// Categorization of semantic properties for proof composition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -440,26 +454,21 @@ pub enum PropertyKind {
     LoopInvariant,
     Assertion,
     TypeRefinement,
-    FrameCondition}
+    FrameCondition,
+}
 
 impl SemanticProperty {
     /// Create a new semantic property.
     #[must_use]
     pub fn new(label: impl Into<String>, formula: Formula, kind: PropertyKind) -> Self {
-        Self {
-            label: label.into(),
-            formula,
-            kind}
+        Self { label: label.into(), formula, kind }
     }
 
     /// Create a semantic property from a label with a trivially true formula.
     /// Useful for backward compatibility with `Property(String)`.
     #[must_use]
     pub fn from_label(label: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-            formula: Formula::Bool(true),
-            kind: PropertyKind::Assertion}
+        Self { label: label.into(), formula: Formula::Bool(true), kind: PropertyKind::Assertion }
     }
 
     /// Check if two semantic properties are equivalent after normalization.
@@ -490,10 +499,11 @@ impl SemanticProperty {
             && formula_subsumes(&self.formula, &other.formula)
     }
 
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Collect the free variables in this property's formula.
     #[must_use]
-    pub fn free_variables(&self) -> FxHashSet<String> {
-        self.formula.free_variables()
+    pub fn free_variables(&self) -> BTreeSet<String> {
+        self.formula.free_variables().into_iter().collect()
     }
 }
 
@@ -571,20 +581,14 @@ mod tests {
 
     #[test]
     fn test_ac_flatten_and() {
-        let nested = Formula::And(vec![
-            Formula::And(vec![var("a"), var("b")]),
-            var("c"),
-        ]);
+        let nested = Formula::And(vec![Formula::And(vec![var("a"), var("b")]), var("c")]);
         let flat = Formula::And(vec![var("a"), var("b"), var("c")]);
         assert!(normalized_equal(&nested, &flat));
     }
 
     #[test]
     fn test_ac_flatten_or() {
-        let nested = Formula::Or(vec![
-            Formula::Or(vec![var("a"), var("b")]),
-            var("c"),
-        ]);
+        let nested = Formula::Or(vec![Formula::Or(vec![var("a"), var("b")]), var("c")]);
         let flat = Formula::Or(vec![var("a"), var("b"), var("c")]);
         assert!(normalized_equal(&nested, &flat));
     }
@@ -782,11 +786,8 @@ mod tests {
 
     #[test]
     fn test_subsumes_true_is_universal() {
-        let universal = SemanticProperty::new(
-            "assert",
-            Formula::Bool(true),
-            PropertyKind::Assertion,
-        );
+        let universal =
+            SemanticProperty::new("assert", Formula::Bool(true), PropertyKind::Assertion);
         let target = SemanticProperty::new(
             "assert",
             Formula::Gt(Box::new(var("x")), Box::new(Formula::Int(0))),
@@ -797,11 +798,8 @@ mod tests {
 
     #[test]
     fn test_subsumes_false_is_universal() {
-        let impossible = SemanticProperty::new(
-            "assert",
-            Formula::Bool(false),
-            PropertyKind::Assertion,
-        );
+        let impossible =
+            SemanticProperty::new("assert", Formula::Bool(false), PropertyKind::Assertion);
         let target = SemanticProperty::new(
             "assert",
             Formula::Lt(Box::new(var("x")), Box::new(Formula::Int(10))),

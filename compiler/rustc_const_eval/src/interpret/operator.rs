@@ -30,7 +30,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             Le => l <= r,
             Gt => l > r,
             Ge => l >= r,
-            // tRust: invariant — match covers all valid binary operators on char type
             _ => span_bug!(self.cur_span(), "Invalid operation on char: {:?}", bin_op),
         };
         ImmTy::from_bool(res, *self.tcx)
@@ -49,7 +48,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             BitAnd => l & r,
             BitOr => l | r,
             BitXor => l ^ r,
-            // tRust: invariant — match covers all valid binary operators on bool type
             _ => span_bug!(self.cur_span(), "Invalid operation on bool: {:?}", bin_op),
         };
         ImmTy::from_bool(res, *self.tcx)
@@ -79,7 +77,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             Mul => ImmTy::from_scalar(adjust_nan((l * r).value).into(), layout),
             Div => ImmTy::from_scalar(adjust_nan((l / r).value).into(), layout),
             Rem => ImmTy::from_scalar(adjust_nan((l % r).value).into(), layout),
-            // tRust: invariant — match covers all valid binary operators on float types
             _ => span_bug!(self.cur_span(), "invalid float op: `{:?}`", bin_op),
         }
     }
@@ -120,29 +117,27 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let shift_amount = r_signed();
                 let rem = shift_amount.rem_euclid(l_bits.into());
                 // `rem` is guaranteed positive, so the `unwrap` cannot fail
-                (u128::try_from(rem).expect("invariant: shift remainder fits in u128"), rem != shift_amount)
+                (u128::try_from(rem).unwrap(), rem != shift_amount)
             } else {
                 let shift_amount = r_unsigned();
                 let rem = shift_amount.rem_euclid(l_bits.into());
                 (rem, rem != shift_amount)
             };
-            let shift_amount = u32::try_from(shift_amount).expect("invariant: shift_amount is in range 0..size so it fits in u32"); // we brought this in the range `0..size` so this will always fit
+            let shift_amount = u32::try_from(shift_amount).unwrap(); // we brought this in the range `0..size` so this will always fit
             // Compute the shifted result.
             let result = if left.layout.backend_repr.is_signed() {
                 let l = l_signed();
                 let result = match bin_op {
-                    Shl | ShlUnchecked => l.checked_shl(shift_amount).expect("invariant: shift_amount was masked to valid range for checked_shl"),
-                    Shr | ShrUnchecked => l.checked_shr(shift_amount).expect("invariant: shift_amount was masked to valid range for checked_shr"),
-                    // tRust: invariant — only shift operations (Shl/Shr) reach this signed-integer path
+                    Shl | ShlUnchecked => l.checked_shl(shift_amount).unwrap(),
+                    Shr | ShrUnchecked => l.checked_shr(shift_amount).unwrap(),
                     _ => bug!(),
                 };
                 ScalarInt::truncate_from_int(result, left.layout.size).0
             } else {
                 let l = l_unsigned();
                 let result = match bin_op {
-                    Shl | ShlUnchecked => l.checked_shl(shift_amount).expect("invariant: shift_amount was masked to valid range for checked_shl"),
-                    Shr | ShrUnchecked => l.checked_shr(shift_amount).expect("invariant: shift_amount was masked to valid range for checked_shr"),
-                    // tRust: invariant — only shift operations (Shl/Shr) reach this unsigned-integer path
+                    Shl | ShlUnchecked => l.checked_shl(shift_amount).unwrap(),
+                    Shr | ShrUnchecked => l.checked_shr(shift_amount).unwrap(),
                     _ => bug!(),
                 };
                 ScalarInt::truncate_from_uint(result, left.layout.size).0
@@ -164,7 +159,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         // For the remaining ops, the types must be the same on both sides
         if left.layout.ty != right.layout.ty {
-            // tRust: invariant — binary operations require matching types on both sides (after coercion)
             span_bug!(
                 self.cur_span(),
                 "invalid asymmetric binary op {bin_op:?}: {l:?} ({l_ty}), {r:?} ({r_ty})",
@@ -264,7 +258,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     Rem if r == 0 => throw_ub!(RemainderByZero),
                     Div => u128::overflowing_div,
                     Rem => u128::overflowing_rem,
-                    // tRust: invariant — match covers all valid integer binary ops (arithmetic, shift, bitwise, comparison)
                     _ => span_bug!(
                         self.cur_span(),
                         "invalid binary op {:?}: {:?}, {:?} (both {})",
@@ -319,12 +312,12 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             // Pointer ops that are always supported.
             Offset => {
                 let ptr = left.to_scalar().to_pointer(self)?;
-                let pointee_ty = left.layout.ty.builtin_deref(true).expect("invariant: pointer offset operand is a pointer type with deref target");
+                let pointee_ty = left.layout.ty.builtin_deref(true).unwrap();
                 let pointee_layout = self.layout_of(pointee_ty)?;
                 assert!(pointee_layout.is_sized());
 
                 // The size always fits in `i64` as it can be at most `isize::MAX`.
-                let pointee_size = i64::try_from(pointee_layout.size.bytes()).expect("invariant: pointee size fits in i64 (cannot exceed isize::MAX)");
+                let pointee_size = i64::try_from(pointee_layout.size.bytes()).unwrap();
                 // This uses the same type as `right`, which can be `isize` or `usize`.
                 // `pointee_size` is guaranteed to fit into both types.
                 let pointee_size = ImmTy::from_int(pointee_size, right.layout);
@@ -427,7 +420,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
                 self.binary_ptr_op(bin_op, left, right)
             }
-            // tRust: invariant — binary ops LHS must be bool, char, int, float, or pointer type
             _ => span_bug!(
                 self.cur_span(),
                 "Invalid MIR: bad LHS type for binop: {}",
@@ -454,7 +446,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let val = val.to_bool()?;
                 let res = match un_op {
                     Not => !val,
-                    // tRust: invariant — match covers all valid unary operators on bool type
                     _ => span_bug!(self.cur_span(), "Invalid bool op {:?}", un_op),
                 };
                 interp_ok(ImmTy::from_bool(res, *self.tcx))
@@ -462,7 +453,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             ty::Float(fty) => {
                 let val = val.to_scalar();
                 if un_op != Neg {
-                    // tRust: invariant — match covers all valid unary operators on float types
                     span_bug!(self.cur_span(), "Invalid float op {:?}", un_op);
                 }
 
@@ -480,7 +470,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let res = match un_op {
                     Not => !val,
                     Neg => val.wrapping_neg(),
-                    // tRust: invariant — match covers all valid unary operators on signed integer types
                     _ => span_bug!(self.cur_span(), "Invalid integer op {:?}", un_op),
                 };
                 let res = ScalarInt::truncate_from_int(res, layout.size).0;
@@ -490,7 +479,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let val = val.to_scalar().to_uint(layout.size)?;
                 let res = match un_op {
                     Not => !val,
-                    // tRust: invariant — match covers all valid unary operators on unsigned integer types
                     _ => span_bug!(self.cur_span(), "Invalid unsigned integer op {:?}", un_op),
                 };
                 let res = ScalarInt::truncate_from_uint(res, layout.size).0;
@@ -512,7 +500,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 })
             }
             _ => {
-                // tRust: invariant — unary operator argument must be a bool, int, or float type
                 bug!("Unexpected unary op argument {val:?}")
             }
         }

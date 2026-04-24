@@ -29,7 +29,7 @@ pub trait SolverDelegate: Deref<Target = Self::Infcx> + Sized {
         span: <Self::Interner as Interner>::Span,
     ) -> <Self::Interner as Interner>::GenericArg;
 
-    // tRust: known issue — Uplift the leak check into this crate.
+    // FIXME: Uplift the leak check into this crate.
     fn leak_check(&self, max_input_universe: ty::UniverseIndex) -> Result<(), NoSolution>;
 
     fn evaluate_const(
@@ -38,7 +38,7 @@ pub trait SolverDelegate: Deref<Target = Self::Infcx> + Sized {
         uv: ty::UnevaluatedConst<Self::Interner>,
     ) -> Option<<Self::Interner as Interner>::Const>;
 
-    // tRust: known issue — This only is here because `wf::obligations` is in `rustc_trait_selection`!
+    // FIXME: This only is here because `wf::obligations` is in `rustc_trait_selection`!
     fn well_formed_goals(
         &self,
         param_env: <Self::Interner as Interner>::ParamEnv,

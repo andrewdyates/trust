@@ -319,10 +319,10 @@ pub(crate) fn check_intrinsic_type(
             1,
             0,
             vec![],
-            tcx.type_of(tcx.lang_items().type_id().expect("invariant: value is present")).no_bound_vars().expect("invariant: value is present"),
+            tcx.type_of(tcx.lang_items().type_id().unwrap()).no_bound_vars().unwrap(),
         ),
         sym::type_id_eq => {
-            let type_id = tcx.type_of(tcx.lang_items().type_id().expect("invariant: value is present")).no_bound_vars().expect("invariant: value is present");
+            let type_id = tcx.type_of(tcx.lang_items().type_id().unwrap()).no_bound_vars().unwrap();
             (0, 0, vec![type_id, type_id], tcx.types.bool)
         }
         sym::type_id_vtable => {
@@ -340,15 +340,15 @@ pub(crate) fn check_intrinsic_type(
             (
                 0,
                 0,
-                vec![tcx.type_of(tcx.lang_items().type_id().expect("invariant: value is present")).no_bound_vars().expect("invariant: value is present"); 2],
+                vec![tcx.type_of(tcx.lang_items().type_id().unwrap()).no_bound_vars().unwrap(); 2],
                 ret_ty,
             )
         }
         sym::type_of => (
             0,
             0,
-            vec![tcx.type_of(tcx.lang_items().type_id().expect("invariant: value is present")).no_bound_vars().expect("invariant: value is present")],
-            tcx.type_of(tcx.lang_items().type_struct().expect("invariant: value is present")).no_bound_vars().expect("invariant: value is present"),
+            vec![tcx.type_of(tcx.lang_items().type_id().unwrap()).no_bound_vars().unwrap()],
+            tcx.type_of(tcx.lang_items().type_struct().unwrap()).no_bound_vars().unwrap(),
         ),
         sym::offload => (
             3,

@@ -144,7 +144,6 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             ty::Error(_) => {}
 
             _ => {
-                // tRust: invariant — all valid item kinds for variance constraints handled above
                 span_bug!(
                     tcx.def_span(def_id),
                     "`build_constraints_for_item` unsupported for this item"
@@ -238,7 +237,6 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             }
 
             ty::FnDef(..) | ty::Coroutine(..) | ty::Closure(..) | ty::CoroutineClosure(..) => {
-                // tRust: invariant — unnameable types should not appear in variance computation
                 bug!("Unexpected unnameable type in variance computation: {ty}");
             }
 
@@ -316,7 +314,7 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             }
 
             ty::UnsafeBinder(ty) => {
-                // tRust: known issue — (unsafe_binders): This is covariant, right?
+                // FIXME(unsafe_binders): This is covariant, right?
                 self.add_constraints_from_ty(current, ty.skip_binder(), variance);
             }
 
@@ -326,7 +324,6 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             }
 
             ty::Placeholder(..) | ty::CoroutineWitness(..) | ty::Bound(..) | ty::Infer(..) => {
-                // tRust: invariant — all type kinds relevant to variance inference handled above
                 bug!("unexpected type encountered in variance inference: {}", ty);
             }
         }
@@ -386,7 +383,7 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             } else {
                 // Parameter on an item defined within another crate:
                 // variance already inferred, just look it up.
-                self.constant_term(remote.as_ref().expect("invariant: value is present")[i])
+                self.constant_term(remote.as_ref().unwrap()[i])
             };
             let variance_i = self.xform(variance, variance_decl);
             debug!(
@@ -465,7 +462,6 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             ty::ReLateParam(..) | ty::ReVar(..) | ty::RePlaceholder(..) | ty::ReErased => {
                 // We don't expect to see anything but 'static or bound
                 // regions when visiting member types or method types.
-                // tRust: invariant — type param index must be within range of the item's generic params
                 bug!(
                     "unexpected region encountered in variance \
                       inference: {:?}",

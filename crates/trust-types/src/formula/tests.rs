@@ -59,11 +59,7 @@ fn test_vc_kind_runtime_fallback_matrix() {
             false,
         ),
         (
-            VcKind::ShiftOverflow {
-                op: BinOp::Shl,
-                operand_ty: Ty::u32(),
-                shift_ty: Ty::u32(),
-            },
+            VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: Ty::u32(), shift_ty: Ty::u32() },
             true,
             false,
         ),
@@ -182,10 +178,7 @@ fn test_liveness_counterexample_display() {
             assignments: vec![("x".into(), "0".into())],
         }],
         cycle: vec![
-            LivenessState {
-                label: "waiting".into(),
-                assignments: vec![("x".into(), "1".into())],
-            },
+            LivenessState { label: "waiting".into(), assignments: vec![("x".into(), "1".into())] },
             LivenessState {
                 label: "still_waiting".into(),
                 assignments: vec![("x".into(), "1".into())],
@@ -203,10 +196,7 @@ fn test_liveness_counterexample_display() {
 fn test_liveness_counterexample_empty_prefix() {
     let cex = LivenessCounterexample {
         prefix: vec![],
-        cycle: vec![LivenessState {
-            label: "stuck".into(),
-            assignments: vec![],
-        }],
+        cycle: vec![LivenessState { label: "stuck".into(), assignments: vec![] }],
     };
     assert_eq!(cex.trace_len(), 1);
     let display = format!("{cex}");
@@ -230,10 +220,7 @@ fn test_vckind_liveness_is_l2_domain() {
 
 #[test]
 fn test_vckind_fairness_is_l2_domain() {
-    let constraint = FairnessConstraint::Weak {
-        action: "send".into(),
-        vars: vec!["buf".into()],
-    };
+    let constraint = FairnessConstraint::Weak { action: "send".into(), vars: vec!["buf".into()] };
     let kind = VcKind::Fairness { constraint };
     assert_eq!(kind.proof_level(), ProofLevel::L2Domain);
     assert!(kind.description().contains("fairness:"));
@@ -248,14 +235,8 @@ fn test_liveness_property_serialization_roundtrip() {
         predicate: "served".into(),
         consequent: None,
         fairness: vec![
-            FairnessConstraint::Weak {
-                action: "dispatch".into(),
-                vars: vec!["queue".into()],
-            },
-            FairnessConstraint::Strong {
-                action: "dequeue".into(),
-                vars: vec!["priority".into()],
-            },
+            FairnessConstraint::Weak { action: "dispatch".into(), vars: vec!["queue".into()] },
+            FairnessConstraint::Strong { action: "dequeue".into(), vars: vec!["priority".into()] },
         ],
     };
     let json = serde_json::to_string(&prop).expect("serialize");
@@ -311,11 +292,7 @@ fn test_children_nary() {
 
 #[test]
 fn test_children_ite() {
-    let f = Formula::Ite(
-        Box::new(Formula::Bool(true)),
-        Box::new(var("x")),
-        Box::new(var("y")),
-    );
+    let f = Formula::Ite(Box::new(Formula::Bool(true)), Box::new(var("x")), Box::new(var("y")));
     assert_eq!(f.children().len(), 3);
 }
 
@@ -358,11 +335,7 @@ fn test_map_children_identity() {
 fn test_map_children_replaces_direct() {
     let f = Formula::Add(Box::new(var("x")), Box::new(var("y")));
     let mapped = f.map_children(&mut |c| {
-        if c == var("x") {
-            Formula::Int(1)
-        } else {
-            c
-        }
+        if c == var("x") { Formula::Int(1) } else { c }
     });
     assert_eq!(mapped, Formula::Add(Box::new(Formula::Int(1)), Box::new(var("y"))));
 }
@@ -384,10 +357,7 @@ fn test_map_children_nary() {
 fn test_map_children_preserves_width() {
     let f = Formula::BvAdd(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32);
     let mapped = f.map_children(&mut |c| c);
-    assert_eq!(
-        mapped,
-        Formula::BvAdd(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32)
-    );
+    assert_eq!(mapped, Formula::BvAdd(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32));
 }
 
 #[test]
@@ -421,11 +391,7 @@ fn test_map_bottom_up() {
     // Replace all Int(1) with Int(2), bottom-up
     let f = Formula::Add(Box::new(Formula::Int(1)), Box::new(Formula::Int(1)));
     let mapped = f.map(&mut |node| {
-        if node == Formula::Int(1) {
-            Formula::Int(2)
-        } else {
-            node
-        }
+        if node == Formula::Int(1) { Formula::Int(2) } else { node }
     });
     assert_eq!(mapped, Formula::Add(Box::new(Formula::Int(2)), Box::new(Formula::Int(2))));
 }
@@ -495,10 +461,7 @@ fn test_has_bitvectors_false_for_pure_int() {
 
 #[test]
 fn test_has_bitvectors_true_for_bv_literal() {
-    let f = Formula::And(vec![
-        var("x"),
-        Formula::BitVec { value: 42, width: 32 },
-    ]);
+    let f = Formula::And(vec![var("x"), Formula::BitVec { value: 42, width: 32 }]);
     assert!(f.has_bitvectors());
 }
 
@@ -510,28 +473,18 @@ fn test_has_bitvectors_true_for_bv_ops() {
 
 #[test]
 fn test_has_bitvectors_true_for_bv_var() {
-    let f = Formula::Not(Box::new(Formula::Eq(
-        Box::new(bv_var("x", 64)),
-        Box::new(Formula::Int(0)),
-    )));
+    let f =
+        Formula::Not(Box::new(Formula::Eq(Box::new(bv_var("x", 64)), Box::new(Formula::Int(0)))));
     assert!(f.has_bitvectors());
 }
 
 #[test]
 fn test_has_bitvectors_deep_nesting() {
-    let f = Formula::And(vec![
-        Formula::Or(vec![
-            Formula::Not(Box::new(Formula::Ite(
-                Box::new(Formula::Bool(true)),
-                Box::new(Formula::BvShl(
-                    Box::new(bv_var("a", 8)),
-                    Box::new(bv_var("b", 8)),
-                    8,
-                )),
-                Box::new(Formula::Int(0)),
-            ))),
-        ]),
-    ]);
+    let f = Formula::And(vec![Formula::Or(vec![Formula::Not(Box::new(Formula::Ite(
+        Box::new(Formula::Bool(true)),
+        Box::new(Formula::BvShl(Box::new(bv_var("a", 8)), Box::new(bv_var("b", 8)), 8)),
+        Box::new(Formula::Int(0)),
+    )))])]);
     assert!(f.has_bitvectors());
 }
 
@@ -560,11 +513,7 @@ fn test_rename_var_multiple_occurrences() {
 fn test_rename_var_deep_nesting() {
     let f = Formula::And(vec![
         Formula::Not(Box::new(Formula::Lt(Box::new(var("a")), Box::new(var("b"))))),
-        Formula::Ite(
-            Box::new(var("a")),
-            Box::new(Formula::Int(1)),
-            Box::new(Formula::Int(0)),
-        ),
+        Formula::Ite(Box::new(var("a")), Box::new(Formula::Int(1)), Box::new(Formula::Int(0))),
     ]);
     let renamed = f.rename_var("a", "c");
     let mut found = false;
@@ -590,10 +539,7 @@ fn test_rename_var_preserves_sort() {
 fn test_rename_var_in_quantifier_body() {
     // rename_var is a syntactic rename -- it does not respect bindings
     // (that would be substitution). It replaces all occurrences.
-    let f = Formula::Forall(
-        vec![("x".into(), Sort::Int)],
-        Box::new(var("y")),
-    );
+    let f = Formula::Forall(vec![("x".into(), Sort::Int)], Box::new(var("y")));
     let renamed = f.rename_var("y", "z");
     match renamed {
         Formula::Forall(_, body) => assert_eq!(*body, var("z")),
@@ -621,11 +567,7 @@ fn bench_formula() -> Formula {
             ])),
         ),
         Formula::Not(Box::new(Formula::Eq(
-            Box::new(Formula::BvAdd(
-                Box::new(bv_var("a", 32)),
-                Box::new(bv_var("b", 32)),
-                32,
-            )),
+            Box::new(Formula::BvAdd(Box::new(bv_var("a", 32)), Box::new(bv_var("b", 32)), 32)),
             Box::new(Formula::BitVec { value: 0, width: 32 }),
         ))),
         Formula::Ite(
@@ -712,10 +654,7 @@ fn test_bv_to_int_signed_to_smtlib() {
     // For 8-bit: 2^8 = 256
     let inner = Formula::Var("x".into(), Sort::BitVec(8));
     let f = Formula::BvToInt(Box::new(inner), 8, true);
-    assert_eq!(
-        f.to_smtlib(),
-        "(ite (bvsge x (_ bv0 8)) (bv2int x) (- (bv2int x) 256))"
-    );
+    assert_eq!(f.to_smtlib(), "(ite (bvsge x (_ bv0 8)) (bv2int x) (- (bv2int x) 256))");
 }
 
 #[test]
@@ -723,10 +662,7 @@ fn test_bv_to_int_signed_32bit_to_smtlib() {
     // For 32-bit: 2^32 = 4294967296
     let inner = Formula::Var("y".into(), Sort::BitVec(32));
     let f = Formula::BvToInt(Box::new(inner), 32, true);
-    assert_eq!(
-        f.to_smtlib(),
-        "(ite (bvsge y (_ bv0 32)) (bv2int y) (- (bv2int y) 4294967296))"
-    );
+    assert_eq!(f.to_smtlib(), "(ite (bvsge y (_ bv0 32)) (bv2int y) (- (bv2int y) 4294967296))");
 }
 
 #[test]

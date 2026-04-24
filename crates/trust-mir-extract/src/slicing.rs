@@ -281,6 +281,7 @@ fn stmt_reads(stmt: &Statement) -> Vec<usize> {
     match stmt {
         Statement::Assign { rvalue, .. } => rvalue_reads(rvalue),
         Statement::Nop => vec![],
+        _ => panic!("trust-mir-extract does not support Statement in stmt_reads: {stmt:?}"),
     }
 }
 
@@ -289,6 +290,7 @@ fn stmt_writes(stmt: &Statement) -> Vec<usize> {
     match stmt {
         Statement::Assign { place, .. } => vec![place.local],
         Statement::Nop => vec![],
+        _ => panic!("trust-mir-extract does not support Statement in stmt_writes: {stmt:?}"),
     }
 }
 
@@ -309,6 +311,7 @@ fn rvalue_reads(rvalue: &Rvalue) -> Vec<usize> {
             vec![place.local]
         }
         Rvalue::Repeat(op, _) => operand_reads(op),
+        _ => panic!("trust-mir-extract does not support Rvalue in rvalue_reads: {rvalue:?}"),
     }
 }
 
@@ -326,6 +329,7 @@ fn operand_reads(operand: &Operand) -> Vec<usize> {
             reads
         }
         Operand::Constant(_) => vec![],
+        _ => panic!("trust-mir-extract does not support Operand in operand_reads: {operand:?}"),
     }
 }
 
@@ -337,6 +341,7 @@ fn terminator_reads(term: &Terminator) -> Vec<usize> {
         Terminator::Call { args, .. } => args.iter().flat_map(operand_reads).collect(),
         Terminator::Drop { place, .. } => vec![place.local],
         Terminator::Goto(_) | Terminator::Return | Terminator::Unreachable => vec![],
+        _ => panic!("trust-mir-extract does not support Terminator in terminator_reads: {term:?}"),
     }
 }
 
@@ -361,6 +366,7 @@ fn successor_blocks(term: &Terminator) -> Vec<usize> {
         Terminator::Call { target, .. } => target.iter().map(|BlockId(b)| *b).collect(),
         Terminator::Assert { target: BlockId(b), .. } => vec![*b],
         Terminator::Drop { target: BlockId(b), .. } => vec![*b],
+        _ => panic!("trust-mir-extract does not support Terminator in successor_blocks: {term:?}"),
     }
 }
 
@@ -820,19 +826,13 @@ mod tests {
 
     #[test]
     fn test_rvalue_reads_unary_op() {
-        let reads = rvalue_reads(&Rvalue::UnaryOp(
-            UnOp::Neg,
-            Operand::Copy(Place::local(4)),
-        ));
+        let reads = rvalue_reads(&Rvalue::UnaryOp(UnOp::Neg, Operand::Copy(Place::local(4))));
         assert_eq!(reads, vec![4]);
     }
 
     #[test]
     fn test_rvalue_reads_ref() {
-        let reads = rvalue_reads(&Rvalue::Ref {
-            mutable: false,
-            place: Place::local(10),
-        });
+        let reads = rvalue_reads(&Rvalue::Ref { mutable: false, place: Place::local(10) });
         assert_eq!(reads, vec![10]);
     }
 
@@ -844,10 +844,7 @@ mod tests {
 
     #[test]
     fn test_rvalue_reads_cast() {
-        let reads = rvalue_reads(&Rvalue::Cast(
-            Operand::Copy(Place::local(2)),
-            Ty::i64(),
-        ));
+        let reads = rvalue_reads(&Rvalue::Cast(Operand::Copy(Place::local(2)), Ty::i64()));
         assert_eq!(reads, vec![2]);
     }
 
@@ -880,10 +877,7 @@ mod tests {
 
     #[test]
     fn test_rvalue_reads_repeat() {
-        let reads = rvalue_reads(&Rvalue::Repeat(
-            Operand::Copy(Place::local(2)),
-            10,
-        ));
+        let reads = rvalue_reads(&Rvalue::Repeat(Operand::Copy(Place::local(2)), 10));
         assert_eq!(reads, vec![2]);
     }
 
@@ -897,10 +891,7 @@ mod tests {
 
     #[test]
     fn test_operand_reads_index_projection() {
-        let place = Place {
-            local: 5,
-            projections: vec![Projection::Index(3)],
-        };
+        let place = Place { local: 5, projections: vec![Projection::Index(3)] };
         let reads = operand_reads(&Operand::Copy(place));
         assert!(reads.contains(&5), "should read base local");
         assert!(reads.contains(&3), "should read index local");
@@ -908,20 +899,14 @@ mod tests {
 
     #[test]
     fn test_operand_reads_field_projection_no_extra_read() {
-        let place = Place {
-            local: 5,
-            projections: vec![Projection::Field(2)],
-        };
+        let place = Place { local: 5, projections: vec![Projection::Field(2)] };
         let reads = operand_reads(&Operand::Copy(place));
         assert_eq!(reads, vec![5], "Field projection does not add a read");
     }
 
     #[test]
     fn test_operand_reads_deref_projection_no_extra_read() {
-        let place = Place {
-            local: 5,
-            projections: vec![Projection::Deref],
-        };
+        let place = Place { local: 5, projections: vec![Projection::Deref] };
         let reads = operand_reads(&Operand::Copy(place));
         assert_eq!(reads, vec![5], "Deref projection does not add a read");
     }
@@ -957,10 +942,7 @@ mod tests {
     fn test_terminator_reads_call() {
         let term = Terminator::Call {
             func: "foo".to_string(),
-            args: vec![
-                Operand::Copy(Place::local(1)),
-                Operand::Move(Place::local(2)),
-            ],
+            args: vec![Operand::Copy(Place::local(1)), Operand::Move(Place::local(2))],
             dest: Place::local(0),
             target: Some(BlockId(1)),
             span: SourceSpan::default(),

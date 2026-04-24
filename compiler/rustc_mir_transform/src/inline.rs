@@ -246,7 +246,6 @@ impl<'tcx> Inliner<'tcx> for ForceInliner<'tcx> {
         let InlineAttr::Force { attr_span, reason: justification } =
             tcx.codegen_instance_attrs(callsite.callee.def).inline
         else {
-            // tRust: invariant: algorithm precondition — caller must verify item has required inlining attribute before calling
             bug!("called on item without required inlining");
         };
 
@@ -392,7 +391,7 @@ impl<'tcx> Inliner<'tcx> for NormalInliner<'tcx> {
         }
         debug!("    final inline threshold = {}", threshold);
 
-        // NOTE: Single-caller bonus not yet implemented in inlining cost model.
+        // FIXME: Give a bonus to functions with only a single caller
 
         let mut checker =
             CostChecker::new(tcx, self.typing_env(), Some(callsite.callee), callee_body);
@@ -442,9 +441,8 @@ impl<'tcx> Inliner<'tcx> for NormalInliner<'tcx> {
                 // if the no-attribute function ends up with the same instruction set anyway.
                 return Err("cannot move inline-asm across instruction sets");
             } else if let TerminatorKind::TailCall { .. } = term.kind {
-                // tRust: Upstream TODO -- tracked by rust-lang explicit_tail_calls feature gate.
-                // TODO(explicit_tail_calls): Determine if functions with tail calls can be
-                // inlined, and if so, how.
+                // FIXME(explicit_tail_calls): figure out how exactly functions containing tail
+                // calls can be inlined (and if they even should)
                 return Err("can't inline functions with tail calls");
             } else {
                 work_list.extend(term.successors())
@@ -552,8 +550,7 @@ fn resolve_callsite<'tcx, I: Inliner<'tcx>>(
     // Only consider direct calls to functions
     let terminator = bb_data.terminator();
 
-    // tRust: Upstream TODO -- tracked by rust-lang explicit_tail_calls feature gate.
-    // TODO(explicit_tail_calls): Determine if tail call sites can be inlined.
+    // FIXME(explicit_tail_calls): figure out if we can inline tail calls
     if let TerminatorKind::Call { ref func, fn_span, .. } = terminator.kind {
         let func_ty = func.ty(caller_body, tcx);
         if let ty::FnDef(def_id, args) = *func_ty.kind() {
@@ -612,8 +609,7 @@ fn try_inlining<'tcx, I: Inliner<'tcx>>(
     check_inline::is_inline_valid_on_fn(tcx, callsite.callee.def_id())?;
     check_codegen_attributes(inliner, callsite, callee_attrs)?;
 
-    let terminator = caller_body[callsite.block].terminator.as_ref().expect("invariant: callsite block must have a terminator"); // tRust: unwrap elimination
-    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
+    let terminator = caller_body[callsite.block].terminator.as_ref().unwrap();
     let TerminatorKind::Call { args, destination, .. } = &terminator.kind else { bug!() };
     let destination_ty = destination.ty(&caller_body.local_decls, tcx).ty;
     for arg in args {
@@ -656,7 +652,6 @@ fn try_inlining<'tcx, I: Inliner<'tcx>>(
         let (self_arg, arg_tuple) = match &args[..] {
             [arg_tuple] => (None, arg_tuple),
             [self_arg, arg_tuple] => (Some(self_arg), arg_tuple),
-            // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
             _ => bug!("Expected `rust-call` to have 1 or 2 args"),
         };
 
@@ -667,7 +662,6 @@ fn try_inlining<'tcx, I: Inliner<'tcx>>(
             std::slice::from_ref(&arg_tuple_ty)
         } else {
             let ty::Tuple(arg_tuple_tys) = *arg_tuple_ty.kind() else {
-                // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                 bug!("Closure arguments are not passed as a tuple");
             };
             arg_tuple_tys.as_slice()
@@ -729,9 +723,11 @@ fn check_mir_is_available<'tcx, I: Inliner<'tcx>>(
             return Err("implementation limitation -- cannot inline intrinsic");
         }
 
-        // NOTE(#127030): ConstParamHasTy interacts badly with drop shim builder
-        // which evaluates predicates in wrong param-env. Stall MIR resolution
-        // until all const params are substituted.
+        // FIXME(#127030): `ConstParamHasTy` has bad interactions with
+        // the drop shim builder, which does not evaluate predicates in
+        // the correct param-env for types being dropped. Stall resolving
+        // the MIR for this instance until all of its const params are
+        // substituted.
         InstanceKind::DropGlue(_, Some(ty)) if ty.has_type_flags(TypeFlags::HAS_CT_PARAM) => {
             debug!("still needs substitution");
             return Err("implementation limitation -- HACK for dropping polymorphic type");
@@ -859,10 +855,9 @@ fn inline_call<'tcx, I: Inliner<'tcx>>(
     mut callee_body: Body<'tcx>,
 ) {
     let tcx = inliner.tcx();
-    let terminator = caller_body[callsite.block].terminator.take().expect("invariant: callsite block must have a terminator"); // tRust: unwrap elimination
+    let terminator = caller_body[callsite.block].terminator.take().unwrap();
     let TerminatorKind::Call { func, args, destination, unwind, target, .. } = terminator.kind
     else {
-        // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
         bug!("unexpected terminator kind {:?}", terminator.kind);
     };
 
@@ -1016,7 +1011,7 @@ fn inline_call<'tcx, I: Inliner<'tcx>>(
     // Copy required constants from the callee_body into the caller_body. Although we are only
     // pushing unevaluated consts to `required_consts`, here they may have been evaluated
     // because we are calling `instantiate_and_normalize_erasing_regions` -- so we filter again.
-    caller_body.required_consts.as_mut().expect("invariant: caller required_consts must be initialized").extend( // tRust: unwrap elimination
+    caller_body.required_consts.as_mut().unwrap().extend(
         callee_body.required_consts().into_iter().filter(|ct| ct.const_.is_required_const()),
     );
     // Now that we incorporated the callee's `required_consts`, we can remove the callee from
@@ -1027,7 +1022,7 @@ fn inline_call<'tcx, I: Inliner<'tcx>>(
     // We need to reconstruct the `required_item` for the callee so that we can find and
     // remove it.
     let callee_item = MentionedItem::Fn(func.ty(caller_body, tcx));
-    let caller_mentioned_items = caller_body.mentioned_items.as_mut().expect("invariant: caller mentioned_items must be initialized"); // tRust: unwrap elimination
+    let caller_mentioned_items = caller_body.mentioned_items.as_mut().unwrap();
     if let Some(idx) = caller_mentioned_items.iter().position(|item| item.node == callee_item) {
         // We found the callee, so remove it and add its items instead.
         caller_mentioned_items.remove(idx);
@@ -1073,19 +1068,18 @@ fn make_call_args<'tcx, I: Inliner<'tcx>>(
     //
     // and the vector is `[closure_ref, tmp0, tmp1, tmp2]`.
     if callsite.fn_sig.abi() == ExternAbi::RustCall && callee_body.spread_arg.is_none() {
-        // tRust: Upstream TODO -- edition 2024 migration for IntoIterator method call.
-        // TODO(edition_2024): Switch back to normal method call when edition allows.
+        // FIXME(edition_2024): switch back to a normal method call.
         let mut args = <_>::into_iter(args);
         let self_ = create_temp_if_necessary(
             inliner,
-            args.next().expect("invariant: closure call must have self argument").node, // tRust: unwrap elimination
+            args.next().unwrap().node,
             callsite,
             caller_body,
             return_block,
         );
         let tuple = create_temp_if_necessary(
             inliner,
-            args.next().expect("invariant: closure call must have tuple argument").node, // tRust: unwrap elimination
+            args.next().unwrap().node,
             callsite,
             caller_body,
             return_block,
@@ -1094,7 +1088,6 @@ fn make_call_args<'tcx, I: Inliner<'tcx>>(
 
         let tuple = Place::from(tuple);
         let ty::Tuple(tuple_tys) = tuple.ty(caller_body, tcx).ty.kind() else {
-            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
             bug!("Closure arguments are not passed as a tuple");
         };
 
@@ -1222,7 +1215,6 @@ impl Integrator<'_, '_> {
         if self.in_cleanup_block {
             match unwind {
                 UnwindAction::Cleanup(_) | UnwindAction::Continue => {
-                    // tRust: invariant: structural invariant — cleanup blocks cannot have their own cleanup in well-formed MIR
                     bug!("cleanup on cleanup block");
                 }
                 UnwindAction::Unreachable | UnwindAction::Terminate(_) => return unwind,
@@ -1308,7 +1300,6 @@ impl<'tcx> MutVisitor<'tcx> for Integrator<'_, 'tcx> {
         }
 
         match terminator.kind {
-            // tRust: invariant: MIR phase guarantee — coroutine drops/yields are lowered before this MIR phase
             TerminatorKind::CoroutineDrop | TerminatorKind::Yield { .. } => bug!(),
             TerminatorKind::Goto { ref mut target } => {
                 *target = self.map_block(*target);
@@ -1360,7 +1351,6 @@ impl<'tcx> MutVisitor<'tcx> for Integrator<'_, 'tcx> {
             TerminatorKind::FalseUnwind { real_target: _, unwind: _ } =>
             // see the ordering of passes in the optimized_mir query.
             {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!("False unwinds should have been removed before inlining")
             }
             TerminatorKind::InlineAsm { ref mut targets, ref mut unwind, .. } => {

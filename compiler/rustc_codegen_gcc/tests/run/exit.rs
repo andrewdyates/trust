@@ -13,7 +13,6 @@ use mini_core::*;
 
 #[no_mangle]
 extern "C" fn main(argc: i32, _argv: *const *const u8) -> i32 {
-    // SAFETY: calling libc exit/abort to terminate the process.
     unsafe {
         libc::exit(2);
     }

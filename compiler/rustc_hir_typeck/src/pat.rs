@@ -490,7 +490,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             && pat_info.max_ref_mutbl != MutblCap::Mut
             && self.downgrade_mut_inside_shared()
         {
-            // tRust: invariant — when shared-reference downgrading is enabled, a `ref mut` binding must still carry a `Mut` cap from pattern analysis.
             span_bug!(pat.span, "Pattern mutability cap violated!");
         }
 
@@ -603,7 +602,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // We allow any type here; we ensure that the type is uninhabited during match checking.
             PatKind::Never => expected,
             PatKind::Expr(PatExpr { kind: PatExprKind::Path(_), hir_id, .. }) => {
-                let ty = match opt_path_res.expect("invariant: value is present") {
+                let ty = match opt_path_res.unwrap() {
                     Ok(ref pr) => {
                         self.check_pat_path(pat.hir_id, pat.span, pr, expected, &pat_info.top_info)
                     }
@@ -621,7 +620,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             PatKind::Binding(ba, var_id, ident, sub) => {
                 self.check_pat_ident(pat, ba, var_id, ident, sub, expected, pat_info)
             }
-            PatKind::TupleStruct(ref qpath, subpats, ddpos) => match opt_path_res.expect("invariant: value is present") {
+            PatKind::TupleStruct(ref qpath, subpats, ddpos) => match opt_path_res.unwrap() {
                 Ok(ResolvedPat { ty, kind: ResolvedPatKind::TupleStruct { res, variant } }) => self
                     .check_pat_tuple_struct(
                         pat, qpath, subpats, ddpos, res, ty, variant, expected, pat_info,
@@ -633,10 +632,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
                     ty_err
                 }
-                // tRust: invariant — successfully resolving a `PatKind::TupleStruct` must yield `ResolvedPatKind::TupleStruct`.
                 Ok(pr) => span_bug!(pat.span, "tuple struct pattern resolved to {pr:?}"),
             },
-            PatKind::Struct(_, fields, has_rest_pat) => match opt_path_res.expect("invariant: value is present") {
+            PatKind::Struct(_, fields, has_rest_pat) => match opt_path_res.unwrap() {
                 Ok(ResolvedPat { ty, kind: ResolvedPatKind::Struct { variant } }) => self
                     .check_pat_struct(
                         pat,
@@ -654,7 +652,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
                     ty_err
                 }
-                // tRust: invariant — successfully resolving a `PatKind::Struct` must yield `ResolvedPatKind::Struct`.
                 Ok(pr) => span_bug!(pat.span, "struct pattern resolved to {pr:?}"),
             },
             PatKind::Guard(pat, cond) => {
@@ -749,7 +746,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let pat_adjustments = pat_adjustments_table.entry(pat.hir_id).or_default();
         // We may reach the recursion limit if a user matches on a type `T` satisfying
         // `T: Deref<Target = T>`; error gracefully in this case.
-        // NOTE(deref_patterns): if `deref_patterns` stabilizes, it may make sense to move
+        // FIXME(deref_patterns): If `deref_patterns` stabilizes, it may make sense to move
         // this check out of this branch. Alternatively, this loop could be implemented with
         // autoderef and this check removed. For now though, don't break code compiling on
         // stable with lots of `&`s and a low recursion limit, if anyone's done that.
@@ -780,7 +777,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // that the expected type be of those types and not reference types.
             PatKind::Tuple(..) | PatKind::Range(..) | PatKind::Slice(..) => AdjustMode::peel_all(),
             // When checking an explicit deref pattern, only peel reference types.
-            // NOTE(deref_patterns): if box patterns and deref patterns need to coexist, box
+            // FIXME(deref_patterns): If box patterns and deref patterns need to coexist, box
             // patterns may want `PeelKind::Implicit`, stopping on encountering a box.
             PatKind::Box(_) | PatKind::Deref(_) => {
                 AdjustMode::Peel { kind: PeelKind::ExplicitDerefPat }
@@ -792,7 +789,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             | PatKind::TupleStruct(..)
             | PatKind::Expr(PatExpr { kind: PatExprKind::Path(_), .. }) => {
                 // If there was an error resolving the path, default to peeling everything.
-                opt_path_res.expect("invariant: value is present").map_or(AdjustMode::peel_all(), |pr| pr.adjust_mode())
+                opt_path_res.unwrap().map_or(AdjustMode::peel_all(), |pr| pr.adjust_mode())
             }
 
             // String and byte-string literals result in types `&str` and `&[u8]` respectively.
@@ -806,10 +803,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     && self.tcx.features().deref_patterns()
                     && !matches!(lt.kind, PatExprKind::Lit { .. })
                 {
-                    // tRust: invariant — with `deref_patterns`, any non-literal `PatKind::Expr` would have to be a path or inline const, but paths were handled earlier and inline const patterns are currently unconstructible.
                     span_bug!(
                         lt.span,
-                        "deref_patterns: adjust mode unimplemented for {:?}",
+                        "FIXME(deref_patterns): adjust mode unimplemented for {:?}",
                         lt.kind
                     );
                 }
@@ -898,7 +894,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // Explicit `deref!(_)` patterns match against smart pointers; don't peel in that case.
         if let PeelKind::Implicit { until_adt, .. } = peel_kind
             // For simplicity, only apply overloaded derefs if `expected` is a known ADT.
-            // NOTE(deref_patterns): we'll get better diagnostics for users trying to
+            // FIXME(deref_patterns): we'll get better diagnostics for users trying to
             // implicitly deref generics if we allow them here, but primitives, tuples, and
             // inference vars definitely should be stopped. Figure out what makes most sense.
             && let ty::Adt(scrutinee_adt, _) = *expected.kind()
@@ -979,7 +975,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 ty::Array(..) if tcx.features().deref_patterns() => {
                     pat_ty = match *ty.kind() {
                         ty::Ref(_, inner_ty, _) => inner_ty,
-                        // tRust: invariant — byte string literals are typed as references, so array-expected deref-pattern matching must unwrap a `ty::Ref` here.
                         _ => span_bug!(span, "found byte string literal with non-ref type {ty:?}"),
                     }
                 }
@@ -1107,7 +1102,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             (Some((true, ..)), Some((true, ..))) => span,
             (Some((true, _, sp)), _) => sp,
             (_, Some((true, _, sp))) => sp,
-            // tRust: invariant — range-pattern type errors are only reported after at least one endpoint has been identified as failing.
             _ => span_bug!(span, "emit_err_pat_range: no side failed or exists but still error?"),
         };
         let mut err = struct_span_code_err!(
@@ -1134,13 +1128,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             (Some((true, lhs_ty, lhs_sp)), rhs) => one_side_err(lhs_sp, lhs_ty, rhs),
             (lhs, Some((true, rhs_ty, rhs_sp))) => one_side_err(rhs_sp, rhs_ty, lhs),
-            // tRust: invariant — after the span selection above, this match must again find a failing left or right endpoint to label.
             _ => span_bug!(span, "Impossible, verified above."),
         }
         if (lhs, rhs).references_error() {
             err.downgrade_to_delayed_bug();
         }
-        if self.tcx.sess.teach(err.code.expect("invariant: value is present")) {
+        if self.tcx.sess.teach(err.code.unwrap()) {
             err.note(
                 "In a match expression, only numbers and characters can be matched \
                     against a range. This is because the compiler checks that the range \
@@ -1359,7 +1352,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     }
 
     /// Precondition: pat is a `Ref(_)` pattern
-    // NOTE(pin_ergonomics): add suggestions for `&pin mut` or `&pin const` patterns
+    // FIXME(pin_ergonomics): add suggestions for `&pin mut` or `&pin const` patterns
     fn borrow_pat_suggestion(&self, err: &mut Diag<'_>, pat: &Pat<'_>) {
         let tcx = self.tcx;
         if let PatKind::Ref(inner, pinned, mutbl) = pat.kind
@@ -1490,7 +1483,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 type_str
             );
             err.span_label(span, format!("type `{type_str}` cannot be dereferenced"));
-            if self.tcx.sess.teach(err.code.expect("invariant: value is present")) {
+            if self.tcx.sess.teach(err.code.unwrap()) {
                 err.note(CANNOT_IMPLICITLY_DEREF_POINTER_TRAIT_OBJ);
             }
             return Err(err.emit());
@@ -1579,7 +1572,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 | DefKind::ConstParam,
                 _,
             ) => {} // OK
-            // tRust: invariant — a successfully resolved path pattern must denote a const, const param, assoc const, or unit-struct constructor.
             _ => bug!("unexpected pattern resolution: {:?}", res),
         }
 
@@ -1641,7 +1633,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         resolved_pat: &ResolvedPat<'tcx>,
     ) {
         let ResolvedPatKind::Path { res, pat_res, segments } = resolved_pat.kind else {
-            // tRust: invariant — `emit_bad_pat_path` is only called for path-pattern diagnostics, so `resolved_pat.kind` must be `ResolvedPatKind::Path`.
             span_bug!(pat_span, "unexpected resolution for path pattern: {resolved_pat:?}");
         };
 
@@ -1756,7 +1747,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 return report_unexpected_res(res);
             }
             Res::Def(DefKind::Ctor(_, CtorKind::Fn), _) => tcx.expect_variant_res(res),
-            // tRust: invariant — once a tuple-struct pattern resolves to a function type, the resolution must be that tuple constructor.
             _ => bug!("unexpected pattern resolution: {:?}", res),
         };
 
@@ -1794,7 +1784,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             || subpats.len() < variant.fields.len() && ddpos.as_opt_usize().is_some()
         {
             let ty::Adt(_, args) = pat_ty.kind() else {
-                // tRust: invariant — tuple-struct subpattern checking only runs after replacing the constructor type with its ADT output.
                 bug!("unexpected pattern type {:?}", pat_ty);
             };
             for (i, subpat) in subpats.iter().enumerate_and_adjust(variant.fields.len(), ddpos) {
@@ -1847,7 +1836,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         } else {
             subpats.iter().map(|p| p.span).collect()
         };
-        let last_subpat_span = *subpat_spans.last().expect("invariant: non-empty collection");
+        let last_subpat_span = *subpat_spans.last().unwrap();
         let res_span = self.tcx.def_span(res.def_id());
         let def_ident_span = self.tcx.def_ident_span(res.def_id()).unwrap_or(res_span);
         let field_def_spans = if fields.is_empty() {
@@ -1855,7 +1844,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         } else {
             fields.iter().map(|f| f.ident(self.tcx).span).collect()
         };
-        let last_field_def_span = *field_def_spans.last().expect("invariant: non-empty collection");
+        let last_field_def_span = *field_def_spans.last().unwrap();
 
         let mut err = struct_span_code_err!(
             self.dcx(),
@@ -1922,7 +1911,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 //   |
                 // L |     let A((x, y)) = A((1, 2));
                 //   |           ^    ^
-                [first, ..] => (first.span.shrink_to_lo(), subpats.last().expect("invariant: non-empty collection").span),
+                [first, ..] => (first.span.shrink_to_lo(), subpats.last().unwrap().span),
             };
             err.multipart_suggestion(
                 "missing parentheses",
@@ -1951,7 +1940,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 Some(pos) => subpats[pos - 1].span.shrink_to_hi().to(after_fields_span),
             };
 
-            // NOTE: heuristic-based suggestion to check current types for where to add `_`.
+            // FIXME: heuristic-based suggestion to check current types for where to add `_`.
             let mut wildcard_sugg = vec!["_"; fields.len() - subpats.len()].join(", ");
             if !subpats.is_empty() {
                 wildcard_sugg = String::from(", ") + &wildcard_sugg;
@@ -2036,7 +2025,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let tcx = self.tcx;
 
         let ty::Adt(adt, args) = adt_ty.kind() else {
-            // tRust: invariant — struct-pattern field checking is only entered for ADT-backed struct or variant types.
             span_bug!(pat.span, "struct pattern is not an ADT");
         };
 
@@ -2341,7 +2329,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
             }
         }
-        if tcx.sess.teach(err.code.expect("invariant: value is present")) {
+        if tcx.sess.teach(err.code.unwrap()) {
             err.note(
                 "This error indicates that a struct pattern attempted to \
                  extract a nonexistent field from a struct. Struct fields \
@@ -2476,7 +2464,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let qpath_span = if let PatKind::Struct(qpath, ..) = &pat.kind {
                 qpath.span()
             } else {
-                // tRust: invariant — `error_no_accessible_fields` only diagnoses `PatKind::Struct`, so extracting its qpath must succeed here.
                 bug!("`error_no_accessible_fields` called on non-struct pattern");
             };
 
@@ -2814,7 +2801,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             // NB: This assumes that `&` patterns can match against mutable
                             // references (RFC 3627, Rule 5). If we implement a pattern typing
                             // ruleset with Rule 4 but not Rule 5, we'll need to check that here.
-                            // NOTE(ref_pat_eat_one_layer_2024_structural): If we already tried
+                            // FIXME(ref_pat_eat_one_layer_2024_structural): If we already tried
                             // matching the real reference, the error message should explain that
                             // falling back to the inherited reference didn't work. This should be
                             // the same error as the old-Edition version below.
@@ -2846,7 +2833,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         } else {
                             // Otherwise, use the common logic below for matching the inner
                             // reference type.
-                            // NOTE(ref_pat_eat_one_layer_2024_structural): If this results in a
+                            // FIXME(ref_pat_eat_one_layer_2024_structural): If this results in a
                             // mutability mismatch, the error message should explain that falling
                             // back to the inherited reference didn't work. This should be the same
                             // error as the Edition 2024 version above.
@@ -2998,7 +2985,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let len = before.len();
         let inner_ty = self.next_ty_var(span);
 
-        Some(Ty::new_array(tcx, inner_ty, len.try_into().expect("invariant: value fits target type")))
+        Some(Ty::new_array(tcx, inner_ty, len.try_into().unwrap()))
     }
 
     /// Used to determines whether we can infer the expected type in the slice pattern to be of type array.
@@ -3101,7 +3088,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
         // Type check the `slice`, if present, against its expected type.
         if let Some(slice) = slice {
-            self.check_pat(slice, opt_slice_ty.expect("invariant: value is present"), pat_info);
+            self.check_pat(slice, opt_slice_ty.unwrap(), pat_info);
         }
         // Type check the elements after `slice`, if present.
         for elt in after {
@@ -3297,7 +3284,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let mut typeck_results = self.typeck_results.borrow_mut();
         let mut table = typeck_results.rust_2024_migration_desugared_pats_mut();
-        // NOTE(ref_pat_eat_one_layer_2024): The migration diagnostic doesn't know how to track the
+        // FIXME(ref_pat_eat_one_layer_2024): The migration diagnostic doesn't know how to track the
         // default binding mode in the presence of Rule 3 or Rule 5. As a consequence, the labels it
         // gives for default binding modes are wrong, as well as suggestions based on the default
         // binding mode. This keeps it from making those suggestions, as doing so could panic.

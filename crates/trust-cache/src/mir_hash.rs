@@ -10,8 +10,8 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::VecDeque;
-use trust_types::fx::{FxHashMap, FxHashSet};
 use std::path::Path;
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -104,7 +104,13 @@ impl VerificationResult {
     /// Create a result representing a fully verified function.
     #[must_use]
     pub fn verified(total: usize) -> Self {
-        Self { verdict: FunctionVerdict::Verified, total_obligations: total, proved: total, failed: 0, unknown: 0 }
+        Self {
+            verdict: FunctionVerdict::Verified,
+            total_obligations: total,
+            proved: total,
+            failed: 0,
+            unknown: 0,
+        }
     }
 }
 
@@ -420,10 +426,7 @@ impl DependencyGraph {
     /// Serialize the dependency graph to JSON for persistence.
     #[must_use]
     pub fn to_json(&self) -> FxHashMap<String, Vec<String>> {
-        self.forward
-            .iter()
-            .map(|(k, vs)| (k.clone(), vs.iter().cloned().collect()))
-            .collect()
+        self.forward.iter().map(|(k, vs)| (k.clone(), vs.iter().cloned().collect())).collect()
     }
 
     /// Deserialize a dependency graph from JSON.
@@ -734,8 +737,8 @@ mod tests {
         let mut graph = DependencyGraph::new();
         graph.add_edge("A", "B");
 
-        assert_eq!(graph.callees("A"), FxHashSet::from(["B".to_string()]));
-        assert_eq!(graph.callers("B"), FxHashSet::from(["A".to_string()]));
+        assert_eq!(graph.callees("A"), ["B".to_string()].into_iter().collect::<FxHashSet<_>>());
+        assert_eq!(graph.callers("B"), ["A".to_string()].into_iter().collect::<FxHashSet<_>>());
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edge_count(), 1);
     }
@@ -810,8 +813,14 @@ mod tests {
         let graph2 = DependencyGraph::from_json(&json);
 
         assert_eq!(graph2.edge_count(), 3);
-        assert_eq!(graph2.callees("A"), FxHashSet::from(["B".to_string(), "C".to_string()]));
-        assert_eq!(graph2.callers("C"), FxHashSet::from(["A".to_string(), "B".to_string()]));
+        assert_eq!(
+            graph2.callees("A"),
+            ["B".to_string(), "C".to_string()].into_iter().collect::<FxHashSet<_>>()
+        );
+        assert_eq!(
+            graph2.callers("C"),
+            ["A".to_string(), "B".to_string()].into_iter().collect::<FxHashSet<_>>()
+        );
     }
 
     #[test]

@@ -53,7 +53,7 @@ where
         let b = guard.run(oper_b);
         (a, b)
     });
-    (a.expect("invariant: parallel task A must not panic"), b.expect("invariant: parallel task B must not panic")) // tRust: unwrap -> expect
+    (a.unwrap(), b.unwrap())
 }
 
 pub fn spawn(func: impl FnOnce() + DynSend + 'static) {
@@ -117,7 +117,7 @@ where
                 move || guard.run(move || proof.derive(oper_b.into_inner()())),
             )
         });
-        (a.expect("invariant: parallel task A must not panic").into_inner(), b.expect("invariant: parallel task B must not panic").into_inner()) // tRust: unwrap -> expect
+        (a.unwrap().into_inner(), b.unwrap().into_inner())
     } else {
         serial_join(oper_a, oper_b)
     }
@@ -228,7 +228,7 @@ pub fn par_map<I: DynSend, T: IntoIterator<Item = I>, R: DynSend, C: FromIterato
                 &mut items,
                 guard,
                 |i| {
-                    i.1 = Some(map(i.0.take().expect("invariant: parallel work item must not be taken twice"))); // tRust: unwrap -> expect
+                    i.1 = Some(map(i.0.take().unwrap()));
                 },
                 proof,
             );

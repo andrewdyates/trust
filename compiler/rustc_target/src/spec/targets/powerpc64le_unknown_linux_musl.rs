@@ -9,7 +9,7 @@ pub(crate) fn target() -> Target {
     base.add_pre_link_args(LinkerFlavor::Gnu(Cc::Yes, Lld::No), &["-m64"]);
     base.max_atomic_width = Some(64);
     base.stack_probes = StackProbeType::Inline;
-    // tRust: known issue (compiler-team#422) — musl targets should be dynamically linked by default.
+    // FIXME(compiler-team#422): musl targets should be dynamically linked by default.
     base.crt_static_default = true;
     base.cfg_abi = CfgAbi::ElfV2;
     base.llvm_abiname = LlvmAbi::ElfV2;

@@ -1140,7 +1140,7 @@ pub(crate) struct SanitizeAttributeNotAllowed {
     pub help: (),
 }
 
-// tRust: known issue — (jdonszelmann) move back to rustc_attr
+// FIXME(jdonszelmann): move back to rustc_attr
 #[derive(Diagnostic)]
 #[diag(
     "`const_stable_indirect` attribute does not make sense on `rustc_const_stable` function, its behavior is already implied"

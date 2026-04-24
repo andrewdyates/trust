@@ -95,9 +95,7 @@ fn common_search_dirs() -> Vec<PathBuf> {
 
 /// Get the user's home directory.
 fn home_dir() -> Option<PathBuf> {
-    std::env::var("HOME")
-        .ok()
-        .map(PathBuf::from)
+    std::env::var("HOME").ok().map(PathBuf::from)
 }
 
 /// Search for a binary by name on PATH and in common locations.
@@ -128,10 +126,7 @@ fn find_binary(name: &str) -> Option<PathBuf> {
 
 /// Try to extract a version string from a binary's `--version` output.
 fn detect_version(binary_path: &Path) -> Option<String> {
-    let output = Command::new(binary_path)
-        .arg("--version")
-        .output()
-        .ok()?;
+    let output = Command::new(binary_path).arg("--version").output().ok()?;
 
     if !output.status.success() {
         return None;
@@ -152,14 +147,10 @@ pub(crate) fn detect_solver(name: &str) -> SolverInfo {
     let spec = KNOWN_SOLVERS.iter().find(|s| s.name == name);
 
     let (description, proof_levels) = match spec {
-        Some(s) => (
-            s.description.to_string(),
-            s.proof_levels.iter().map(|l| l.to_string()).collect(),
-        ),
-        None => (
-            format!("Unknown solver: {name}"),
-            vec![],
-        ),
+        Some(s) => {
+            (s.description.to_string(), s.proof_levels.iter().map(|l| l.to_string()).collect())
+        }
+        None => (format!("Unknown solver: {name}"), vec![]),
     };
 
     let binary_name = spec.map_or(name, |s| s.binary);
@@ -230,17 +221,10 @@ pub(crate) fn render_solvers_terminal(solvers: &[SolverInfo]) {
             "MISSING"
         };
 
-        let version_str = solver
-            .version
-            .as_deref()
-            .map(|v| format!(" ({v})"))
-            .unwrap_or_default();
+        let version_str = solver.version.as_deref().map(|v| format!(" ({v})")).unwrap_or_default();
 
-        let path_str = solver
-            .path
-            .as_deref()
-            .map(|p| format!(" at {}", p.display()))
-            .unwrap_or_default();
+        let path_str =
+            solver.path.as_deref().map(|p| format!(" at {}", p.display())).unwrap_or_default();
 
         let levels = if solver.proof_levels.is_empty() {
             String::new()
@@ -255,9 +239,7 @@ pub(crate) fn render_solvers_terminal(solvers: &[SolverInfo]) {
     }
 
     eprintln!();
-    eprintln!(
-        "Summary: {available_count}/{total} solvers available"
-    );
+    eprintln!("Summary: {available_count}/{total} solvers available");
 
     if available_count == 0 {
         eprintln!();
@@ -272,9 +254,7 @@ pub(crate) fn render_solvers_terminal(solvers: &[SolverInfo]) {
         eprintln!("  L2 (full):     L1 + tla2 + lean5");
     } else if available_count < total {
         eprintln!();
-        eprintln!(
-            "Some solvers are missing. Full verification requires all solvers."
-        );
+        eprintln!("Some solvers are missing. Full verification requires all solvers.");
     }
 
     eprintln!("===========================");
@@ -290,11 +270,7 @@ pub(crate) fn render_solvers_json(solvers: &[SolverInfo]) {
     }
 
     let available = solvers.iter().filter(|s| s.available).count();
-    let report = SolverReport {
-        solvers: solvers.to_vec(),
-        available,
-        total: solvers.len(),
-    };
+    let report = SolverReport { solvers: solvers.to_vec(), available, total: solvers.len() };
 
     match serde_json::to_string_pretty(&report) {
         Ok(json) => println!("{json}"),

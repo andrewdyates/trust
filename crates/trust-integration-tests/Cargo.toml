@@ -29,13 +29,16 @@ trust-symex = { workspace = true }
 trust-strengthen = { workspace = true }
 trust-backprop = { workspace = true }
 trust-convergence = { workspace = true }
+trust-transval = { workspace = true }
 trust-loop = { workspace = true }
 trust-lift = { workspace = true, features = ["elf"] }
-trust-decompile = { workspace = true }
 trust-disasm = { workspace = true }
 trust-binary-parse = { workspace = true }
-trust-type-recover = { workspace = true }
+trust-proof-cert = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [features]
 default = ["pipeline-v2"]

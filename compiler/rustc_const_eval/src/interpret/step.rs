@@ -58,7 +58,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             // Make sure we are not updating `statement_index` of the wrong frame.
             assert_eq!(old_frames, self.frame_idx());
             // Advance the program counter.
-            self.frame_mut().loc.as_mut().left().expect("invariant: frame location is Left (valid statement index) during statement stepping").statement_index += 1;
+            self.frame_mut().loc.as_mut().left().unwrap().statement_index += 1;
             return interp_ok(true);
         }
 
@@ -139,7 +139,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             // this should change, and/or how to implement a const eval counter, is a subject of the
             // following issue:
             //
-            // tRust: known issue (#73156) — Handle source code coverage in const eval
+            // FIXME(#73156): Handle source code coverage in const eval
             Coverage(..) => {}
 
             ConstEvalCounter => {
@@ -167,7 +167,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         place: mir::Place<'tcx>,
     ) -> InterpResult<'tcx> {
         let dest = self.eval_place(place)?;
-        // tRust: known issue — ensure some kind of non-aliasing between LHS and RHS?
+        // FIXME: ensure some kind of non-aliasing between LHS and RHS?
         // Also see https://github.com/rust-lang/rust/issues/68364.
 
         use rustc_middle::mir::Rvalue::*;
@@ -183,7 +183,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 self.copy_op(&op, &dest)?;
             }
 
-            // tRust: invariant — CopyForDeref is a MIR building artifact removed before runtime
             CopyForDeref(_) => bug!("`CopyForDeref` in runtime MIR"),
 
             BinaryOp(bin_op, box (ref left, ref right)) => {
@@ -296,7 +295,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 // or in type mismatches. Instead, build an `Immediate` from
                 // the parts and write that to the destination.
                 let [data, meta] = &operands.raw else {
-                    // tRust: invariant — checked binary operations require exactly 2 operands
                     bug!("{kind:?} should have 2 operands, had {operands:?}");
                 };
                 let data = self.eval_operand(data, None)?;
@@ -477,7 +475,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 )
             }
             _ => {
-                // tRust: invariant — call terminator callee must have a function or function pointer type
                 span_bug!(terminator.source_info.span, "invalid callee of type {}", func.layout.ty)
             }
         };
@@ -558,7 +555,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 // for those (which is fine since execution will continue on a different thread).
                 if target.is_some() && self.frame_idx() == old_stack && self.frame().loc == old_loc
                 {
-                    // tRust: invariant — intrinsic/lang-item call must either return or diverge
                     span_bug!(terminator.source_info.span, "evaluating this call made no progress");
                 }
             }
@@ -572,7 +568,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 self.init_fn_tail_call(callee, (fn_sig.abi, fn_abi), &args, with_caller_location)?;
 
                 if self.frame_idx() != old_frame_idx {
-                    // tRust: invariant — tail call must replace the current frame, not push a new one
                     span_bug!(
                         terminator.source_info.span,
                         "evaluating this tail call pushed a new stack frame"
@@ -633,7 +628,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             Unreachable => throw_ub!(Unreachable),
 
             // These should never occur for MIR we actually run.
-            // tRust: invariant — these terminators are eliminated by MIR passes before interpretation
             FalseEdge { .. } | FalseUnwind { .. } | Yield { .. } | CoroutineDrop => span_bug!(
                 terminator.source_info.span,
                 "{:#?} should have been eliminated by MIR pass",

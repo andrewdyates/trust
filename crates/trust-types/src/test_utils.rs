@@ -26,7 +26,7 @@ pub fn make_test_vc_with_formula(
 ) -> VerificationCondition {
     VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: test_source_span(),
         formula,
         contract_metadata: None,

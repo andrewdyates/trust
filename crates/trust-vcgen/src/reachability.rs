@@ -30,10 +30,7 @@ pub fn reachable_from(graph: &CallGraph, roots: &[&str]) -> FxHashSet<String> {
     // Build adjacency: caller def_path -> set of callee strings
     let mut adjacency: FxHashMap<&str, Vec<&str>> = FxHashMap::default();
     for edge in &graph.edges {
-        adjacency
-            .entry(edge.caller.as_str())
-            .or_default()
-            .push(edge.callee.as_str());
+        adjacency.entry(edge.caller.as_str()).or_default().push(edge.callee.as_str());
     }
 
     // Build a lookup for resolving callee names to node def_paths.
@@ -126,8 +123,8 @@ pub fn analyze_reachability(graph: &CallGraph) -> ReachabilityResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trust_types::call_graph::{CallGraphEdge, CallGraphNode};
     use trust_types::SourceSpan;
+    use trust_types::call_graph::{CallGraphEdge, CallGraphNode};
 
     fn span(file: &str, line: u32) -> SourceSpan {
         SourceSpan {
@@ -357,11 +354,9 @@ mod tests {
     fn test_cycle_handling() {
         let mut graph = CallGraph::new();
 
-        for (path, name, is_entry) in [
-            ("crate::main", "main", true),
-            ("crate::a", "a", false),
-            ("crate::b", "b", false),
-        ] {
+        for (path, name, is_entry) in
+            [("crate::main", "main", true), ("crate::a", "a", false), ("crate::b", "b", false)]
+        {
             graph.add_node(CallGraphNode {
                 def_path: path.to_string(),
                 name: name.to_string(),

@@ -1,3 +1,6 @@
+// tRust: #861 — Updated to use unsafe fn pointer. Coercion of #[target_feature]
+// functions to safe fn pointers is now always rejected (soundness fix).
+
 //@ only-x86_64
 //@ run-pass
 
@@ -7,7 +10,7 @@ fn foo() -> bool {
 }
 
 #[target_feature(enable = "sse2")]
-fn bar() -> fn() -> bool {
+fn bar() -> unsafe fn() -> bool {
     foo
 }
 
@@ -16,5 +19,5 @@ fn main() {
         return;
     }
     let f = unsafe { bar() };
-    assert!(f());
+    assert!(unsafe { f() });
 }

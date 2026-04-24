@@ -134,12 +134,7 @@ impl Formula {
 
             // Conditional
             Formula::Ite(cond, then, els) => {
-                format!(
-                    "(ite {} {} {})",
-                    cond.to_smtlib(),
-                    then.to_smtlib(),
-                    els.to_smtlib()
-                )
+                format!("(ite {} {} {})", cond.to_smtlib(), then.to_smtlib(), els.to_smtlib())
             }
 
             // Quantifiers
@@ -163,12 +158,7 @@ impl Formula {
                 format!("(select {} {})", arr.to_smtlib(), idx.to_smtlib())
             }
             Formula::Store(arr, idx, val) => {
-                format!(
-                    "(store {} {} {})",
-                    arr.to_smtlib(),
-                    idx.to_smtlib(),
-                    val.to_smtlib()
-                )
+                format!("(store {} {} {})", arr.to_smtlib(), idx.to_smtlib(), val.to_smtlib())
             }
         }
     }

@@ -161,10 +161,7 @@ fn extract_function_map(report: &JsonProofReport) -> BTreeMap<String, FunctionSn
 }
 
 /// Build a full diff report from two `JsonProofReport` instances.
-pub(crate) fn build_diff(
-    baseline: &JsonProofReport,
-    current: &JsonProofReport,
-) -> FullDiffReport {
+pub(crate) fn build_diff(baseline: &JsonProofReport, current: &JsonProofReport) -> FullDiffReport {
     let base_map = extract_function_map(baseline);
     let curr_map = extract_function_map(current);
 
@@ -300,30 +297,20 @@ fn use_color() -> bool {
 }
 
 fn color(code: &str, text: &str) -> String {
-    if use_color() {
-        format!("{code}{text}{RESET}")
-    } else {
-        text.to_string()
-    }
+    if use_color() { format!("{code}{text}{RESET}") } else { text.to_string() }
 }
 
 fn bold(text: &str) -> String {
-    if use_color() {
-        format!("{BOLD}{text}{RESET}")
-    } else {
-        text.to_string()
-    }
+    if use_color() { format!("{BOLD}{text}{RESET}") } else { text.to_string() }
 }
 
 impl FullDiffReport {
     pub(crate) fn render(&self, format: OutputFormat) {
         match format {
-            OutputFormat::Json => {
-                match serde_json::to_string_pretty(self) {
-                    Ok(json) => println!("{json}"),
-                    Err(e) => eprintln!("cargo-trust: failed to serialize diff: {e}"),
-                }
-            }
+            OutputFormat::Json => match serde_json::to_string_pretty(self) {
+                Ok(json) => println!("{json}"),
+                Err(e) => eprintln!("cargo-trust: failed to serialize diff: {e}"),
+            },
             OutputFormat::Terminal | OutputFormat::Html => {
                 self.render_terminal();
             }
@@ -370,30 +357,14 @@ impl FullDiffReport {
         } else {
             for entry in &self.entries {
                 let (icon, colored_status) = match entry.direction {
-                    ChangeDirection::Improved => (
-                        color(GREEN, "+"),
-                        color(GREEN, "IMPROVED"),
-                    ),
-                    ChangeDirection::Regressed => (
-                        color(RED, "-"),
-                        color(RED, "REGRESSED"),
-                    ),
-                    ChangeDirection::Added => (
-                        color(CYAN, "+"),
-                        color(CYAN, "ADDED"),
-                    ),
-                    ChangeDirection::Removed => (
-                        color(YELLOW, "-"),
-                        color(YELLOW, "REMOVED"),
-                    ),
-                    ChangeDirection::ObligationChanged => (
-                        color(YELLOW, "~"),
-                        color(YELLOW, "CHANGED"),
-                    ),
-                    ChangeDirection::Unchanged => (
-                        " ".to_string(),
-                        "unchanged".to_string(),
-                    ),
+                    ChangeDirection::Improved => (color(GREEN, "+"), color(GREEN, "IMPROVED")),
+                    ChangeDirection::Regressed => (color(RED, "-"), color(RED, "REGRESSED")),
+                    ChangeDirection::Added => (color(CYAN, "+"), color(CYAN, "ADDED")),
+                    ChangeDirection::Removed => (color(YELLOW, "-"), color(YELLOW, "REMOVED")),
+                    ChangeDirection::ObligationChanged => {
+                        (color(YELLOW, "~"), color(YELLOW, "CHANGED"))
+                    }
+                    ChangeDirection::Unchanged => (" ".to_string(), "unchanged".to_string()),
                 };
 
                 let detail = match (&entry.baseline, &entry.current) {
@@ -409,28 +380,15 @@ impl FullDiffReport {
                         )
                     }
                     (None, Some(c)) => {
-                        format!(
-                            "(new) {}  ({}/{})",
-                            c.status.label(),
-                            c.proved,
-                            c.total,
-                        )
+                        format!("(new) {}  ({}/{})", c.status.label(), c.proved, c.total,)
                     }
                     (Some(b), None) => {
-                        format!(
-                            "{} -> (removed)  (was {}/{})",
-                            b.status.label(),
-                            b.proved,
-                            b.total,
-                        )
+                        format!("{} -> (removed)  (was {}/{})", b.status.label(), b.proved, b.total,)
                     }
                     (None, None) => String::new(),
                 };
 
-                eprintln!(
-                    "  [{icon}] {colored_status:>12}  {}  {detail}",
-                    bold(&entry.function),
-                );
+                eprintln!("  [{icon}] {colored_status:>12}  {}  {detail}", bold(&entry.function),);
             }
         }
 
@@ -448,15 +406,9 @@ impl FullDiffReport {
 
         // CI gate result
         if self.has_regressions {
-            eprintln!(
-                "  {}",
-                color(RED, "FAIL: verification regressions detected (exit 1)"),
-            );
+            eprintln!("  {}", color(RED, "FAIL: verification regressions detected (exit 1)"),);
         } else {
-            eprintln!(
-                "  {}",
-                color(GREEN, "PASS: no verification regressions"),
-            );
+            eprintln!("  {}", color(GREEN, "PASS: no verification regressions"),);
         }
 
         eprintln!("{}", bold("================================"));
@@ -485,10 +437,7 @@ pub(crate) fn load_report(path: &Path) -> Result<JsonProofReport, String> {
         return Ok(legacy_to_json_proof_report(&legacy));
     }
 
-    Err(format!(
-        "failed to parse `{}` as JsonProofReport or legacy report",
-        path.display()
-    ))
+    Err(format!("failed to parse `{}` as JsonProofReport or legacy report", path.display()))
 }
 
 /// Legacy saved report format for backward compatibility.
@@ -551,15 +500,13 @@ fn legacy_to_json_proof_report(legacy: &LegacySavedReport) -> JsonProofReport {
             .iter()
             .map(|r| {
                 let outcome = match r.outcome {
-                    LegacyOutcome::Proved => ObligationOutcome::Proved {
-                        strength: ProofStrength::smt_unsat(),
-                    },
-                    LegacyOutcome::Failed => ObligationOutcome::Failed {
-                        counterexample: None,
-                    },
-                    LegacyOutcome::Unknown => ObligationOutcome::Unknown {
-                        reason: "unknown".to_string(),
-                    },
+                    LegacyOutcome::Proved => {
+                        ObligationOutcome::Proved { strength: ProofStrength::smt_unsat() }
+                    }
+                    LegacyOutcome::Failed => ObligationOutcome::Failed { counterexample: None },
+                    LegacyOutcome::Unknown => {
+                        ObligationOutcome::Unknown { reason: "unknown".to_string() }
+                    }
                 };
                 ObligationReport {
                     description: r.message.clone(),
@@ -593,18 +540,12 @@ fn legacy_to_json_proof_report(legacy: &LegacySavedReport) -> JsonProofReport {
     }
 
     let total = total_proved + total_failed + total_unknown;
-    let functions_verified = functions
-        .iter()
-        .filter(|f| f.summary.verdict == FunctionVerdict::Verified)
-        .count();
-    let functions_with_violations = functions
-        .iter()
-        .filter(|f| f.summary.verdict == FunctionVerdict::HasViolations)
-        .count();
-    let functions_inconclusive = functions
-        .iter()
-        .filter(|f| f.summary.verdict == FunctionVerdict::Inconclusive)
-        .count();
+    let functions_verified =
+        functions.iter().filter(|f| f.summary.verdict == FunctionVerdict::Verified).count();
+    let functions_with_violations =
+        functions.iter().filter(|f| f.summary.verdict == FunctionVerdict::HasViolations).count();
+    let functions_inconclusive =
+        functions.iter().filter(|f| f.summary.verdict == FunctionVerdict::Inconclusive).count();
 
     let verdict = if total_failed > 0 {
         CrateVerdict::HasViolations
@@ -683,11 +624,7 @@ pub(crate) fn run_diff_command(
     let diff = build_diff(&baseline, &current);
     diff.render(format);
 
-    if diff.has_regressions {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    if diff.has_regressions { ExitCode::FAILURE } else { ExitCode::SUCCESS }
 }
 
 /// Create an empty `JsonProofReport` for comparison.
@@ -727,7 +664,9 @@ mod tests {
     use super::*;
     use trust_types::*;
 
-    fn make_report(functions: Vec<(&str, FunctionVerdict, usize, usize, usize)>) -> JsonProofReport {
+    fn make_report(
+        functions: Vec<(&str, FunctionVerdict, usize, usize, usize)>,
+    ) -> JsonProofReport {
         let mut funcs = Vec::new();
         let mut tp = 0;
         let mut tf = 0;
@@ -758,8 +697,10 @@ mod tests {
         }
 
         let fv = funcs.iter().filter(|f| f.summary.verdict == FunctionVerdict::Verified).count();
-        let fviol = funcs.iter().filter(|f| f.summary.verdict == FunctionVerdict::HasViolations).count();
-        let finc = funcs.iter().filter(|f| f.summary.verdict == FunctionVerdict::Inconclusive).count();
+        let fviol =
+            funcs.iter().filter(|f| f.summary.verdict == FunctionVerdict::HasViolations).count();
+        let finc =
+            funcs.iter().filter(|f| f.summary.verdict == FunctionVerdict::Inconclusive).count();
 
         let verdict = if tf > 0 {
             CrateVerdict::HasViolations
@@ -819,12 +760,8 @@ mod tests {
 
     #[test]
     fn test_diff_regression() {
-        let baseline = make_report(vec![
-            ("safe_add", FunctionVerdict::Verified, 2, 0, 0),
-        ]);
-        let current = make_report(vec![
-            ("safe_add", FunctionVerdict::HasViolations, 1, 1, 0),
-        ]);
+        let baseline = make_report(vec![("safe_add", FunctionVerdict::Verified, 2, 0, 0)]);
+        let current = make_report(vec![("safe_add", FunctionVerdict::HasViolations, 1, 1, 0)]);
 
         let diff = build_diff(&baseline, &current);
         assert_eq!(diff.regressions, 1);
@@ -836,12 +773,8 @@ mod tests {
 
     #[test]
     fn test_diff_improvement() {
-        let baseline = make_report(vec![
-            ("buggy_fn", FunctionVerdict::HasViolations, 0, 2, 0),
-        ]);
-        let current = make_report(vec![
-            ("buggy_fn", FunctionVerdict::Verified, 2, 0, 0),
-        ]);
+        let baseline = make_report(vec![("buggy_fn", FunctionVerdict::HasViolations, 0, 2, 0)]);
+        let current = make_report(vec![("buggy_fn", FunctionVerdict::Verified, 2, 0, 0)]);
 
         let diff = build_diff(&baseline, &current);
         assert_eq!(diff.improvements, 1);
@@ -853,9 +786,7 @@ mod tests {
 
     #[test]
     fn test_diff_added_function() {
-        let baseline = make_report(vec![
-            ("old_fn", FunctionVerdict::Verified, 1, 0, 0),
-        ]);
+        let baseline = make_report(vec![("old_fn", FunctionVerdict::Verified, 1, 0, 0)]);
         let current = make_report(vec![
             ("old_fn", FunctionVerdict::Verified, 1, 0, 0),
             ("new_fn", FunctionVerdict::Verified, 2, 0, 0),
@@ -876,9 +807,7 @@ mod tests {
             ("old_fn", FunctionVerdict::Verified, 1, 0, 0),
             ("removed_fn", FunctionVerdict::HasViolations, 0, 1, 0),
         ]);
-        let current = make_report(vec![
-            ("old_fn", FunctionVerdict::Verified, 1, 0, 0),
-        ]);
+        let current = make_report(vec![("old_fn", FunctionVerdict::Verified, 1, 0, 0)]);
 
         let diff = build_diff(&baseline, &current);
         assert_eq!(diff.removed, 1);
@@ -891,12 +820,8 @@ mod tests {
 
     #[test]
     fn test_diff_obligation_count_change() {
-        let baseline = make_report(vec![
-            ("fn_a", FunctionVerdict::Verified, 2, 0, 0),
-        ]);
-        let current = make_report(vec![
-            ("fn_a", FunctionVerdict::Verified, 3, 0, 0),
-        ]);
+        let baseline = make_report(vec![("fn_a", FunctionVerdict::Verified, 2, 0, 0)]);
+        let current = make_report(vec![("fn_a", FunctionVerdict::Verified, 3, 0, 0)]);
 
         let diff = build_diff(&baseline, &current);
         assert_eq!(diff.obligation_changes, 1);
@@ -915,10 +840,10 @@ mod tests {
             ("stable_fn", FunctionVerdict::Verified, 1, 0, 0),
         ]);
         let current = make_report(vec![
-            ("proved_fn", FunctionVerdict::HasViolations, 1, 1, 0),  // regressed
-            ("failed_fn", FunctionVerdict::Verified, 1, 0, 0),       // improved
-            ("new_fn", FunctionVerdict::Verified, 2, 0, 0),          // added
-            ("stable_fn", FunctionVerdict::Verified, 1, 0, 0),       // unchanged
+            ("proved_fn", FunctionVerdict::HasViolations, 1, 1, 0), // regressed
+            ("failed_fn", FunctionVerdict::Verified, 1, 0, 0),      // improved
+            ("new_fn", FunctionVerdict::Verified, 2, 0, 0),         // added
+            ("stable_fn", FunctionVerdict::Verified, 1, 0, 0),      // unchanged
         ]);
 
         let diff = build_diff(&baseline, &current);
@@ -935,9 +860,7 @@ mod tests {
 
     #[test]
     fn test_diff_ci_gate_no_regressions() {
-        let baseline = make_report(vec![
-            ("fn_a", FunctionVerdict::HasViolations, 0, 1, 0),
-        ]);
+        let baseline = make_report(vec![("fn_a", FunctionVerdict::HasViolations, 0, 1, 0)]);
         let current = make_report(vec![
             ("fn_a", FunctionVerdict::HasViolations, 0, 1, 0),
             ("fn_b", FunctionVerdict::HasViolations, 0, 2, 0),
@@ -950,12 +873,8 @@ mod tests {
 
     #[test]
     fn test_diff_json_serialization() {
-        let baseline = make_report(vec![
-            ("fn_a", FunctionVerdict::Verified, 2, 0, 0),
-        ]);
-        let current = make_report(vec![
-            ("fn_a", FunctionVerdict::HasViolations, 1, 1, 0),
-        ]);
+        let baseline = make_report(vec![("fn_a", FunctionVerdict::Verified, 2, 0, 0)]);
+        let current = make_report(vec![("fn_a", FunctionVerdict::HasViolations, 1, 1, 0)]);
 
         let diff = build_diff(&baseline, &current);
         let json = serde_json::to_string(&diff).expect("should serialize FullDiffReport");
@@ -1020,12 +939,8 @@ mod tests {
 
     #[test]
     fn test_unknown_to_proved_is_improvement() {
-        let baseline = make_report(vec![
-            ("fn_a", FunctionVerdict::Inconclusive, 0, 0, 2),
-        ]);
-        let current = make_report(vec![
-            ("fn_a", FunctionVerdict::Verified, 2, 0, 0),
-        ]);
+        let baseline = make_report(vec![("fn_a", FunctionVerdict::Inconclusive, 0, 0, 2)]);
+        let current = make_report(vec![("fn_a", FunctionVerdict::Verified, 2, 0, 0)]);
 
         let diff = build_diff(&baseline, &current);
         assert_eq!(diff.improvements, 1);
@@ -1034,12 +949,8 @@ mod tests {
 
     #[test]
     fn test_proved_to_unknown_is_regression() {
-        let baseline = make_report(vec![
-            ("fn_a", FunctionVerdict::Verified, 2, 0, 0),
-        ]);
-        let current = make_report(vec![
-            ("fn_a", FunctionVerdict::Inconclusive, 0, 0, 2),
-        ]);
+        let baseline = make_report(vec![("fn_a", FunctionVerdict::Verified, 2, 0, 0)]);
+        let current = make_report(vec![("fn_a", FunctionVerdict::Inconclusive, 0, 0, 2)]);
 
         let diff = build_diff(&baseline, &current);
         assert_eq!(diff.regressions, 1);

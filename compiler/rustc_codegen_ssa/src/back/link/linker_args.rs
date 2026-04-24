@@ -58,7 +58,7 @@ pub(super) fn add_pre_link_objects(
         &empty
     };
     for obj in objects.get(&link_output_kind).iter().copied().flatten() {
-        cmd.add_object(&super::get_object_file_path(sess, obj, self_contained));
+        cmd.add_object(&super::native_libs::get_object_file_path(sess, obj, self_contained));
     }
 }
 
@@ -75,7 +75,7 @@ pub(super) fn add_post_link_objects(
         &sess.target.post_link_objects
     };
     for obj in objects.get(&link_output_kind).iter().copied().flatten() {
-        cmd.add_object(&super::get_object_file_path(sess, obj, self_contained));
+        cmd.add_object(&super::native_libs::get_object_file_path(sess, obj, self_contained));
     }
 }
 
@@ -281,7 +281,7 @@ pub(super) fn add_linked_symbol_object(
     }
 
     let path = tmpdir.join("symbols.o");
-    let result = std::fs::write(&path, file.write().expect("invariant: object file serialization must succeed"));
+    let result = std::fs::write(&path, file.write().unwrap());
     if let Err(error) = result {
         sess.dcx().emit_fatal(errors::FailedToWrite { path, error });
     }
@@ -501,11 +501,13 @@ pub(super) fn linker_with_args(
         &crate_info.target_cpu,
         codegen_backend,
     );
-    let link_output_kind = super::link_output_kind(sess, crate_type);
+    let link_output_kind = super::linker_config::link_output_kind(sess, crate_type);
 
     let mut export_symbols = crate_info.exported_symbols[&crate_type].clone();
 
     if crate_type == CrateType::Cdylib {
+        // tRust: DETERMINISM — FxHashSet used for deduplication only (insert-and-check).
+        // Output order is driven by used_libraries iteration, not set iteration.
         let mut seen = FxHashSet::default();
 
         for lib in &crate_info.used_libraries {
@@ -545,7 +547,7 @@ pub(super) fn linker_with_args(
     add_linked_symbol_object(cmd, sess, tmpdir, &crate_info.linked_symbols[&crate_type]);
 
     // Sanitizer libraries.
-    super::add_sanitizer_libraries(sess, flavor, crate_type, cmd);
+    super::native_libs::add_sanitizer_libraries(sess, flavor, crate_type, cmd);
 
     // Object code from the current crate.
     // Take careful note of the ordering of the arguments we pass to the linker
@@ -597,7 +599,7 @@ pub(super) fn linker_with_args(
     cmd.add_as_needed();
 
     // Local native libraries of all kinds.
-    super::add_local_native_libraries(
+    super::native_libs::add_local_native_libraries(
         cmd,
         sess,
         archive_builder_builder,
@@ -607,7 +609,7 @@ pub(super) fn linker_with_args(
     );
 
     // Upstream rust crates and their non-dynamic native libraries.
-    super::add_upstream_rust_crates(
+    super::native_libs::add_upstream_rust_crates(
         cmd,
         sess,
         archive_builder_builder,
@@ -618,7 +620,7 @@ pub(super) fn linker_with_args(
     );
 
     // Dynamic native libraries from upstream crates.
-    super::add_upstream_native_libraries(
+    super::native_libs::add_upstream_native_libraries(
         cmd,
         sess,
         archive_builder_builder,

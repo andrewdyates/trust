@@ -72,7 +72,7 @@ struct ClashingExternDeclarations {
     /// Map of function symbol name to the first-seen hir id for that symbol name.. If seen_decls
     /// contains an entry for key K, it means a symbol with name K has been seen by this lint and
     /// the symbol should be reported as a clashing declaration.
-    // tRust: known issue — Technically, we could just store a &'tcx str here without issue; however, the
+    // FIXME: Technically, we could just store a &'tcx str here without issue; however, the
     // `impl_lint_pass` macro doesn't currently support lints parametric over a lifetime.
     seen_decls: UnordMap<Symbol, hir::OwnerId>,
 }
@@ -178,11 +178,11 @@ impl ClashingExternDeclarations {
 fn name_of_extern_decl(tcx: TyCtxt<'_>, fi: hir::OwnerId) -> SymbolName {
     if let Some((overridden_link_name, overridden_link_name_span)) =
         tcx.codegen_fn_attrs(fi).symbol_name.map(|overridden_link_name| {
-            // tRust: known issue — Instead of searching through the attributes again to get span
+            // FIXME: Instead of searching through the attributes again to get span
             // information, we could have codegen_fn_attrs also give span information back for
             // where the attribute was defined. However, until this is found to be a
             // bottleneck, this does just fine.
-            (overridden_link_name, find_attr!(tcx, fi, LinkName {span, ..} => *span).expect("invariant: foreign item with link_name has LinkName attr")) // tRust: unwrap -> expect
+            (overridden_link_name, find_attr!(tcx, fi, LinkName {span, ..} => *span).unwrap())
         })
     {
         SymbolName::Link(overridden_link_name, overridden_link_name_span)
@@ -214,8 +214,8 @@ fn structurally_same_type<'tcx>(
     if cfg!(debug_assertions) && result {
         // Sanity-check: must have same ABI, size and alignment.
         // `extern` blocks cannot be generic, so we'll always get a layout here.
-        let a_layout = tcx.layout_of(typing_env.as_query_input(a)).expect("invariant: layout_of succeeds for well-typed foreign function types"); // tRust: unwrap -> expect
-        let b_layout = tcx.layout_of(typing_env.as_query_input(b)).expect("invariant: layout_of succeeds for well-typed foreign function types"); // tRust: unwrap -> expect
+        let a_layout = tcx.layout_of(typing_env.as_query_input(a)).unwrap();
+        let b_layout = tcx.layout_of(typing_env.as_query_input(b)).unwrap();
         assert_eq!(a_layout.backend_repr, b_layout.backend_repr);
         assert_eq!(a_layout.size, b_layout.size);
         assert_eq!(a_layout.align, b_layout.align);

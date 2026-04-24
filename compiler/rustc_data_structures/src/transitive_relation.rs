@@ -47,7 +47,7 @@ impl<T: Clone> Clone for TransitiveRelation<T> {
     }
 }
 
-// tRust: known issue — (eddyb) manual impl avoids `Default` bound on `T`.
+// HACK(eddyb) manual impl avoids `Default` bound on `T`.
 impl<T: Eq + Hash> Default for TransitiveRelationBuilder<T> {
     fn default() -> Self {
         TransitiveRelationBuilder { elements: Default::default(), edges: Default::default() }
@@ -207,8 +207,8 @@ impl<T: Eq + Hash + Copy> TransitiveRelation<T> {
                 [] => return None,
                 [mub] => return Some(mub),
                 _ => {
-                    let m = mubs.pop().expect("invariant: mubs must have at least 2 elements"); // tRust: unwrap -> expect
-                    let n = mubs.pop().expect("invariant: mubs must have at least 1 element after first pop"); // tRust: unwrap -> expect
+                    let m = mubs.pop().unwrap();
+                    let n = mubs.pop().unwrap();
                     mubs.extend(self.minimal_upper_bounds(n, m));
                 }
             }

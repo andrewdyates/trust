@@ -172,13 +172,11 @@ pub enum RegionError {
     WriteToSharedBorrow { id: RegionId, name: String },
 
     #[error("exclusivity violation: region `{name}` (id {id}) has active borrows")]
-    ExclusivityViolation {
-        id: RegionId,
-        name: String,
-        active_borrows: Vec<RegionId>,
-    },
+    ExclusivityViolation { id: RegionId, name: String, active_borrows: Vec<RegionId> },
 
-    #[error("borrow outlives owner: borrow `{borrow_name}` (scope {borrow_scope}) outlives owner `{owner_name}` (scope {owner_scope})")]
+    #[error(
+        "borrow outlives owner: borrow `{borrow_name}` (scope {borrow_scope}) outlives owner `{owner_name}` (scope {owner_scope})"
+    )]
     BorrowOutlivesOwner {
         borrow_name: String,
         borrow_scope: u32,
@@ -195,26 +193,18 @@ pub enum RegionError {
     #[error("cannot borrow moved region `{name}` (id {id})")]
     BorrowOfMoved { id: RegionId, name: String },
 
-    #[error("cannot create mutable borrow: region `{name}` (id {id}) already has active shared borrows")]
-    MutBorrowWithSharedActive {
-        id: RegionId,
-        name: String,
-        shared_borrows: Vec<RegionId>,
-    },
+    #[error(
+        "cannot create mutable borrow: region `{name}` (id {id}) already has active shared borrows"
+    )]
+    MutBorrowWithSharedActive { id: RegionId, name: String, shared_borrows: Vec<RegionId> },
 
-    #[error("cannot create shared borrow: region `{name}` (id {id}) already has an active mutable borrow")]
-    SharedBorrowWithMutActive {
-        id: RegionId,
-        name: String,
-        mut_borrow: RegionId,
-    },
+    #[error(
+        "cannot create shared borrow: region `{name}` (id {id}) already has an active mutable borrow"
+    )]
+    SharedBorrowWithMutActive { id: RegionId, name: String, mut_borrow: RegionId },
 
     #[error("array index out of bounds: index {index} >= length {length} in region `{name}`")]
-    ArrayIndexOutOfBounds {
-        name: String,
-        index: u64,
-        length: u64,
-    },
+    ArrayIndexOutOfBounds { name: String, index: u64, length: u64 },
 
     #[error("field `{field}` not found in struct region `{name}`")]
     FieldNotFound { name: String, field: String },
@@ -305,9 +295,10 @@ impl RegionMap {
 
                 // Remove from parent's children.
                 if let Some(parent_id) = region.parent
-                    && let Some(parent) = self.regions.get_mut(&parent_id) {
-                        parent.children.remove(&id);
-                    }
+                    && let Some(parent) = self.regions.get_mut(&parent_id)
+                {
+                    parent.children.remove(&id);
+                }
             }
         }
 
@@ -318,10 +309,7 @@ impl RegionMap {
     /// Returns the number of live regions.
     #[must_use]
     pub fn live_region_count(&self) -> usize {
-        self.regions
-            .values()
-            .filter(|r| r.state == RegionState::Live)
-            .count()
+        self.regions.values().filter(|r| r.state == RegionState::Live).count()
     }
 
     /// Returns the total number of regions (including dead ones).
@@ -360,11 +348,7 @@ impl RegionMap {
     }
 
     /// Create a new owned region for a function parameter.
-    pub fn bind_param(
-        &mut self,
-        name: impl Into<String>,
-        ty: Ty,
-    ) -> RegionId {
+    pub fn bind_param(&mut self, name: impl Into<String>, ty: Ty) -> RegionId {
         let name_str: String = name.into();
         let sym = SymbolicValue::Symbol(name_str.clone());
         self.bind_owned(name_str, ty, sym)
@@ -393,10 +377,7 @@ impl RegionMap {
         let owner = self.get_region(owner_id)?;
         let borrow_name = borrow_name.into();
         let inner_ty = owner.ty.clone();
-        let borrow_ty = Ty::Ref {
-            mutable: false,
-            inner: Box::new(inner_ty),
-        };
+        let borrow_ty = Ty::Ref { mutable: false, inner: Box::new(inner_ty) };
 
         let id = self.alloc_id();
         let region = Region {
@@ -458,10 +439,7 @@ impl RegionMap {
         let owner = self.get_region(owner_id)?;
         let borrow_name = borrow_name.into();
         let inner_ty = owner.ty.clone();
-        let borrow_ty = Ty::Ref {
-            mutable: true,
-            inner: Box::new(inner_ty),
-        };
+        let borrow_ty = Ty::Ref { mutable: true, inner: Box::new(inner_ty) };
 
         let id = self.alloc_id();
         let region = Region {
@@ -515,10 +493,7 @@ impl RegionMap {
         let parent = self.get_region(parent_id)?;
         let field_ty = match &parent.ty {
             Ty::Adt { fields, .. } => {
-                fields
-                    .iter()
-                    .find(|(name, _)| name == field_name)
-                    .map(|(_, ty)| ty.clone())
+                fields.iter().find(|(name, _)| name == field_name).map(|(_, ty)| ty.clone())
             }
             _ => None,
         };
@@ -578,13 +553,14 @@ impl RegionMap {
         // Bounds check.
         let parent = self.get_region(parent_id)?;
         if let Ty::Array { len, .. } = &parent.ty
-            && index >= *len {
-                return Err(RegionError::ArrayIndexOutOfBounds {
-                    name: parent.name.clone(),
-                    index,
-                    length: *len,
-                });
-            }
+            && index >= *len
+        {
+            return Err(RegionError::ArrayIndexOutOfBounds {
+                name: parent.name.clone(),
+                index,
+                length: *len,
+            });
+        }
 
         // Check if we already have a sub-region for this index.
         let key = (parent_id, index);
@@ -649,30 +625,20 @@ impl RegionMap {
                 .get(&id)
                 // SAFETY: get_region(id)? succeeded above, so regions contains this id.
                 .expect("invariant: get_region(id) succeeded, so regions must contain this id");
-            RegionError::RegionNotFound {
-                id,
-                name: region.name.clone(),
-            }
+            RegionError::RegionNotFound { id, name: region.name.clone() }
         })
     }
 
     /// Write a symbolic value to a region.
     ///
     /// Enforces: cannot write to shared borrows, cannot write to non-live regions.
-    pub fn write(
-        &mut self,
-        id: RegionId,
-        value: SymbolicValue,
-    ) -> Result<(), RegionError> {
+    pub fn write(&mut self, id: RegionId, value: SymbolicValue) -> Result<(), RegionError> {
         let region = self.get_region(id)?;
         self.check_accessible(region)?;
 
         // Shared borrows are read-only.
         if region.ownership == OwnershipKind::SharedBorrow {
-            return Err(RegionError::WriteToSharedBorrow {
-                id,
-                name: region.name.clone(),
-            });
+            return Err(RegionError::WriteToSharedBorrow { id, name: region.name.clone() });
         }
 
         // Check no active borrows exist when writing through owner.
@@ -681,9 +647,7 @@ impl RegionMap {
                 .children
                 .iter()
                 .filter(|child_id| {
-                    self.regions
-                        .get(child_id)
-                        .is_some_and(|r| r.state == RegionState::Live)
+                    self.regions.get(child_id).is_some_and(|r| r.state == RegionState::Live)
                 })
                 .copied()
                 .collect();
@@ -745,9 +709,7 @@ impl RegionMap {
             .children
             .iter()
             .filter(|child_id| {
-                self.regions
-                    .get(child_id)
-                    .is_some_and(|r| r.state == RegionState::Live)
+                self.regions.get(child_id).is_some_and(|r| r.state == RegionState::Live)
             })
             .copied()
             .collect();
@@ -761,9 +723,11 @@ impl RegionMap {
 
         let source = self.get_region(source_id)?;
         let ty = source.ty.clone();
-        let value = self.values.get(&source_id).cloned().unwrap_or_else(|| {
-            SymbolicValue::Symbol(format!("moved_from_{}", source.name))
-        });
+        let value = self
+            .values
+            .get(&source_id)
+            .cloned()
+            .unwrap_or_else(|| SymbolicValue::Symbol(format!("moved_from_{}", source.name)));
 
         // Invalidate source.
         if let Some(s) = self.regions.get_mut(&source_id) {
@@ -790,10 +754,7 @@ impl RegionMap {
                 return Ok(());
             }
             RegionState::Dropped => {
-                return Err(RegionError::DoubleDrop {
-                    id,
-                    name: region.name.clone(),
-                });
+                return Err(RegionError::DoubleDrop { id, name: region.name.clone() });
             }
             RegionState::Expired => {
                 // Expired borrows are already cleaned up.
@@ -805,9 +766,10 @@ impl RegionMap {
         let children: Vec<RegionId> = region.children.iter().copied().collect();
         for child_id in children {
             if let Some(child) = self.regions.get_mut(&child_id)
-                && child.state == RegionState::Live {
-                    child.state = RegionState::Expired;
-                }
+                && child.state == RegionState::Live
+            {
+                child.state = RegionState::Expired;
+            }
         }
 
         if let Some(r) = self.regions.get_mut(&id) {
@@ -826,18 +788,14 @@ impl RegionMap {
         self.name_to_region
             .get(name)
             .copied()
-            .ok_or_else(|| RegionError::RegionNotFound {
-                id: 0,
-                name: name.to_owned(),
-            })
+            .ok_or_else(|| RegionError::RegionNotFound { id: 0, name: name.to_owned() })
     }
 
     /// Get a region by id (immutable).
     pub fn get_region(&self, id: RegionId) -> Result<&Region, RegionError> {
-        self.regions.get(&id).ok_or_else(|| RegionError::RegionNotFound {
-            id,
-            name: format!("<unknown:{id}>"),
-        })
+        self.regions
+            .get(&id)
+            .ok_or_else(|| RegionError::RegionNotFound { id, name: format!("<unknown:{id}>") })
     }
 
     /// Iterate over all live regions.
@@ -901,9 +859,7 @@ impl RegionMap {
     pub fn smt_var_name(&self, id: RegionId) -> Option<String> {
         self.regions.get(&id).map(|r| {
             // Sanitize name for SMT (replace dots, brackets).
-            r.name
-                .replace(['.', '['], "_")
-                .replace(']', "")
+            r.name.replace(['.', '['], "_").replace(']', "")
         })
     }
 
@@ -942,14 +898,8 @@ impl RegionMap {
         let len_formula = Formula::Int(length as i128);
 
         Some(Formula::Or(vec![
-            Formula::Lt(
-                Box::new(index_formula.clone()),
-                Box::new(zero),
-            ),
-            Formula::Ge(
-                Box::new(index_formula.clone()),
-                Box::new(len_formula),
-            ),
+            Formula::Lt(Box::new(index_formula.clone()), Box::new(zero)),
+            Formula::Ge(Box::new(index_formula.clone()), Box::new(len_formula)),
         ]))
     }
 
@@ -966,36 +916,30 @@ impl RegionMap {
     fn check_live(&self, region: &Region) -> Result<(), RegionError> {
         match region.state {
             RegionState::Live => Ok(()),
-            RegionState::Moved => Err(RegionError::BorrowOfMoved {
-                id: region.id,
-                name: region.name.clone(),
-            }),
-            RegionState::Dropped => Err(RegionError::UseAfterDrop {
-                id: region.id,
-                name: region.name.clone(),
-            }),
-            RegionState::Expired => Err(RegionError::ExpiredBorrow {
-                id: region.id,
-                name: region.name.clone(),
-            }),
+            RegionState::Moved => {
+                Err(RegionError::BorrowOfMoved { id: region.id, name: region.name.clone() })
+            }
+            RegionState::Dropped => {
+                Err(RegionError::UseAfterDrop { id: region.id, name: region.name.clone() })
+            }
+            RegionState::Expired => {
+                Err(RegionError::ExpiredBorrow { id: region.id, name: region.name.clone() })
+            }
         }
     }
 
     fn check_accessible(&self, region: &Region) -> Result<(), RegionError> {
         match region.state {
             RegionState::Live => Ok(()),
-            RegionState::Moved => Err(RegionError::UseAfterMove {
-                id: region.id,
-                name: region.name.clone(),
-            }),
-            RegionState::Dropped => Err(RegionError::UseAfterDrop {
-                id: region.id,
-                name: region.name.clone(),
-            }),
-            RegionState::Expired => Err(RegionError::ExpiredBorrow {
-                id: region.id,
-                name: region.name.clone(),
-            }),
+            RegionState::Moved => {
+                Err(RegionError::UseAfterMove { id: region.id, name: region.name.clone() })
+            }
+            RegionState::Dropped => {
+                Err(RegionError::UseAfterDrop { id: region.id, name: region.name.clone() })
+            }
+            RegionState::Expired => {
+                Err(RegionError::ExpiredBorrow { id: region.id, name: region.name.clone() })
+            }
         }
     }
 }
@@ -1018,19 +962,13 @@ mod tests {
     }
 
     fn array_i32_ty(len: u64) -> Ty {
-        Ty::Array {
-            elem: Box::new(i32_ty()),
-            len,
-        }
+        Ty::Array { elem: Box::new(i32_ty()), len }
     }
 
     fn struct_point_ty() -> Ty {
         Ty::Adt {
             name: "Point".into(),
-            fields: vec![
-                ("x".into(), i32_ty()),
-                ("y".into(), i32_ty()),
-            ],
+            fields: vec![("x".into(), i32_ty()), ("y".into(), i32_ty())],
         }
     }
 
@@ -1076,9 +1014,7 @@ mod tests {
         let mut map = RegionMap::new();
         let owner = map.bind_owned("x", i32_ty(), SymbolicValue::Concrete(1));
         let borrow = map.borrow_shared("ref_x", owner).expect("borrow");
-        let err = map
-            .write(borrow, SymbolicValue::Concrete(2))
-            .expect_err("should fail");
+        let err = map.write(borrow, SymbolicValue::Concrete(2)).expect_err("should fail");
         assert!(matches!(err, RegionError::WriteToSharedBorrow { .. }));
     }
 
@@ -1100,14 +1036,8 @@ mod tests {
         let b1 = map.borrow_shared("r1", owner).expect("borrow 1");
         let b2 = map.borrow_shared("r2", owner).expect("borrow 2");
         assert_ne!(b1, b2);
-        assert_eq!(
-            *map.read(b1).expect("read b1"),
-            SymbolicValue::Concrete(5)
-        );
-        assert_eq!(
-            *map.read(b2).expect("read b2"),
-            SymbolicValue::Concrete(5)
-        );
+        assert_eq!(*map.read(b1).expect("read b1"), SymbolicValue::Concrete(5));
+        assert_eq!(*map.read(b2).expect("read b2"), SymbolicValue::Concrete(5));
     }
 
     // --- Mutable borrows ---
@@ -1126,9 +1056,7 @@ mod tests {
         let mut map = RegionMap::new();
         let owner = map.bind_owned("x", i32_ty(), SymbolicValue::Concrete(1));
         let _mb = map.borrow_mut("mut_x", owner).expect("mut borrow");
-        let err = map
-            .borrow_shared("ref_x", owner)
-            .expect_err("shared after mut");
+        let err = map.borrow_shared("ref_x", owner).expect_err("shared after mut");
         assert!(matches!(err, RegionError::SharedBorrowWithMutActive { .. }));
     }
 
@@ -1137,9 +1065,7 @@ mod tests {
         let mut map = RegionMap::new();
         let owner = map.bind_owned("x", i32_ty(), SymbolicValue::Concrete(1));
         let _sb = map.borrow_shared("ref_x", owner).expect("shared borrow");
-        let err = map
-            .borrow_mut("mut_x", owner)
-            .expect_err("mut after shared");
+        let err = map.borrow_mut("mut_x", owner).expect_err("mut after shared");
         assert!(matches!(err, RegionError::MutBorrowWithSharedActive { .. }));
     }
 
@@ -1148,18 +1074,11 @@ mod tests {
         let mut map = RegionMap::new();
         let owner = map.bind_owned("x", i32_ty(), SymbolicValue::Concrete(1));
         let mb = map.borrow_mut("mut_x", owner).expect("mut borrow");
-        map.write_through_mut_borrow(mb, SymbolicValue::Concrete(99))
-            .expect("write through");
+        map.write_through_mut_borrow(mb, SymbolicValue::Concrete(99)).expect("write through");
         // Both borrow and owner should reflect the new value.
-        assert_eq!(
-            *map.read(mb).expect("read borrow"),
-            SymbolicValue::Concrete(99)
-        );
+        assert_eq!(*map.read(mb).expect("read borrow"), SymbolicValue::Concrete(99));
         // Owner value also updated.
-        assert_eq!(
-            *map.values.get(&owner).expect("owner value"),
-            SymbolicValue::Concrete(99)
-        );
+        assert_eq!(*map.values.get(&owner).expect("owner value"), SymbolicValue::Concrete(99));
     }
 
     // --- Scope-based lifetime tracking ---
@@ -1230,10 +1149,7 @@ mod tests {
         let dest = map.move_value(src, "y").expect("move ok");
 
         // Destination has the value.
-        assert_eq!(
-            *map.read(dest).expect("read dest"),
-            SymbolicValue::Concrete(42)
-        );
+        assert_eq!(*map.read(dest).expect("read dest"), SymbolicValue::Concrete(42));
 
         // Source is invalidated.
         let err = map.read(src).expect_err("source should be moved");
@@ -1302,11 +1218,7 @@ mod tests {
     #[test]
     fn test_struct_field_access() {
         let mut map = RegionMap::new();
-        let pt = map.bind_owned(
-            "p",
-            struct_point_ty(),
-            SymbolicValue::Symbol("p".into()),
-        );
+        let pt = map.bind_owned("p", struct_point_ty(), SymbolicValue::Symbol("p".into()));
         let x_id = map.field_access(pt, "x").expect("field x");
         let y_id = map.field_access(pt, "y").expect("field y");
         assert_ne!(x_id, y_id);
@@ -1322,11 +1234,7 @@ mod tests {
     #[test]
     fn test_struct_field_access_idempotent() {
         let mut map = RegionMap::new();
-        let pt = map.bind_owned(
-            "p",
-            struct_point_ty(),
-            SymbolicValue::Symbol("p".into()),
-        );
+        let pt = map.bind_owned("p", struct_point_ty(), SymbolicValue::Symbol("p".into()));
         let x1 = map.field_access(pt, "x").expect("first access");
         let x2 = map.field_access(pt, "x").expect("second access");
         assert_eq!(x1, x2, "repeated field access returns same region");
@@ -1335,11 +1243,7 @@ mod tests {
     #[test]
     fn test_struct_field_not_found() {
         let mut map = RegionMap::new();
-        let pt = map.bind_owned(
-            "p",
-            struct_point_ty(),
-            SymbolicValue::Symbol("p".into()),
-        );
+        let pt = map.bind_owned("p", struct_point_ty(), SymbolicValue::Symbol("p".into()));
         let err = map.field_access(pt, "z").expect_err("no field z");
         assert!(matches!(err, RegionError::FieldNotFound { .. }));
     }
@@ -1349,11 +1253,7 @@ mod tests {
     #[test]
     fn test_array_access_in_bounds() {
         let mut map = RegionMap::new();
-        let arr = map.bind_owned(
-            "arr",
-            array_i32_ty(4),
-            SymbolicValue::Symbol("arr".into()),
-        );
+        let arr = map.bind_owned("arr", array_i32_ty(4), SymbolicValue::Symbol("arr".into()));
         let e0 = map.array_access(arr, 0).expect("elem 0");
         let e3 = map.array_access(arr, 3).expect("elem 3");
         assert_ne!(e0, e3);
@@ -1365,26 +1265,15 @@ mod tests {
     #[test]
     fn test_array_access_out_of_bounds() {
         let mut map = RegionMap::new();
-        let arr = map.bind_owned(
-            "arr",
-            array_i32_ty(4),
-            SymbolicValue::Symbol("arr".into()),
-        );
+        let arr = map.bind_owned("arr", array_i32_ty(4), SymbolicValue::Symbol("arr".into()));
         let err = map.array_access(arr, 4).expect_err("out of bounds");
-        assert!(matches!(
-            err,
-            RegionError::ArrayIndexOutOfBounds { index: 4, length: 4, .. }
-        ));
+        assert!(matches!(err, RegionError::ArrayIndexOutOfBounds { index: 4, length: 4, .. }));
     }
 
     #[test]
     fn test_array_access_idempotent() {
         let mut map = RegionMap::new();
-        let arr = map.bind_owned(
-            "arr",
-            array_i32_ty(4),
-            SymbolicValue::Symbol("arr".into()),
-        );
+        let arr = map.bind_owned("arr", array_i32_ty(4), SymbolicValue::Symbol("arr".into()));
         let e1a = map.array_access(arr, 1).expect("first access");
         let e1b = map.array_access(arr, 1).expect("second access");
         assert_eq!(e1a, e1b);
@@ -1417,15 +1306,9 @@ mod tests {
     #[test]
     fn test_array_bounds_check_formula() {
         let mut map = RegionMap::new();
-        let arr = map.bind_owned(
-            "arr",
-            array_i32_ty(4),
-            SymbolicValue::Symbol("arr".into()),
-        );
+        let arr = map.bind_owned("arr", array_i32_ty(4), SymbolicValue::Symbol("arr".into()));
         let idx = Formula::Var("i".into(), Sort::Int);
-        let formula = map
-            .array_bounds_check_formula(arr, &idx)
-            .expect("bounds formula");
+        let formula = map.array_bounds_check_formula(arr, &idx).expect("bounds formula");
         // Should be: (i < 0) OR (i >= 4)
         match &formula {
             Formula::Or(clauses) => assert_eq!(clauses.len(), 2),
@@ -1453,9 +1336,7 @@ mod tests {
         let mut map = RegionMap::new();
         let owner = map.bind_owned("x", i32_ty(), SymbolicValue::Concrete(1));
         let _borrow = map.borrow_shared("ref_x", owner).expect("borrow");
-        let err = map
-            .write(owner, SymbolicValue::Concrete(2))
-            .expect_err("write while borrowed");
+        let err = map.write(owner, SymbolicValue::Concrete(2)).expect_err("write while borrowed");
         assert!(matches!(err, RegionError::ExclusivityViolation { .. }));
     }
 
@@ -1533,11 +1414,7 @@ mod tests {
     #[test]
     fn test_struct_borrow_field_read_drop() {
         let mut map = RegionMap::new();
-        let pt = map.bind_owned(
-            "p",
-            struct_point_ty(),
-            SymbolicValue::Symbol("p".into()),
-        );
+        let pt = map.bind_owned("p", struct_point_ty(), SymbolicValue::Symbol("p".into()));
 
         // Borrow the struct.
         map.enter_scope();

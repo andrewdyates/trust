@@ -121,7 +121,7 @@ impl FromInternal<TokenStream> for Vec<TokenTree<TokenStream, Span, Symbol>> {
                     // convert it to a `Group`.
                     while let Delimiter::Invisible(InvisibleOrigin::MetaVar(_)) = delim {
                         if stream.len() == 1
-                            && let tree = stream.iter().next().expect("invariant: stream is non-empty for single-token group") // tRust:
+                            && let tree = stream.iter().next().unwrap()
                             && let tokenstream::TokenTree::Delimited(_, _, delim2, stream2) = tree
                             && let Delimiter::Invisible(InvisibleOrigin::MetaVar(_)) = delim2
                         {
@@ -438,7 +438,7 @@ impl<'a, 'b> Rustc<'a, 'b> {
             def_site: ecx.with_def_site_ctxt(expn_data.def_site),
             call_site: ecx.with_call_site_ctxt(expn_data.call_site),
             mixed_site: ecx.with_mixed_site_ctxt(expn_data.call_site),
-            krate: expn_data.macro_def_id.expect("invariant: proc macro has a def_id").krate, // tRust:,
+            krate: expn_data.macro_def_id.unwrap().krate,
             rebased_spans: FxHashMap::default(),
             ecx,
         }
@@ -628,7 +628,7 @@ impl server::Server for Rustc<'_, '_> {
                 ast::ExprKind::Lit(token_lit) => match token_lit {
                     token::Lit { kind: token::Integer | token::Float, .. } => {
                         Ok(Self::TokenStream::from_iter([
-                            // tRust: known issue —: The span of the `-` token is lost when
+                            // FIXME: The span of the `-` token is lost when
                             // parsing, so we cannot faithfully recover it here.
                             tokenstream::TokenTree::token_joint_hidden(token::Minus, e.span),
                             tokenstream::TokenTree::token_alone(token::Literal(*token_lit), e.span),
@@ -835,7 +835,7 @@ impl server::Server for Rustc<'_, '_> {
     fn span_recover_proc_macro_span(&mut self, id: usize) -> Self::Span {
         let (resolver, krate, def_site) = (&*self.ecx.resolver, self.krate, self.def_site);
         *self.rebased_spans.entry(id).or_insert_with(|| {
-            // tRust: known issue —: `SyntaxContext` for spans from proc macro crates is lost during encoding,
+            // FIXME: `SyntaxContext` for spans from proc macro crates is lost during encoding,
             // replace it with a def-site context until we are encoding it properly.
             resolver.get_proc_macro_quoted_span(krate, id).with_ctxt(def_site.ctxt())
         })

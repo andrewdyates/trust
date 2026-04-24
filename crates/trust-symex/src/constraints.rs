@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use trust_types::Formula;
 
 use crate::concrete::SymbolicBranchPoint;
-use crate::path::{PathConstraint, symbolic_to_formula};
+use crate::path::symbolic_to_formula;
 use crate::state::SymbolicValue;
 use trust_types::fx::FxHashSet;
 
@@ -46,7 +46,6 @@ pub enum NegationStrategy {
     /// alternative direction has not been covered.
     CoverageDirected,
 }
-
 
 /// Collector that accumulates branch decisions from a concolic run and
 /// produces negated prefixes for the solver.
@@ -86,37 +85,6 @@ impl ConstraintCollector {
                 block_id: bp.block_id,
             });
         }
-    }
-
-    /// Import decisions from a `PathConstraint`.
-    pub(crate) fn import_path(&mut self, path: &PathConstraint) {
-        self.decisions.clear();
-        for (idx, d) in path.decisions().iter().enumerate() {
-            self.decisions.push(CollectedDecision {
-                condition: d.condition.clone(),
-                taken: d.taken,
-                block_id: idx, // Use decision index as pseudo block ID.
-            });
-        }
-    }
-
-    /// Returns the number of collected decisions.
-    #[must_use]
-    pub(crate) fn decision_count(&self) -> usize {
-        self.decisions.len()
-    }
-
-    /// Returns the number of decisions not yet negated.
-    #[must_use]
-    pub(crate) fn remaining(&self) -> usize {
-        self.decisions
-            .len()
-            .saturating_sub(self.negated_set.len())
-    }
-
-    /// Mark a decision index as already negated (e.g., from a prior run).
-    pub(crate) fn mark_negated(&mut self, index: usize) {
-        self.negated_set.insert(index);
     }
 
     /// Produce negated prefixes according to the chosen strategy.
@@ -197,16 +165,14 @@ impl ConstraintCollector {
         let formula = match clauses.len() {
             0 => Formula::Bool(true),
             // SAFETY: match arm guarantees len == 1, so .next() returns Some.
-            1 => clauses.into_iter().next()
+            1 => clauses
+                .into_iter()
+                .next()
                 .unwrap_or_else(|| unreachable!("empty iter despite len == 1")),
             _ => Formula::And(clauses),
         };
 
-        Some(NegatedPrefix {
-            negated_index,
-            formula,
-            branch_block: negated_d.block_id,
-        })
+        Some(NegatedPrefix { negated_index, formula, branch_block: negated_d.block_id })
     }
 }
 
@@ -216,8 +182,6 @@ mod tests {
 
     use super::*;
     use crate::concrete::SymbolicBranchPoint;
-    use crate::path::PathConstraint;
-
     fn sym(name: &str) -> SymbolicValue {
         SymbolicValue::Symbol(name.into())
     }
@@ -229,8 +193,8 @@ mod tests {
     #[test]
     fn test_constraints_collector_empty() {
         let collector = ConstraintCollector::new();
-        assert_eq!(collector.decision_count(), 0);
-        assert_eq!(collector.remaining(), 0);
+        assert!(collector.decisions.is_empty());
+        assert!(collector.negated_set.is_empty());
     }
 
     #[test]
@@ -251,8 +215,8 @@ mod tests {
             },
         ];
         collector.import_branches(&branches);
-        assert_eq!(collector.decision_count(), 2);
-        assert_eq!(collector.remaining(), 2);
+        assert_eq!(collector.decisions.len(), 2);
+        assert!(collector.negated_set.is_empty());
     }
 
     #[test]
@@ -322,7 +286,7 @@ mod tests {
         assert_eq!(prefixes[2].negated_index, 2);
 
         // All should now be marked negated.
-        assert_eq!(collector.remaining(), 0);
+        assert_eq!(collector.negated_set.len(), collector.decisions.len());
     }
 
     #[test]
@@ -343,7 +307,7 @@ mod tests {
             },
         ];
         collector.import_branches(&branches);
-        collector.mark_negated(0);
+        collector.negated_set.insert(0);
 
         let prefixes = collector.negate(NegationStrategy::Generational);
         assert_eq!(prefixes.len(), 1);
@@ -368,17 +332,6 @@ mod tests {
             Formula::Not(_) => {}
             other => panic!("expected Not, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn test_constraints_import_path() {
-        let mut path = PathConstraint::new();
-        path.add_constraint(sym("a"), true);
-        path.add_constraint(sym("b"), false);
-
-        let mut collector = ConstraintCollector::new();
-        collector.import_path(&path);
-        assert_eq!(collector.decision_count(), 2);
     }
 
     #[test]

@@ -26,34 +26,17 @@ use crate::region::{OwnershipKind, RegionError, RegionId, RegionMap, RegionState
 #[non_exhaustive]
 pub enum OwnershipConstraintKind {
     /// No aliasing of mutable references (exclusivity).
-    MutExclusivity {
-        region_name: String,
-        conflicting_borrows: Vec<String>,
-    },
+    MutExclusivity { region_name: String, conflicting_borrows: Vec<String> },
     /// No use after move.
-    UseAfterMove {
-        region_name: String,
-        used_at: String,
-    },
+    UseAfterMove { region_name: String, used_at: String },
     /// No use after drop.
-    UseAfterDrop {
-        region_name: String,
-        used_at: String,
-    },
+    UseAfterDrop { region_name: String, used_at: String },
     /// Borrow does not outlive its owner.
-    BorrowLifetime {
-        borrow_name: String,
-        owner_name: String,
-    },
+    BorrowLifetime { borrow_name: String, owner_name: String },
     /// Array bounds check for indexed access.
-    ArrayBoundsCheck {
-        array_name: String,
-        length: u64,
-    },
+    ArrayBoundsCheck { array_name: String, length: u64 },
     /// Shared reference read-only constraint.
-    SharedReadOnly {
-        borrow_name: String,
-    },
+    SharedReadOnly { borrow_name: String },
 }
 
 impl OwnershipConstraintKind {
@@ -61,31 +44,19 @@ impl OwnershipConstraintKind {
     #[must_use]
     pub fn description(&self) -> String {
         match self {
-            Self::MutExclusivity {
-                region_name,
-                conflicting_borrows,
-            } => {
+            Self::MutExclusivity { region_name, conflicting_borrows } => {
                 format!(
                     "mutable reference exclusivity: `{region_name}` conflicts with [{}]",
                     conflicting_borrows.join(", ")
                 )
             }
-            Self::UseAfterMove {
-                region_name,
-                used_at,
-            } => {
+            Self::UseAfterMove { region_name, used_at } => {
                 format!("use after move: `{region_name}` used at `{used_at}`")
             }
-            Self::UseAfterDrop {
-                region_name,
-                used_at,
-            } => {
+            Self::UseAfterDrop { region_name, used_at } => {
                 format!("use after drop: `{region_name}` used at `{used_at}`")
             }
-            Self::BorrowLifetime {
-                borrow_name,
-                owner_name,
-            } => {
+            Self::BorrowLifetime { borrow_name, owner_name } => {
                 format!("borrow `{borrow_name}` outlives owner `{owner_name}`")
             }
             Self::ArrayBoundsCheck { array_name, length } => {
@@ -123,10 +94,8 @@ impl OwnershipConstraint {
     #[must_use]
     pub fn to_vc(&self) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: self.kind.description(),
-            },
-            function: self.function.clone(),
+            kind: VcKind::Assertion { message: self.kind.description() },
+            function: self.function.clone().into(),
             location: self.location.clone(),
             formula: self.violation_formula.clone(),
             contract_metadata: None,
@@ -259,10 +228,8 @@ impl OwnershipChecker {
             let mut_borrows = regions.active_mut_borrows(parent_id);
 
             // Filter out self.
-            let other_mut: Vec<RegionId> = mut_borrows
-                .into_iter()
-                .filter(|&id| id != region.id())
-                .collect();
+            let other_mut: Vec<RegionId> =
+                mut_borrows.into_iter().filter(|&id| id != region.id()).collect();
 
             let mut conflicting_names = Vec::new();
             for &id in shared.iter().chain(other_mut.iter()) {
@@ -319,10 +286,7 @@ impl OwnershipChecker {
             // Generate a formula variable for the moved value.
             // The violation is: the moved region is accessed.
             // We encode this as an assertion that the "valid" flag is false.
-            let valid_var = Formula::Var(
-                format!("{}_valid", region.name()),
-                Sort::Bool,
-            );
+            let valid_var = Formula::Var(format!("{}_valid", region.name()), Sort::Bool);
             let violation = Formula::Not(Box::new(valid_var));
 
             self.constraints.push(OwnershipConstraint {
@@ -346,10 +310,7 @@ impl OwnershipChecker {
                 used_at: self.function_name.clone(),
             };
 
-            let valid_var = Formula::Var(
-                format!("{}_alive", region.name()),
-                Sort::Bool,
-            );
+            let valid_var = Formula::Var(format!("{}_alive", region.name()), Sort::Bool);
             let violation = Formula::Not(Box::new(valid_var));
 
             self.constraints.push(OwnershipConstraint {
@@ -367,10 +328,8 @@ impl OwnershipChecker {
     /// this is enforced by scope depth: a borrow's scope must be >= its owner's.
     pub fn check_borrow_lifetimes(&mut self, regions: &RegionMap) {
         for region in regions.live_regions() {
-            if !matches!(
-                region.ownership(),
-                OwnershipKind::SharedBorrow | OwnershipKind::MutBorrow
-            ) {
+            if !matches!(region.ownership(), OwnershipKind::SharedBorrow | OwnershipKind::MutBorrow)
+            {
                 continue;
             }
 
@@ -392,10 +351,7 @@ impl OwnershipChecker {
                 // Encode as: borrow_scope < owner_scope (violation).
                 let borrow_scope = Formula::Int(region.scope_depth() as i128);
                 let owner_scope = Formula::Int(parent.scope_depth() as i128);
-                let violation = Formula::Lt(
-                    Box::new(borrow_scope),
-                    Box::new(owner_scope),
-                );
+                let violation = Formula::Lt(Box::new(borrow_scope), Box::new(owner_scope));
 
                 self.constraints.push(OwnershipConstraint {
                     kind: kind.clone(),
@@ -426,26 +382,22 @@ impl OwnershipChecker {
         array_id: RegionId,
         index_formula: &Formula,
     ) -> Result<(), OwnershipError> {
-        let region = regions
-            .get_region(array_id)
-            .map_err(OwnershipError::Region)?;
+        let region = regions.get_region(array_id).map_err(OwnershipError::Region)?;
 
         let length = match &region.ty() {
             Ty::Array { len, .. } => *len,
             _ => {
                 return Err(OwnershipError::ConstraintGeneration {
-                    reason: format!(
-                        "region `{}` is not an array type",
-                        region.name()
-                    ),
+                    reason: format!("region `{}` is not an array type", region.name()),
                 });
             }
         };
 
-        let violation = regions
-            .array_bounds_check_formula(array_id, index_formula)
-            .ok_or_else(|| OwnershipError::ConstraintGeneration {
-                reason: "failed to generate bounds check formula".into(),
+        let violation =
+            regions.array_bounds_check_formula(array_id, index_formula).ok_or_else(|| {
+                OwnershipError::ConstraintGeneration {
+                    reason: "failed to generate bounds check formula".into(),
+                }
             })?;
 
         let kind = OwnershipConstraintKind::ArrayBoundsCheck {
@@ -471,23 +423,17 @@ impl OwnershipChecker {
         regions: &RegionMap,
         borrow_id: RegionId,
     ) -> Result<(), OwnershipError> {
-        let region = regions
-            .get_region(borrow_id)
-            .map_err(OwnershipError::Region)?;
+        let region = regions.get_region(borrow_id).map_err(OwnershipError::Region)?;
 
         if region.ownership() != OwnershipKind::SharedBorrow {
             return Ok(()); // Not a shared borrow -- nothing to check.
         }
 
-        let kind = OwnershipConstraintKind::SharedReadOnly {
-            borrow_name: region.name().to_owned(),
-        };
+        let kind =
+            OwnershipConstraintKind::SharedReadOnly { borrow_name: region.name().to_owned() };
 
         // The violation formula: writing to a shared ref is always a violation.
-        let written_var = Formula::Var(
-            format!("{}_written", region.name()),
-            Sort::Bool,
-        );
+        let written_var = Formula::Var(format!("{}_written", region.name()), Sort::Bool);
 
         self.constraints.push(OwnershipConstraint {
             kind,
@@ -550,10 +496,7 @@ mod tests {
     }
 
     fn array_i32_ty(len: u64) -> Ty {
-        Ty::Array {
-            elem: Box::new(i32_ty()),
-            len,
-        }
+        Ty::Array { elem: Box::new(i32_ty()), len }
     }
 
     // --- Basic checker creation ---
@@ -650,17 +593,11 @@ mod tests {
     #[test]
     fn test_array_bounds_check_vc() {
         let mut regions = RegionMap::new();
-        let arr = regions.bind_owned(
-            "arr",
-            array_i32_ty(4),
-            SymbolicValue::Symbol("arr".into()),
-        );
+        let arr = regions.bind_owned("arr", array_i32_ty(4), SymbolicValue::Symbol("arr".into()));
 
         let mut checker = OwnershipChecker::new("test_fn");
         let idx = Formula::Var("i".into(), Sort::Int);
-        checker
-            .check_array_bounds(&regions, arr, &idx)
-            .expect("bounds check");
+        checker.check_array_bounds(&regions, arr, &idx).expect("bounds check");
 
         assert_eq!(checker.constraints().len(), 1);
         assert!(matches!(
@@ -676,9 +613,7 @@ mod tests {
 
         let mut checker = OwnershipChecker::new("test_fn");
         let idx = Formula::Var("i".into(), Sort::Int);
-        let err = checker
-            .check_array_bounds(&regions, x, &idx)
-            .expect_err("not an array");
+        let err = checker.check_array_bounds(&regions, x, &idx).expect_err("not an array");
         assert!(matches!(err, OwnershipError::ConstraintGeneration { .. }));
     }
 
@@ -691,9 +626,7 @@ mod tests {
         let borrow = regions.borrow_shared("ref_x", x).expect("borrow");
 
         let mut checker = OwnershipChecker::new("test_fn");
-        checker
-            .check_shared_read_only(&regions, borrow)
-            .expect("check");
+        checker.check_shared_read_only(&regions, borrow).expect("check");
 
         assert_eq!(checker.constraints().len(), 1);
         assert!(matches!(
@@ -708,9 +641,7 @@ mod tests {
         let x = regions.bind_param("x", i32_ty());
 
         let mut checker = OwnershipChecker::new("test_fn");
-        checker
-            .check_shared_read_only(&regions, x)
-            .expect("check");
+        checker.check_shared_read_only(&regions, x).expect("check");
 
         // Owned region -- no shared read-only constraint generated.
         assert!(checker.constraints().is_empty());
@@ -833,13 +764,8 @@ mod tests {
                 borrow_name: "ref_x".into(),
                 owner_name: "x".into(),
             },
-            OwnershipConstraintKind::ArrayBoundsCheck {
-                array_name: "arr".into(),
-                length: 4,
-            },
-            OwnershipConstraintKind::SharedReadOnly {
-                borrow_name: "ref_x".into(),
-            },
+            OwnershipConstraintKind::ArrayBoundsCheck { array_name: "arr".into(), length: 4 },
+            OwnershipConstraintKind::SharedReadOnly { borrow_name: "ref_x".into() },
         ];
 
         for kind in &kinds {
@@ -859,15 +785,10 @@ mod tests {
 
     #[test]
     fn test_ownership_error_display() {
-        let err = OwnershipError::ConstraintGeneration {
-            reason: "test reason".into(),
-        };
+        let err = OwnershipError::ConstraintGeneration { reason: "test reason".into() };
         assert!(err.to_string().contains("test reason"));
 
-        let region_err = RegionError::RegionNotFound {
-            id: 0,
-            name: "x".into(),
-        };
+        let region_err = RegionError::RegionNotFound { id: 0, name: "x".into() };
         let err2 = OwnershipError::Region(region_err);
         assert!(err2.to_string().contains("region"));
     }

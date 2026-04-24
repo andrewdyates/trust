@@ -54,14 +54,10 @@ fn detect_llvm_link() -> (&'static str, &'static str) {
 fn restore_library_path() {
     let key = tracked_env_var_os("REAL_LIBRARY_PATH_VAR").expect("REAL_LIBRARY_PATH_VAR");
     if let Some(env) = tracked_env_var_os("REAL_LIBRARY_PATH") {
-        // SAFETY: This build script mutates the environment before it spawns any threads,
-        // so no concurrent environment access in this process can race with this call.
         unsafe {
             env::set_var(&key, env);
         }
     } else {
-        // SAFETY: This build script mutates the environment before it spawns any threads,
-        // so no concurrent environment access in this process can race with this call.
         unsafe {
             env::remove_var(&key);
         }
@@ -79,14 +75,14 @@ fn tracked_env_var_os<K: AsRef<OsStr> + Display>(key: K) -> Option<OsString> {
 fn rerun_if_changed_anything_in_dir(dir: &Path) {
     let mut stack = dir
         .read_dir()
-        .expect("invariant: dir must be a readable directory") // tRust: unwrap -> expect
-        .map(|e| e.expect("invariant: directory entry must be readable")) // tRust: unwrap -> expect
+        .unwrap()
+        .map(|e| e.unwrap())
         .filter(|e| &*e.file_name() != ".git")
         .collect::<Vec<_>>();
     while let Some(entry) = stack.pop() {
         let path = entry.path();
-        if entry.file_type().expect("invariant: entry must have a valid file type").is_dir() { // tRust: unwrap -> expect
-            stack.extend(path.read_dir().expect("invariant: subdirectory must be readable").map(|e| e.expect("invariant: directory entry must be readable"))); // tRust: unwrap -> expect
+        if entry.file_type().unwrap().is_dir() {
+            stack.extend(path.read_dir().unwrap().map(|e| e.unwrap()));
         } else {
             println!("cargo:rerun-if-changed={}", path.display());
         }
@@ -114,11 +110,11 @@ fn execute(cmd: &mut Command) -> Output {
 
 #[track_caller]
 fn output(cmd: &mut Command) -> String {
-    String::from_utf8(execute(cmd.stderr(Stdio::inherit())).stdout).expect("invariant: command stdout must be valid UTF-8") // tRust: unwrap -> expect
+    String::from_utf8(execute(cmd.stderr(Stdio::inherit())).stdout).unwrap()
 }
 #[track_caller]
 fn stderr(cmd: &mut Command) -> String {
-    String::from_utf8(execute(cmd).stderr).expect("invariant: command stderr must be valid UTF-8") // tRust: unwrap -> expect
+    String::from_utf8(execute(cmd).stderr).unwrap()
 }
 
 enum LlvmConfigOutput {
@@ -185,7 +181,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", llvm_config.display());
 
-    // tRust: known issue — `--quote-paths` was added to llvm-config in LLVM 22, so this test (and all its ensuing
+    // FIXME: `--quote-paths` was added to llvm-config in LLVM 22, so this test (and all its ensuing
     //        fallback paths) can be removed once we bump the minimum llvm_version >= (22, 0, 0).
     let llvm_config_supports_quote_paths =
         stderr(Command::new(&llvm_config).arg("--help")).contains("quote-paths");
@@ -382,11 +378,11 @@ fn main() {
             let path = Path::new(&*lib);
             if lib.ends_with(".a") {
                 is_static = true;
-                println!("cargo:rustc-link-search=native={}", path.parent().expect("invariant: library path must have a parent directory").display()); // tRust: unwrap -> expect
-                let name = path.file_stem().expect("invariant: .a file must have a file stem").to_str().expect("invariant: file stem must be valid UTF-8"); // tRust: unwrap -> expect
+                println!("cargo:rustc-link-search=native={}", path.parent().unwrap().display());
+                let name = path.file_stem().unwrap().to_str().unwrap();
                 name.trim_start_matches("lib")
             } else {
-                let name = path.file_name().expect("invariant: library path must have a file name").to_str().expect("invariant: file name must be valid UTF-8"); // tRust: unwrap -> expect
+                let name = path.file_name().unwrap().to_str().unwrap();
                 name.trim_end_matches(".lib")
             }
         } else if lib.ends_with(".lib") {
@@ -446,7 +442,7 @@ fn main() {
     // dependencies.
     let llvm_linker_flags = tracked_env_var_os("LLVM_LINKER_FLAGS");
     if let Some(s) = llvm_linker_flags {
-        let linker_flags = s.into_string().expect("invariant: LLVM_LINKER_FLAGS must be valid UTF-8"); // tRust: unwrap -> expect
+        let linker_flags = s.into_string().unwrap();
         let mut shlex = Shlex::new(&linker_flags);
         for lib in shlex.by_ref() {
             if let Some(stripped) = lib.strip_prefix("-l") {
@@ -492,7 +488,7 @@ fn main() {
         if let Some(s) = llvm_static_stdcpp {
             assert!(cxxflags.into_iter().all(|flag| flag != "-stdlib=libc++"));
             let path = PathBuf::from(s);
-            println!("cargo:rustc-link-search=native={}", path.parent().expect("invariant: LLVM_STATIC_STDCPP path must have a parent directory").display()); // tRust: unwrap -> expect
+            println!("cargo:rustc-link-search=native={}", path.parent().unwrap().display());
             if target.contains("windows") {
                 println!("cargo:rustc-link-lib=static:-bundle={stdcppname}");
             } else {

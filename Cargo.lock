@@ -29,6 +29,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "getrandom 0.3.3",
+ "once_cell",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -220,7 +233,7 @@ dependencies = [
  "memchr",
  "proc-macro2",
  "quote",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_derive",
  "syn 2.0.117",
@@ -241,7 +254,7 @@ version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d0af3691ba3af77949c0b5a3925444b85cb58a0184cc7fec16c68ba2e7be868"
 dependencies = [
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_derive",
  "unicode-ident",
@@ -1119,8 +1132,7 @@ dependencies = [
 [[package]]
 name = "crossbeam"
 version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1137cd7e7fc0fb5d3c5a8678be38ec56e819125d8d7907411fe24ccb943faca8"
+source = "git+https://github.com/andrewdyates/tla2"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
@@ -1688,6 +1700,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
 
 [[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1728,6 +1746,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
+name = "fixedbitset"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
+
+[[package]]
 name = "flate2"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1747,7 +1771,7 @@ dependencies = [
  "fluent-syntax",
  "intl-memoizer",
  "intl_pluralrules",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "self_cell",
  "smallvec",
  "unic-langid",
@@ -1806,6 +1830,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -2035,6 +2069,15 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
@@ -2050,6 +2093,8 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.2.0",
  "serde",
  "serde_core",
@@ -2060,6 +2105,15 @@ name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+
+[[package]]
+name = "hashlink"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
+dependencies = [
+ "hashbrown 0.14.5",
+]
 
 [[package]]
 name = "heck"
@@ -2640,7 +2694,7 @@ dependencies = [
  "anyhow",
  "clap",
  "fs-err",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustdoc-json-types",
  "serde",
  "serde_json",
@@ -2664,6 +2718,25 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
+name = "lean5-kernel"
+version = "1.1.0"
+source = "git+https://github.com/andrewdyates/lean5"
+dependencies = [
+ "ahash",
+ "bincode",
+ "hashbrown 0.16.1",
+ "lz4_flex",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2",
+ "smallvec",
+ "stacker",
+ "thiserror 2.0.18",
+ "zstd",
+]
 
 [[package]]
 name = "leb128"
@@ -2776,6 +2849,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsqlite3-sys"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2843,6 +2927,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "llvm2-codegen"
+version = "0.1.0"
+source = "git+https://github.com/andrewdyates/LLVM2"
+dependencies = [
+ "llvm2-dialect",
+ "llvm2-ir",
+ "llvm2-lower",
+ "llvm2-opt",
+ "llvm2-regalloc",
+ "rayon",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tmir 0.1.0 (git+https://github.com/andrewdyates/tMIR)",
+ "tmir-build",
+]
+
+[[package]]
+name = "llvm2-dialect"
+version = "0.1.0"
+source = "git+https://github.com/andrewdyates/LLVM2"
+dependencies = [
+ "llvm2-ir",
+]
+
+[[package]]
 name = "llvm2-ir"
 version = "0.1.0"
 source = "git+https://github.com/andrewdyates/LLVM2"
@@ -2859,9 +2968,28 @@ dependencies = [
  "llvm2-ir",
  "serde",
  "thiserror 2.0.18",
- "tmir-func",
- "tmir-instrs",
- "tmir-types",
+ "tmir 0.1.0 (git+https://github.com/andrewdyates/tMIR)",
+ "tmir-build",
+]
+
+[[package]]
+name = "llvm2-opt"
+version = "0.1.0"
+source = "git+https://github.com/andrewdyates/LLVM2"
+dependencies = [
+ "llvm2-ir",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "llvm2-regalloc"
+version = "0.1.0"
+source = "git+https://github.com/andrewdyates/LLVM2"
+dependencies = [
+ "llvm2-ir",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2911,6 +3039,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "605d9697bcd5ef3a42d38efc51541aa3d6a4a25f7ab6d1ed0da5ac632a26b470"
 dependencies = [
  "logos-codegen",
+]
+
+[[package]]
+name = "lz4_flex"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+dependencies = [
+ "twox-hash 2.1.2",
 ]
 
 [[package]]
@@ -4260,6 +4397,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmp"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ba8be72d372b2c9b35542551678538b562e7cf86c3315773cae48dfbfe7790c"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72f81bee8c8ef9b577d1681a70ebbc962c232461e397b22c208c43c04b67a155"
+dependencies = [
+ "rmp",
+ "serde",
+]
+
+[[package]]
 name = "rug"
 version = "1.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4286,6 +4442,20 @@ dependencies = [
  "similar",
  "tempfile",
  "wasmparser 0.236.1",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
+dependencies = [
+ "bitflags",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
 ]
 
 [[package]]
@@ -4318,6 +4488,11 @@ name = "rustc-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe"
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.2"
+source = "git+https://github.com/andrewdyates/tla2"
 
 [[package]]
 name = "rustc-literal-escaper"
@@ -4599,6 +4774,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_codegen_llvm2"
+version = "0.0.0"
+dependencies = [
+ "rustc_codegen_ssa",
+ "rustc_data_structures",
+ "rustc_metadata",
+ "rustc_middle",
+ "rustc_session",
+ "rustc_span",
+ "tracing",
+ "trust-llvm2-bridge",
+ "trust-mir-extract",
+ "trust-types",
+]
+
+[[package]]
 name = "rustc_codegen_ssa"
 version = "0.0.0"
 dependencies = [
@@ -4681,7 +4872,7 @@ dependencies = [
  "memmap2",
  "parking_lot",
  "portable-atomic",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-stable-hash",
  "rustc_arena",
  "rustc_graphviz",
@@ -5016,6 +5207,7 @@ dependencies = [
  "rustc_borrowck",
  "rustc_builtin_macros",
  "rustc_codegen_llvm",
+ "rustc_codegen_llvm2",
  "rustc_codegen_ssa",
  "rustc_const_eval",
  "rustc_data_structures",
@@ -5269,7 +5461,6 @@ dependencies = [
  "smallvec",
  "tracing",
  "trust-cache",
- "trust-convergence",
  "trust-loop",
  "trust-mir-extract",
  "trust-router",
@@ -5369,7 +5560,7 @@ dependencies = [
 name = "rustc_pattern_analysis"
 version = "0.0.0"
 dependencies = [
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_abi",
  "rustc_apfloat",
  "rustc_arena",
@@ -5700,7 +5891,7 @@ dependencies = [
  "derive-where",
  "ena",
  "indexmap",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_abi",
  "rustc_ast_ir",
  "rustc_data_structures",
@@ -5799,7 +5990,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "rkyv",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6166,6 +6357,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "signal-hook"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
+dependencies = [
+ "errno",
+ "libc",
+]
+
+[[package]]
 name = "signature"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6209,6 +6420,9 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "socket2"
@@ -6600,7 +6814,7 @@ dependencies = [
  "ignore",
  "miropt-test-tools",
  "regex",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver",
  "serde",
  "similar",
@@ -6651,43 +6865,66 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "tla-lock"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/tla2"
+dependencies = [
+ "tla-lock-api",
+ "tla-lock-core",
+]
+
+[[package]]
+name = "tla-lock-api"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/tla2"
+dependencies = [
+ "scopeguard",
+]
+
+[[package]]
+name = "tla-lock-core"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/tla2"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall 0.5.18",
+ "smallvec",
+ "windows-link 0.2.1",
+]
+
+[[package]]
 name = "tla-mc-core"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/tla2"
 dependencies = [
  "crossbeam",
- "parking_lot",
- "rustc-hash 2.1.2",
- "smallvec",
+ "rustc-hash 2.1.2 (git+https://github.com/andrewdyates/tla2)",
  "thiserror 2.0.18",
+ "tla-lock",
+ "tla-smallvec",
 ]
 
 [[package]]
-name = "tmir-func"
+name = "tla-smallvec"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/tla2"
+
+[[package]]
+name = "tmir"
 version = "0.1.0"
-source = "git+https://github.com/andrewdyates/LLVM2"
+source = "git+https://github.com/andrewdyates/tMIR"
 dependencies = [
+ "rmp-serde",
  "serde",
- "serde_json",
- "tmir-instrs",
- "tmir-types",
 ]
 
 [[package]]
-name = "tmir-instrs"
+name = "tmir-build"
 version = "0.1.0"
-source = "git+https://github.com/andrewdyates/LLVM2"
+source = "git+https://github.com/andrewdyates/tMIR"
 dependencies = [
- "serde",
- "tmir-types",
-]
-
-[[package]]
-name = "tmir-types"
-version = "0.1.0"
-source = "git+https://github.com/andrewdyates/LLVM2"
-dependencies = [
- "serde",
+ "tmir 0.1.0 (git+https://github.com/andrewdyates/tMIR)",
 ]
 
 [[package]]
@@ -7015,6 +7252,7 @@ dependencies = [
 name = "trust-cache"
 version = "0.1.0"
 dependencies = [
+ "fs2",
  "hmac",
  "proptest",
  "serde",
@@ -7072,18 +7310,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "trust-decompile"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.18",
- "trust-types",
-]
-
-[[package]]
 name = "trust-disasm"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "trust-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "trust-backprop",
+ "trust-binary-parse",
+ "trust-cache",
+ "trust-cegar",
+ "trust-convergence",
+ "trust-disasm",
+ "trust-lift",
+ "trust-loop",
+ "trust-proof-cert",
+ "trust-report",
+ "trust-router",
+ "trust-strengthen",
+ "trust-symex",
+ "trust-transval",
+ "trust-types",
+ "trust-vcgen",
+]
+
+[[package]]
+name = "trust-lean5"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "lean5-kernel",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "trust-proof-cert",
+ "trust-types",
 ]
 
 [[package]]
@@ -7092,7 +7360,6 @@ version = "0.1.0"
 dependencies = [
  "thiserror 2.0.18",
  "trust-binary-parse",
- "trust-decompile",
  "trust-disasm",
  "trust-machine-sem",
  "trust-types",
@@ -7103,7 +7370,10 @@ dependencies = [
 name = "trust-llvm2-bridge"
 version = "0.1.0"
 dependencies = [
+ "llvm2-codegen",
  "llvm2-lower",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "trust-types",
 ]
@@ -7154,6 +7424,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "trust-types",
+ "z4-proof-common 0.9.0 (git+https://github.com/andrewdyates/z4)",
 ]
 
 [[package]]
@@ -7184,6 +7455,7 @@ dependencies = [
  "trust-cache",
  "trust-cegar",
  "trust-config",
+ "trust-llvm2-bridge",
  "trust-proof-cert",
  "trust-report",
  "trust-sunder-lib",
@@ -7193,18 +7465,13 @@ dependencies = [
  "trust-vcgen",
  "trust-zani-lib",
  "z4",
+ "z4-bindings 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "zani-verifier",
 ]
 
 [[package]]
-name = "trust-runtime"
+name = "trust-spec"
 version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "trust-types",
-]
 
 [[package]]
 name = "trust-strengthen"
@@ -7250,13 +7517,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "trust-testgen"
+name = "trust-transval"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "trust-router",
  "trust-types",
+ "trust-vcgen",
 ]
 
 [[package]]
@@ -7265,7 +7535,7 @@ version = "0.1.0"
 dependencies = [
  "indexmap",
  "proptest",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "sha2",
@@ -7330,7 +7600,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb30dbbd9036155e74adad6812e9898d03ec374946234fbcebd5dfc7b9187b90"
 dependencies = [
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -7895,6 +8165,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "winapi"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
+dependencies = [
+ "winapi-i686-pc-windows-gnu",
+ "winapi-x86_64-pc-windows-gnu",
+]
+
+[[package]]
+name = "winapi-i686-pc-windows-gnu"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
+
+[[package]]
 name = "winapi-util"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7902,6 +8188,12 @@ checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "winapi-x86_64-pc-windows-gnu"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows"
@@ -8422,14 +8714,17 @@ source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
  "anyhow",
  "clap",
+ "nix 0.29.0",
  "num-bigint",
  "num-rational",
  "serde_json",
+ "signal-hook",
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
  "z4-allsat",
  "z4-bench",
+ "z4-bisect",
  "z4-chc",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-dpll 0.9.0 (git+https://github.com/andrewdyates/z4)",
@@ -8438,7 +8733,9 @@ dependencies = [
  "z4-flatzinc-smt",
  "z4-frontend 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-fzn2smt",
+ "z4-lp",
  "z4-lrat-check",
+ "z4-pb",
  "z4-proof 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-sat 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-sys 0.9.0 (git+https://github.com/andrewdyates/z4)",
@@ -8472,9 +8769,12 @@ name = "z4-bench"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
- "anyhow",
+ "rayon",
+ "rusqlite",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
+ "z4-proof-complexity",
 ]
 
 [[package]]
@@ -8487,6 +8787,19 @@ dependencies = [
  "stacker",
  "thiserror 2.0.18",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
+]
+
+[[package]]
+name = "z4-bisect"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/z4"
+dependencies = [
+ "anyhow",
+ "clap",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -8513,7 +8826,7 @@ dependencies = [
  "num-integer",
  "num-rational",
  "num-traits",
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json",
  "stacker",
  "thiserror 2.0.18",
@@ -8521,12 +8834,14 @@ dependencies = [
  "z4-arrays 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-bv 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-dispatch",
  "z4-dpll 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-euf 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-frontend 0.9.0 (git+https://github.com/andrewdyates/z4)",
- "z4-jit",
+ "z4-jit 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lia 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-sat 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-sys 0.9.0 (git+https://github.com/andrewdyates/z4)",
 ]
 
 [[package]]
@@ -8534,6 +8849,7 @@ name = "z4-core"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
+ "foldhash 0.1.5",
  "hashbrown 0.15.5",
  "num-bigint",
  "num-integer",
@@ -8549,11 +8865,19 @@ name = "z4-cp"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
- "rustc-hash 2.1.2",
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec",
  "thiserror 2.0.18",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-sat 0.9.0 (git+https://github.com/andrewdyates/z4)",
+]
+
+[[package]]
+name = "z4-dispatch"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/z4"
+dependencies = [
+ "rustc-hash 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -8577,6 +8901,7 @@ dependencies = [
  "z4-euf 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-fp 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-frontend 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-jit 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lia 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lra 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-nia 0.9.0 (git+https://github.com/andrewdyates/z4)",
@@ -8632,8 +8957,6 @@ name = "z4-flatzinc-smt"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
- "libc",
- "nix 0.29.0",
  "num-traits",
  "thiserror 2.0.18",
  "z4-dpll 0.9.0 (git+https://github.com/andrewdyates/z4)",
@@ -8664,6 +8987,7 @@ dependencies = [
  "logos",
  "num-bigint",
  "num-rational",
+ "num-traits",
  "stacker",
  "thiserror 2.0.18",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
@@ -8674,7 +8998,7 @@ name = "z4-fzn2smt"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
- "anyhow",
+ "thiserror 2.0.18",
  "z4-cp",
  "z4-flatzinc-parser",
  "z4-flatzinc-smt",
@@ -8702,6 +9026,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tmir 0.1.0 (git+https://github.com/andrewdyates/tMIR)",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
 ]
 
@@ -8717,7 +9042,16 @@ dependencies = [
  "num-traits",
  "tracing",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-intsat 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lra 0.9.0 (git+https://github.com/andrewdyates/z4)",
+]
+
+[[package]]
+name = "z4-lp"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/z4"
+dependencies = [
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -8730,9 +9064,11 @@ dependencies = [
  "num-integer",
  "num-rational",
  "num-traits",
+ "rug",
  "smallvec",
  "tracing",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-jit 0.9.0 (git+https://github.com/andrewdyates/z4)",
 ]
 
 [[package]]
@@ -8751,12 +9087,24 @@ source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
  "hashbrown 0.15.5",
  "num-bigint",
+ "num-integer",
  "num-rational",
  "num-traits",
+ "stacker",
  "tracing",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lia 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lra 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-nonlinear-common 0.9.0 (git+https://github.com/andrewdyates/z4)",
+]
+
+[[package]]
+name = "z4-nonlinear-common"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/z4"
+dependencies = [
+ "num-rational",
+ "num-traits",
 ]
 
 [[package]]
@@ -8772,6 +9120,16 @@ dependencies = [
  "tracing",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-lra 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-nonlinear-common 0.9.0 (git+https://github.com/andrewdyates/z4)",
+]
+
+[[package]]
+name = "z4-pb"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/z4"
+dependencies = [
+ "thiserror 2.0.18",
+ "z4-sat 0.9.0 (git+https://github.com/andrewdyates/z4)",
 ]
 
 [[package]]
@@ -8800,20 +9158,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "z4-proof-complexity"
+version = "0.9.0"
+source = "git+https://github.com/andrewdyates/z4"
+dependencies = [
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "serde",
+ "thiserror 2.0.18",
+ "z4-sat 0.9.0 (git+https://github.com/andrewdyates/z4)",
+]
+
+[[package]]
 name = "z4-sat"
 version = "0.9.0"
 source = "git+https://github.com/andrewdyates/z4"
 dependencies = [
  "bytemuck",
+ "fixedbitset",
+ "foldhash 0.1.5",
  "hashbrown 0.15.5",
+ "parking_lot",
  "serde_json",
  "smallvec",
  "thiserror 2.0.18",
  "tracing",
  "z4-core 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-drat-check 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-jit 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-prefetch 0.9.0 (git+https://github.com/andrewdyates/z4)",
  "z4-proof-common 0.9.0 (git+https://github.com/andrewdyates/z4)",
+ "z4-sys 0.9.0 (git+https://github.com/andrewdyates/z4)",
 ]
 
 [[package]]
@@ -8973,3 +9348,31 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[package]]
+name = "zstd"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.0.16+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
+dependencies = [
+ "cc",
+ "pkg-config",
+]

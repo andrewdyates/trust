@@ -304,7 +304,6 @@ fn report_mismatched_rpitit_signature<'tcx>(
 
     if tcx.asyncness(impl_m_def_id).is_async() && tcx.asyncness(trait_m_def_id).is_async() {
         let ty::Alias(ty::Projection, future_ty) = return_ty.kind() else {
-            // tRust: invariant — opaque type refinement checking only applies to items with valid parent items
             span_bug!(
                 tcx.def_span(trait_m_def_id),
                 "expected return type of async fn in trait to be a AFIT projection"
@@ -318,19 +317,18 @@ fn report_mismatched_rpitit_signature<'tcx>(
                 _ => None,
             })
         else {
-            // tRust: invariant — async fn in trait must have a Future projection bound
             span_bug!(tcx.def_span(trait_m_def_id), "expected `Future` projection bound in AFIT");
         };
         return_ty = future_output_ty;
     }
 
     let (span, impl_return_span, pre, post) =
-        match tcx.hir_node_by_def_id(impl_m_def_id.expect_local()).fn_decl().expect("invariant: value is present").output {
+        match tcx.hir_node_by_def_id(impl_m_def_id.expect_local()).fn_decl().unwrap().output {
             hir::FnRetTy::DefaultReturn(span) => (tcx.def_span(impl_m_def_id), span, "-> ", " "),
             hir::FnRetTy::Return(ty) => (ty.span, ty.span, "", ""),
         };
     let trait_return_span =
-        tcx.hir_get_if_local(trait_m_def_id).map(|node| match node.fn_decl().expect("invariant: value is present").output {
+        tcx.hir_get_if_local(trait_m_def_id).map(|node| match node.fn_decl().unwrap().output {
             hir::FnRetTy::DefaultReturn(_) => tcx.def_span(trait_m_def_id),
             hir::FnRetTy::Return(ty) => ty.span,
         });

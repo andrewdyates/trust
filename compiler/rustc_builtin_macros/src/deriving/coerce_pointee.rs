@@ -97,7 +97,7 @@ pub(crate) fn expand_deriving_coerce_pointee(
     let self_type = cx.ty_path(path);
 
     // Declare helper function that adds implementation blocks.
-    // tRust: known issue (dingxiangfei2009) — Investigate the set of attributes on target struct to be propagated to impls
+    // FIXME(dingxiangfei2009): Investigate the set of attributes on target struct to be propagated to impls
     let attrs = thin_vec![cx.attr_word(sym::automatically_derived, span),];
     // # Validity assertion which will be checked later in `rustc_hir_analysis::coherence::builtins`.
     {

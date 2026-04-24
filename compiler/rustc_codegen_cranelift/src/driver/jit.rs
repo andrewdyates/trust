@@ -105,8 +105,6 @@ pub(crate) fn run_jit(tcx: TyCtxt<'_>, crate_info: &CrateInfo, jit_args: Vec<Str
     let finalized_start: *const u8 = jit_module.get_finalized_function(start_func_id);
 
     let f: extern "C" fn(c_int, *const *const c_char) -> c_int =
-        // SAFETY: The source and target types have the same size and
-        // compatible memory layouts, so the transmute is well-defined.
         unsafe { ::std::mem::transmute(finalized_start) };
 
     let mut argv = args.iter().map(|arg| arg.as_ptr()).collect::<Vec<_>>();
@@ -201,10 +199,6 @@ fn dep_symbol_lookup_fn(
     let imported_dylibs = Box::leak(
         dylib_paths
             .into_iter()
-            // SAFETY: `Library::new` is unsafe because loading a shared library can
-            // execute arbitrary initialization code (`DT_INIT`/`DT_INIT_ARRAY`). Here the
-            // paths come from the crate dependency graph resolved by rustc, so they are
-            // trusted compiler-produced dylib paths, not user-controlled input.
             .map(|path| unsafe { libloading::Library::new(&path).unwrap() })
             .collect::<Box<[_]>>(),
     );
@@ -213,8 +207,6 @@ fn dep_symbol_lookup_fn(
 
     Box::new(move |sym_name| {
         for dylib in &*imported_dylibs {
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because the leaked `Library` handles outlive this closure, and we only read the resolved symbol's raw address as `*const u8`.
             if let Ok(sym) = unsafe { dylib.get::<*const u8>(sym_name.as_bytes()) } {
                 return Some(*sym);
             }

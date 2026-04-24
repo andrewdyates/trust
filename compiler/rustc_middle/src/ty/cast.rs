@@ -90,7 +90,6 @@ pub fn mir_cast_kind<'tcx>(from_ty: Ty<'tcx>, cast_ty: Ty<'tcx>) -> mir::CastKin
         (Some(CastTy::Ptr(_)), Some(CastTy::Ptr(_))) => mir::CastKind::PtrToPtr,
 
         (_, _) => {
-            // tRust: invariant: Attempting to cast non-castable types <...> and <...>
             bug!("Attempting to cast non-castable types {:?} and {:?}", from_ty, cast_ty)
         }
     };

@@ -41,7 +41,7 @@ pub(crate) fn collect<'tcx>(tcx: TyCtxt<'tcx>, LocalCrate: LocalCrate) -> EiiMap
                 EiiImplResolution::Error(_eg) => continue,
             };
 
-            // tRust: known issue — remove extern target from encoded decl (upstream FIXME by eii)
+            // FIXME(eii) remove extern target from encoded decl
             eiis.entry(decl.foreign_item)
                 .or_insert_with(|| (decl, Default::default()))
                 .1

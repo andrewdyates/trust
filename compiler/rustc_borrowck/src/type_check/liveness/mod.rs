@@ -48,7 +48,7 @@ pub(super) fn generate<'tcx>(
     if typeck.tcx().sess.opts.unstable_opts.polonius.is_next_enabled() {
         let (_, boring_locals) =
             compute_relevant_live_locals(typeck.tcx(), &free_regions, typeck.body);
-        typeck.polonius_context.as_mut().expect("invariant: Polonius context must be set").boring_nll_locals =
+        typeck.polonius_context.as_mut().unwrap().boring_nll_locals =
             boring_locals.into_iter().collect();
         free_regions = typeck.universal_regions.universal_regions_iter().collect();
     }
@@ -182,7 +182,6 @@ impl<'a, 'tcx> Visitor<'tcx> for LiveVariablesVisitor<'a, 'tcx> {
             | TyContext::ResumeTy(SourceInfo { span, .. })
             | TyContext::UserTy(span)
             | TyContext::LocalDecl { source_info: SourceInfo { span, .. }, .. } => {
-                // tRust: invariant — region inference guarantee
                 span_bug!(span, "should not be visiting outside of the CFG: {:?}", ty_context);
             }
             TyContext::Location(location) => {

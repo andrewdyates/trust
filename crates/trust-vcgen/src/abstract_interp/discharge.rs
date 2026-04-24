@@ -151,16 +151,6 @@ pub(crate) fn check_comparison_intervals(
                 None
             }
         }
-        // lhs != rhs holds for ALL values iff intervals don't overlap
-        ComparisonOp::Ne => {
-            if lhs.hi < rhs.lo || lhs.lo > rhs.hi {
-                Some(true)
-            } else if lhs.lo == lhs.hi && rhs.lo == rhs.hi && lhs.lo == rhs.lo {
-                Some(false)
-            } else {
-                None
-            }
-        }
     }
 }
 
@@ -172,7 +162,6 @@ pub(crate) enum ComparisonOp {
     Gt,
     Ge,
     Eq,
-    Ne,
 }
 
 /// Try to determine the truth value of a formula under interval abstraction.
@@ -273,7 +262,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
     // definitely false, the VC is proved.
     if try_eval_boolean(&vc.formula, env) == Some(false) {
         return AbstractInterpResult::Discharged(VerificationResult::Proved {
-            solver: "abstract-interp".to_string(),
+            solver: "abstract-interp".into(),
             time_ms: 0,
             strength: ProofStrength::abstract_interpretation(),
             proof_certificate: None,
@@ -290,7 +279,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && !divisor_interval.contains(0)
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -305,7 +294,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && result_ok
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -320,7 +309,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && safe
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -336,7 +325,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && safe
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -352,7 +341,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && safe
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -367,7 +356,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && !divisor_interval.contains(0)
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -383,7 +372,7 @@ pub fn try_discharge_vc(vc: &VerificationCondition, env: &IntervalDomain) -> Abs
                 && safe
             {
                 return AbstractInterpResult::Discharged(VerificationResult::Proved {
-                    solver: "abstract-interp".to_string(),
+                    solver: "abstract-interp".into(),
                     time_ms: 0,
                     strength: ProofStrength::abstract_interpretation(),
                     proof_certificate: None,
@@ -519,7 +508,7 @@ pub fn augment_vc_with_abstract_state(
 
     VerificationCondition {
         kind: vc.kind.clone(),
-        function: vc.function.clone(),
+        function: vc.function,
         location: vc.location.clone(),
         formula: Formula::And(vec![env_formula, vc.formula.clone()]),
         contract_metadata: vc.contract_metadata,

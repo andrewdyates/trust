@@ -1,6 +1,3 @@
-//! tRust: `MirPatch` utilities for queuing and batch-applying MIR block,
-//! tRust: statement, and terminator edits.
-
 use rustc_data_structures::fx::FxHashMap;
 use rustc_index::Idx;
 use rustc_middle::mir::*;

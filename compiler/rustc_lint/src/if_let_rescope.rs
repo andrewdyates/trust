@@ -192,7 +192,7 @@ impl IfLetRescope {
                         // so we just bail.
                         // Alternatively when the span comes from proc macro expansion,
                         // we will also bail.
-                        // tRust: known issue — (#101728) change this when type ascription syntax is stabilized again
+                        // FIXME(#101728): change this when type ascription syntax is stabilized again
                     } else if let Ok(pat) = source_map.span_to_snippet(pat.span) {
                         let emit_suggestion = |alt_span| {
                             first_if_to_rewrite = true;
@@ -479,7 +479,7 @@ impl<'tcx> Visitor<'tcx> for FindSignificantDropper<'_, 'tcx> {
             }
             // `(Drop, ()).1` introduces a temporary and then moves out of
             // part of it, therefore we should check it for temporaries.
-            // tRust: known issue — This may have false positives if we move the part
+            // FIXME: This may have false positives if we move the part
             // that actually has drop, but oh well.
             hir::ExprKind::Index(expr, _, _) | hir::ExprKind::Field(expr, _) => {
                 self.check_promoted_temp_with_drop(expr)?;

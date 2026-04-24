@@ -60,7 +60,7 @@ pub(crate) enum MinMax {
 pub(crate) fn alloc_type_name<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> (AllocId, u64) {
     let path = crate::util::type_name(tcx, ty);
     let bytes = path.into_bytes();
-    let len = bytes.len().try_into().expect("invariant: byte slice length fits in u64");
+    let len = bytes.len().try_into().unwrap();
     (tcx.allocate_bytes_dedup(bytes, CTFE_ALLOC_SALT), len)
 }
 impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
@@ -122,7 +122,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 None => {
                     let hash = self.tcx.type_id_hash(elem_ty).as_u128();
                     let mut hash_bytes = [0u8; 16];
-                    write_target_uint(self.data_layout().endian, &mut hash_bytes, hash).expect("invariant: hash_bytes buffer is large enough for target uint write");
+                    write_target_uint(self.data_layout().endian, &mut hash_bytes, hash).unwrap();
                     ty_and_hash = Some((elem_ty, hash_bytes));
                     hash_bytes
                 }
@@ -137,14 +137,14 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             };
             // Ensure the elem_hash matches the corresponding part of the full hash.
             let hash_frag = &full_hash[(idx as usize) * ptr_size..][..ptr_size];
-            if read_target_uint(self.data_layout().endian, hash_frag).expect("invariant: hash_frag buffer contains a valid target uint") != elem_hash.into() {
+            if read_target_uint(self.data_layout().endian, hash_frag).unwrap() != elem_hash.into() {
                 throw_ub_format!(
                     "invalid `TypeId` value: the hash does not match the type id metadata"
                 );
             }
         }
 
-        interp_ok(ty_and_hash.expect("invariant: type hash lookup found a matching entry before exhausting candidates").0)
+        interp_ok(ty_and_hash.unwrap().0)
     }
 
     /// Returns `true` if emulation happened.
@@ -196,7 +196,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let tp_ty = instance.args.type_at(0);
                 let layout = self.layout_of(tp_ty)?;
                 if !layout.is_sized() {
-                    // tRust: invariant — size_of intrinsic requires a Sized type
                     span_bug!(self.cur_span(), "unsized type for `size_of`");
                 }
                 let val = layout.size.bytes();
@@ -206,7 +205,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let tp_ty = instance.args.type_at(0);
                 let layout = self.layout_of(tp_ty)?;
                 if !layout.is_sized() {
-                    // tRust: invariant — align_of intrinsic requires a Sized type
                     span_bug!(self.cur_span(), "unsized type for `align_of`");
                 }
                 let val = layout.align.bytes();
@@ -244,7 +242,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         throw_inval!(TooGeneric)
                     }
                     ty::Pat(..) => unreachable!(),
-                    // tRust: invariant — bound type variables are resolved before const evaluation
                     ty::Bound(_, _) => bug!("bound ty during ctfe"),
                     ty::Bool
                     | ty::Char
@@ -292,7 +289,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let result = match intrinsic_name {
                     sym::align_of_val => align.bytes(),
                     sym::size_of_val => size.bytes(),
-                    // tRust: invariant — only size_of_val and align_of_val intrinsics reach this path
                     _ => bug!(),
                 };
 
@@ -314,7 +310,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     sym::fdiv_algebraic => BinOp::Div,
                     sym::frem_algebraic => BinOp::Rem,
 
-                    // tRust: invariant — only algebraic float intrinsics (fadd/fsub/fmul/fdiv/frem) reach this path
                     _ => bug!(),
                 };
 
@@ -374,7 +369,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let offset_count = self.read_target_isize(&args[1])?;
                 let pointee_ty = instance_args.type_at(0);
 
-                let pointee_size = i64::try_from(self.layout_of(pointee_ty)?.size.bytes()).expect("invariant: pointee size fits in i64 (cannot exceed isize::MAX)");
+                let pointee_size = i64::try_from(self.layout_of(pointee_ty)?.size.bytes()).unwrap();
                 let offset_bytes = offset_count.wrapping_mul(pointee_size);
                 let offset_ptr = ptr.wrapping_signed_offset(offset_bytes, self);
                 self.write_pointer(offset_ptr, dest)?;
@@ -481,7 +476,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 // derived from the same allocation.
                 self.check_ptr_access_signed(
                     a,
-                    dist.checked_neg().expect("invariant: dist is not i64::MIN because no allocation can be that large"), // i64::MIN is impossible as no allocation can be that large
+                    dist.checked_neg().unwrap(), // i64::MIN is impossible as no allocation can be that large
                     CheckInAllocMsg::Dereferenceable,
                 )
                 .map_err_kind(|_| {
@@ -809,7 +804,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 assert_eq!(layout, ret_layout);
                 (bits << extra).reverse_bits()
             }
-            // tRust: invariant — caller only dispatches recognized numeric intrinsic names
             _ => bug!("not a numeric intrinsic: {}", name),
         };
         interp_ok(Scalar::from_uint(bits_out, ret_layout.size))
@@ -848,7 +842,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         assert_matches!(mir_op, BinOp::Add | BinOp::Sub);
 
         let (val, overflowed) =
-            self.binary_op(mir_op.wrapping_to_overflowing().expect("invariant: wrapping_to_overflowing is defined for all checked MIR bin ops"), l, r)?.to_scalar_pair();
+            self.binary_op(mir_op.wrapping_to_overflowing().unwrap(), l, r)?.to_scalar_pair();
         interp_ok(if overflowed.to_bool()? {
             let size = l.layout.size;
             if l.layout.backend_repr.is_signed() {
@@ -907,7 +901,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         nonoverlapping: bool,
     ) -> InterpResult<'tcx> {
         let count = self.read_target_usize(count)?;
-        let layout = self.layout_of(src.layout.ty.builtin_deref(true).expect("invariant: src operand of copy intrinsic is a pointer type with a deref target"))?;
+        let layout = self.layout_of(src.layout.ty.builtin_deref(true).unwrap())?;
         let (size, align) = (layout.size, layout.align.abi);
 
         let size = self.compute_size_in_bytes(size, count).ok_or_else(|| {
@@ -967,7 +961,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         count: &OpTy<'tcx, <M as Machine<'tcx>>::Provenance>,
         name: &'static str,
     ) -> InterpResult<'tcx> {
-        let layout = self.layout_of(dst.layout.ty.builtin_deref(true).expect("invariant: dst operand of write intrinsic is a pointer type with a deref target"))?;
+        let layout = self.layout_of(dst.layout.ty.builtin_deref(true).unwrap())?;
 
         let dst = self.read_pointer(dst)?;
         let byte = self.read_scalar(byte)?.to_u8()?;
@@ -1006,7 +1000,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         lhs: &OpTy<'tcx, <M as Machine<'tcx>>::Provenance>,
         rhs: &OpTy<'tcx, <M as Machine<'tcx>>::Provenance>,
     ) -> InterpResult<'tcx, Scalar<M::Provenance>> {
-        let layout = self.layout_of(lhs.layout.ty.builtin_deref(true).expect("invariant: lhs of ptr comparison intrinsic is a pointer type with a deref target"))?;
+        let layout = self.layout_of(lhs.layout.ty.builtin_deref(true).unwrap())?;
         assert!(layout.is_sized());
 
         let get_bytes = |this: &InterpCx<'tcx, M>,
@@ -1193,7 +1187,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     (Scalar::from_int(res.value, int_size), res.status)
                 }
                 // Nothing else
-                // tRust: invariant — float-to-int conversion target must be an integer type (Uint or Int)
                 _ => span_bug!(
                     ecx.cur_span(),
                     "attempted float-to-int conversion with non-int output type {}",
@@ -1203,7 +1196,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         }
 
         let ty::Float(fty) = src.layout.ty.kind() else {
-            // tRust: invariant — float_to_int_checked is only called with float source types
             bug!("float_to_int_checked: non-float input type {}", src.layout.ty)
         };
 
@@ -1239,7 +1231,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         // Find the first pointer field in this struct. The exact index is target-specific.
         let ty::Adt(adt, substs) = va_list_inner.layout().ty.kind() else {
-            // tRust: invariant — VaListImpl struct has a known fixed layout
             bug!("invalid VaListImpl layout");
         };
 
@@ -1249,7 +1240,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             }
         }
 
-        // tRust: invariant — VaListImpl struct must contain at least one pointer field
         bug!("no VaListImpl field is a pointer");
     }
 }

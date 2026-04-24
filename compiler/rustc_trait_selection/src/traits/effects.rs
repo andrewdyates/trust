@@ -26,7 +26,6 @@ pub fn evaluate_host_effect_obligation<'tcx>(
     obligation: &HostEffectObligation<'tcx>,
 ) -> Result<ThinVec<PredicateObligation<'tcx>>, EvaluationFailure> {
     if selcx.infcx.typing_mode() == TypingMode::Coherence {
-        // tRust: invariant — Should not select host obligation in old solver in intercrate mode
         span_bug!(
             obligation.cause.span,
             "should not select host obligation in old solver in intercrate mode"
@@ -485,7 +484,7 @@ fn evaluate_host_effect_for_destruct_goal<'tcx>(
             return Err(EvaluationFailure::NoSolution);
         }
 
-        // tRust: known issue (unsafe_binders) — Unsafe binders could implement `[const] Drop`
+        // FIXME(unsafe_binders): Unsafe binders could implement `[const] Drop`
         // if their inner type implements it.
         ty::UnsafeBinder(_) => return Err(EvaluationFailure::NoSolution),
 
@@ -536,7 +535,7 @@ fn evaluate_host_effect_for_fn_goal<'tcx>(
             (
                 def,
                 tcx.mk_args_from_iter(
-                    [ty::GenericArg::from(*sig.inputs().get(0).expect("invariant: index/key is valid")), sig.output().into()]
+                    [ty::GenericArg::from(*sig.inputs().get(0).unwrap()), sig.output().into()]
                         .into_iter(),
                 ),
             )

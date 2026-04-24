@@ -682,8 +682,6 @@ impl<'a, 'gcc, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'a, 'gcc, 'tc
 
     fn abort(&mut self) {
         let func = self.context.get_builtin_function("abort");
-        // SAFETY: The source and target types have the same size and
-        // compatible memory layouts, so the transmute is well-defined.
         let func: RValue<'gcc> = unsafe { std::mem::transmute(func) };
         self.call(self.type_void(), None, None, func, &[], None, None);
     }
@@ -1443,8 +1441,6 @@ fn codegen_gnu_try<'gcc, 'tcx>(
         bx.invoke(try_func_ty, None, None, try_func, &[data], then, catch, None, None);
     });
 
-    // SAFETY: The source and target types have the same size and
-    // compatible memory layouts, so the transmute is well-defined.
     let func = unsafe { std::mem::transmute::<Function<'gcc>, RValue<'gcc>>(func) };
 
     // Note that no invoke is used here because by definition this function

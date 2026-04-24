@@ -606,7 +606,7 @@ impl<E: rustc_span::SpanEncoder> rustc_serialize::Encodable<E> for DocAttribute 
         rustc_serialize::Encodable::<E>::encode(aliases, encoder);
         rustc_serialize::Encodable::<E>::encode(hidden, encoder);
 
-        // tRust: known issue — The `doc(inline)` attribute is never encoded, but is it actually the right thing
+        // FIXME: The `doc(inline)` attribute is never encoded, but is it actually the right thing
         // to do? I suspect the condition was broken, should maybe instead not encode anything if we
         // have `doc(no_inline)`.
         let inline: ThinVec<_> =
@@ -1265,7 +1265,7 @@ pub enum AttributeKind {
     },
 
     /// Represents `#[align(N)]`.
-    // tRust: known issue (#82232, #143834) — temporarily renamed to mitigate `#[align]` nameres ambiguity
+    // FIXME(#82232, #143834): temporarily renamed to mitigate `#[align]` nameres ambiguity
     RustcAlign {
         align: Align,
         span: Span,
@@ -1324,7 +1324,7 @@ pub enum AttributeKind {
     /// Represents `#[rustc_confusables]`.
     RustcConfusables {
         symbols: ThinVec<Symbol>,
-        // tRust: known issue (jdonszelmann) — remove when target validation code is moved
+        // FIXME(jdonszelmann): remove when target validation code is moved
         first_span: Span,
     },
     /// Represents `#[rustc_const_stable]` and `#[rustc_const_unstable]`.

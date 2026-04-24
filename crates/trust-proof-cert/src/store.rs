@@ -7,7 +7,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -18,10 +18,11 @@ use crate::{CertError, CertificateChain, CertificateId, FunctionHash, ProofCerti
 /// A collection of proof certificates for a crate, with chain tracking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CertificateStore {
+    // tRust: BTreeMap for deterministic certificate output (#827)
     /// Map from certificate ID to certificate.
-    pub certificates: FxHashMap<String, ProofCertificate>,
+    pub certificates: BTreeMap<String, ProofCertificate>,
     /// Map from certificate ID to its verification chain.
-    pub chains: FxHashMap<String, CertificateChain>,
+    pub chains: BTreeMap<String, CertificateChain>,
     /// Crate name this store belongs to.
     pub crate_name: String,
     /// Store format version.
@@ -37,8 +38,8 @@ impl CertificateStore {
     /// Create a new empty store for a crate.
     pub fn new(crate_name: impl Into<String>) -> Self {
         CertificateStore {
-            certificates: FxHashMap::default(),
-            chains: FxHashMap::default(),
+            certificates: BTreeMap::new(),
+            chains: BTreeMap::new(),
             crate_name: crate_name.into(),
             version: STORE_FORMAT_VERSION,
         }
@@ -76,10 +77,7 @@ impl CertificateStore {
     ///
     /// Matches against the `vc_snapshot.kind` field (Debug format of VcKind).
     pub fn find_by_vc_kind(&self, kind_substr: &str) -> Vec<&ProofCertificate> {
-        self.certificates
-            .values()
-            .filter(|c| c.vc_snapshot.kind.contains(kind_substr))
-            .collect()
+        self.certificates.values().filter(|c| c.vc_snapshot.kind.contains(kind_substr)).collect()
     }
 
     /// Find certificates by proof strength.
@@ -102,7 +100,7 @@ impl CertificateStore {
     /// Verify all certificates: check chains and staleness.
     pub fn verify_all(
         &self,
-        current_hashes: &FxHashMap<String, FunctionHash>,
+        current_hashes: &BTreeMap<String, FunctionHash>,
     ) -> Result<StoreVerification, CertError> {
         let mut result = StoreVerification {
             total: self.certificates.len(),
@@ -158,15 +156,15 @@ impl CertificateStore {
     /// Prune certificates for functions whose hashes have changed.
     ///
     /// Returns the IDs of removed certificates.
-    pub fn prune_by_hash(&mut self, current_hashes: &FxHashMap<String, FunctionHash>) -> Vec<String> {
+    pub fn prune_by_hash(
+        &mut self,
+        current_hashes: &BTreeMap<String, FunctionHash>,
+    ) -> Vec<String> {
         let stale_ids: Vec<String> = self
             .certificates
             .iter()
             .filter(|(_id, cert)| {
-                current_hashes
-                    .get(&cert.function)
-                    .map(|h| !cert.is_fresh_for(h))
-                    .unwrap_or(true)
+                current_hashes.get(&cert.function).map(|h| !cert.is_fresh_for(h)).unwrap_or(true)
             })
             .map(|(id, _)| id.clone())
             .collect();

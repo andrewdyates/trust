@@ -25,8 +25,8 @@ use crate::{LateContext, LateLintPass, LintId, LintStore};
 ///
 /// This function exists because [`Session::lint_store`] is type-erased.
 pub fn unerased_lint_store(sess: &Session) -> &LintStore {
-    let store: &dyn Any = sess.lint_store.as_deref().expect("invariant: lint_store is set during session creation"); // tRust: unwrap -> expect
-    store.downcast_ref().expect("invariant: store is LintStore after session init") // tRust: unwrap -> expect
+    let store: &dyn Any = sess.lint_store.as_deref().unwrap();
+    store.downcast_ref().unwrap()
 }
 
 macro_rules! lint_callback { ($cx:expr, $f:ident, $($args:expr),*) => ({
@@ -92,7 +92,7 @@ impl<'tcx, T: LateLintPass<'tcx>> hir_visit::Visitor<'tcx> for LateContextAndPas
         let old_enclosing_body = self.context.enclosing_body.replace(body_id);
         let old_cached_typeck_results = self.context.cached_typeck_results.get();
 
-        // tRust: known issue — (eddyb) avoid trashing `cached_typeck_results` when we're
+        // HACK(eddyb) avoid trashing `cached_typeck_results` when we're
         // nested in `visit_fn`, which may have already resulted in them
         // being queried.
         if old_enclosing_body != Some(body_id) {
@@ -103,7 +103,7 @@ impl<'tcx, T: LateLintPass<'tcx>> hir_visit::Visitor<'tcx> for LateContextAndPas
         self.visit_body(body);
         self.context.enclosing_body = old_enclosing_body;
 
-        // See tRust: known issue — comment above.
+        // See HACK comment above.
         if old_enclosing_body != Some(body_id) {
             self.context.cached_typeck_results.set(old_cached_typeck_results);
         }

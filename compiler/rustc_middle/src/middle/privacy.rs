@@ -126,7 +126,7 @@ impl EffectiveVisibilities {
         self.map.insert(CRATE_DEF_ID, EffectiveVisibility::from_vis(Visibility::Public));
     }
 
-    // tRust: known issue — Share code with `fn update`.
+    // FIXME: Share code with `fn update`.
     pub fn update_eff_vis(
         &mut self,
         def_id: LocalDefId,
@@ -161,19 +161,15 @@ impl EffectiveVisibilities {
             let private_vis = Visibility::Restricted(tcx.parent_module_from_def_id(def_id));
             let span = tcx.def_span(def_id.to_def_id());
             if !ev.direct.is_at_least(private_vis, tcx) {
-                // tRust: invariant: private <...> > direct <...>
                 span_bug!(span, "private {:?} > direct {:?}", private_vis, ev.direct);
             }
             if !ev.reexported.is_at_least(ev.direct, tcx) {
-                // tRust: invariant: direct <...> > reexported <...>
                 span_bug!(span, "direct {:?} > reexported {:?}", ev.direct, ev.reexported);
             }
             if !ev.reachable.is_at_least(ev.reexported, tcx) {
-                // tRust: invariant: reexported <...> > reachable <...>
                 span_bug!(span, "reexported {:?} > reachable {:?}", ev.reexported, ev.reachable);
             }
             if !ev.reachable_through_impl_trait.is_at_least(ev.reachable, tcx) {
-                // tRust: invariant: unexpected state in check_invariants
                 span_bug!(
                     span,
                     "reachable {:?} > reachable_through_impl_trait {:?}",
@@ -188,7 +184,6 @@ impl EffectiveVisibilities {
             if !is_impl && tcx.trait_impl_of_assoc(def_id.to_def_id()).is_none() {
                 let nominal_vis = tcx.visibility(def_id);
                 if !nominal_vis.is_at_least(ev.reachable, tcx) {
-                    // tRust: invariant: unexpected state in check_invariants
                     span_bug!(
                         span,
                         "{:?}: reachable {:?} > nominal {:?}",
@@ -211,7 +206,7 @@ impl<Id: Eq + Hash> EffectiveVisibilities<Id> {
         self.map.get(&id)
     }
 
-    // tRust: known issue — Share code with `fn update`.
+    // FIXME: Share code with `fn update`.
     pub fn effective_vis_or_private(
         &mut self,
         id: Id,

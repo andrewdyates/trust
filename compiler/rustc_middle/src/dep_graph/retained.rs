@@ -36,7 +36,7 @@ impl RetainedDepGraph {
     }
 
     pub fn nodes(&self) -> Vec<&DepNode> {
-        self.inner.all_nodes().iter().map(|n| n.data.as_ref().expect("invariant: value is Some")).collect()
+        self.inner.all_nodes().iter().map(|n| n.data.as_ref().unwrap()).collect()
     }
 
     pub fn edges(&self) -> Vec<(&DepNode, &DepNode)> {

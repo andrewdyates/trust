@@ -14,12 +14,14 @@
 // avoids duplicating `#[cfg(feature = "llm")]` guards on each item.
 #![allow(dead_code)]
 
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
+
 use crate::analyzer::{FailureAnalysis, FailurePattern};
 use crate::proposer::{Proposal, ProposalKind};
 use crate::{LlmBackend, LlmError, LlmRequest, LlmResponse};
-use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
 /// Error type for AI Model API interactions.
 #[derive(Debug, thiserror::Error)]
@@ -134,13 +136,12 @@ impl CircuitBreaker {
             CircuitState::Closed | CircuitState::HalfOpen => Ok(()),
             CircuitState::Open => {
                 if let Some(last) = self.last_failure_time
-                    && last.elapsed() >= self.cooldown {
-                        self.state = CircuitState::HalfOpen;
-                        return Ok(());
-                    }
-                Err(LlmError::CircuitBreakerOpen {
-                    failures: self.consecutive_failures,
-                })
+                    && last.elapsed() >= self.cooldown
+                {
+                    self.state = CircuitState::HalfOpen;
+                    return Ok(());
+                }
+                Err(LlmError::CircuitBreakerOpen { failures: self.consecutive_failures })
             }
         }
     }
@@ -248,10 +249,7 @@ impl ClaudeLlm {
     }
 
     /// Create a new AI Model LLM backend with a custom circuit breaker.
-    pub fn with_circuit_breaker(
-        config: ClaudeConfig,
-        circuit_breaker: CircuitBreaker,
-    ) -> Self {
+    pub fn with_circuit_breaker(config: ClaudeConfig, circuit_breaker: CircuitBreaker) -> Self {
         Self {
             #[cfg(feature = "llm")]
             client: reqwest::blocking::Client::builder()
@@ -298,10 +296,7 @@ enum RetryDecision {
 #[cfg(feature = "llm")]
 fn parse_rate_limit_headers(headers: &reqwest::header::HeaderMap) -> RateLimitInfo {
     let parse_header = |name: &str| -> Option<u64> {
-        headers
-            .get(name)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok())
+        headers.get(name).and_then(|v| v.to_str().ok()).and_then(|s| s.parse::<u64>().ok())
     };
     RateLimitInfo {
         remaining: parse_header("x-ratelimit-limit-requests")
@@ -318,10 +313,7 @@ pub(crate) fn build_prompt(
     source: &str,
     failures: &[FailureAnalysis],
 ) -> String {
-    let failure_descriptions: Vec<String> = failures
-        .iter()
-        .map(format_failure)
-        .collect();
+    let failure_descriptions: Vec<String> = failures.iter().map(format_failure).collect();
 
     format!(
         r#"You are a formal verification expert. Analyze this Rust function and its verification failures, then propose specifications (preconditions, postconditions, or invariants) that would make the function provable.
@@ -388,10 +380,7 @@ fn format_failure(analysis: &FailureAnalysis) -> String {
         FailurePattern::Temporal => "Temporal property violation".into(),
         FailurePattern::Unknown => "Unknown failure".into(),
     };
-    let solver = analysis
-        .solver
-        .as_deref()
-        .unwrap_or("unknown");
+    let solver = analysis.solver.as_deref().unwrap_or("unknown");
     format!("- **{pattern_desc}** in `{}` (solver: {solver})", analysis.function)
 }
 
@@ -536,11 +525,7 @@ enum ContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-    },
+    ToolUse { id: String, name: String, input: serde_json::Value },
 }
 
 /// A single proposal as returned by AI Model's JSON response.
@@ -593,9 +578,10 @@ fn extract_json_array(text: &str) -> String {
         return trimmed.to_string();
     }
     if let (Some(start), Some(end)) = (text.find('['), text.rfind(']'))
-        && start < end {
-            return text[start..=end].to_string();
-        }
+        && start < end
+    {
+        return text[start..=end].to_string();
+    }
     text.to_string()
 }
 
@@ -606,15 +592,9 @@ fn convert_llm_proposal(
     function_path: &str,
 ) -> Option<Proposal> {
     let kind = match p.kind.as_str() {
-        "precondition" => ProposalKind::AddPrecondition {
-            spec_body: p.spec_body,
-        },
-        "postcondition" => ProposalKind::AddPostcondition {
-            spec_body: p.spec_body,
-        },
-        "invariant" => ProposalKind::AddInvariant {
-            spec_body: p.spec_body,
-        },
+        "precondition" => ProposalKind::AddPrecondition { spec_body: p.spec_body },
+        "postcondition" => ProposalKind::AddPostcondition { spec_body: p.spec_body },
+        "invariant" => ProposalKind::AddInvariant { spec_body: p.spec_body },
         _ => return None,
     };
 
@@ -678,10 +658,7 @@ impl LlmBackend for ClaudeLlm {
                 // for truncation. Callers that want finer-grained priority control
                 // should use `truncate_to_budget` directly before calling `send()`.
                 crate::llm_token_budget::truncate_to_budget(
-                    vec![(
-                        crate::llm_token_budget::Priority::FunctionBody,
-                        request.prompt.clone(),
-                    )],
+                    vec![(crate::llm_token_budget::Priority::FunctionBody, request.prompt.clone())],
                     &budget,
                 )
             } else {
@@ -691,10 +668,7 @@ impl LlmBackend for ClaudeLlm {
             let msg_request = MessagesRequest {
                 model: model.clone(),
                 max_tokens,
-                messages: vec![Message {
-                    role: "user".into(),
-                    content: prompt,
-                }],
+                messages: vec![Message { role: "user".into(), content: prompt }],
                 tools,
                 tool_choice,
             };
@@ -727,14 +701,12 @@ impl LlmBackend for ClaudeLlm {
                     Err(e) => {
                         let is_timeout = e.is_timeout();
                         let err = if is_timeout {
-                            LlmError::Timeout {
-                                timeout_secs: retry_config.request_timeout_secs,
-                            }
+                            LlmError::Timeout { timeout_secs: retry_config.request_timeout_secs }
                         } else {
                             LlmError::Request(e.to_string())
                         };
-                        let mut cb = self.circuit_breaker.lock()
-                            .expect("circuit breaker lock poisoned");
+                        let mut cb =
+                            self.circuit_breaker.lock().expect("circuit breaker lock poisoned");
                         cb.record_failure();
                         last_err = Some(err);
                         continue;
@@ -744,15 +716,13 @@ impl LlmBackend for ClaudeLlm {
                 let status = response.status().as_u16();
                 match Self::classify_status(status) {
                     RetryDecision::Success => {
-                        let mut cb = self.circuit_breaker.lock()
-                            .expect("circuit breaker lock poisoned");
+                        let mut cb =
+                            self.circuit_breaker.lock().expect("circuit breaker lock poisoned");
                         cb.record_success();
 
-                        let body: MessagesResponse = response
-                            .json()
-                            .map_err(|e| {
-                                LlmError::Request(format!("failed to parse response: {e}"))
-                            })?;
+                        let body: MessagesResponse = response.json().map_err(|e| {
+                            LlmError::Request(format!("failed to parse response: {e}"))
+                        })?;
 
                         // Check for tool_use blocks first (structured output).
                         // If the model used the propose_specifications tool,
@@ -804,25 +774,21 @@ impl LlmBackend for ClaudeLlm {
                             reset = rate_info.reset_secs,
                         );
                         std::thread::sleep(Duration::from_millis(wait_ms));
-                        let mut cb = self.circuit_breaker.lock()
-                            .expect("circuit breaker lock poisoned");
+                        let mut cb =
+                            self.circuit_breaker.lock().expect("circuit breaker lock poisoned");
                         cb.record_failure();
-                        last_err = Some(LlmError::RateLimited {
-                            retry_after_ms: wait_ms,
-                        });
+                        last_err = Some(LlmError::RateLimited { retry_after_ms: wait_ms });
                     }
                     RetryDecision::RetryServerError { status } => {
-                        let mut cb = self.circuit_breaker.lock()
-                            .expect("circuit breaker lock poisoned");
+                        let mut cb =
+                            self.circuit_breaker.lock().expect("circuit breaker lock poisoned");
                         cb.record_failure();
-                        eprintln!(
-                            "[trust-strengthen] server error (HTTP {status}), will retry"
-                        );
+                        eprintln!("[trust-strengthen] server error (HTTP {status}), will retry");
                         last_err = Some(LlmError::ServerError { status });
                     }
                     RetryDecision::Fail => {
-                        let mut cb = self.circuit_breaker.lock()
-                            .expect("circuit breaker lock poisoned");
+                        let mut cb =
+                            self.circuit_breaker.lock().expect("circuit breaker lock poisoned");
                         cb.record_failure();
                         return Err(LlmError::Request(format!("HTTP {status}")));
                     }
@@ -844,15 +810,19 @@ impl LlmBackend for ClaudeLlm {
 
 #[cfg(test)]
 mod tests {
+    use trust_types::{BinOp, Ty, VcKind};
+
     use super::*;
     use crate::analyzer::{FailureAnalysis, FailurePattern};
-    use trust_types::{BinOp, Ty, VcKind};
 
     fn overflow_failure() -> FailureAnalysis {
         FailureAnalysis {
             vc_kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "get_midpoint".into(),
             pattern: FailurePattern::ArithmeticOverflow { op: BinOp::Add },
@@ -873,7 +843,11 @@ mod tests {
 
     #[test]
     fn test_build_prompt_contains_function_name() {
-        let prompt = build_prompt("get_midpoint", "fn get_midpoint(a: u64, b: u64) -> u64 { a + b }", &[overflow_failure()]);
+        let prompt = build_prompt(
+            "get_midpoint",
+            "fn get_midpoint(a: u64, b: u64) -> u64 { a + b }",
+            &[overflow_failure()],
+        );
         assert!(prompt.contains("get_midpoint"));
         assert!(prompt.contains("fn get_midpoint"));
         assert!(prompt.contains("Arithmetic overflow"));
@@ -881,7 +855,11 @@ mod tests {
 
     #[test]
     fn test_build_prompt_contains_failure_info() {
-        let prompt = build_prompt("safe_divide", "fn safe_divide(a: u64, b: u64) -> u64 { a / b }", &[div_zero_failure()]);
+        let prompt = build_prompt(
+            "safe_divide",
+            "fn safe_divide(a: u64, b: u64) -> u64 { a / b }",
+            &[div_zero_failure()],
+        );
         assert!(prompt.contains("Division by zero"));
         assert!(prompt.contains("z4"));
     }
@@ -919,7 +897,9 @@ mod tests {
         assert_eq!(proposals.len(), 1);
         assert_eq!(proposals[0].function_name, "get_midpoint");
         assert_eq!(proposals[0].function_path, "test::get_midpoint");
-        assert!(matches!(&proposals[0].kind, ProposalKind::AddPrecondition { spec_body } if spec_body == "a <= u64::MAX - b"));
+        assert!(
+            matches!(&proposals[0].kind, ProposalKind::AddPrecondition { spec_body } if spec_body == "a <= u64::MAX - b")
+        );
         assert!((proposals[0].confidence - 0.9).abs() < f64::EPSILON);
         assert_eq!(proposals[0].rationale, "Prevents addition overflow");
     }
@@ -929,7 +909,9 @@ mod tests {
         let json = r#"[{"kind": "postcondition", "spec_body": "result >= a && result >= b", "confidence": 0.8, "rationale": "Max returns the larger value"}]"#;
         let proposals = parse_llm_response(json, "max", "test::max");
         assert_eq!(proposals.len(), 1);
-        assert!(matches!(&proposals[0].kind, ProposalKind::AddPostcondition { spec_body } if spec_body == "result >= a && result >= b"));
+        assert!(
+            matches!(&proposals[0].kind, ProposalKind::AddPostcondition { spec_body } if spec_body == "result >= a && result >= b")
+        );
     }
 
     #[test]
@@ -937,7 +919,9 @@ mod tests {
         let json = r#"[{"kind": "invariant", "spec_body": "i < len", "confidence": 0.85, "rationale": "Loop index stays in bounds"}]"#;
         let proposals = parse_llm_response(json, "search", "test::search");
         assert_eq!(proposals.len(), 1);
-        assert!(matches!(&proposals[0].kind, ProposalKind::AddInvariant { spec_body } if spec_body == "i < len"));
+        assert!(
+            matches!(&proposals[0].kind, ProposalKind::AddInvariant { spec_body } if spec_body == "i < len")
+        );
     }
 
     #[test]
@@ -957,7 +941,9 @@ mod tests {
         let response = "Here's the analysis:\n\n```json\n[{\"kind\": \"precondition\", \"spec_body\": \"x > 0\", \"confidence\": 0.9, \"rationale\": \"Must be positive\"}]\n```\n\nThis ensures safety.";
         let proposals = parse_llm_response(response, "f", "test::f");
         assert_eq!(proposals.len(), 1);
-        assert!(matches!(&proposals[0].kind, ProposalKind::AddPrecondition { spec_body } if spec_body == "x > 0"));
+        assert!(
+            matches!(&proposals[0].kind, ProposalKind::AddPrecondition { spec_body } if spec_body == "x > 0")
+        );
     }
 
     #[test]
@@ -1054,10 +1040,7 @@ mod tests {
 
     #[test]
     fn test_api_key_from_config() {
-        let config = ClaudeConfig {
-            api_key: Some("test-key-123".into()),
-            ..Default::default()
-        };
+        let config = ClaudeConfig { api_key: Some("test-key-123".into()), ..Default::default() };
         let llm = ClaudeLlm::new(config);
         assert_eq!(llm.api_key().expect("should have key"), "test-key-123");
     }
@@ -1220,12 +1203,18 @@ mod tests {
 
     #[test]
     fn test_classify_status_500() {
-        assert!(matches!(ClaudeLlm::classify_status(500), RetryDecision::RetryServerError { status: 500 }));
+        assert!(matches!(
+            ClaudeLlm::classify_status(500),
+            RetryDecision::RetryServerError { status: 500 }
+        ));
     }
 
     #[test]
     fn test_classify_status_503() {
-        assert!(matches!(ClaudeLlm::classify_status(503), RetryDecision::RetryServerError { status: 503 }));
+        assert!(matches!(
+            ClaudeLlm::classify_status(503),
+            RetryDecision::RetryServerError { status: 503 }
+        ));
     }
 
     #[test]
@@ -1283,7 +1272,10 @@ mod tests {
     }
 
     impl LlmBackend for MockClaudeLlm {
-        fn send(&self, _request: &crate::LlmRequest) -> Result<crate::LlmResponse, crate::LlmError> {
+        fn send(
+            &self,
+            _request: &crate::LlmRequest,
+        ) -> Result<crate::LlmResponse, crate::LlmError> {
             Ok(crate::LlmResponse {
                 content: self.response.clone(),
                 used_tool_use: false,
@@ -1300,29 +1292,35 @@ mod tests {
                 {"kind": "postcondition", "spec_body": "result == (a + b) / 2", "confidence": 0.85, "rationale": "Midpoint definition"}
             ]"#.into(),
         };
-        let response = mock.send(&crate::LlmRequest {
-            prompt: "test".into(),
-            model: String::new(),
-            max_response_tokens: 1024,
-            use_tool_use: false,
-        }).expect("mock should not fail");
+        let response = mock
+            .send(&crate::LlmRequest {
+                prompt: "test".into(),
+                model: String::new(),
+                max_response_tokens: 1024,
+                use_tool_use: false,
+            })
+            .expect("mock should not fail");
         let proposals = parse_llm_response(&response.content, "get_midpoint", "get_midpoint");
         assert_eq!(proposals.len(), 2);
-        assert!(matches!(&proposals[0].kind, ProposalKind::AddPrecondition { spec_body } if spec_body == "a <= u64::MAX - b"));
-        assert!(matches!(&proposals[1].kind, ProposalKind::AddPostcondition { spec_body } if spec_body == "result == (a + b) / 2"));
+        assert!(
+            matches!(&proposals[0].kind, ProposalKind::AddPrecondition { spec_body } if spec_body == "a <= u64::MAX - b")
+        );
+        assert!(
+            matches!(&proposals[1].kind, ProposalKind::AddPostcondition { spec_body } if spec_body == "result == (a + b) / 2")
+        );
     }
 
     #[test]
     fn test_mock_llm_bad_response() {
-        let mock = MockClaudeLlm {
-            response: "I don't understand the question.".into(),
-        };
-        let response = mock.send(&crate::LlmRequest {
-            prompt: "test".into(),
-            model: String::new(),
-            max_response_tokens: 1024,
-            use_tool_use: false,
-        }).expect("mock should not fail");
+        let mock = MockClaudeLlm { response: "I don't understand the question.".into() };
+        let response = mock
+            .send(&crate::LlmRequest {
+                prompt: "test".into(),
+                model: String::new(),
+                max_response_tokens: 1024,
+                use_tool_use: false,
+            })
+            .expect("mock should not fail");
         let proposals = parse_llm_response(&response.content, "f", "f");
         assert!(proposals.is_empty());
     }
@@ -1335,12 +1333,14 @@ mod tests {
                 {"kind": "teleport", "spec_body": "beam me up", "confidence": 0.1, "rationale": "Invalid kind"}
             ]"#.into(),
         };
-        let response = mock.send(&crate::LlmRequest {
-            prompt: "test".into(),
-            model: String::new(),
-            max_response_tokens: 1024,
-            use_tool_use: false,
-        }).expect("mock should not fail");
+        let response = mock
+            .send(&crate::LlmRequest {
+                prompt: "test".into(),
+                model: String::new(),
+                max_response_tokens: 1024,
+                use_tool_use: false,
+            })
+            .expect("mock should not fail");
         let proposals = parse_llm_response(&response.content, "f", "f");
         assert_eq!(proposals.len(), 1);
     }
@@ -1350,8 +1350,8 @@ mod tests {
     #[test]
     fn test_strengthen_with_mock_llm() {
         use trust_types::{
-            CrateVerificationResult, Formula, FunctionVerificationResult,
-            SourceSpan, VerificationCondition, VerificationResult,
+            CrateVerificationResult, Formula, FunctionVerificationResult, SourceSpan,
+            VerificationCondition, VerificationResult,
         };
         let mock = MockClaudeLlm {
             response: r#"[{"kind": "precondition", "spec_body": "a <= u64::MAX - b", "confidence": 0.9, "rationale": "LLM overflow guard"}]"#.into(),
@@ -1359,7 +1359,10 @@ mod tests {
         let vc = VerificationCondition {
             kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+                operand_tys: (
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
+                ),
             },
             function: "get_midpoint".into(),
             location: SourceSpan::default(),
@@ -1385,10 +1388,7 @@ mod tests {
             total_from_notes: 0,
             total_with_assumptions: 0,
         };
-        let config = crate::StrengthenConfig {
-            use_llm: true,
-            ..Default::default()
-        };
+        let config = crate::StrengthenConfig { use_llm: true, ..Default::default() };
         let output = crate::run(&results, &config, &mock);
         assert!(output.has_proposals);
         assert!(output.proposals.len() >= 3);
@@ -1434,10 +1434,10 @@ mod tests {
     #[test]
     fn test_build_tool_definition_kind_enum() {
         let tool = build_tool_definition();
-        let kind_enum = &tool["input_schema"]["properties"]["proposals"]["items"]
-            ["properties"]["kind"]["enum"];
-        let values: Vec<&str> = kind_enum.as_array().unwrap()
-            .iter().map(|v| v.as_str().unwrap()).collect();
+        let kind_enum =
+            &tool["input_schema"]["properties"]["proposals"]["items"]["properties"]["kind"]["enum"];
+        let values: Vec<&str> =
+            kind_enum.as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
         assert_eq!(values, vec!["precondition", "postcondition", "invariant"]);
     }
 
@@ -1445,8 +1445,8 @@ mod tests {
     fn test_build_tool_definition_required_fields() {
         let tool = build_tool_definition();
         let required = &tool["input_schema"]["properties"]["proposals"]["items"]["required"];
-        let fields: Vec<&str> = required.as_array().unwrap()
-            .iter().map(|v| v.as_str().unwrap()).collect();
+        let fields: Vec<&str> =
+            required.as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
         assert!(fields.contains(&"kind"));
         assert!(fields.contains(&"spec_body"));
         assert!(fields.contains(&"confidence"));
@@ -1554,11 +1554,15 @@ mod tests {
                 "proposals": [{"kind": "precondition", "spec_body": "n > 0", "confidence": 0.9, "rationale": "Positive input"}]
             }}
         ]}"#;
-        let response: MessagesResponse = serde_json::from_str(json)
-            .expect("should parse mixed response");
+        let response: MessagesResponse =
+            serde_json::from_str(json).expect("should parse mixed response");
         assert_eq!(response.content.len(), 2);
-        assert!(matches!(&response.content[0], ContentBlock::Text { text } if text == "Here are my proposals:"));
-        assert!(matches!(&response.content[1], ContentBlock::ToolUse { name, .. } if name == "propose_specifications"));
+        assert!(
+            matches!(&response.content[0], ContentBlock::Text { text } if text == "Here are my proposals:")
+        );
+        assert!(
+            matches!(&response.content[1], ContentBlock::ToolUse { name, .. } if name == "propose_specifications")
+        );
     }
 
     #[test]
@@ -1583,7 +1587,9 @@ mod tests {
             max_tokens: 1024,
             messages: vec![Message { role: "user".into(), content: "test".into() }],
             tools: Some(vec![build_tool_definition()]),
-            tool_choice: Some(serde_json::json!({"type": "tool", "name": "propose_specifications"})),
+            tool_choice: Some(
+                serde_json::json!({"type": "tool", "name": "propose_specifications"}),
+            ),
         };
         let json = serde_json::to_value(&request).expect("should serialize");
         let tools = json["tools"].as_array().expect("tools should be array");
@@ -1596,14 +1602,12 @@ mod tests {
     #[test]
     fn test_tool_use_input_round_trip() {
         let input = ToolUseInput {
-            proposals: vec![
-                ToolProposalSchema {
-                    kind: "precondition".into(),
-                    spec_body: "x > 0".into(),
-                    confidence: 0.9,
-                    rationale: "Must be positive".into(),
-                },
-            ],
+            proposals: vec![ToolProposalSchema {
+                kind: "precondition".into(),
+                spec_body: "x > 0".into(),
+                confidence: 0.9,
+                rationale: "Must be positive".into(),
+            }],
         };
         let json = serde_json::to_string(&input).expect("should serialize");
         let parsed: ToolUseInput = serde_json::from_str(&json).expect("should deserialize");
@@ -1624,7 +1628,10 @@ mod tests {
     }
 
     impl LlmBackend for MockToolUseLlm {
-        fn send(&self, _request: &crate::LlmRequest) -> Result<crate::LlmResponse, crate::LlmError> {
+        fn send(
+            &self,
+            _request: &crate::LlmRequest,
+        ) -> Result<crate::LlmResponse, crate::LlmError> {
             if self.use_tool_use {
                 // Simulate structured tool_use response
                 let input = ToolUseInput {
@@ -1655,25 +1662,30 @@ mod tests {
     fn test_fallback_tool_use_to_text_parsing() {
         // When used_tool_use is true, content is ToolUseInput JSON
         let mock = MockToolUseLlm { use_tool_use: true };
-        let response = mock.send(&crate::LlmRequest {
-            prompt: "test".into(),
-            model: String::new(),
-            max_response_tokens: 1024,
-            use_tool_use: true,
-        }).expect("should succeed");
+        let response = mock
+            .send(&crate::LlmRequest {
+                prompt: "test".into(),
+                model: String::new(),
+                max_response_tokens: 1024,
+                use_tool_use: true,
+            })
+            .expect("should succeed");
         assert!(response.used_tool_use);
-        let proposals = parse_tool_use_response(&response.content, "get_midpoint", "test::get_midpoint");
+        let proposals =
+            parse_tool_use_response(&response.content, "get_midpoint", "test::get_midpoint");
         assert_eq!(proposals.len(), 1);
         assert!((proposals[0].confidence - 0.95).abs() < f64::EPSILON);
 
         // When used_tool_use is false, content is free-form text
         let mock = MockToolUseLlm { use_tool_use: false };
-        let response = mock.send(&crate::LlmRequest {
-            prompt: "test".into(),
-            model: String::new(),
-            max_response_tokens: 1024,
-            use_tool_use: false,
-        }).expect("should succeed");
+        let response = mock
+            .send(&crate::LlmRequest {
+                prompt: "test".into(),
+                model: String::new(),
+                max_response_tokens: 1024,
+                use_tool_use: false,
+            })
+            .expect("should succeed");
         assert!(!response.used_tool_use);
         let proposals = parse_llm_response(&response.content, "get_midpoint", "test::get_midpoint");
         assert_eq!(proposals.len(), 1);

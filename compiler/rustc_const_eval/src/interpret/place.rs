@@ -34,7 +34,6 @@ impl<Prov: Provenance> MemPlaceMeta<Prov> {
         match self {
             Self::Meta(s) => s,
             Self::None => {
-                // tRust: invariant — wide pointers (trait objects, slices) always have metadata
                 bug!("expected wide pointer extra data (e.g. slice length or trait object vtable)")
             }
         }
@@ -88,7 +87,7 @@ impl<Prov: Provenance> MemPlace<Prov> {
         );
         let ptr = match mode {
             OffsetMode::Inbounds => {
-                ecx.ptr_offset_inbounds(self.ptr, offset.bytes().try_into().expect("invariant: place offset fits in isize for ptr_offset_inbounds"))?
+                ecx.ptr_offset_inbounds(self.ptr, offset.bytes().try_into().unwrap())?
             }
             OffsetMode::Wrapping => self.ptr.wrapping_offset(offset, ecx),
         };
@@ -257,7 +256,6 @@ impl<'tcx, Prov: Provenance> PlaceTy<'tcx, Prov> {
     #[cfg_attr(debug_assertions, track_caller)] // only in debug builds due to perf (see #98980)
     pub fn assert_mem_place(&self) -> MPlaceTy<'tcx, Prov> {
         self.as_mplace_or_local().left().unwrap_or_else(|| {
-            // tRust: invariant — preceding branches cover all valid cases
             bug!(
                 "PlaceTy of type {} was a local when it was expected to be an MPlace",
                 self.layout.ty
@@ -335,7 +333,6 @@ impl<'tcx, Prov: Provenance> OpTy<'tcx, Prov> {
     #[cfg_attr(debug_assertions, track_caller)] // only in debug builds due to perf (see #98980)
     pub fn assert_mem_place(&self) -> MPlaceTy<'tcx, Prov> {
         self.as_mplace_or_imm().left().unwrap_or_else(|| {
-            // tRust: invariant — preceding branches cover all valid cases
             bug!(
                 "OpTy of type {} was immediate when it was expected to be an MPlace",
                 self.layout.ty
@@ -384,7 +381,7 @@ impl<'tcx, Prov: Provenance> Writeable<'tcx, Prov> for MPlaceTy<'tcx, Prov> {
     }
 }
 
-// tRust: known issue — Working around https://github.com/rust-lang/rust/issues/54385
+// FIXME: Working around https://github.com/rust-lang/rust/issues/54385
 impl<'tcx, Prov, M> InterpCx<'tcx, M>
 where
     Prov: Provenance,
@@ -464,7 +461,6 @@ where
             // Derefer should have removed all Box derefs.
             // Some `Box` are not immediates (if they have a custom allocator)
             // so the code below would fail.
-            // tRust: invariant — deref operand must have a reference or pointer type
             bug!("dereferencing {}", src.layout().ty);
         }
 
@@ -522,7 +518,6 @@ where
         } else {
             // Other parts of the system rely on `Place::Local` never being unsized.
             match frame.locals[local].access()? {
-                // tRust: invariant — preceding match/if arms cover all valid cases
                 Operand::Immediate(_) => bug!(),
                 Operand::Indirect(mplace) => Place::Ptr(*mplace),
             }
@@ -559,7 +554,6 @@ where
                 self.layout_of(normalized_place_ty)?,
                 place.layout,
             ) {
-                // tRust: invariant — MIR place type must match the interpreter place type after evaluation
                 span_bug!(
                     self.cur_span(),
                     "eval_place of a MIR place with type {} produced an interpreter place with type {}",
@@ -589,7 +583,7 @@ where
             Right((local, offset, locals_addr, layout)) => {
                 if offset.is_some() {
                     // This has been projected to a part of this local, or had the type changed.
-                    // tRust: known issue — there are cases where we could still avoid allocating an mplace.
+                    // FIXME: there are cases where we could still avoid allocating an mplace.
                     Left(place.force_mplace(self)?)
                 } else {
                     debug_assert_eq!(locals_addr, self.frame().locals_addr());
@@ -722,7 +716,6 @@ where
             }
             Immediate::ScalarPair(a_val, b_val) => {
                 let BackendRepr::ScalarPair(_a, b) = layout.backend_repr else {
-                    // tRust: invariant — ScalarPair write requires a layout with exactly two scalar fields
                     span_bug!(
                         self.cur_span(),
                         "write_immediate_to_mplace: invalid ScalarPair layout: {:#?}",
@@ -885,7 +878,6 @@ where
         let layout_compat =
             mir_assign_valid_types(*self.tcx, self.typing_env, src.layout(), dest.layout());
         if !allow_transmute && !layout_compat {
-            // tRust: invariant — source and destination types must match for memory copy operations
             span_bug!(
                 self.cur_span(),
                 "type mismatch when copying!\nsrc: {},\ndest: {}",
@@ -952,11 +944,10 @@ where
 
         let dest = dest.force_mplace(self)?;
         let Some((dest_size, _)) = self.size_and_align_of_val(&dest)? else {
-            // tRust: invariant — copy_op requires dynamically sized value to have known size
             span_bug!(self.cur_span(), "copy_op needs (dynamically) sized values")
         };
         if cfg!(debug_assertions) {
-            let src_size = self.size_and_align_of_val(&src)?.expect("invariant: unsized copy source must have determinable size and alignment").0;
+            let src_size = self.size_and_align_of_val(&src)?.unwrap().0;
             assert_eq!(src_size, dest_size, "Cannot copy differently-sized data");
         } else {
             // As a cheap approximation, we compare the fixed parts of the size.
@@ -1013,7 +1004,7 @@ where
                         // Now we can call `access_mut` again, asserting it goes well, and actually
                         // overwrite things. This points to the entire allocation, not just the part
                         // the place refers to, i.e. we do this before we apply `offset`.
-                        *self.frame_mut().locals[local].access_mut().expect("invariant: local has been marked live and is accessible for mutation") =
+                        *self.frame_mut().locals[local].access_mut().unwrap() =
                             Operand::Indirect(mplace.mplace);
                         mplace.mplace
                     }
@@ -1045,7 +1036,6 @@ where
         meta: MemPlaceMeta<M::Provenance>,
     ) -> InterpResult<'tcx, MPlaceTy<'tcx, M::Provenance>> {
         let Some((size, align)) = self.size_and_align_from_meta(&meta, &layout)? else {
-            // tRust: invariant — extern types have unknown size and cannot be stack-allocated
             span_bug!(self.cur_span(), "cannot allocate space for `extern` type, size is not known")
         };
         let ptr = self.allocate_ptr(size, align, kind, AllocInit::Uninit)?;
@@ -1088,10 +1078,10 @@ where
         let ptr = self.allocate_bytes_dedup(bytes)?;
 
         // Create length metadata for the string.
-        let meta = Scalar::from_target_usize(u64::try_from(bytes.len()).expect("invariant: byte slice length fits in u64 for target_usize"), self);
+        let meta = Scalar::from_target_usize(u64::try_from(bytes.len()).unwrap(), self);
 
         // Get layout for Rust's str type.
-        let layout = self.layout_of(self.tcx.types.str_).expect("invariant: str type layout is always available");
+        let layout = self.layout_of(self.tcx.types.str_).unwrap();
 
         // Combine pointer and metadata into a wide pointer.
         interp_ok(self.ptr_with_meta_to_mplace(

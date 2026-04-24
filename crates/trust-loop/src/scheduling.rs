@@ -248,10 +248,7 @@ impl SchedulerState {
         self.priority_queue.clear();
         for c in candidates {
             let priority = compute_priority(c);
-            self.priority_queue.push(PrioritizedCandidate {
-                priority,
-                candidate: c.clone(),
-            });
+            self.priority_queue.push(PrioritizedCandidate { priority, candidate: c.clone() });
         }
     }
 }
@@ -315,7 +312,7 @@ mod tests {
 
     fn candidate(name: &str, difficulty: f64, failures: u32, vcs: u32) -> VerificationCandidate {
         VerificationCandidate {
-            function: name.to_string(),
+            function: name.into(),
             difficulty_estimate: difficulty,
             past_failures: failures,
             vc_count: vcs,
@@ -347,8 +344,8 @@ mod tests {
     fn test_priority_based_orders_by_score() {
         let candidates = vec![
             candidate("crate::easy", 0.1, 0, 1),   // low priority
-            candidate("crate::hard", 0.9, 5, 10),   // high priority
-            candidate("crate::medium", 0.5, 2, 3),  // medium
+            candidate("crate::hard", 0.9, 5, 10),  // high priority
+            candidate("crate::medium", 0.5, 2, 3), // medium
         ];
         let budget = IterationBudget::default();
         let mut state = SchedulerState::new(SchedulingPolicy::PriorityBased, budget, candidates);
@@ -376,7 +373,7 @@ mod tests {
     #[test]
     fn test_resource_aware_skips_expensive_candidates() {
         let candidates = vec![
-            candidate("crate::cheap", 0.1, 0, 1),     // cost: 1*(1+0) = 1
+            candidate("crate::cheap", 0.1, 0, 1),      // cost: 1*(1+0) = 1
             candidate("crate::expensive", 0.9, 10, 5), // cost: 5*(1+10) = 55
         ];
         let budget = IterationBudget {
@@ -397,10 +394,7 @@ mod tests {
     #[test]
     fn test_should_pause_solver_calls() {
         let candidates = vec![candidate("crate::f", 0.5, 0, 1)];
-        let budget = IterationBudget {
-            max_solver_calls: 100,
-            ..IterationBudget::default()
-        };
+        let budget = IterationBudget { max_solver_calls: 100, ..IterationBudget::default() };
         let mut state = SchedulerState::new(SchedulingPolicy::RoundRobin, budget, candidates);
 
         assert!(state.should_pause().is_none());
@@ -418,10 +412,7 @@ mod tests {
     #[test]
     fn test_should_pause_memory() {
         let candidates = vec![candidate("crate::f", 0.5, 0, 1)];
-        let budget = IterationBudget {
-            max_memory: 1024,
-            ..IterationBudget::default()
-        };
+        let budget = IterationBudget { max_memory: 1024, ..IterationBudget::default() };
         let mut state = SchedulerState::new(SchedulingPolicy::RoundRobin, budget, candidates);
 
         assert!(state.should_pause().is_none());
@@ -439,10 +430,8 @@ mod tests {
     #[test]
     fn test_should_pause_time() {
         let candidates = vec![candidate("crate::f", 0.5, 0, 1)];
-        let budget = IterationBudget {
-            max_time: Duration::from_millis(0),
-            ..IterationBudget::default()
-        };
+        let budget =
+            IterationBudget { max_time: Duration::from_millis(0), ..IterationBudget::default() };
         let state = SchedulerState::new(SchedulingPolicy::RoundRobin, budget, candidates);
 
         // With a 0ms budget, should_pause triggers immediately.
@@ -467,8 +456,7 @@ mod tests {
     #[test]
     fn test_empty_candidates_returns_none() {
         let budget = IterationBudget::default();
-        let mut state =
-            SchedulerState::new(SchedulingPolicy::RoundRobin, budget, Vec::new());
+        let mut state = SchedulerState::new(SchedulingPolicy::RoundRobin, budget, Vec::new());
 
         assert!(state.schedule_next().is_none());
     }
@@ -476,13 +464,10 @@ mod tests {
     #[test]
     fn test_adaptive_switches_strategy() {
         let candidates = vec![
-            candidate("crate::cheap", 0.1, 0, 1),     // cost 1, low priority
+            candidate("crate::cheap", 0.1, 0, 1), // cost 1, low priority
             candidate("crate::expensive", 0.9, 5, 20), // cost 20*6=120, high priority
         ];
-        let budget = IterationBudget {
-            max_solver_calls: 200,
-            ..IterationBudget::default()
-        };
+        let budget = IterationBudget { max_solver_calls: 200, ..IterationBudget::default() };
         let mut state = SchedulerState::new(SchedulingPolicy::Adaptive, budget, candidates.clone());
 
         // First half of budget (0 used / 200 max = 0%): uses priority-based.

@@ -194,8 +194,6 @@ impl ThreadPool {
         R: Send,
     {
         // We assert that `self.registry` has not terminated.
-        // SAFETY: A live `ThreadPool` keeps `self.registry` alive and can only start termination in
-        // `ThreadPool::drop`, so this borrowed registry satisfies `broadcast_in`'s precondition.
         unsafe { broadcast::broadcast_in(op, &self.registry) }
     }
 
@@ -347,8 +345,6 @@ impl ThreadPool {
         OP: FnOnce() + Send + 'static,
     {
         // We assert that `self.registry` has not terminated.
-        // SAFETY: A live `ThreadPool` keeps `self.registry` alive and can only start termination in
-        // `ThreadPool::drop`, so this borrowed registry satisfies `spawn_in`'s precondition.
         unsafe { spawn::spawn_in(op, &self.registry) }
     }
 
@@ -365,8 +361,6 @@ impl ThreadPool {
         OP: FnOnce() + Send + 'static,
     {
         // We assert that `self.registry` has not terminated.
-        // SAFETY: A live `ThreadPool` keeps `self.registry` alive and can only start termination in
-        // `ThreadPool::drop`, so this borrowed registry satisfies `spawn_fifo_in`'s precondition.
         unsafe { spawn::spawn_fifo_in(op, &self.registry) }
     }
 
@@ -379,8 +373,6 @@ impl ThreadPool {
         OP: Fn(BroadcastContext<'_>) + Send + Sync + 'static,
     {
         // We assert that `self.registry` has not terminated.
-        // SAFETY: A live `ThreadPool` keeps `self.registry` alive and can only start termination in
-        // `ThreadPool::drop`, so this borrowed registry satisfies `spawn_broadcast_in`'s precondition.
         unsafe { broadcast::spawn_broadcast_in(op, &self.registry) }
     }
 
@@ -455,8 +447,6 @@ impl fmt::Debug for ThreadPool {
 /// [snt]: struct.ThreadPoolBuilder.html#method.num_threads
 #[inline]
 pub fn current_thread_index() -> Option<usize> {
-    // SAFETY: `WorkerThread::current` returns the TLS worker pointer for this thread, which is
-    // either null or a live `WorkerThread` valid for the thread's lifetime; `as_ref` handles null.
     unsafe {
         let curr = WorkerThread::current().as_ref()?;
         Some(curr.index())
@@ -471,8 +461,6 @@ pub fn current_thread_index() -> Option<usize> {
 /// [m]: struct.ThreadPool.html#method.current_thread_has_pending_tasks
 #[inline]
 pub fn current_thread_has_pending_tasks() -> Option<bool> {
-    // SAFETY: `WorkerThread::current` returns the TLS worker pointer for this thread, which is
-    // either null or a live `WorkerThread` valid for the thread's lifetime; `as_ref` handles null.
     unsafe {
         let curr = WorkerThread::current().as_ref()?;
         Some(!curr.local_deque_is_empty())
@@ -492,8 +480,6 @@ pub fn current_thread_has_pending_tasks() -> Option<bool> {
 /// Returns `Some(Yield::Executed)` if anything was executed, `Some(Yield::Idle)` if
 /// nothing was available, or `None` if this thread is not part of any pool at all.
 pub fn yield_now() -> Option<Yield> {
-    // SAFETY: `WorkerThread::current` returns the TLS worker pointer for this thread, which is
-    // either null or a live `WorkerThread` valid for the thread's lifetime; `as_ref` handles null.
     unsafe {
         let thread = WorkerThread::current().as_ref()?;
         Some(thread.yield_now())
@@ -511,8 +497,6 @@ pub fn yield_now() -> Option<Yield> {
 /// Returns `Some(Yield::Executed)` if anything was executed, `Some(Yield::Idle)` if
 /// nothing was available, or `None` if this thread is not part of any pool at all.
 pub fn yield_local() -> Option<Yield> {
-    // SAFETY: `WorkerThread::current` returns the TLS worker pointer for this thread, which is
-    // either null or a live `WorkerThread` valid for the thread's lifetime; `as_ref` handles null.
     unsafe {
         let thread = WorkerThread::current().as_ref()?;
         Some(thread.yield_local())

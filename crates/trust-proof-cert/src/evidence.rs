@@ -7,7 +7,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::{AssuranceLevel, ProofEvidence, ProofStrength, ReasoningKind};
+use trust_types::{ProofEvidence, ProofStrength};
+
+#[cfg(test)]
+use trust_types::{AssuranceLevel, ReasoningKind};
 
 /// Derive `ProofEvidence` from a `ProofStrength` and optional raw certificate bytes.
 ///
@@ -27,10 +30,7 @@ pub fn evidence_from_certificate(
             // Full certificate validation (LRAT checking, etc.) would happen here.
             // For now, mark as SmtBacked since we trust the solver but haven't
             // independently validated the certificate.
-            ProofEvidence {
-                reasoning: base.reasoning,
-                assurance: base.assurance,
-            }
+            ProofEvidence { reasoning: base.reasoning, assurance: base.assurance }
         }
         _ => base,
     }
@@ -39,8 +39,9 @@ pub fn evidence_from_certificate(
 /// Classify the reasoning kind from a solver name string.
 ///
 /// Maps known solver identifiers to their corresponding `ReasoningKind`.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn reasoning_from_solver(solver: &str) -> ReasoningKind {
+fn reasoning_from_solver(solver: &str) -> ReasoningKind {
     match solver {
         "z4" => ReasoningKind::Smt,
         "zani" => ReasoningKind::BoundedModelCheck { depth: 0 },
@@ -54,8 +55,9 @@ pub(crate) fn reasoning_from_solver(solver: &str) -> ReasoningKind {
 }
 
 /// Determine assurance level from certificate validation status.
+#[cfg(test)]
 #[must_use]
-pub(crate) fn assurance_from_validation(validated: bool, has_certificate: bool) -> AssuranceLevel {
+fn assurance_from_validation(validated: bool, has_certificate: bool) -> AssuranceLevel {
     match (validated, has_certificate) {
         (true, true) => AssuranceLevel::Certified,
         (false, true) => AssuranceLevel::SmtBacked,

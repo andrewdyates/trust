@@ -288,7 +288,7 @@ impl Printer {
 
     /// Be very careful with this!
     pub(crate) fn replace_last_token_still_buffered(&mut self, token: Token) {
-        self.buf.last_mut().expect("invariant: buf non-empty after push").token = token; // tRust: unwrap -> expect
+        self.buf.last_mut().unwrap().token = token;
     }
 
     fn scan_eof(&mut self) {
@@ -353,9 +353,9 @@ impl Printer {
 
     fn check_stream(&mut self) {
         while self.right_total - self.left_total > self.space {
-            if *self.scan_stack.front().expect("invariant: scan_stack non-empty in loop") == self.buf.index_of_first() { // tRust: unwrap -> expect
-                self.scan_stack.pop_front().expect("invariant: scan_stack non-empty after front check"); // tRust: unwrap -> expect
-                self.buf.first_mut().expect("invariant: buf non-empty when index matches").size = SIZE_INFINITY; // tRust: unwrap -> expect
+            if *self.scan_stack.front().unwrap() == self.buf.index_of_first() {
+                self.scan_stack.pop_front().unwrap();
+                self.buf.first_mut().unwrap().size = SIZE_INFINITY;
             }
             self.advance_left();
             if self.buf.is_empty() {
@@ -365,8 +365,8 @@ impl Printer {
     }
 
     fn advance_left(&mut self) {
-        while self.buf.first().expect("invariant: buf non-empty at loop entry").size >= 0 { // tRust: unwrap -> expect
-            let left = self.buf.pop_first().expect("invariant: buf non-empty after first() succeeded"); // tRust: unwrap -> expect
+        while self.buf.first().unwrap().size >= 0 {
+            let left = self.buf.pop_first().unwrap();
 
             match &left.token {
                 Token::String(string) => {
@@ -397,18 +397,18 @@ impl Printer {
                     if depth == 0 {
                         break;
                     }
-                    self.scan_stack.pop_back().expect("invariant: scan_stack non-empty after back() succeeded"); // tRust: unwrap -> expect
+                    self.scan_stack.pop_back().unwrap();
                     entry.size += self.right_total;
                     depth -= 1;
                 }
                 Token::End => {
                     // paper says + not =, but that makes no sense.
-                    self.scan_stack.pop_back().expect("invariant: scan_stack non-empty after back() succeeded"); // tRust: unwrap -> expect
+                    self.scan_stack.pop_back().unwrap();
                     entry.size = 1;
                     depth += 1;
                 }
                 _ => {
-                    self.scan_stack.pop_back().expect("invariant: scan_stack non-empty after back() succeeded"); // tRust: unwrap -> expect
+                    self.scan_stack.pop_back().unwrap();
                     entry.size += self.right_total;
                     if depth == 0 {
                         break;
@@ -430,7 +430,7 @@ impl Printer {
             self.print_stack.push(PrintFrame::Broken { indent: self.indent, breaks: token.breaks });
             self.indent = match token.indent {
                 IndentStyle::Block { offset } => {
-                    usize::try_from(self.indent as isize + offset).expect("invariant: indent + offset is non-negative") // tRust: unwrap -> expect
+                    usize::try_from(self.indent as isize + offset).unwrap()
                 }
                 IndentStyle::Visual => (MARGIN - self.space) as usize,
             };
@@ -440,7 +440,7 @@ impl Printer {
     }
 
     fn print_end(&mut self) {
-        if let PrintFrame::Broken { indent, .. } = self.print_stack.pop().expect("invariant: print_stack non-empty, each Begin pushes a frame") { // tRust: unwrap -> expect
+        if let PrintFrame::Broken { indent, .. } = self.print_stack.pop().unwrap() {
             self.indent = indent;
         }
     }

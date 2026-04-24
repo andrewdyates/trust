@@ -185,7 +185,6 @@ pub(super) fn build_enum_type_di_node<'ll, 'tcx>(
 ) -> DINodeCreationResult<'ll> {
     let enum_type = unique_type_id.expect_ty();
     let &ty::Adt(enum_adt_def, _) = enum_type.kind() else {
-        // tRust: invariant — the C++-like enum debuginfo builder only runs on ADT enum types
         bug!("build_enum_type_di_node() called with non-enum type: `{:?}`", enum_type)
     };
 
@@ -269,7 +268,6 @@ pub(super) fn build_coroutine_di_node<'ll, 'tcx>(
     let coroutine_type = unique_type_id.expect_ty();
     let def_location = if cx.sess().opts.unstable_opts.debug_info_type_line_numbers {
         let &ty::Coroutine(coroutine_def_id, _) = coroutine_type.kind() else {
-            // tRust: invariant — the C++-like coroutine debuginfo builder only runs on coroutine types
             bug!("build_coroutine_di_node() called with non-coroutine type: `{:?}`", coroutine_type)
         };
         Some(file_metadata_from_def_id(cx, Some(coroutine_def_id)))
@@ -304,7 +302,6 @@ pub(super) fn build_coroutine_di_node<'ll, 'tcx>(
             Variants::Single { .. }
             | Variants::Empty
             | Variants::Multiple { tag_encoding: TagEncoding::Niche { .. }, .. } => {
-                // tRust: invariant — coroutine debuginfo emission here only supports layouts with a directly encoded discriminant
                 bug!(
                     "Encountered coroutine with non-direct-tag layout: {:?}",
                     coroutine_type_and_layout
@@ -572,7 +569,7 @@ fn build_variant_struct_wrapper_type_di_node<'ll, 'tcx>(
                                      value: u64,
                                      align: Align|
              -> &'ll llvm::Metadata {
-                // tRust: known issue — Currently we force all DISCR_* values to be u64's as LLDB seems to have
+                // FIXME: Currently we force all DISCR_* values to be u64's as LLDB seems to have
                 // problems inspecting other value types. Since DISCR_* is typically only going to be
                 // directly inspected via the debugger visualizer - which compares it to the `tag` value
                 // (whose type is not modified at all) it shouldn't cause any real problems.
@@ -584,7 +581,6 @@ fn build_variant_struct_wrapper_type_di_node<'ll, 'tcx>(
                 };
 
                 // must wrap type in a `const` modifier for LLDB to be able to inspect the value of the member
-                // SAFETY: The `DIBuilder` is valid, and the base type reference is valid.
                 let field_type = unsafe {
                     llvm::LLVMDIBuilderCreateQualifiedType(DIB(cx), DW_TAG_const_type, t_di)
                 };
@@ -715,7 +711,6 @@ fn build_union_fields_for_direct_tag_coroutine<'ll, 'tcx>(
     let Variants::Multiple { tag_encoding: TagEncoding::Direct, tag_field, .. } =
         coroutine_type_and_layout.variants
     else {
-        // tRust: invariant — direct-tag coroutine field emission only receives layouts with `Variants::Multiple` and `TagEncoding::Direct`
         bug!("This function only supports layouts with directly encoded tags.")
     };
 
@@ -724,7 +719,7 @@ fn build_union_fields_for_direct_tag_coroutine<'ll, 'tcx>(
         _ => unreachable!(),
     };
 
-    let coroutine_layout = cx.tcx.coroutine_layout(coroutine_def_id, coroutine_args.args).expect("invariant: coroutine has a layout");
+    let coroutine_layout = cx.tcx.coroutine_layout(coroutine_def_id, coroutine_args.args).unwrap();
 
     let common_upvar_names = cx.tcx.closure_saved_names_of_captured_variables(coroutine_def_id);
     let variant_range = coroutine_args.variant_range(coroutine_def_id, cx.tcx);
@@ -990,7 +985,6 @@ fn create_static_member_type<'ll>(
     value: Option<&'ll llvm::Value>,
     align: Align,
 ) -> &'ll llvm::Metadata {
-    // SAFETY: The `DIBuilder` is valid, and all references and string buffers are valid.
     unsafe {
         llvm::LLVMDIBuilderCreateStaticMemberType(
             DIB(cx),

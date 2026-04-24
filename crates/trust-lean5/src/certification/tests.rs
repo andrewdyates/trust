@@ -5,17 +5,17 @@
 
 use trust_types::*;
 
-use super::*;
-use crate::reconstruction::validate_reconstruction;
-use crate::reconstruction::{SolverProof, LeanProofTerm, ProofStep};
-use crate::logic_classification::{SmtLogic, CertificationScope};
-use crate::error::CertificateError;
 use super::generation::serialize_lean_proof_term;
+use super::*;
+use crate::error::CertificateError;
+use crate::logic_classification::{CertificationScope, SmtLogic};
+use crate::reconstruction::validate_reconstruction;
+use crate::reconstruction::{LeanProofTerm, ProofStep, SolverProof};
 
 fn sample_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "test_div".to_string(),
+        function: "test_div".into(),
         location: SourceSpan::default(),
         formula: Formula::Not(Box::new(Formula::Eq(
             Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -27,14 +27,16 @@ fn sample_vc() -> VerificationCondition {
 
 fn proved_result() -> VerificationResult {
     VerificationResult::Proved {
-        solver: "z4".to_string(),
+        solver: "z4".into(),
         time_ms: 5,
-        strength: ProofStrength::smt_unsat(), proof_certificate: None,
-            solver_warnings: None, }
+        strength: ProofStrength::smt_unsat(),
+        proof_certificate: None,
+        solver_warnings: None,
+    }
 }
 
 fn failed_result() -> VerificationResult {
-    VerificationResult::Failed { solver: "z4".to_string(), time_ms: 3, counterexample: None }
+    VerificationResult::Failed { solver: "z4".into(), time_ms: 3, counterexample: None }
 }
 
 /// Helper: build a QF_LIA VC for overflow checking.
@@ -44,7 +46,7 @@ fn qf_lia_overflow_vc() -> VerificationCondition {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "get_midpoint".to_string(),
+        function: "get_midpoint".into(),
         location: SourceSpan::default(),
         formula: Formula::Le(
             Box::new(Formula::Add(
@@ -61,7 +63,7 @@ fn qf_lia_overflow_vc() -> VerificationCondition {
 fn qf_uf_equality_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::Assertion { message: "equality check".to_string() },
-        function: "test_eq".to_string(),
+        function: "test_eq".into(),
         location: SourceSpan::default(),
         formula: Formula::Eq(
             Box::new(Formula::Var("a".into(), Sort::Bool)),
@@ -140,7 +142,7 @@ fn test_certification_result_is_skipped_for_failed() {
 fn test_certification_result_is_skipped_for_unknown() {
     let vc = sample_vc();
     let result = VerificationResult::Unknown {
-        solver: "z4".to_string(),
+        solver: "z4".into(),
         time_ms: 10,
         reason: "incomplete".to_string(),
     };
@@ -153,7 +155,7 @@ fn test_certification_result_is_skipped_for_unknown() {
 #[test]
 fn test_certification_result_is_skipped_for_timeout() {
     let vc = sample_vc();
-    let result = VerificationResult::Timeout { solver: "z4".to_string(), timeout_ms: 5000 };
+    let result = VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 };
     let pipeline = CertificationPipeline::new();
 
     let cert_result = pipeline.certify(&vc, &result, vec![1]);
@@ -288,15 +290,14 @@ fn test_verify_existing_detects_stale() {
     // Verify against a different VC — should detect staleness
     let vc2 = VerificationCondition {
         kind: VcKind::RemainderByZero,
-        function: "other".to_string(),
+        function: "other".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(true),
         contract_metadata: None,
     };
 
-    let err = pipeline
-        .verify_existing(&vc2, &certificate)
-        .expect_err("should detect stale certificate");
+    let err =
+        pipeline.verify_existing(&vc2, &certificate).expect_err("should detect stale certificate");
     assert!(
         matches!(err, CertificateError::StaleCertificate { .. }),
         "should be StaleCertificate, got: {err:?}"
@@ -390,7 +391,7 @@ fn test_classify_vc_qf_bv_not_certifiable() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "bv_func".to_string(),
+        function: "bv_func".into(),
         location: SourceSpan::default(),
         formula: Formula::BvAdd(
             Box::new(Formula::Var("x".into(), Sort::BitVec(32))),
@@ -466,7 +467,7 @@ fn test_generate_proof_term_unsupported_qf_bv() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "bv_func".to_string(),
+        function: "bv_func".into(),
         location: SourceSpan::default(),
         formula: Formula::BvAdd(
             Box::new(Formula::Var("x".into(), Sort::BitVec(32))),
@@ -507,10 +508,7 @@ fn test_generate_proof_term_failed_invalid_axiom() {
     assert!(pg.is_failed(), "invalid axiom should fail, got: {pg:?}");
 
     if let ProofGeneration::Failed { reason } = &pg {
-        assert!(
-            reason.contains("unknown axiom") || reason.contains("Unknown"),
-            "reason: {reason}"
-        );
+        assert!(reason.contains("unknown axiom") || reason.contains("Unknown"), "reason: {reason}");
     }
 }
 
@@ -633,10 +631,7 @@ fn test_certify_from_solver_proof_rejects_invalid_proof() {
     let result = proved_result();
     // Invalid: modus ponens references non-existent steps
     let solver_proof = SolverProof {
-        steps: vec![ProofStep::ModusPonens {
-            implication_step: 99,
-            antecedent_step: 100,
-        }],
+        steps: vec![ProofStep::ModusPonens { implication_step: 99, antecedent_step: 100 }],
         used_axioms: vec![],
         used_lemmas: vec![],
     };
@@ -648,10 +643,7 @@ fn test_certify_from_solver_proof_rejects_invalid_proof() {
     );
 
     if let CertificationResult::Rejected { reason, .. } = &cert_result {
-        assert!(
-            reason.contains("reconstruction") || reason.contains("lemma"),
-            "reason: {reason}"
-        );
+        assert!(reason.contains("reconstruction") || reason.contains("lemma"), "reason: {reason}");
     }
 }
 
@@ -664,7 +656,7 @@ fn test_certify_from_solver_proof_multi_step_qf_lia() {
     let pipeline = CertificationPipeline::new();
     let vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_div".to_string(),
+        function: "safe_div".into(),
         location: SourceSpan::default(),
         formula: Formula::Not(Box::new(Formula::Eq(
             Box::new(Formula::Var("d".into(), Sort::Int)),
@@ -702,10 +694,7 @@ fn test_certify_from_solver_proof_multi_step_qf_lia() {
             },
             ProofStep::ModusPonens { implication_step: 1, antecedent_step: 0 },
         ],
-        used_axioms: vec![
-            "d_positive".to_string(),
-            "positive_implies_nonzero".to_string(),
-        ],
+        used_axioms: vec!["d_positive".to_string(), "positive_implies_nonzero".to_string()],
         used_lemmas: vec![0, 1],
     };
 
@@ -726,7 +715,7 @@ fn test_certify_from_solver_proof_qf_uf_congruence() {
     let pipeline = CertificationPipeline::new();
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "congruence check".to_string() },
-        function: "test_cong".to_string(),
+        function: "test_cong".into(),
         location: SourceSpan::default(),
         formula: Formula::Eq(
             Box::new(Formula::Var("a".into(), Sort::Bool)),
@@ -747,10 +736,7 @@ fn test_certify_from_solver_proof_qf_uf_congruence() {
                     Box::new(Formula::Var("b".into(), Sort::Bool)),
                 ),
             },
-            ProofStep::Congruence {
-                equality_step: 0,
-                function_name: "f".to_string(),
-            },
+            ProofStep::Congruence { equality_step: 0, function_name: "f".to_string() },
         ],
         used_axioms: vec!["a_eq_b".to_string()],
         used_lemmas: vec![0],
@@ -772,10 +758,7 @@ fn test_certify_from_solver_proof_qf_uf_congruence() {
 fn test_qf_lia_axiom_helper() {
     let step = qf_lia_axiom(
         "bound_check",
-        Formula::Le(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(100)),
-        ),
+        Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
     );
     if let ProofStep::Axiom { name, formula } = &step {
         assert_eq!(name, "bound_check");
@@ -816,10 +799,8 @@ fn test_proof_generation_variant_checks() {
     assert!(!generated.is_unsupported());
     assert!(!generated.is_failed());
 
-    let unsupported = ProofGeneration::Unsupported {
-        logic: SmtLogic::QfBv,
-        reason: "not supported".to_string(),
-    };
+    let unsupported =
+        ProofGeneration::Unsupported { logic: SmtLogic::QfBv, reason: "not supported".to_string() };
     assert!(!unsupported.is_generated());
     assert!(unsupported.is_unsupported());
     assert!(!unsupported.is_failed());
@@ -843,14 +824,8 @@ fn test_serialize_lean_proof_term() {
     let bytes = serialize_lean_proof_term(&term);
     assert!(!bytes.is_empty());
     let debug_str = String::from_utf8_lossy(&bytes);
-    assert!(
-        debug_str.contains("tRust.VC.mk"),
-        "serialized term should contain tRust.VC.mk"
-    );
-    assert!(
-        debug_str.contains("True.intro"),
-        "serialized term should contain True.intro"
-    );
+    assert!(debug_str.contains("tRust.VC.mk"), "serialized term should contain tRust.VC.mk");
+    assert!(debug_str.contains("True.intro"), "serialized term should contain True.intro");
 }
 
 // -----------------------------------------------------------------------
@@ -862,7 +837,7 @@ fn test_certify_from_solver_proof_skips_quantified() {
     let pipeline = CertificationPipeline::new();
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "quantified".to_string() },
-        function: "forall_fn".to_string(),
+        function: "forall_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Forall(
             vec![("x".into(), Sort::Int)],
@@ -877,16 +852,10 @@ fn test_certify_from_solver_proof_skips_quantified() {
     let solver_proof = simple_axiom_proof("forall_axiom", Formula::Bool(true));
 
     let cert_result = pipeline.certify_from_solver_proof(&vc, &result, &solver_proof);
-    assert!(
-        cert_result.is_skipped(),
-        "quantified formula should be skipped, got: {cert_result:?}"
-    );
+    assert!(cert_result.is_skipped(), "quantified formula should be skipped, got: {cert_result:?}");
 
     if let CertificationResult::Skipped { reason } = &cert_result {
-        assert!(
-            reason.contains("not certifiable") || reason.contains("ALL"),
-            "reason: {reason}"
-        );
+        assert!(reason.contains("not certifiable") || reason.contains("ALL"), "reason: {reason}");
     }
 }
 
@@ -921,11 +890,7 @@ fn test_e2e_qf_lia_divbyzero_resolution_proof() {
                     Formula::Bool(true),
                 ]),
             },
-            ProofStep::Resolution {
-                positive_step: 0,
-                negative_step: 1,
-                pivot,
-            },
+            ProofStep::Resolution { positive_step: 0, negative_step: 1, pivot },
         ],
         used_axioms: vec!["clause1".to_string(), "clause2".to_string()],
         used_lemmas: vec![0, 1],
@@ -993,13 +958,10 @@ fn test_classify_vc_scope_qf_uf() {
 fn test_classify_vc_scope_qf_lia_uf() {
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "mixed".to_string() },
-        function: "mixed_fn".to_string(),
+        function: "mixed_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
             Formula::Var("flag".into(), Sort::Bool),
         ]),
         contract_metadata: None,
@@ -1020,7 +982,7 @@ fn test_classify_vc_scope_qf_bv_partially_certified() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "bv_fn".to_string(),
+        function: "bv_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::BvAdd(
             Box::new(Formula::Var("a".into(), Sort::BitVec(32))),
@@ -1042,7 +1004,7 @@ fn test_classify_vc_scope_qf_bv_partially_certified() {
 fn test_classify_vc_scope_full_uncertified() {
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "quantified".to_string() },
-        function: "forall_fn".to_string(),
+        function: "forall_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Forall(
             vec![("x".into(), Sort::Int)],
@@ -1066,13 +1028,10 @@ fn test_classify_vc_scope_full_uncertified() {
 fn test_generate_proof_term_qf_lia_uf() {
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "mixed guard".to_string() },
-        function: "mixed_guard".to_string(),
+        function: "mixed_guard".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("n".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Var("valid".into(), Sort::Bool),
         ]),
         contract_metadata: None,
@@ -1080,10 +1039,7 @@ fn test_generate_proof_term_qf_lia_uf() {
     let solver_proof = simple_axiom_proof(
         "guard_axiom",
         Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("n".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Var("valid".into(), Sort::Bool),
         ]),
     );
@@ -1105,13 +1061,10 @@ fn test_generate_proof_term_qf_lia_uf() {
 fn test_classify_vc_for_certification_qf_lia_uf() {
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "mixed".to_string() },
-        function: "mixed_fn".to_string(),
+        function: "mixed_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Le(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
             Formula::Var("enabled".into(), Sort::Bool),
         ]),
         contract_metadata: None,
@@ -1141,8 +1094,7 @@ fn test_certify_with_scope_fully_certified_qf_lia() {
         ),
     );
 
-    let (cert_result, scope) =
-        pipeline.certify_with_scope(&vc, &result, &solver_proof);
+    let (cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
     // tRust: #758 — kernel may reject reconstructed proof terms and fall back to Trusted
     assert!(
         cert_result.is_certified() || cert_result.is_trusted(),
@@ -1161,13 +1113,10 @@ fn test_certify_with_scope_fully_certified_qf_lia_uf() {
     let pipeline = CertificationPipeline::new();
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "mixed".to_string() },
-        function: "mixed_fn".to_string(),
+        function: "mixed_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("n".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Var("flag".into(), Sort::Bool),
         ]),
         contract_metadata: None,
@@ -1176,16 +1125,12 @@ fn test_certify_with_scope_fully_certified_qf_lia_uf() {
     let solver_proof = simple_axiom_proof(
         "mixed_axiom",
         Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("n".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("n".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Var("flag".into(), Sort::Bool),
         ]),
     );
 
-    let (cert_result, scope) =
-        pipeline.certify_with_scope(&vc, &result, &solver_proof);
+    let (cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
     // tRust: #758 — kernel may reject reconstructed proof terms and fall back to Trusted
     assert!(
         cert_result.is_certified() || cert_result.is_trusted(),
@@ -1203,7 +1148,7 @@ fn test_certify_with_scope_uncertified_quantified() {
     let pipeline = CertificationPipeline::new();
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "quantified".to_string() },
-        function: "forall_fn".to_string(),
+        function: "forall_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::Forall(
             vec![("x".into(), Sort::Int)],
@@ -1217,17 +1162,13 @@ fn test_certify_with_scope_uncertified_quantified() {
     let result = proved_result();
     let solver_proof = simple_axiom_proof("forall_axiom", Formula::Bool(true));
 
-    let (cert_result, scope) =
-        pipeline.certify_with_scope(&vc, &result, &solver_proof);
+    let (cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
     // Graceful degradation: skipped, not failed
     assert!(cert_result.is_skipped(), "should skip gracefully: {cert_result:?}");
     assert!(scope.is_uncertified());
 
     if let CertificationScope::Uncertified { reason } = &scope {
-        assert!(
-            reason.contains("quantifier"),
-            "reason should explain why: {reason}"
-        );
+        assert!(reason.contains("quantifier"), "reason should explain why: {reason}");
     }
 }
 
@@ -1243,7 +1184,7 @@ fn test_certify_with_scope_partially_certified_qf_bv() {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "bv_fn".to_string(),
+        function: "bv_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::BvAdd(
             Box::new(Formula::Var("a".into(), Sort::BitVec(32))),
@@ -1255,8 +1196,7 @@ fn test_certify_with_scope_partially_certified_qf_bv() {
     let result = proved_result();
     let solver_proof = simple_axiom_proof("bv_axiom", Formula::Bool(true));
 
-    let (_cert_result, scope) =
-        pipeline.certify_with_scope(&vc, &result, &solver_proof);
+    let (_cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
     // QF_BV has partial strategy but certify_from_solver_proof may skip it
     // because it's not fully certifiable
     assert!(scope.is_partially_certified());
@@ -1278,8 +1218,7 @@ fn test_certify_with_scope_skips_failed_result() {
     let result = failed_result();
     let solver_proof = simple_axiom_proof("any", Formula::Bool(true));
 
-    let (cert_result, scope) =
-        pipeline.certify_with_scope(&vc, &result, &solver_proof);
+    let (cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
     assert!(cert_result.is_skipped());
     assert!(scope.is_uncertified());
 
@@ -1299,8 +1238,7 @@ fn test_certify_with_scope_skips_empty_proof() {
     let result = proved_result();
     let solver_proof = SolverProof { steps: vec![], used_axioms: vec![], used_lemmas: vec![] };
 
-    let (cert_result, scope) =
-        pipeline.certify_with_scope(&vc, &result, &solver_proof);
+    let (cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
     assert!(cert_result.is_skipped());
     assert!(scope.is_uncertified());
 
@@ -1337,13 +1275,10 @@ fn test_certify_from_solver_proof_qf_lia_uf() {
     let pipeline = CertificationPipeline::new();
     let vc = VerificationCondition {
         kind: VcKind::Assertion { message: "mixed check".to_string() },
-        function: "mixed_fn".to_string(),
+        function: "mixed_fn".into(),
         location: SourceSpan::default(),
         formula: Formula::And(vec![
-            Formula::Le(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
             Formula::Var("enabled".into(), Sort::Bool),
         ]),
         contract_metadata: None,
@@ -1352,10 +1287,7 @@ fn test_certify_from_solver_proof_qf_lia_uf() {
     let solver_proof = simple_axiom_proof(
         "mixed_check",
         Formula::And(vec![
-            Formula::Le(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Le(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
             Formula::Var("enabled".into(), Sort::Bool),
         ]),
     );
@@ -1389,34 +1321,36 @@ fn test_certify_with_scope_graceful_degradation_no_panic() {
     // Test all unsupported logic classes — none should panic or error,
     // they should all produce skipped/uncertified results
     let unsupported_formulas: Vec<(&str, Formula)> = vec![
-        ("quantified", Formula::Forall(
-            vec![("x".into(), Sort::Int)],
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-        )),
-        ("nonlinear", Formula::Mul(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Var("y".into(), Sort::Int)),
-        )),
+        (
+            "quantified",
+            Formula::Forall(
+                vec![("x".into(), Sort::Int)],
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+            ),
+        ),
+        (
+            "nonlinear",
+            Formula::Mul(
+                Box::new(Formula::Var("x".into(), Sort::Int)),
+                Box::new(Formula::Var("y".into(), Sort::Int)),
+            ),
+        ),
     ];
 
     for (name, formula) in unsupported_formulas {
         let vc = VerificationCondition {
             kind: VcKind::Assertion { message: name.to_string() },
-            function: name.to_string(),
+            function: name.into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
         };
 
-        let (cert_result, scope) =
-            pipeline.certify_with_scope(&vc, &result, &solver_proof);
+        let (cert_result, scope) = pipeline.certify_with_scope(&vc, &result, &solver_proof);
         assert!(
             cert_result.is_skipped(),
             "formula '{name}' should skip gracefully, got: {cert_result:?}"
         );
-        assert!(
-            scope.is_uncertified(),
-            "formula '{name}' should be uncertified, got: {scope:?}"
-        );
+        assert!(scope.is_uncertified(), "formula '{name}' should be uncertified, got: {scope:?}");
     }
 }

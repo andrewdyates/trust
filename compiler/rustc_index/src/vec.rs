@@ -147,7 +147,7 @@ impl<I: Idx, T> IndexVec<I, T> {
     ) -> impl Iterator<Item = (I, T)> {
         let begin = match range.start_bound() {
             std::ops::Bound::Included(i) => *i,
-            std::ops::Bound::Excluded(i) => i.checked_add(1).expect("invariant: excluded bound does not overflow usize"), // tRust: unwrap -> expect
+            std::ops::Bound::Excluded(i) => i.checked_add(1).unwrap(),
             std::ops::Bound::Unbounded => 0,
         };
         self.raw.drain(range).enumerate().map(move |(n, t)| (I::new(begin + n), t))

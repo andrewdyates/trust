@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 //! trust-convergence: Fixed-point detection for the tRust rewrite loop.
 //!
 //! This crate provides a small, self-contained convergence model for the
@@ -15,27 +15,13 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-pub(crate) mod acceleration;
-pub(crate) mod alerts;
-pub(crate) mod fixpoint;
-pub(crate) mod fixpoint_widening;
-pub(crate) mod analysis;
-pub(crate) mod loop_convergence;
-pub(crate) mod lyapunov;
-pub(crate) mod bisection;
-pub(crate) mod dashboard_data;
 pub(crate) mod error;
-pub(crate) mod export;
-pub(crate) mod feedback;
+pub(crate) mod fixpoint;
 pub mod integration;
-pub(crate) mod metrics;
+pub(crate) mod loop_convergence;
 pub mod monotonicity;
 pub(crate) mod oscillation;
-pub(crate) mod persistence;
-pub(crate) mod proof_strength_propagation;
-pub(crate) mod snapshot;
 pub mod stagnation;
-pub(crate) mod strategy_selector;
 pub mod termination;
 pub mod visualization;
 pub mod widening;
@@ -311,9 +297,7 @@ impl ConvergenceTracker {
     pub fn observe(&mut self, snapshot: IterationSnapshot) -> ConvergenceDecision {
         self.history.push(snapshot);
         // SAFETY: We just pushed to history, so latest_report() cannot return None.
-        self.latest_report()
-            .unwrap_or_else(|| unreachable!("history empty after push"))
-            .decision
+        self.latest_report().unwrap_or_else(|| unreachable!("history empty after push")).decision
     }
 
     /// Compute the high-level convergence verdict from the current history.
@@ -340,9 +324,7 @@ impl ConvergenceTracker {
                     ConvergenceVerdict::Converged
                 } else {
                     // Converged with failures => stalled
-                    ConvergenceVerdict::Stalled {
-                        stale_iterations: report.stable_rounds,
-                    }
+                    ConvergenceVerdict::Stalled { stale_iterations: report.stable_rounds }
                 }
             }
             ConvergenceDecision::IterationLimitReached { .. } => {
@@ -366,9 +348,7 @@ impl ConvergenceTracker {
                             // ConvergenceDecision::Converged. Still converged for verdict.
                             ConvergenceVerdict::Converged
                         } else if stale >= self.verdict_config.stall_threshold {
-                            ConvergenceVerdict::Stalled {
-                                stale_iterations: stale,
-                            }
+                            ConvergenceVerdict::Stalled { stale_iterations: stale }
                         } else {
                             ConvergenceVerdict::InProgress
                         }
@@ -736,8 +716,7 @@ mod tests {
     #[test]
     fn verdict_converged_all_proved_stable() {
         // All proved, stable for 3 rounds => Converged
-        let mut tracker = ConvergenceTracker::new(3, 10)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(3, 10).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(5, 0, 0, 0, 0)));
         tracker.observe(IterationSnapshot::new(1, frontier(5, 0, 0, 0, 0)));
         tracker.observe(IterationSnapshot::new(2, frontier(5, 0, 0, 0, 0)));
@@ -747,8 +726,7 @@ mod tests {
     #[test]
     fn verdict_converged_early_all_proved() {
         // All proved on first pass, even before stable_round_limit => Converged
-        let mut tracker = ConvergenceTracker::new(3, 10)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(3, 10).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(5, 0, 0, 0, 0)));
         // Only 1 observation, but all proved => Converged for verdict
         // (Continue { Improved } from tracker, but verdict sees all proved)
@@ -762,38 +740,29 @@ mod tests {
     #[test]
     fn verdict_stalled_same_counts_for_3_rounds() {
         // Same frontier with failures for 3+ rounds => Stalled
-        let mut tracker = ConvergenceTracker::new(5, 20)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(5, 20).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(3, 0, 0, 2, 0)));
         assert_eq!(tracker.verdict(), ConvergenceVerdict::InProgress);
         tracker.observe(IterationSnapshot::new(1, frontier(3, 0, 0, 2, 0)));
         assert_eq!(tracker.verdict(), ConvergenceVerdict::InProgress);
         tracker.observe(IterationSnapshot::new(2, frontier(3, 0, 0, 2, 0)));
         // 3 consecutive stable with failures => Stalled
-        assert_eq!(
-            tracker.verdict(),
-            ConvergenceVerdict::Stalled { stale_iterations: 3 }
-        );
+        assert_eq!(tracker.verdict(), ConvergenceVerdict::Stalled { stale_iterations: 3 });
     }
 
     #[test]
     fn verdict_stalled_custom_threshold() {
         // Custom threshold of 2
-        let mut tracker = ConvergenceTracker::new(5, 20)
-            .with_verdict_config(VerdictConfig::new(2));
+        let mut tracker = ConvergenceTracker::new(5, 20).with_verdict_config(VerdictConfig::new(2));
         tracker.observe(IterationSnapshot::new(0, frontier(3, 0, 0, 2, 0)));
         tracker.observe(IterationSnapshot::new(1, frontier(3, 0, 0, 2, 0)));
-        assert_eq!(
-            tracker.verdict(),
-            ConvergenceVerdict::Stalled { stale_iterations: 2 }
-        );
+        assert_eq!(tracker.verdict(), ConvergenceVerdict::Stalled { stale_iterations: 2 });
     }
 
     #[test]
     fn verdict_regressed_fewer_proved() {
         // Proved count decreases => Regressed
-        let mut tracker = ConvergenceTracker::new(3, 10)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(3, 10).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(5, 0, 0, 1, 0)));
         tracker.observe(IterationSnapshot::new(1, frontier(4, 0, 0, 2, 0)));
         assert_eq!(tracker.verdict(), ConvergenceVerdict::Regressed);
@@ -802,8 +771,7 @@ mod tests {
     #[test]
     fn verdict_in_progress_improving() {
         // Improving each iteration => InProgress
-        let mut tracker = ConvergenceTracker::new(3, 10)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(3, 10).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(1, 0, 0, 4, 0)));
         assert_eq!(tracker.verdict(), ConvergenceVerdict::InProgress);
         tracker.observe(IterationSnapshot::new(1, frontier(2, 0, 0, 3, 0)));
@@ -815,8 +783,7 @@ mod tests {
     #[test]
     fn verdict_in_progress_not_yet_stalled() {
         // Same frontier twice but threshold is 3 => still InProgress
-        let mut tracker = ConvergenceTracker::new(5, 20)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(5, 20).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(3, 0, 0, 2, 0)));
         tracker.observe(IterationSnapshot::new(1, frontier(3, 0, 0, 2, 0)));
         // Only 2 stable, threshold is 3
@@ -832,8 +799,7 @@ mod tests {
     #[test]
     fn verdict_converged_via_decision() {
         // ConvergenceDecision::Converged with no failures => Converged verdict
-        let mut tracker = ConvergenceTracker::new(2, 10)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(2, 10).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(5, 0, 0, 0, 0)));
         tracker.observe(IterationSnapshot::new(1, frontier(5, 0, 0, 0, 0)));
         // Decision is Converged { stable_rounds: 2 }, all proved
@@ -843,15 +809,11 @@ mod tests {
     #[test]
     fn verdict_stalled_via_converged_decision_with_failures() {
         // ConvergenceDecision::Converged but with failures => Stalled
-        let mut tracker = ConvergenceTracker::new(2, 10)
-            .with_verdict_config(VerdictConfig::new(3));
+        let mut tracker = ConvergenceTracker::new(2, 10).with_verdict_config(VerdictConfig::new(3));
         tracker.observe(IterationSnapshot::new(0, frontier(3, 0, 0, 2, 0)));
         tracker.observe(IterationSnapshot::new(1, frontier(3, 0, 0, 2, 0)));
         // Decision is Converged, but failures remain => Stalled
-        assert_eq!(
-            tracker.verdict(),
-            ConvergenceVerdict::Stalled { stale_iterations: 2 }
-        );
+        assert_eq!(tracker.verdict(), ConvergenceVerdict::Stalled { stale_iterations: 2 });
     }
 
     #[test]

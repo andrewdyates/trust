@@ -1,6 +1,3 @@
-//! tRust: MIR pass that turns comparison-plus-`SwitchInt` patterns into
-//! tRust: direct switches on the operand.
-
 use std::iter;
 
 use rustc_middle::bug;
@@ -61,7 +58,7 @@ impl<'tcx> crate::MirPass<'tcx> for SimplifyComparisonIntegral {
             const FALSE: u128 = 0;
 
             let mut new_targets = opt.targets;
-            let first_value = new_targets.iter().next().expect("invariant: switch targets must have at least one entry").0; // tRust: unwrap elimination
+            let first_value = new_targets.iter().next().unwrap().0;
             let first_is_false_target = first_value == FALSE;
             match opt.op {
                 BinOp::Eq => {
@@ -91,7 +88,7 @@ impl<'tcx> crate::MirPass<'tcx> for SimplifyComparisonIntegral {
                 // we convert the move in the comparison statement to a copy.
 
                 // unwrap is safe as we know this statement is an assign
-                let (_, rhs) = bb.statements[opt.bin_op_stmt_idx].kind.as_assign_mut().expect("invariant: binary op statement must be an assignment"); // tRust: unwrap elimination
+                let (_, rhs) = bb.statements[opt.bin_op_stmt_idx].kind.as_assign_mut().unwrap();
 
                 use Operand::*;
                 match rhs {
@@ -131,7 +128,6 @@ impl<'tcx> crate::MirPass<'tcx> for SimplifyComparisonIntegral {
 
             let [bb_cond, bb_otherwise] = match new_targets.all_targets() {
                 [a, b] => [*a, *b],
-                // tRust: invariant: structural invariant — statement kind is constrained by the match context in this MIR pass
                 e => bug!("expected 2 switch targets, got: {:?}", e),
             };
 

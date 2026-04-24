@@ -50,11 +50,7 @@ impl ProvenanceId {
 
 impl std::fmt::Display for ProvenanceId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0 == 0 {
-            write!(f, "prov(*)")
-        } else {
-            write!(f, "prov({})", self.0)
-        }
+        if self.0 == 0 { write!(f, "prov(*)") } else { write!(f, "prov({})", self.0) }
     }
 }
 
@@ -154,19 +150,12 @@ impl SymbolicPointer {
     /// Returns a formula asserting that the pointer address falls within
     /// the given allocation region `[alloc_base, alloc_base + alloc_size)`.
     #[must_use]
-    pub fn provenance_matches(
-        &self,
-        alloc_base: &Formula,
-        alloc_size: &Formula,
-    ) -> Formula {
+    pub fn provenance_matches(&self, alloc_base: &Formula, alloc_size: &Formula) -> Formula {
         Formula::And(vec![
             Formula::Le(Box::new(alloc_base.clone()), Box::new(self.addr.clone())),
             Formula::Lt(
                 Box::new(self.addr.clone()),
-                Box::new(Formula::Add(
-                    Box::new(alloc_base.clone()),
-                    Box::new(alloc_size.clone()),
-                )),
+                Box::new(Formula::Add(Box::new(alloc_base.clone()), Box::new(alloc_size.clone()))),
             ),
         ])
     }

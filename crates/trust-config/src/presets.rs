@@ -166,6 +166,7 @@ pub fn apply_preset(config: &TrustConfig, preset: Preset) -> TrustConfig {
         certify: config.certify,
         tv: config.tv,
         report_format: config.report_format.clone(),
+        solver_memory_limit_mb: config.solver_memory_limit_mb,
     }
 }
 
@@ -207,6 +208,7 @@ pub fn merge_preset(config: &TrustConfig, preset: Preset) -> TrustConfig {
         certify: config.certify,
         tv: config.tv,
         report_format: config.report_format.clone(),
+        solver_memory_limit_mb: config.solver_memory_limit_mb,
     }
 }
 

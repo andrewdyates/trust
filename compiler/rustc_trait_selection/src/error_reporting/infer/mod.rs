@@ -244,7 +244,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     "trait",
                 );
             }
-            _ => (), // tRust: known issue (#22750) — handle traits and stuff
+            _ => (), // FIXME(#22750) handle traits and stuff
         }
         false
     }
@@ -414,7 +414,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                             .as_ref()
                             .and_then(|typeck_results| typeck_results.expr_ty_opt(arg_expr))
                     } else {
-                        // tRust: invariant — the `?` operator desugaring must have a call expression as its scrutinee
                         bug!("try desugaring w/out call expr as scrutinee");
                     };
 
@@ -454,7 +453,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                                 .as_ref()
                                 .and_then(|typeck_results| typeck_results.expr_ty_opt(arg_expr))
                         } else {
-                            // tRust: invariant — the `?` operator desugaring must have a call expression as its scrutinee
                             bug!("try desugaring w/out call expr as scrutinee");
                         };
 
@@ -771,7 +769,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             use rustc_hir::def::Namespace;
             let (sig, reg) = ty::print::FmtPrinter::new(self.tcx, Namespace::TypeNS)
                 .name_all_regions(sig, WrapBinderMode::ForAll)
-                .expect("invariant: value is present");
+                .unwrap();
             let lts: Vec<String> =
                 reg.into_items().map(|(_, kind)| kind.to_string()).into_sorted_stable_ord();
             (if lts.is_empty() { String::new() } else { format!("for<{}> ", lts.join(", ")) }, sig)
@@ -1555,7 +1553,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     && let Some(primitive) = found.primitive_symbol()
                 {
                     let path = self.tcx.def_path(expected.did()).data;
-                    let name = path.last().expect("invariant: non-empty collection").data.get_opt_name();
+                    let name = path.last().unwrap().data.get_opt_name();
                     if name == Some(primitive) {
                         return Some(Similar::PrimitiveFound { expected: *expected, found });
                     }
@@ -1563,7 +1561,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     && let ty::Adt(found, _) = found.kind()
                 {
                     let path = self.tcx.def_path(found.did()).data;
-                    let name = path.last().expect("invariant: non-empty collection").data.get_opt_name();
+                    let name = path.last().unwrap().data.get_opt_name();
                     if name == Some(primitive) {
                         return Some(Similar::PrimitiveExpected { expected, found: *found });
                     }
@@ -1781,7 +1779,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     true
                 };
 
-            // tRust: known issue (#73154) — For now, we do leak check when coercing function
+            // FIXME(#73154): For now, we do leak check when coercing function
             // pointers in typeck, instead of only during borrowck. This can lead
             // to these `RegionsInsufficientlyPolymorphic` errors that aren't helpful.
             if should_suggest_fixes
@@ -2232,7 +2230,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for SameTypeModuloInfer<'_, 'tcx> {
         a: ty::Const<'tcx>,
         _b: ty::Const<'tcx>,
     ) -> relate::RelateResult<'tcx, ty::Const<'tcx>> {
-        // tRust: known issue (compiler-errors) — This could at least do some first-order
+        // FIXME(compiler-errors): This could at least do some first-order
         // relation
         Ok(a)
     }
@@ -2421,7 +2419,7 @@ impl TyCategory {
                 Some((kind, def_id))
             }
             ty::Coroutine(def_id, ..) => {
-                Some((Self::Coroutine(tcx.coroutine_kind(def_id).expect("invariant: def is a coroutine")), def_id))
+                Some((Self::Coroutine(tcx.coroutine_kind(def_id).unwrap()), def_id))
             }
             ty::Foreign(def_id) => Some((Self::Foreign, def_id)),
             _ => None,

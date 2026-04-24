@@ -133,7 +133,7 @@ where
     I: Interner,
     T: ResponseT<I>,
 {
-    // tRust: known issue — Longterm canonical queries should deal with all placeholders
+    // FIXME: Longterm canonical queries should deal with all placeholders
     // created inside of the query directly instead of returning them to the
     // caller.
     let prev_universe = delegate.universe();
@@ -162,7 +162,7 @@ where
                 // more involved. They are also a lot rarer than region variables.
                 if let ty::Bound(index_kind, b) = t.kind()
                     && !matches!(
-                        response.var_kinds.get(b.var().as_usize()).expect("invariant: bound var index is within response var_kinds"), // tRust: unwrap -> expect
+                        response.var_kinds.get(b.var().as_usize()).unwrap(),
                         CanonicalVarKind::Ty { .. }
                     )
                 {
@@ -187,7 +187,7 @@ where
     CanonicalVarValues::instantiate(delegate.cx(), response.var_kinds, |var_values, kind| {
         if kind.universe() != ty::UniverseIndex::ROOT {
             // A variable from inside a binder of the query. While ideally these shouldn't
-            // exist at all (see the known issue at the start of this method), we have to deal with
+            // exist at all (see the FIXME at the start of this method), we have to deal with
             // them for now.
             delegate.instantiate_canonical_var(kind, span, &var_values, |idx| {
                 prev_universe + idx.index()
@@ -240,7 +240,7 @@ fn unify_query_var_values<D, I>(
 
     for (&orig, response) in iter::zip(original_values, var_values.var_values.iter()) {
         let goals =
-            delegate.eq_structurally_relating_aliases(param_env, orig, response, span).expect("invariant: original and response values must be equatable"); // tRust: unwrap -> expect
+            delegate.eq_structurally_relating_aliases(param_env, orig, response, span).unwrap();
         assert!(goals.is_empty());
     }
 }
@@ -306,7 +306,7 @@ where
     Canonicalizer::canonicalize_response(delegate, max_input_universe, state)
 }
 
-// tRust: known issue — needs to be pub to be accessed by downstream
+// FIXME: needs to be pub to be accessed by downstream
 // `rustc_trait_selection::solve::inspect::analyse`.
 pub fn instantiate_canonical_state<D, I, T>(
     delegate: &D,
@@ -348,7 +348,7 @@ pub fn response_no_constraints_raw<I: Interner>(
         var_kinds,
         value: Response {
             var_values: ty::CanonicalVarValues::make_identity(cx, var_kinds),
-            // tRust: known issue — maybe we should store the "no response" version in cx, like
+            // FIXME: maybe we should store the "no response" version in cx, like
             // we do for cx.types and stuff.
             external_constraints: cx.mk_external_constraints(ExternalConstraintsData::default()),
             certainty,

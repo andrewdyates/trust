@@ -31,8 +31,6 @@ trait Termination {
 
 impl Termination for () {
     fn report(self) -> i32 {
-        // SAFETY: writing to a mutable static and reading its reference is safe here because
-        // this runs single-threaded during initialization; no data race is possible.
         unsafe {
             NUM = 6 * 7 + 1 + (1u8 == 1u8) as u8; // 44
             assert_eq!(*NUM_REF as i32, 44);
@@ -47,7 +45,6 @@ trait SomeTrait {
 
 impl SomeTrait for &'static str {
     fn object_safe(&self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(*self as *const str as *const i8);
         }
@@ -68,7 +65,6 @@ struct NoisyDropInner;
 
 impl Drop for NoisyDrop {
     fn drop(&mut self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(self.text as *const str as *const i8);
         }
@@ -77,7 +73,6 @@ impl Drop for NoisyDrop {
 
 impl Drop for NoisyDropInner {
     fn drop(&mut self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts("Inner got dropped!\0" as *const str as *const i8);
         }
@@ -102,15 +97,12 @@ fn start<T: Termination + 'static>(
     _sigpipe: u8,
 ) -> isize {
     if argc == 3 {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(*argv as *const i8);
         }
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(*((argv as usize + size_of::<*const u8>()) as *const *const i8));
         }
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             puts(*((argv as usize + 2 * size_of::<*const u8>()) as *const *const i8));
         }
@@ -121,12 +113,9 @@ fn start<T: Termination + 'static>(
 
 static mut NUM: u8 = 6 * 7;
 
-// SAFETY: creating a shared reference from the raw pointer to the mutable static `NUM` is
-// safe because `NUM` is initialized before any code reads through `NUM_REF`.
 static NUM_REF: &'static u8 = unsafe { &*&raw const NUM };
 
 unsafe fn zeroed<T>() -> T {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         let mut uninit = MaybeUninit { uninit: () };
         intrinsics::write_bytes(&mut uninit.value.value as *mut T, 0, 1);
@@ -164,7 +153,6 @@ extern "C" fn bool_struct_in_11(_arg0: bool_11) {}
 
 #[allow(unreachable_code)] // FIXME false positive
 fn main() {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     take_unique(Unique { pointer: unsafe { NonNull(1 as *mut ()) }, _marker: PhantomData });
     take_f32(0.1);
 
@@ -189,7 +177,6 @@ fn main() {
 
     assert_eq!(slice_ptr as usize % 4, 0);
 
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         printf("Hello %s\n\0" as *const str as *const i8, "printf\0" as *const str as *const i8);
 
@@ -244,8 +231,6 @@ fn main() {
         }
 
         unsafe fn uninitialized<T>() -> T {
-            // SAFETY: reading the `value` field of a `MaybeUninit` union produces an
-            // uninitialized `T`; the caller is responsible for ensuring `T` permits this.
             unsafe { MaybeUninit { uninit: () }.value.value }
         }
 
@@ -298,8 +283,6 @@ fn main() {
             }
         }
 
-        // SAFETY: reading an `extern_weak` static is safe here; if the symbol is absent the
-        // linker resolves it to null, which we verify via the assertion below.
         unsafe {
             assert_eq!(ABC as usize, 0);
         }
@@ -345,8 +328,6 @@ fn main() {
     test_tls();
 
     #[cfg(all(not(jit), target_arch = "x86_64", any(target_os = "linux", target_os = "macos")))]
-    // SAFETY: calling extern assembly functions that have been linked into this binary;
-    // these are only invoked on x86_64 linux/macos where the assembly is valid.
     unsafe {
         global_asm_test();
         naked_test();
@@ -362,8 +343,6 @@ fn main() {
 
     let f = V([0.0, 1.0]);
     let fp = (&raw const f) as *const [f64; 2];
-    // SAFETY: `fp` points to a live, aligned `[f64; 2]` derived from `f` via raw-pointer cast;
-    // `#[repr(simd)]` guarantees `V` has the same layout as `[f64; 2]`.
     let _a = (unsafe { &*fp })[0];
 
     stack_val_align();
@@ -470,8 +449,6 @@ struct Thread {
 
 impl Thread {
     unsafe fn create(f: extern "C" fn(_: *mut c_void) -> *mut c_void) -> Self {
-        // SAFETY: pthread APIs are called with valid, zero-initialized attribute structs and
-        // a function pointer with the correct C calling convention; the caller ensures `f` is safe to invoke.
         unsafe {
             #[cfg(unix)]
             {
@@ -504,7 +481,6 @@ impl Thread {
     }
 
     unsafe fn join(self) {
-        // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
         unsafe {
             #[cfg(unix)]
             {
@@ -528,7 +504,6 @@ static mut TLS: u8 = 42;
 
 #[cfg(not(jit))]
 extern "C" fn mutate_tls(_: *mut c_void) -> *mut c_void {
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         TLS = 0;
     }
@@ -537,8 +512,6 @@ extern "C" fn mutate_tls(_: *mut c_void) -> *mut c_void {
 
 #[cfg(not(jit))]
 fn test_tls() {
-    // SAFETY: accessing a `#[thread_local]` mutable static is safe because TLS variables are
-    // per-thread; Thread::create and join are called with a valid function pointer.
     unsafe {
         assert_eq!(TLS, 42);
 

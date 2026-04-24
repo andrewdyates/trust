@@ -51,10 +51,7 @@ impl std::fmt::Display for FutilityReason {
                 write!(f, "no new proofs for {rounds} consecutive rounds")
             }
             Self::IneffectiveStrengthening { rounds } => {
-                write!(
-                    f,
-                    "strengthening ineffective for {rounds} consecutive rounds"
-                )
+                write!(f, "strengthening ineffective for {rounds} consecutive rounds")
             }
             Self::SolverTimeGrowth { growth_rate } => {
                 write!(f, "solver time growth rate {growth_rate:.2}x exceeds limit")
@@ -153,12 +150,6 @@ impl FutilityDetector {
         None
     }
 
-    /// Access the configuration.
-    #[must_use]
-    pub fn config(&self) -> &FutilityConfig {
-        &self.config
-    }
-
     fn check_no_progress(&self, metrics: &[IterationMetrics]) -> Option<FutilityReason> {
         if metrics.len() < self.config.no_progress_rounds {
             return None;
@@ -168,9 +159,7 @@ impl FutilityDetector {
         let all_no_progress = tail.iter().all(|m| m.newly_proved == 0);
 
         if all_no_progress {
-            Some(FutilityReason::NoProgress {
-                rounds: self.config.no_progress_rounds,
-            })
+            Some(FutilityReason::NoProgress { rounds: self.config.no_progress_rounds })
         } else {
             None
         }
@@ -184,11 +173,10 @@ impl FutilityDetector {
             return None;
         }
 
-        let tail = &metrics
-            [metrics.len().saturating_sub(self.config.ineffective_strengthen_rounds)..];
-        let all_ineffective = tail
-            .iter()
-            .all(|m| m.proposals_applied > 0 && m.proposals_effective == 0);
+        let tail =
+            &metrics[metrics.len().saturating_sub(self.config.ineffective_strengthen_rounds)..];
+        let all_ineffective =
+            tail.iter().all(|m| m.proposals_applied > 0 && m.proposals_effective == 0);
 
         if all_ineffective {
             Some(FutilityReason::IneffectiveStrengthening {
@@ -199,10 +187,7 @@ impl FutilityDetector {
         }
     }
 
-    fn check_solver_time_growth(
-        &self,
-        metrics: &[IterationMetrics],
-    ) -> Option<FutilityReason> {
+    fn check_solver_time_growth(&self, metrics: &[IterationMetrics]) -> Option<FutilityReason> {
         if metrics.len() < 2 {
             return None;
         }
@@ -220,10 +205,7 @@ impl FutilityDetector {
         None
     }
 
-    fn check_solver_time_budget(
-        &self,
-        metrics: &[IterationMetrics],
-    ) -> Option<FutilityReason> {
+    fn check_solver_time_budget(&self, metrics: &[IterationMetrics]) -> Option<FutilityReason> {
         let total: u64 = metrics.iter().map(|m| m.solver_time_ms).sum();
         if total > self.config.max_total_solver_time_ms {
             Some(FutilityReason::SolverTimeBudget {
@@ -235,10 +217,7 @@ impl FutilityDetector {
         }
     }
 
-    fn check_wall_time_budget(
-        &self,
-        metrics: &[IterationMetrics],
-    ) -> Option<FutilityReason> {
+    fn check_wall_time_budget(&self, metrics: &[IterationMetrics]) -> Option<FutilityReason> {
         let total: u64 = metrics.iter().map(|m| m.wall_time_ms).sum();
         if total > self.config.max_total_wall_time_ms {
             Some(FutilityReason::WallTimeBudget {
@@ -299,10 +278,7 @@ mod tests {
             ..FutilityConfig::default()
         });
 
-        let history = vec![
-            metrics(1, 0, 1, 0, 100, 200),
-            metrics(2, 0, 1, 0, 100, 200),
-        ];
+        let history = vec![metrics(1, 0, 1, 0, 100, 200), metrics(2, 0, 1, 0, 100, 200)];
 
         let reason = detector.should_stop(&history);
         assert_eq!(reason, Some(FutilityReason::NoProgress { rounds: 2 }));
@@ -330,10 +306,7 @@ mod tests {
             ..FutilityConfig::default()
         });
 
-        let history = vec![
-            metrics(1, 0, 1, 0, 100, 200),
-            metrics(2, 0, 1, 0, 100, 200),
-        ];
+        let history = vec![metrics(1, 0, 1, 0, 100, 200), metrics(2, 0, 1, 0, 100, 200)];
 
         assert!(detector.should_stop(&history).is_none());
     }
@@ -357,10 +330,7 @@ mod tests {
         ];
 
         let reason = detector.should_stop(&history);
-        assert_eq!(
-            reason,
-            Some(FutilityReason::IneffectiveStrengthening { rounds: 2 })
-        );
+        assert_eq!(reason, Some(FutilityReason::IneffectiveStrengthening { rounds: 2 }));
     }
 
     #[test]
@@ -443,13 +413,7 @@ mod tests {
         ];
 
         let reason = detector.should_stop(&history);
-        assert_eq!(
-            reason,
-            Some(FutilityReason::SolverTimeBudget {
-                total_ms: 600,
-                limit_ms: 500,
-            })
-        );
+        assert_eq!(reason, Some(FutilityReason::SolverTimeBudget { total_ms: 600, limit_ms: 500 }));
     }
 
     // --- Wall time budget ---
@@ -470,13 +434,7 @@ mod tests {
         ];
 
         let reason = detector.should_stop(&history);
-        assert_eq!(
-            reason,
-            Some(FutilityReason::WallTimeBudget {
-                total_ms: 400,
-                limit_ms: 300,
-            })
-        );
+        assert_eq!(reason, Some(FutilityReason::WallTimeBudget { total_ms: 400, limit_ms: 300 }));
     }
 
     // --- Empty metrics ---
@@ -512,10 +470,7 @@ mod tests {
         let r = FutilityReason::SolverTimeGrowth { growth_rate: 3.5 };
         assert!(r.to_string().contains("3.50x"));
 
-        let r = FutilityReason::SolverTimeBudget {
-            total_ms: 100,
-            limit_ms: 50,
-        };
+        let r = FutilityReason::SolverTimeBudget { total_ms: 100, limit_ms: 50 };
         assert!(r.to_string().contains("100ms"));
     }
 }

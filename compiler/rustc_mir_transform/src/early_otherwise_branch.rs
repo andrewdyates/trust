@@ -268,7 +268,6 @@ fn evaluate_candidate<'tcx>(
             //     let ptr = &mut Q as *mut _ as *mut u8;
             //     // It may be difficult for us to effectively determine whether values are valid.
             //     // Invalid values can come from all sorts of corners.
-            //     // SAFETY: `ptr` was derived from `&mut Q` in this example and still points to `Q` for this write.
             //     unsafe { *ptr = 10; }
             // }
             //
@@ -291,8 +290,8 @@ fn evaluate_candidate<'tcx>(
             // invalid value, which is UB.
             // In order to fix this, **we would either need to show that the discriminant computation of
             // `place` is computed in all branches**.
-            // NOTE(#95162): Conservative approach - only optimizes when otherwise branch
-            // has no statements and an unreachable terminator.
+            // FIXME(#95162) For the moment, we adopt a conservative approach and
+            // consider only the `otherwise` branch has no statements and an unreachable terminator.
             return None;
         }
         // Handle:

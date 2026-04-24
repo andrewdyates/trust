@@ -44,7 +44,7 @@ fn path_for_rustc_pass_by_value(cx: &LateContext<'_>, ty: &hir::Ty<'_>) -> Optio
         match path.res {
             Res::Def(_, def_id) if find_attr!(cx.tcx, def_id, RustcPassByValue(_)) => {
                 let name = cx.tcx.item_ident(def_id);
-                let path_segment = path.segments.last().expect("invariant: path segments non-empty for type paths"); // tRust: unwrap -> expect
+                let path_segment = path.segments.last().unwrap();
                 return Some(format!("{}{}", name, gen_args(cx, path_segment)));
             }
             Res::SelfTyAlias { alias_to: did, is_trait_impl: false, .. } => {

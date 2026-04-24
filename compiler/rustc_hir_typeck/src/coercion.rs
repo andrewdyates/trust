@@ -137,7 +137,7 @@ struct CoerceMaybePinnedRef<'tcx> {
 /// Whether to force a leak check to occur in `Coerce::unify_raw`.
 /// Note that leak checks may still occur evn with `ForceLeakCheck::No`.
 ///
-/// NOTE: We may want to change type relations to always leak-check
+/// FIXME: We may want to change type relations to always leak-check
 /// after exiting a binder, at which point we will always do so and
 /// no longer need to handle this explicitly
 enum ForceLeakCheck {
@@ -437,7 +437,7 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
                     let r = self.next_region_var(coercion);
                     r_borrow_var = Some(r);
                 }
-                r_borrow_var.expect("invariant: value is present")
+                r_borrow_var.unwrap()
             };
 
             let autorefd_deref_ty = Ty::new_ref(self.tcx, r, deref_ty, mutbl_b);
@@ -484,7 +484,7 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
             // Unfortunately, this can actually effect capture analysis
             // which in turn means this effects borrow checking. This can
             // also effect diagnostics.
-            // NOTE(BoxyUwU): we should always emit reborrow coercions
+            // FIXME(BoxyUwU): we should always emit reborrow coercions
             //
             // Note that for `&mut`, we DO want to reborrow --
             // otherwise, this would be a move, which might be an
@@ -1347,13 +1347,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let prev_adjustment = match prev_ty.kind() {
                 ty::Closure(..) => Adjust::Pointer(PointerCoercion::ClosureFnPointer(sig.safety())),
                 ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer(sig.safety())),
-                // tRust: invariant — entering this fn-pointer coercion path means `sig_for_coerce_lub(prev_ty, ..)` already proved `prev_ty` is a closure or fn item
                 _ => span_bug!(cause.span, "should not try to coerce a {prev_ty} to a fn pointer"),
             };
             let next_adjustment = match new_ty.kind() {
                 ty::Closure(..) => Adjust::Pointer(PointerCoercion::ClosureFnPointer(sig.safety())),
                 ty::FnDef(..) => Adjust::Pointer(PointerCoercion::ReifyFnPointer(sig.safety())),
-                // tRust: invariant — entering this fn-pointer coercion path means `sig_for_coerce_lub(new_ty, ..)` already proved `new_ty` is a closure or fn item
                 _ => span_bug!(new.span, "should not try to coerce a {new_ty} to a fn pointer"),
             };
             for expr in exprs.iter() {
@@ -1489,7 +1487,7 @@ pub fn can_coerce<'tcx>(
 ///   `(a lub b) lub expected_ty`. They should be the same type. However,
 ///   `a lub expected_ty` may constrain inference variables in `expected_ty`.
 ///   In this case the difference does matter and we get actually incorrect results.
-/// NOTE: Ideally we'd compute the final type without unnecessarily constraining
+/// FIXME: Ideally we'd compute the final type without unnecessarily constraining
 /// the expected type of the match when computing the types of its branches.
 pub(crate) struct CoerceMany<'tcx> {
     expected_ty: Ty<'tcx>,
@@ -2092,7 +2090,7 @@ impl<'tcx> ProofTreeVisitor<'tcx> for CoerceVisitor<'_, 'tcx> {
                 }
             }
             Ok(Certainty::Maybe { .. }) => {
-                // NOTE: structurally normalize?
+                // FIXME: structurally normalize?
                 if self.fcx.tcx.is_lang_item(pred.def_id(), LangItem::Unsize)
                     && let ty::Dynamic(..) = pred.skip_binder().trait_ref.args.type_at(1).kind()
                     && let ty::Infer(ty::TyVar(vid)) = *pred.self_ty().skip_binder().kind()

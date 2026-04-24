@@ -38,7 +38,7 @@ fn collate_raw_dylibs_windows<'a>(
             let imports = dylib_table.entry(name.clone()).or_default();
             for import in &lib.dll_imports {
                 if let Some(old_import) = imports.insert(import.name, import) {
-                    // TODO: When ordinal support is added, determine if additional handling is needed.
+                    // FIXME: when we add support for ordinals, figure out if we need to do anything
                     // if we have two DllImport values with the same name but different ordinals.
                     if import.calling_convention != old_import.calling_convention {
                         sess.dcx().emit_err(errors::MultipleExternalFuncDecl {
@@ -369,7 +369,7 @@ fn create_elf_raw_dylib_stub(sess: &Session, soname: &str, symbols: &[DllImport]
         e_entry: 0,
         e_flags: crate::back::metadata::elf_e_flags(arch, sess),
     })
-    .expect("invariant: ELF file header creation must succeed");
+    .unwrap();
 
     // .shstrtab
     stub.write_shstrtab();

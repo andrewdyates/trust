@@ -17,7 +17,7 @@ macro_rules! opt_nonzero_u32 {
         None
     };
     ($val:expr) => {
-        Some(NonZeroU32::new($val).expect("invariant: feature issue number must be non-zero")) // tRust: unwrap -> expect
+        Some(NonZeroU32::new($val).unwrap())
     };
 }
 
@@ -316,7 +316,7 @@ declare_features! (
     // feature-group-start: removed library features
     // -------------------------------------------------------------------------
     //
-    // tRust: known issue (#141617) — we should have a better way to track removed library features, but we reuse
+    // FIXME(#141617): we should have a better way to track removed library features, but we reuse
     // the infrastructure here so users still get hints. The symbols used here can be remove from
     // `symbol.rs` when that happens.
     (removed, concat_idents, "1.90.0", Some(29599),

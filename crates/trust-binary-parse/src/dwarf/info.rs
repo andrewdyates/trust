@@ -65,7 +65,6 @@ pub enum AttributeValue<'a> {
     Block(&'a [u8]),
     Reference(u64),
     ExprLoc(&'a [u8]),
-    Unknown,
 }
 
 struct UnitParseContext<'a, 'b> {
@@ -505,7 +504,6 @@ mod tests {
         assert_eq!(AttributeValue::Sdata(-1).as_u64(), None);
         assert_eq!(AttributeValue::Flag(true).as_u64(), None);
         assert_eq!(AttributeValue::String("hello").as_u64(), None);
-        assert_eq!(AttributeValue::Unknown.as_u64(), None);
     }
 
     #[test]
@@ -524,7 +522,6 @@ mod tests {
         assert_eq!(AttributeValue::String("hello").as_str(), Some("hello"));
         assert_eq!(AttributeValue::String("").as_str(), Some(""));
         assert_eq!(AttributeValue::Data1(0).as_str(), None);
-        assert_eq!(AttributeValue::Unknown.as_str(), None);
     }
 
     #[test]
@@ -542,14 +539,8 @@ mod tests {
             tag: DW_TAG_BASE_TYPE,
             has_children: false,
             attributes: vec![
-                super::Attribute {
-                    name: DW_AT_NAME,
-                    value: AttributeValue::String("int"),
-                },
-                super::Attribute {
-                    name: DW_AT_BYTE_SIZE,
-                    value: AttributeValue::Data1(4),
-                },
+                super::Attribute { name: DW_AT_NAME, value: AttributeValue::String("int") },
+                super::Attribute { name: DW_AT_BYTE_SIZE, value: AttributeValue::Data1(4) },
             ],
             children: Vec::new(),
         };

@@ -29,7 +29,7 @@ pub(super) fn mangle<'tcx>(
     is_exportable: bool,
 ) -> String {
     let def_id = instance.def_id();
-    // tRust: known issue (eddyb) — this should ideally not be needed.
+    // FIXME(eddyb) this should ideally not be needed.
     let args = tcx.normalize_erasing_regions(ty::TypingEnv::fully_monomorphized(), instance.args);
 
     let prefix = "_R";
@@ -52,7 +52,7 @@ pub(super) fn mangle<'tcx>(
         ty::InstanceKind::ReifyShim(_, Some(ReifyReason::FnPtr)) => Some("reify_fnptr"),
         ty::InstanceKind::ReifyShim(_, Some(ReifyReason::Vtable)) => Some("reify_vtable"),
 
-        // tRust: known issue (async_closures) — This shouldn't be needed when we fix
+        // FIXME(async_closures): This shouldn't be needed when we fix
         // `Instance::ty`/`Instance::def_id`.
         ty::InstanceKind::ConstructCoroutineInClosureShim { receiver_by_ref: true, .. } => {
             Some("by_move")
@@ -68,15 +68,15 @@ pub(super) fn mangle<'tcx>(
         let ty::Coroutine(_, cor_args) = ty.kind() else {
             bug!();
         };
-        let drop_ty = cor_args.first().expect("invariant: coroutine args must have at least one arg").expect_ty(); // tRust: unwrap -> expect
-        p.print_def_path(def_id, tcx.mk_args(&[GenericArg::from(drop_ty)])).expect("invariant: v0 mangling print_def_path cannot fail") // tRust: unwrap -> expect
+        let drop_ty = cor_args.first().unwrap().expect_ty();
+        p.print_def_path(def_id, tcx.mk_args(&[GenericArg::from(drop_ty)])).unwrap()
     } else if let Some(shim_kind) = shim_kind {
-        p.path_append_ns(|p| p.print_def_path(def_id, args), 'S', 0, shim_kind).expect("invariant: v0 mangling path_append_ns cannot fail") // tRust: unwrap -> expect
+        p.path_append_ns(|p| p.print_def_path(def_id, args), 'S', 0, shim_kind).unwrap()
     } else {
-        p.print_def_path(def_id, args).expect("invariant: v0 mangling print_def_path cannot fail") // tRust: unwrap -> expect
+        p.print_def_path(def_id, args).unwrap()
     };
     if let Some(instantiating_crate) = instantiating_crate {
-        p.print_def_path(instantiating_crate.as_def_id(), &[]).expect("invariant: v0 mangling print_def_path cannot fail"); // tRust: unwrap -> expect
+        p.print_def_path(instantiating_crate.as_def_id(), &[]).unwrap();
     }
     std::mem::take(&mut p.out)
 }
@@ -125,7 +125,7 @@ pub fn mangle_internal_symbol<'tcx>(tcx: TyCtxt<'tcx>, item_name: &str) -> Strin
         0,
         item_name,
     )
-    .expect("invariant: v0 mangling path_append_ns cannot fail"); // tRust: unwrap -> expect
+    .unwrap();
 
     std::mem::take(&mut p.out)
 }
@@ -134,7 +134,7 @@ pub(super) fn mangle_typeid_for_trait_ref<'tcx>(
     tcx: TyCtxt<'tcx>,
     trait_ref: ty::ExistentialTraitRef<'tcx>,
 ) -> String {
-    // tRust: known issue (flip1995) — See comment in `mangle_typeid_for_fnabi`.
+    // FIXME(flip1995): See comment in `mangle_typeid_for_fnabi`.
     let mut p = V0SymbolMangler {
         tcx,
         start_offset: 0,
@@ -145,7 +145,7 @@ pub(super) fn mangle_typeid_for_trait_ref<'tcx>(
         binders: vec![],
         out: String::new(),
     };
-    p.print_def_path(trait_ref.def_id, &[]).expect("invariant: v0 mangling print_def_path cannot fail"); // tRust: unwrap -> expect
+    p.print_def_path(trait_ref.def_id, &[]).unwrap();
     std::mem::take(&mut p.out)
 }
 
@@ -242,7 +242,7 @@ impl<'tcx> V0SymbolMangler<'tcx> {
         let mut lifetime_depths =
             self.binders.last().map(|b| b.lifetime_depths.end).map_or(0..0, |i| i..i);
 
-        // tRust: known issue (non-lifetime-binders) — What to do here?
+        // FIXME(non-lifetime-binders): What to do here?
         let lifetimes = value
             .bound_vars()
             .iter()
@@ -311,7 +311,7 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
         args: &'tcx [GenericArg<'tcx>],
     ) -> Result<(), PrintError> {
         let key = self.tcx.def_key(impl_def_id);
-        let parent_def_id = DefId { index: key.parent.expect("invariant: impl def must have a parent"), ..impl_def_id }; // tRust: unwrap -> expect
+        let parent_def_id = DefId { index: key.parent.unwrap(), ..impl_def_id };
 
         let self_ty = self.tcx.type_of(impl_def_id);
         let impl_trait_ref = self.tcx.impl_opt_trait_ref(impl_def_id);
@@ -423,7 +423,7 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
                 let binder = &self.binders[self.binders.len() - 1 - debruijn.index()];
                 let depth = binder.lifetime_depths.start + var.as_u32();
 
-                1 + (self.binders.last().expect("invariant: binders must be non-empty when processing bound regions").lifetime_depths.end - 1 - depth) // tRust: unwrap -> expect
+                1 + (self.binders.last().unwrap().lifetime_depths.end - 1 - depth)
             }
 
             _ => bug!("symbol_names: non-erased region `{:?}`", region),
@@ -578,10 +578,8 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
                 })?;
             }
 
-            // tRust: UnsafeBinder is an experimental feature not yet supported in symbol mangling
-            ty::UnsafeBinder(..) => {
-                bug!("unimplemented: UnsafeBinder is not yet supported in symbol mangling")
-            }
+            // FIXME(unsafe_binder):
+            ty::UnsafeBinder(..) => todo!(),
 
             ty::Dynamic(predicates, r) => {
                 self.push("D");
@@ -726,7 +724,7 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
             // Handle `str` as partial support for unsized constants
             ty::Str => {
                 let tcx = self.tcx();
-                // tRust: known issue (jaic1) — hide the `str` type behind a reference
+                // HACK(jaic1): hide the `str` type behind a reference
                 // for the following transformation from valtree to raw bytes
                 let ref_ty = Ty::new_imm_ref(tcx, tcx.lifetimes.re_static, ct_ty);
                 let cv = ty::Value { ty: ref_ty, valtree };
@@ -738,7 +736,7 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
                 // "e" for str as a basic type
                 self.push("e");
 
-                // tRust: known issue (eddyb) — use a specialized hex-encoding loop.
+                // FIXME(eddyb) use a specialized hex-encoding loop.
                 for byte in s.bytes() {
                     let _ = write!(self.out, "{byte:02x}");
                 }
@@ -746,7 +744,7 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
                 self.push("_");
             }
 
-            // tRust: known issue (valtrees) — Remove the special case for `str`
+            // FIXME(valtrees): Remove the special case for `str`
             // here and fully support unsized constants.
             ty::Ref(_, _, mutbl) => {
                 self.push(match mutbl {
@@ -812,14 +810,14 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
                     None => {
                         self.push("S");
                         for (field_def, field) in iter::zip(&variant_def.fields, fields) {
-                            // tRust: known issue (eddyb) — this mimics `print_path_with_simple`,
+                            // HACK(eddyb) this mimics `print_path_with_simple`,
                             // instead of simply using `field_def.ident`,
                             // just to be able to handle disambiguators.
                             let disambiguated_field =
                                 self.tcx.def_key(field_def.did).disambiguated_data;
                             let field_name = disambiguated_field.data.get_opt_name();
                             self.push_disambiguator(disambiguated_field.disambiguator as u64);
-                            self.push_ident(field_name.expect("invariant: struct fields must have names").as_str()); // tRust: unwrap -> expect
+                            self.push_ident(field_name.unwrap().as_str());
 
                             field.print(self)?;
                         }
@@ -857,7 +855,7 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
         trait_ref: Option<ty::TraitRef<'tcx>>,
     ) -> Result<(), PrintError> {
         assert!(trait_ref.is_some());
-        let trait_ref = trait_ref.expect("invariant: asserted trait_ref.is_some() above"); // tRust: unwrap -> expect
+        let trait_ref = trait_ref.unwrap();
 
         self.push("Y");
         self_ty.print(self)?;
@@ -991,7 +989,7 @@ pub(crate) fn push_ident(ident: &str, output: &mut String) {
     let ident = if use_punycode {
         output.push('u');
 
-        // tRust: known issue (eddyb) — we should probably roll our own punycode implementation.
+        // FIXME(eddyb) we should probably roll our own punycode implementation.
         let mut punycode_bytes = match punycode::encode(ident) {
             Ok(s) => s.into_bytes(),
             Err(()) => bug!("symbol_names: punycode encoding failed for ident {:?}", ident),
@@ -1002,8 +1000,8 @@ pub(crate) fn push_ident(ident: &str, output: &mut String) {
             *c = b'_';
         }
 
-        // tRust: known issue (eddyb) — avoid rechecking UTF-8 validity.
-        punycode_string = String::from_utf8(punycode_bytes).expect("invariant: punycode output is valid ASCII, thus valid UTF-8"); // tRust: unwrap -> expect
+        // FIXME(eddyb) avoid rechecking UTF-8 validity.
+        punycode_string = String::from_utf8(punycode_bytes).unwrap();
         &punycode_string
     } else {
         ident

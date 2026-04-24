@@ -360,7 +360,7 @@ impl<'a> Parser<'a> {
 
         // if the token we have is a `<`
         // it *might* be a misplaced generic
-        // tRust: known issue —: could we recover with this?
+        // FIXME: could we recover with this?
         if self.token == token::Lt {
             // all keywords that could have generic applied
             let valid_prev_keywords =
@@ -594,7 +594,7 @@ impl<'a> Parser<'a> {
             )
         };
         self.last_unexpected_token_span = Some(self.token.span);
-        // tRust: known issue —: translation requires list formatting (for `expect`)
+        // FIXME: translation requires list formatting (for `expect`)
         let mut err = self.dcx().struct_span_err(self.token.span, msg_exp);
 
         self.label_expected_raw_ref(&mut err);
@@ -1489,7 +1489,7 @@ impl<'a> Parser<'a> {
                             Ok(_) => {
                                 // 99% certain that the suggestion is correct, continue parsing.
                                 let guar = self.dcx().emit_err(err);
-                                // tRust: known issue —: actually check that the two expressions in the binop are
+                                // FIXME: actually check that the two expressions in the binop are
                                 // paths and resynthesize new fn call expression instead of using
                                 // `ExprKind::Err` placeholder.
                                 mk_err_expr(self, inner_op.span.to(self.prev_token.span), guar)
@@ -1517,7 +1517,7 @@ impl<'a> Parser<'a> {
                             Err(()) => Err(self.dcx().create_err(err)),
                             Ok(()) => {
                                 let guar = self.dcx().emit_err(err);
-                                // tRust: known issue —: actually check that the two expressions in the binop are
+                                // FIXME: actually check that the two expressions in the binop are
                                 // paths and resynthesize new fn call expression instead of using
                                 // `ExprKind::Err` placeholder.
                                 mk_err_expr(self, inner_op.span.to(self.prev_token.span), guar)
@@ -2247,7 +2247,7 @@ impl<'a> Parser<'a> {
             && self.look_ahead(1, |t| *t == token::Comma || *t == token::CloseParen)
         {
             // `fn foo(String s) {}`
-            let ident = self.parse_ident_common(true).expect("invariant: token is a valid identifier"); // tRust: unwrap -> expect
+            let ident = self.parse_ident_common(true).unwrap();
             let span = pat.span.with_hi(ident.span.hi());
 
             err.span_suggestion(
@@ -2515,8 +2515,8 @@ impl<'a> Parser<'a> {
         // If we haven't encountered a closing `>`, then the argument is malformed.
         // It's likely that the user has written a const expression without enclosing it
         // in braces, so we try to recover here.
-        let arg = args.pop().expect("invariant: args list is non-empty"); // tRust: unwrap -> expect
-        // tRust: known issue —: for some reason using `unexpected` or `expected_one_of_not_found` has
+        let arg = args.pop().unwrap();
+        // FIXME: for some reason using `unexpected` or `expected_one_of_not_found` has
         // adverse side-effects to subsequent errors and seems to advance the parser.
         // We are causing this error here exclusively in case that a `const` expression
         // could be recovered from the current parser state, even if followed by more

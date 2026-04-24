@@ -15,7 +15,7 @@ use rustc_type_ir::{TypeFlags, TypeVisitable};
 
 use crate::infer::canonical::{Canonical, CanonicalVarValues};
 
-/// tRust: known issue —(-Znext-solver): This or public because it is shared with the
+/// FIXME(-Znext-solver): This or public because it is shared with the
 /// new trait solver implementation. We should deduplicate canonicalization.
 #[extension(pub trait CanonicalExt<'tcx, V>)]
 impl<'tcx, V> Canonical<'tcx, V> {

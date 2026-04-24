@@ -32,12 +32,14 @@ pub struct MachHeader64 {
 
 impl MachHeader64 {
     /// Whether this binary needs byte-swapping (big-endian on a LE host).
+    #[cfg(test)]
     pub fn is_swapped(&self) -> bool {
         self.magic == MH_CIGAM_64
     }
 
     /// Human-readable file type name.
     #[must_use]
+    #[cfg(test)]
     pub fn filetype_name(&self) -> &'static str {
         match self.filetype {
             MH_OBJECT => "MH_OBJECT",
@@ -55,6 +57,7 @@ impl MachHeader64 {
 
     /// Human-readable CPU type name.
     #[must_use]
+    #[cfg(test)]
     pub fn cputype_name(&self) -> &'static str {
         match self.cputype {
             CPU_TYPE_ARM64 => "ARM64",
@@ -69,11 +72,7 @@ impl MachHeader64 {
 /// Returns the header and whether byte-swapping is needed.
 pub fn parse_header(data: &[u8]) -> Result<(MachHeader64, bool), ParseError> {
     if data.len() < 4 {
-        return Err(ParseError::BufferTooSmall {
-            offset: 0,
-            need: 4,
-            have: data.len(),
-        });
+        return Err(ParseError::BufferTooSmall { offset: 0, need: 4, have: data.len() });
     }
 
     let magic = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
@@ -117,11 +116,7 @@ pub struct FatArch {
 /// Parse a fat/universal binary header, returning the slice descriptors.
 pub fn parse_fat_header(data: &[u8]) -> Result<Vec<FatArch>, ParseError> {
     if data.len() < 4 {
-        return Err(ParseError::BufferTooSmall {
-            offset: 0,
-            need: 4,
-            have: data.len(),
-        });
+        return Err(ParseError::BufferTooSmall { offset: 0, need: 4, have: data.len() });
     }
 
     let magic = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
@@ -149,13 +144,7 @@ pub fn parse_fat_header(data: &[u8]) -> Result<Vec<FatArch>, ParseError> {
         if is_64 {
             cursor.skip(4)?; // reserved
         }
-        arches.push(FatArch {
-            cputype,
-            cpusubtype,
-            offset,
-            size,
-            align,
-        });
+        arches.push(FatArch { cputype, cpusubtype, offset, size, align });
     }
 
     Ok(arches)
@@ -350,13 +339,7 @@ mod tests {
 
     #[test]
     fn test_fat_arch_eq_and_debug() {
-        let arch = FatArch {
-            cputype: CPU_TYPE_ARM64,
-            cpusubtype: 0,
-            offset: 0,
-            size: 0,
-            align: 0,
-        };
+        let arch = FatArch { cputype: CPU_TYPE_ARM64, cpusubtype: 0, offset: 0, size: 0, align: 0 };
         let arch2 = arch;
         assert_eq!(arch, arch2);
         let _ = format!("{:?}", arch);

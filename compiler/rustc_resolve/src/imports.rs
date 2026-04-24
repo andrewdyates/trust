@@ -194,7 +194,7 @@ pub(crate) type Import<'ra> = Interned<'ra, ImportData<'ra>>;
 
 // Allows us to use Interned without actually enforcing (via Hash/PartialEq/...) uniqueness of the
 // contained data.
-// NOTE: we may wish to have debug-level assertions that Interned's guarantees
+// FIXME: We may wish to actually have at least debug-level assertions that Interned's guarantees
 // are upheld.
 impl std::hash::Hash for ImportData<'_> {
     fn hash<H>(&self, _: &mut H)
@@ -369,10 +369,10 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         // from that module without generating new ambiguities.
         // - A glob decl is overwritten by a non-glob decl arriving later.
         // - A glob decl is overwritten by its clone after setting ambiguity in it.
-        //   NOTE: avoid this by removing `warn_ambiguity`, or by triggering glob re-fetch
+        //   FIXME: avoid this by removing `warn_ambiguity`, or by triggering glob re-fetch
         //   with the same decl in some way.
         // - A glob decl is overwritten by a glob decl with larger visibility.
-        //   NOTE: avoid this by updating this visibility in place.
+        //   FIXME: avoid this by updating this visibility in place.
         // - A glob decl is overwritten by a glob decl re-fetching an
         //   overwritten decl from other module (the recursive case).
         // Here we are detecting all such re-fetches and overwrite old decls
@@ -383,10 +383,10 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         if deep_decl != glob_decl {
             // Some import layers have been removed, need to overwrite.
             assert_ne!(old_deep_decl, old_glob_decl);
-            // NOTE: reenable the asserts when `warn_ambiguity` is removed (#149195).
+            // FIXME: reenable the asserts when `warn_ambiguity` is removed (#149195).
             // assert_ne!(old_deep_decl, deep_decl);
             // assert!(old_deep_decl.is_glob_import());
-            // NOTE: reenable the assert when visibility is updated in place.
+            // FIXME: reenable the assert when visibility is updated in place.
             // assert!(!deep_decl.is_glob_import());
             if old_glob_decl.ambiguity.get().is_some() && glob_decl.ambiguity.get().is_none() {
                 // Do not lose glob ambiguities when re-fetching the glob.
@@ -404,12 +404,12 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             } else {
                 // Need a fresh decl so other glob imports importing it could re-fetch it
                 // and set their own `warn_ambiguity` to true.
-                // NOTE: remove this when `warn_ambiguity` is removed (#149195).
+                // FIXME: remove this when `warn_ambiguity` is removed (#149195).
                 self.arenas.alloc_decl((*old_glob_decl).clone())
             }
         } else if !old_glob_decl.vis().is_at_least(glob_decl.vis(), self.tcx) {
             // We are glob-importing the same item but with greater visibility.
-            // NOTE: update visibility in place, but without regressions
+            // FIXME: Update visibility in place, but without regressions
             // (#152004, #151124, #152347).
             glob_decl
         } else if glob_decl.is_ambiguity_recursive() && !old_glob_decl.is_ambiguity_recursive() {
@@ -432,7 +432,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         decl: Decl<'ra>,
         warn_ambiguity: bool,
     ) -> Result<(), Decl<'ra>> {
-        let module = decl.parent_module.expect("invariant: binding has parent module");
+        let module = decl.parent_module.unwrap();
         let res = decl.res();
         self.check_reserved_macro_name(ident.name, orig_ident_span, res);
         // Even if underscore names cannot be looked up, we still need to add them to modules,
@@ -685,7 +685,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                 &import.kind,
                 import.span,
             );
-            // NOTE: there should be a better way of doing this than
+            // FIXME: there should be a better way of doing this than
             // formatting this as a string then checking for `::`
             if path.contains("::") {
                 let err = UnresolvedImportError {
@@ -1027,14 +1027,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                 // Consistency checks, analogous to `finalize_macro_resolutions`.
                 if let Some(initial_module) = import.imported_module.get() {
                     if module != initial_module && no_ambiguity && !self.issue_145575_hack_applied {
-                        // tRust: fix for rust-lang#154296 — convert ICE to delayed bug.
-                        // Inconsistent resolution can occur in edge cases with complex
-                        // import graphs; emitting a delayed bug allows compilation to
-                        // continue and report a proper error instead of crashing.
-                        self.dcx().span_delayed_bug(
-                            import.span,
-                            "inconsistent resolution for an import",
-                        );
+                        span_bug!(import.span, "inconsistent resolution for an import");
                     }
                 } else if self.privacy_errors.is_empty() {
                     self.dcx()
@@ -1136,7 +1129,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             }
             ImportKind::Glob { ref max_vis, id } => {
                 if import.module_path.len() <= 1 {
-                    // tRust: known issue — (eddyb) `lint_if_path_starts_with_module` needs at least
+                    // HACK(eddyb) `lint_if_path_starts_with_module` needs at least
                     // 2 segments, so the `resolve_path` above won't trigger it.
                     let mut full_path = import.module_path.clone();
                     full_path.push(Segment::from_ident(Ident::dummy()));
@@ -1244,11 +1237,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                         }
                         if let Some(initial_res) = initial_res {
                             if res != initial_res && !this.issue_145575_hack_applied {
-                                // tRust: fix for rust-lang#154296 — convert ICE to delayed bug.
-                                this.dcx().span_delayed_bug(
-                                    import.span,
-                                    "inconsistent resolution for an import",
-                                );
+                                span_bug!(import.span, "inconsistent resolution for an import");
                             }
                         } else if this.privacy_errors.is_empty() {
                             this.dcx()
@@ -1257,7 +1246,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                         }
                     }
                     Err(..) => {
-                        // NOTE: this assert may fire if public glob is later shadowed by a private
+                        // FIXME: This assert may fire if public glob is later shadowed by a private
                         // single import (see test `issue-55884-2.rs`). In theory single imports should
                         // always block globs, even if they are not yet resolved, so that this kind of
                         // self-inconsistent resolution never happens.
@@ -1353,7 +1342,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                         if !ident.is_path_segment_keyword() {
                             format!("no external crate `{ident}`")
                         } else {
-                            // tRust: known issue — (eddyb) this shows up for `self` & `super`, which
+                            // HACK(eddyb) this shows up for `self` & `super`, which
                             // should work instead - for now keep the same error message.
                             format!("no `{ident}` in the root")
                         }
@@ -1410,7 +1399,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
 
         // All namespaces must be re-exported with extra visibility for an error to occur.
         if !any_successful_reexport {
-            let (ns, binding) = reexport_error.expect("invariant: value is present");
+            let (ns, binding) = reexport_error.unwrap();
             if let Some(extern_crate_id) = pub_use_of_private_extern_crate_hack(import, binding) {
                 let extern_crate_sp = self.tcx.source_span(self.local_def_id(extern_crate_id));
                 self.lint_buffer.buffer_lint(
@@ -1462,7 +1451,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         }
 
         if import.module_path.len() <= 1 {
-            // tRust: known issue — (eddyb) `lint_if_path_starts_with_module` needs at least
+            // HACK(eddyb) `lint_if_path_starts_with_module` needs at least
             // 2 segments, so the `resolve_path` above won't trigger it.
             let mut full_path = import.module_path.clone();
             full_path.push(Segment::from_ident(ident));
@@ -1582,7 +1571,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         // This function is only called for glob imports.
         let ImportKind::Glob { id, .. } = import.kind else { unreachable!() };
 
-        let ModuleOrUniformRoot::Module(module) = import.imported_module.get().expect("invariant: import module is resolved") else {
+        let ModuleOrUniformRoot::Module(module) = import.imported_module.get().unwrap() else {
             self.dcx().emit_err(CannotGlobImportAllCrates { span: import.span });
             return;
         };
@@ -1641,7 +1630,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         }
 
         // Record the destination of this import
-        self.record_partial_res(id, PartialRes::new(module.res().expect("invariant: module has resolution")));
+        self.record_partial_res(id, PartialRes::new(module.res().unwrap()));
     }
 
     // Miscellaneous post-processing, including recording re-exports,

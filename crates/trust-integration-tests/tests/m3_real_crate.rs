@@ -15,13 +15,13 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::fx::FxHashMap;
 use std::path::{Path, PathBuf};
+use trust_types::fx::FxHashMap;
 
 use trust_types::{
-    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula,
-    LocalDecl, Operand, Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty,
-    VcKind, VerifiableBody, VerifiableFunction, VerificationCondition, VerificationResult,
+    AssertMessage, BasicBlock, BinOp, BlockId, Contract, ContractKind, Formula, LocalDecl, Operand,
+    Place, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody,
+    VerifiableFunction, VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -36,13 +36,13 @@ struct TempCrate {
 impl TempCrate {
     /// Create a temporary crate with the given lib.rs content.
     fn new(name: &str, lib_rs: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("trust_m3_real_{name}_{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("trust_m3_real_{name}_{}", std::process::id()));
         let src_dir = root.join("src");
         std::fs::create_dir_all(&src_dir).expect("create temp crate src dir");
 
-        let cargo_toml = format!(
-            "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
-        );
+        let cargo_toml =
+            format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
         std::fs::write(root.join("Cargo.toml"), cargo_toml).expect("write Cargo.toml");
         std::fs::write(src_dir.join("lib.rs"), lib_rs).expect("write lib.rs");
 
@@ -53,7 +53,6 @@ impl TempCrate {
         self.root.join("src/lib.rs")
     }
 
-    #[allow(dead_code)]
     fn root(&self) -> &Path {
         &self.root
     }
@@ -396,11 +395,7 @@ fn real_checked_add_function(name: &str) -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::usize(), name: None },
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -686,18 +681,9 @@ fn test_real_arithmetic_crate_source_analysis() {
     );
 
     // Verify specific function names are found.
-    assert!(
-        stats.function_names.contains(&"safe_add".to_string()),
-        "should find safe_add"
-    );
-    assert!(
-        stats.function_names.contains(&"safe_divide".to_string()),
-        "should find safe_divide"
-    );
-    assert!(
-        stats.function_names.contains(&"midpoint".to_string()),
-        "should find midpoint"
-    );
+    assert!(stats.function_names.contains(&"safe_add".to_string()), "should find safe_add");
+    assert!(stats.function_names.contains(&"safe_divide".to_string()), "should find safe_divide");
+    assert!(stats.function_names.contains(&"midpoint".to_string()), "should find midpoint");
 
     // Verify the file exists on disk.
     assert!(krate.src_file().exists(), "lib.rs should exist on disk");
@@ -858,10 +844,7 @@ fn test_real_crate_pipeline_arithmetic() {
         "should have >= 3 total VCs across arithmetic functions, got {}",
         all_results.len()
     );
-    assert!(
-        vc_counts.len() >= 2,
-        "should have at least 2 distinct VC kinds, got: {vc_counts:?}"
-    );
+    assert!(vc_counts.len() >= 2, "should have at least 2 distinct VC kinds, got: {vc_counts:?}");
 
     // Build report and validate structure.
     let report = trust_report::build_json_report("arithmetic-crate", &all_results);
@@ -917,15 +900,8 @@ fn test_real_crate_pipeline_contracts() {
         all_results.extend(router.verify_all(&vcs));
     }
 
-    assert!(
-        has_postcondition_vc,
-        "contract functions should produce postcondition VCs"
-    );
-    assert!(
-        all_results.len() >= 3,
-        "should have >= 3 total results, got {}",
-        all_results.len()
-    );
+    assert!(has_postcondition_vc, "contract functions should produce postcondition VCs");
+    assert!(all_results.len() >= 3, "should have >= 3 total results, got {}", all_results.len());
 
     // Build report.
     let report = trust_report::build_json_report("spec-crate", &all_results);
@@ -975,10 +951,7 @@ fn test_real_crate_pipeline_array_access() {
         all_results.extend(router.verify_all(&vcs));
     }
 
-    assert!(
-        has_bounds_vc,
-        "array access functions should produce IndexOutOfBounds VCs"
-    );
+    assert!(has_bounds_vc, "array access functions should produce IndexOutOfBounds VCs");
 
     let report = trust_report::build_json_report("array-crate", &all_results);
     assert!(report.summary.total_obligations >= 2);
@@ -1051,11 +1024,7 @@ fn test_real_crate_combined_pipeline() {
         vc_kind_counts.len() >= 3,
         "should have >= 3 distinct VC kinds, got: {vc_kind_counts:?}"
     );
-    assert_eq!(
-        proved + failed + unknown,
-        all_results.len(),
-        "verdict counts should sum to total"
-    );
+    assert_eq!(proved + failed + unknown, all_results.len(), "verdict counts should sum to total");
 
     // Build the full report.
     let report = trust_report::build_json_report("combined-real-crate", &all_results);
@@ -1156,9 +1125,7 @@ fn test_real_crate_json_report_structure() {
         assert!(func_entry.get("summary").is_some(), "missing function summary");
         assert!(func_entry.get("obligations").is_some(), "missing obligations");
 
-        let obligations = func_entry["obligations"]
-            .as_array()
-            .expect("obligations is array");
+        let obligations = func_entry["obligations"].as_array().expect("obligations is array");
         for ob in obligations {
             assert!(ob.get("description").is_some(), "missing obligation description");
             assert!(ob.get("kind").is_some(), "missing obligation kind");
@@ -1175,11 +1142,7 @@ fn test_real_crate_json_report_structure() {
     let ndjson = String::from_utf8(ndjson_buf).expect("utf8");
     let ndjson_lines: Vec<&str> = ndjson.trim_end().split('\n').collect();
     // header + N functions + footer
-    assert!(
-        ndjson_lines.len() >= 3,
-        "NDJSON should have >= 3 lines, got {}",
-        ndjson_lines.len()
-    );
+    assert!(ndjson_lines.len() >= 3, "NDJSON should have >= 3 lines, got {}", ndjson_lines.len());
     for (i, line) in ndjson_lines.iter().enumerate() {
         let parsed: serde_json::Value = serde_json::from_str(line)
             .unwrap_or_else(|e| panic!("NDJSON line {i} not valid JSON: {e}"));
@@ -1201,9 +1164,9 @@ fn test_real_crate_json_report_structure() {
 fn test_real_crate_results_cover_verdict_types() {
     // Construct functions that exercise different verdict paths.
     let functions = vec![
-        real_checked_add_function("overflow_fn"),  // produces Unknown (variable formula)
-        real_division_function("div_fn"),           // produces Unknown (variable formula)
-        real_contract_function("contract_fn"),      // produces Unknown (postcondition with variables)
+        real_checked_add_function("overflow_fn"), // produces Unknown (variable formula)
+        real_division_function("div_fn"),         // produces Unknown (variable formula)
+        real_contract_function("contract_fn"),    // produces Unknown (postcondition with variables)
     ];
 
     let router = trust_router::Router::new();
@@ -1227,21 +1190,12 @@ fn test_real_crate_results_cover_verdict_types() {
 
     // With the mock backend, we expect at least Unknown verdicts (for variable formulas)
     // and possibly Proved (for trivially false formulas like Bool(false) if any).
-    assert!(
-        !all_results.is_empty(),
-        "should have at least some verification results"
-    );
+    assert!(!all_results.is_empty(), "should have at least some verification results");
 
     // Verify that results are present and all have valid structure.
     for (vc, result) in &all_results {
-        assert!(
-            !vc.function.is_empty(),
-            "VC should have a function name"
-        );
-        assert!(
-            !result.solver_name().is_empty(),
-            "result should have a solver name"
-        );
+        assert!(!vc.function.is_empty(), "VC should have a function name");
+        assert!(!result.solver_name().is_empty(), "result should have a solver name");
     }
 
     eprintln!("=== Verdict Type Coverage ===");

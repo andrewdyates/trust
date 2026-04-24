@@ -4,9 +4,7 @@
 // during verification. The lifecycle is:
 //
 //   1. begin("tRust verification", "Checking src/lib.rs")
-//   2. report("Verifying function get_midpoint", 33)
-//   3. report("Verifying function risky_fn", 66)
-//   4. end("Verification complete: 2 proved, 1 failed")
+//   2. end("Verification complete: 2 proved, 1 failed")
 //
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
@@ -22,26 +20,10 @@ pub(crate) struct ProgressReporter {
 }
 
 impl ProgressReporter {
-    /// Create a reporter with a string token.
-    #[must_use]
-    pub(crate) fn new(token: &str) -> Self {
-        Self {
-            token: ProgressToken::String(token.to_string()),
-        }
-    }
-
     /// Create a reporter with an integer token.
     #[must_use]
     pub(crate) fn with_id(id: i64) -> Self {
-        Self {
-            token: ProgressToken::Integer(id),
-        }
-    }
-
-    /// The progress token used by this reporter.
-    #[must_use]
-    pub(crate) fn token(&self) -> &ProgressToken {
-        &self.token
+        Self { token: ProgressToken::Integer(id) }
     }
 
     /// Build a `begin` progress notification.
@@ -58,27 +40,12 @@ impl ProgressReporter {
         }
     }
 
-    /// Build a `report` progress notification.
-    #[must_use]
-    pub(crate) fn report(&self, message: &str, percentage: u32) -> ProgressParams {
-        ProgressParams {
-            token: self.token.clone(),
-            value: WorkDoneProgress::Report {
-                message: Some(message.to_string()),
-                percentage: Some(percentage),
-                cancellable: Some(true),
-            },
-        }
-    }
-
     /// Build an `end` progress notification.
     #[must_use]
     pub(crate) fn end(&self, message: &str) -> ProgressParams {
         ProgressParams {
             token: self.token.clone(),
-            value: WorkDoneProgress::End {
-                message: Some(message.to_string()),
-            },
+            value: WorkDoneProgress::End { message: Some(message.to_string()) },
         }
     }
 }
@@ -113,7 +80,8 @@ mod tests {
 
     #[test]
     fn test_progress_reporter_begin() {
-        let reporter = ProgressReporter::new("trust-verify-1");
+        let reporter =
+            ProgressReporter { token: ProgressToken::String("trust-verify-1".to_string()) };
         let params = reporter.begin("tRust verification", Some("Checking src/lib.rs"));
 
         let json = serde_json::to_string(&params).expect("serialize");
@@ -124,22 +92,12 @@ mod tests {
     }
 
     #[test]
-    fn test_progress_reporter_report() {
-        let reporter = ProgressReporter::with_id(42);
-        let params = reporter.report("Verifying get_midpoint", 50);
-
-        let json = serde_json::to_string(&params).expect("serialize");
-        assert!(json.contains("\"token\":42"));
-        assert!(json.contains("\"kind\":\"report\""));
-        assert!(json.contains("\"percentage\":50"));
-    }
-
-    #[test]
     fn test_progress_reporter_end() {
-        let reporter = ProgressReporter::new("test");
+        let reporter = ProgressReporter::with_id(42);
         let params = reporter.end("Done");
 
         let json = serde_json::to_string(&params).expect("serialize");
+        assert!(json.contains("\"token\":42"));
         assert!(json.contains("\"kind\":\"end\""));
         assert!(json.contains("\"message\":\"Done\""));
     }

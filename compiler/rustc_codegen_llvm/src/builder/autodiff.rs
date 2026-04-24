@@ -23,7 +23,6 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
     da: &mut ThinVec<DiffActivity>,
 ) {
     if !matches!(fn_ptr_ty.kind(), ty::FnPtr(..)) {
-        // tRust: invariant — autodiff activity adjustment only runs on function pointer types
         bug!("expected fn ptr for autodiff, got {:?}", fn_ptr_ty);
     }
 
@@ -32,7 +31,7 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
     let fn_sig = fn_ptr_ty.fn_sig(tcx);
     let sig = fn_sig.skip_binder();
 
-    // tRust: known issue — (Sa4dUs): pass proper varargs once we have support for differentiating variadic functions
+    // FIXME(Sa4dUs): pass proper varargs once we have support for differentiating variadic functions
     let Ok(fn_abi) = tcx.fn_abi_of_fn_ptr(typing_env.as_query_input((fn_sig, ty::List::empty())))
     else {
         bug!("failed to get fn_abi of fn_ptr with empty varargs");
@@ -61,7 +60,6 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
                 let elem_size = match layout {
                     Ok(layout) => layout.size,
                     Err(_) => {
-                        // tRust: invariant — slice element types seen during autodiff ABI adjustment must have a layout
                         bug!("autodiff failed to compute slice element size");
                     }
                 };
@@ -84,7 +82,6 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
                             DiffActivity::FakeActivitySize(Some(elem_size))
                         }
                         DiffActivity::Const => DiffActivity::Const,
-                        // tRust: invariant — slice references that expand to pointer-length pairs must use an activity kind this ABI adjustment can duplicate or keep const
                         _ => bug!("unexpected activity for ptr/ref"),
                     };
                     new_activities.push(activity);
@@ -100,7 +97,6 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
         let layout = match tcx.layout_of(pci) {
             Ok(layout) => layout.layout,
             Err(_) => {
-                // tRust: invariant — each monomorphized input type processed for autodiff must have a layout
                 bug!("failed to compute layout for type {:?}", ty);
             }
         };
@@ -110,7 +106,7 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
         // For ZST, just ignore and don't add its activity, as this arg won't be present
         // in the LLVM passed to Enzyme.
         // Some targets pass ZST indirectly in the C ABI, in that case, handle it as a normal arg
-        // tRust: known issue — (Sa4dUs): Enforce ZST corresponding diff activity be `Const`
+        // FIXME(Sa4dUs): Enforce ZST corresponding diff activity be `Const`
         if *pass_mode == PassMode::Ignore {
             del_activities += 1;
             da.remove(i);
@@ -127,8 +123,8 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
     // now add the extra activities coming from slices
     // Reverse order to not invalidate the indices
     for _ in 0..new_activities.len() {
-        let pos = new_positions.pop().expect("invariant: collection is non-empty");
-        let activity = new_activities.pop().expect("invariant: collection is non-empty");
+        let pos = new_positions.pop().unwrap();
+        let activity = new_activities.pop().unwrap();
         da.insert(pos, activity);
     }
 }
@@ -141,7 +137,7 @@ pub(crate) fn adjust_activity_to_abi<'tcx>(
 // arguments. A slice, `&[f32]`, for example, is represented as a pointer and a length on
 // llvm-ir level. The number of activities matches the number of Rust level arguments, so we
 // need to match those.
-// tRust: known issue — (ZuseZ4): This logic is a bit more complicated than it should be, can we simplify it
+// FIXME(ZuseZ4): This logic is a bit more complicated than it should be, can we simplify it
 // using iterators and peek()?
 fn match_args_from_caller_to_enzyme<'ll, 'tcx>(
     cx: &SimpleCx<'ll>,
@@ -156,7 +152,7 @@ fn match_args_from_caller_to_enzyme<'ll, 'tcx>(
     // arguments. A slice, `&[f32]`, for example, is represented as a pointer and a length on
     // llvm-ir level. The number of activities matches the number of Rust level arguments, so we
     // need to match those.
-    // tRust: known issue — (ZuseZ4): This logic is a bit more complicated than it should be, can we simplify it
+    // FIXME(ZuseZ4): This logic is a bit more complicated than it should be, can we simplify it
     // using iterators and peek()?
     let mut outer_pos: usize = 0;
     let mut activity_pos = 0;
@@ -195,13 +191,11 @@ fn match_args_from_caller_to_enzyme<'ll, 'tcx>(
             let next_outer_arg = outer_args[outer_pos + 1];
             let elem_bytes_size: u64 = match inputs[activity_pos + 1] {
                 DiffActivity::FakeActivitySize(Some(s)) => s.into(),
-                // tRust: invariant — a `Dualv` activity must be followed by the synthesized `FakeActivitySize(Some(_))` marker
                 _ => bug!("incorrect Dualv handling recognized."),
             };
             // stride: sizeof(T) * n_elems.
             // n_elems is the next integer.
             // Now we multiply `4 * next_outer_arg` to get the stride.
-            // SAFETY: `self.llbuilder` is positioned at a valid insertion point, and both operands are valid LLVM integer values of the same type.
             let mul = unsafe {
                 llvm::LLVMBuildMul(
                     builder.llbuilder,
@@ -218,7 +212,7 @@ fn match_args_from_caller_to_enzyme<'ll, 'tcx>(
             // so this can not be out of bounds.
             let next_outer_arg = outer_args[outer_pos + 1];
             let next_outer_ty = cx.val_ty(next_outer_arg);
-            // tRust: known issue — (ZuseZ4): We should add support for Vec here too, but it's less urgent since
+            // FIXME(ZuseZ4): We should add support for Vec here too, but it's less urgent since
             // vectors behind references (&Vec<T>) are already supported. Users can not pass a
             // Vec by value for reverse mode, so this would only help forward mode autodiff.
             let slice = {
@@ -236,7 +230,7 @@ fn match_args_from_caller_to_enzyme<'ll, 'tcx>(
                 // A duplicated slice will have the following two outer_fn arguments:
                 // (..., ptr1, int1, ptr2, int2, ...). We add the following llvm-ir to our __enzyme call:
                 // (..., metadata! enzyme_dup, ptr, ptr, int1, ...).
-                // tRust: known issue — (ZuseZ4): We will upstream a safety check later which asserts that
+                // FIXME(ZuseZ4): We will upstream a safety check later which asserts that
                 // int2 >= int1, which means the shadow vector is large enough to store the gradient.
                 assert_eq!(cx.type_kind(next_outer_ty), TypeKind::Integer);
 
@@ -292,7 +286,7 @@ fn match_args_from_caller_to_enzyme<'ll, 'tcx>(
 /// function and handle the differences between the Rust calling convention and
 /// Enzyme.
 /// [^1]: <https://enzyme.mit.edu/getting_started/CallingConvention/>
-// tRust: known issue — (ZuseZ4): `outer_fn` should include upstream safety checks to
+// FIXME(ZuseZ4): `outer_fn` should include upstream safety checks to
 // cover some assumptions of enzyme/autodiff, which could lead to UB otherwise.
 pub(crate) fn generate_enzyme_call<'ll, 'tcx>(
     builder: &mut Builder<'_, 'll, 'tcx>,
@@ -343,12 +337,10 @@ pub(crate) fn generate_enzyme_call<'ll, 'tcx>(
     //   ret double %0
     // }
     // ```
-    // SAFETY: `ret` is a valid LLVM return type, all parameter types in `args` are valid LLVM types, and the count matches the slice length.
     let enzyme_ty = unsafe { llvm::LLVMFunctionType(ret_ty, ptr::null(), 0, TRUE) };
 
-    // tRust: known issue — (ZuseZ4): the CC/Addr/Vis values are best effort guesses, we should look at tests and
+    // FIXME(ZuseZ4): the CC/Addr/Vis values are best effort guesses, we should look at tests and
     // think a bit more about what should go here.
-    // SAFETY: The function is a valid LLVM reference.
     let cc = unsafe { llvm::LLVMGetFunctionCallConv(fn_to_diff) };
     let ad_fn = declare_simple_fn(
         cx,

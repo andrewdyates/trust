@@ -177,7 +177,7 @@ pub trait SolverDelegateEvalExt: SolverDelegate {
         goal: Goal<Self::Interner, <Self::Interner as Interner>::Predicate>,
     ) -> bool;
 
-    // tRust: known issue — This is only exposed because we need to use it in `analyse.rs`
+    // FIXME: This is only exposed because we need to use it in `analyse.rs`
     // which is not yet uplifted. Once that's done, we should remove this.
     fn evaluate_root_goal_for_proof_tree(
         &self,
@@ -395,8 +395,8 @@ where
         // When creating a query response we clone the opaque type constraints
         // instead of taking them. This would cause an ICE here, since we have
         // assertions against dropping an `InferCtxt` without taking opaques.
-        // tRust: known issue — Once we remove support for the old impl we can remove this.
-        // tRust: known issue — Could we make `build_with_canonical` into `enter_with_canonical` and call this at the end?
+        // FIXME: Once we remove support for the old impl we can remove this.
+        // FIXME: Could we make `build_with_canonical` into `enter_with_canonical` and call this at the end?
         delegate.reset_opaque_types();
 
         result
@@ -488,7 +488,7 @@ where
             self.origin_span,
         );
 
-        // tRust: known issue — We previously had an assert here that checked that recomputing
+        // FIXME: We previously had an assert here that checked that recomputing
         // a goal after applying its constraints did not change its response.
         //
         // This assert was removed as it did not hold for goals constraining
@@ -501,7 +501,7 @@ where
         let stalled_on = match certainty {
             Certainty::Yes => None,
             Certainty::Maybe { .. } => match has_changed {
-                // tRust: known issue — We could recompute a *new* set of stalled variables by walking
+                // FIXME: We could recompute a *new* set of stalled variables by walking
                 // through the orig values, resolving, and computing the root vars of anything
                 // that is not resolved. Only when *these* have changed is it meaningful
                 // to recompute this goal.
@@ -692,7 +692,7 @@ where
                 // start out as an unconstrained inference variable so any aliases get
                 // fully normalized when instantiating it.
                 //
-                // tRust: known issue — Strictly speaking this may be incomplete if the normalized-to
+                // FIXME: Strictly speaking this may be incomplete if the normalized-to
                 // type contains an ambiguous alias referencing bound regions. We should
                 // consider changing this to only use "shallow structural equality".
                 self.eq_structurally_relating_aliases(
@@ -705,7 +705,7 @@ where
                 // looking at the "has changed" return from evaluate_goal,
                 // because we expect the `unconstrained_rhs` part of the predicate
                 // to have changed -- that means we actually normalized successfully!
-                // tRust: known issue — Do we need to eagerly resolve here? Or should we check
+                // FIXME: Do we need to eagerly resolve here? Or should we check
                 // if the cache key has any changed vars?
                 let with_resolved_vars = self.resolve_vars_if_possible(goal);
                 if pred.alias
@@ -1024,7 +1024,7 @@ where
                 ty::PredicateKind::Subtype { .. } | ty::PredicateKind::AliasRelate(..) => {
                     GoalSource::TypeRelating
                 }
-                // tRust: known issue (-Znext-solver=coinductive) — should these WF goals also be unproductive?
+                // FIXME(-Znext-solver=coinductive): should these WF goals also be unproductive?
                 ty::PredicateKind::Clause(ty::ClauseKind::WellFormed(_)) => GoalSource::Misc,
                 p => unreachable!("unexpected nested goal in `relate`: {p:?}"),
             };

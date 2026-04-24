@@ -35,8 +35,10 @@ pub(super) struct Validator {
 
 impl<'tcx> crate::MirPass<'tcx> for Validator {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
-        // NOTE: Intrinsic/Virtual bodies are never instantiated in codegen. Skipping
-        // validation is acceptable since other passes handle them correctly.
+        // FIXME(JakobDegen): These bodies never instantiated in codegend anyway, so it's not
+        // terribly important that they pass the validator. However, I think other passes might
+        // still see them, in which case they might be surprised. It would probably be better if we
+        // didn't put this through the MIR pipeline at all.
         if matches!(body.source.instance, InstanceKind::Intrinsic(..) | InstanceKind::Virtual(..)) {
             return;
         }
@@ -56,7 +58,6 @@ impl<'tcx> crate::MirPass<'tcx> for Validator {
                 ty::Coroutine(..) => ExternAbi::Rust,
                 // No need to do MIR validation on error bodies
                 ty::Error(_) => return,
-                // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                 _ => span_bug!(body.span, "unexpected body ty: {body_ty}"),
             };
 
@@ -124,7 +125,6 @@ impl<'a, 'tcx> CfgChecker<'a, 'tcx> {
     fn fail(&self, location: Location, msg: impl AsRef<str>) {
         // We might see broken MIR when other errors have already occurred.
         if self.tcx.dcx().has_errors().is_none() {
-            // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
             span_bug!(
                 self.body.source_info(location).span,
                 "broken MIR in {:?} ({}) at {:?}:\n{}",
@@ -141,7 +141,7 @@ impl<'a, 'tcx> CfgChecker<'a, 'tcx> {
             self.fail(location, "start block must not have predecessors")
         }
         if let Some(bb) = self.body.basic_blocks.get(bb) {
-            let src = self.body.basic_blocks.get(location.block).expect("invariant: location block must exist in basic_blocks"); // tRust: unwrap elimination
+            let src = self.body.basic_blocks.get(location.block).unwrap();
             match (src.is_cleanup, bb.is_cleanup, edge_kind) {
                 // Non-cleanup blocks can jump to non-cleanup blocks along non-unwind edges
                 (false, false, EdgeKind::Normal)
@@ -183,7 +183,7 @@ impl<'a, 'tcx> CfgChecker<'a, 'tcx> {
                 if let Some(root) = post_contract_node.get(&bb) {
                     break *root;
                 }
-                let parent = doms.immediate_dominator(bb).expect("invariant: non-entry block must have a dominator"); // tRust: unwrap elimination
+                let parent = doms.immediate_dominator(bb).unwrap();
                 dom_path.push(bb);
                 if !self.body.basic_blocks[parent].is_cleanup {
                     break bb;
@@ -320,8 +320,9 @@ impl<'a, 'tcx> Visitor<'tcx> for CfgChecker<'a, 'tcx> {
                 }
             }
             StatementKind::Retag(kind, _) => {
-                // NOTE: Should check self.body.phase < DropsLowered, but drop shims
-                // fail to set MirPhase correctly, causing ICEs. Accepted limitation.
+                // FIXME(JakobDegen) The validator should check that `self.body.phase <
+                // DropsLowered`. However, this causes ICEs with generation of drop shims, which
+                // seem to fail to set their `MirPhase` correctly.
                 if matches!(kind, RetagKind::TwoPhase) {
                     self.fail(location, format!("explicit `{kind:?}` is forbidden"));
                 }
@@ -382,8 +383,7 @@ impl<'a, 'tcx> Visitor<'tcx> for CfgChecker<'a, 'tcx> {
             }
             TerminatorKind::Call { func, args, .. }
             | TerminatorKind::TailCall { func, args, .. } => {
-                // tRust: Upstream TODO -- tracked by rust-lang explicit_tail_calls feature gate.
-                // TODO(explicit_tail_calls): refactor this & add tail-call specific checks
+                // FIXME(explicit_tail_calls): refactor this & add tail-call specific checks
                 if let TerminatorKind::Call { target, unwind, destination, .. } = terminator.kind {
                     if let Some(target) = target {
                         self.check_edge(location, target, EdgeKind::Normal);
@@ -392,8 +392,9 @@ impl<'a, 'tcx> Visitor<'tcx> for CfgChecker<'a, 'tcx> {
 
                     // The code generation assumes that there are no critical call edges. The
                     // assumption is used to simplify inserting code that should be executed along
-                    // the return edge from the call. NOTE(tmiasko): This is a codegen concern;
-                    // ideally codegen would handle it rather than the validator.
+                    // the return edge from the call. FIXME(tmiasko): Since this is a strictly code
+                    // generation concern, the code generation should be responsible for handling
+                    // it.
                     if self.body.phase >= MirPhase::Runtime(RuntimePhase::Optimized)
                         && self.is_critical_call_edge(target, unwind)
                     {
@@ -757,7 +758,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                     .or_else(|| self.tcx.coroutine_layout(def_id, args).ok())
                             } else if self.tcx.needs_coroutine_by_move_body_def_id(def_id)
                                 && let ty::ClosureKind::FnOnce =
-                                    args.as_coroutine().kind_ty().to_opt_closure_kind().expect("invariant: coroutine must have a closure kind") // tRust: unwrap elimination
+                                    args.as_coroutine().kind_ty().to_opt_closure_kind().unwrap()
                                 && self.caller_body.source.def_id()
                                     == self.tcx.coroutine_by_move_body_def_id(def_id)
                             {
@@ -1119,7 +1120,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                                 self.fail(location, "input and output mutability must match");
                             }
 
-                            // NOTE: Should check `Thin` instead of `Sized` for correctness
+                            // FIXME: check `Thin` instead of `Sized`
                             if !in_pointee.is_sized(self.tcx, self.typing_env) {
                                 self.fail(location, "input pointer must be thin");
                             }
@@ -1130,7 +1131,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                             );
                         }
 
-                        // NOTE: Only slice and sized metadata are checked; other cases need work
+                        // FIXME: Check metadata more generally
                         if pointee_ty.is_slice() {
                             if !self.mir_assign_valid_types(metadata_ty, self.tcx.types.usize) {
                                 self.fail(location, "slice metadata must be usize");
@@ -1261,10 +1262,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             Rvalue::Cast(kind, operand, target_type) => {
                 let op_ty = operand.ty(self.body, self.tcx);
                 match kind {
-                    // NOTE: Provenance cast validation not yet implemented.
+                    // FIXME: Add Checks for these
                     CastKind::PointerWithExposedProvenance | CastKind::PointerExposeProvenance => {}
                     CastKind::PointerCoercion(PointerCoercion::ReifyFnPointer(_), _) => {
-                        // NOTE: Signature compatibility check not yet implemented.
+                        // FIXME: check signature compatibility.
                         check_kinds!(
                             op_ty,
                             "CastKind::{kind:?} input must be a fn item, not {:?}",
@@ -1277,7 +1278,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         );
                     }
                     CastKind::PointerCoercion(PointerCoercion::UnsafeFnPointer, _) => {
-                        // NOTE: Safety and signature compatibility check not yet implemented.
+                        // FIXME: check safety and signature compatibility.
                         check_kinds!(
                             op_ty,
                             "CastKind::{kind:?} input must be a fn pointer, not {:?}",
@@ -1290,7 +1291,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         );
                     }
                     CastKind::PointerCoercion(PointerCoercion::ClosureFnPointer(..), _) => {
-                        // NOTE: Safety, captures, and signature compatibility check not yet implemented.
+                        // FIXME: check safety, captures, and signature compatibility.
                         check_kinds!(
                             op_ty,
                             "CastKind::{kind:?} input must be a closure, not {:?}",
@@ -1303,7 +1304,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         );
                     }
                     CastKind::PointerCoercion(PointerCoercion::MutToConstPointer, _) => {
-                        // NOTE: Same-pointee check not yet implemented.
+                        // FIXME: check same pointee?
                         check_kinds!(
                             op_ty,
                             "CastKind::{kind:?} input must be a raw mut pointer, not {:?}",
@@ -1319,7 +1320,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                         }
                     }
                     CastKind::PointerCoercion(PointerCoercion::ArrayToPointer, _) => {
-                        // NOTE: Pointee type check not yet implemented.
+                        // FIXME: Check pointee types
                         check_kinds!(
                             op_ty,
                             "CastKind::{kind:?} input must be a raw pointer, not {:?}",
@@ -1557,8 +1558,9 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 }
             }
             StatementKind::Retag(kind, _) => {
-                // NOTE: Should check self.body.phase < DropsLowered, but drop shims
-                // fail to set MirPhase correctly, causing ICEs. Accepted limitation.
+                // FIXME(JakobDegen) The validator should check that `self.body.phase <
+                // DropsLowered`. However, this causes ICEs with generation of drop shims, which
+                // seem to fail to set their `MirPhase` correctly.
                 if matches!(kind, RetagKind::TwoPhase) {
                     self.fail(location, format!("explicit `{kind:?}` is forbidden"));
                 }
@@ -1583,11 +1585,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 let target_width = self.tcx.sess.target.pointer_width;
 
                 let size = Size::from_bits(match switch_ty.kind() {
-                    ty::Uint(uint) => uint.normalize(target_width).bit_width().expect("invariant: normalized uint must have a known bit width"), // tRust: unwrap elimination
-                    ty::Int(int) => int.normalize(target_width).bit_width().expect("invariant: normalized int must have a known bit width"), // tRust: unwrap elimination
+                    ty::Uint(uint) => uint.normalize(target_width).bit_width().unwrap(),
+                    ty::Int(int) => int.normalize(target_width).bit_width().unwrap(),
                     ty::Char => 32,
                     ty::Bool => 1,
-                    // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                     other => bug!("unhandled type: {:?}", other),
                 });
 
@@ -1614,8 +1615,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                 }
 
                 if let TerminatorKind::TailCall { .. } = terminator.kind {
-                    // tRust: Upstream TODO -- tracked by rust-lang explicit_tail_calls feature gate.
-                    // TODO(explicit_tail_calls): implement tail-call specific checks here (such
+                    // FIXME(explicit_tail_calls): implement tail-call specific checks here (such
                     // as signature matching, forbidding closures, etc)
                 }
             }

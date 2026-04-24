@@ -27,10 +27,8 @@ use super::formula::SepFormula;
 /// The `heap_var` parameter is the name of the heap array variable.
 #[must_use]
 pub fn sep_to_formula(sep: &SepFormula, heap_var: &str) -> Formula {
-    let heap = Formula::Var(heap_var.to_string(), Sort::Array(
-        Box::new(Sort::Int),
-        Box::new(Sort::Int),
-    ));
+    let heap =
+        Formula::Var(heap_var.to_string(), Sort::Array(Box::new(Sort::Int), Box::new(Sort::Int)));
     sep_to_formula_inner(sep, &heap)
 }
 
@@ -40,10 +38,7 @@ fn sep_to_formula_inner(sep: &SepFormula, heap: &Formula) -> Formula {
         SepFormula::PointsTo { addr, value } => {
             // Select(heap, addr) == value
             Formula::Eq(
-                Box::new(Formula::Select(
-                    Box::new(heap.clone()),
-                    Box::new(addr.clone()),
-                )),
+                Box::new(Formula::Select(Box::new(heap.clone()), Box::new(addr.clone()))),
                 Box::new(value.clone()),
             )
         }
@@ -94,7 +89,9 @@ pub fn encode_heap_disjointness(lhs: &SepFormula, rhs: &SepFormula) -> Formula {
 
     if constraints.len() == 1 {
         // SAFETY: len == 1 guarantees .next() returns Some.
-        constraints.into_iter().next()
+        constraints
+            .into_iter()
+            .next()
             .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
     } else {
         Formula::And(constraints)
@@ -146,11 +143,9 @@ pub fn encode_unsafe_block(
     // VC 1: Precondition must be satisfiable (not trivially false)
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep] heap precondition for unsafe block in {func_name}"
-            ),
+            message: format!("[unsafe:sep] heap precondition for unsafe block in {func_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
         formula: Formula::Not(Box::new(pre_fol.clone())),
         contract_metadata: None,
@@ -160,16 +155,11 @@ pub fn encode_unsafe_block(
     // Violation: precondition holds but postcondition doesn't
     vcs.push(VerificationCondition {
         kind: VcKind::Assertion {
-            message: format!(
-                "[unsafe:sep] heap postcondition for unsafe block in {func_name}"
-            ),
+            message: format!("[unsafe:sep] heap postcondition for unsafe block in {func_name}"),
         },
-        function: func_name.to_string(),
+        function: func_name.into(),
         location: span.clone(),
-        formula: Formula::And(vec![
-            pre_fol,
-            Formula::Not(Box::new(post_fol)),
-        ]),
+        formula: Formula::And(vec![pre_fol, Formula::Not(Box::new(post_fol))]),
         contract_metadata: None,
     });
 

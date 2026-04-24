@@ -373,14 +373,14 @@ impl Session {
         let found_negative = requested_features.clone().any(|r| r == "-crt-static");
         let found_positive = requested_features.clone().any(|r| r == "+crt-static");
 
-        // JUSTIFICATION: necessary use of crate_types directly (see known issue below)
+        // JUSTIFICATION: necessary use of crate_types directly (see FIXME below)
         #[allow(rustc::bad_opt_access)]
         if found_positive || found_negative {
             found_positive
         } else if crate_type == Some(CrateType::ProcMacro)
             || crate_type == None && self.opts.crate_types.contains(&CrateType::ProcMacro)
         {
-            // tRust: known issue — When crate_type is not available,
+            // FIXME: When crate_type is not available,
             // we use compiler options to determine the crate_type.
             // We can't check `#![crate_type = "proc-macro"]` here.
             false
@@ -889,7 +889,7 @@ impl Session {
         let min = apple::OSVersion::minimum_deployment_target(&self.target);
         let env_var = apple::deployment_target_env_var(&self.target.os);
 
-        // tRust: known issue (madsmtm) — Track changes to this.
+        // FIXME(madsmtm): Track changes to this.
         if let Ok(deployment_target) = env::var(env_var) {
             match apple::OSVersion::from_str(&deployment_target) {
                 Ok(version) => {
@@ -994,7 +994,7 @@ pub fn build_session(
     ice_file: Option<PathBuf>,
     using_internal_features: &'static AtomicBool,
 ) -> Session {
-    // tRust: known issue — This is not general enough to make the warning lint completely override
+    // FIXME: This is not general enough to make the warning lint completely override
     // normal diagnostic warnings, since the warning lint can also be denied and changed
     // later via the source code.
     let warnings_allow = sopts
@@ -1005,7 +1005,7 @@ pub fn build_session(
     let cap_lints_allow = sopts.lint_cap.is_some_and(|cap| cap == lint::Allow);
     let can_emit_warnings = !(warnings_allow || cap_lints_allow);
 
-    let source_map = rustc_span::source_map::get_source_map().expect("invariant: source map must be available during session creation"); // tRust: unwrap -> expect
+    let source_map = rustc_span::source_map::get_source_map().unwrap();
     let emitter = default_emitter(&sopts, Arc::clone(&source_map));
 
     let mut dcx =
@@ -1050,7 +1050,7 @@ pub fn build_session(
 
     let host_triple = config::host_tuple();
     let target_triple = sopts.target_triple.tuple();
-    // tRust: known issue — use host sysroot?
+    // FIXME use host sysroot?
     let host_tlib_path =
         Arc::new(SearchPath::from_sysroot_and_triple(sopts.sysroot.path(), host_triple));
     let target_tlib_path = if host_triple == target_triple {
@@ -1354,7 +1354,7 @@ fn validate_commandline_args_with_session_available(sess: &Session) {
     match sess.opts.unstable_opts.function_return {
         FunctionReturn::Keep => (),
         FunctionReturn::ThunkExtern => {
-            // tRust: known issue — In principle, the inherited base LLVM target code model could be large,
+            // FIXME: In principle, the inherited base LLVM target code model could be large,
             // but this only checks whether we were passed one explicitly (like Clang does).
             if let Some(code_model) = sess.code_model()
                 && code_model == CodeModel::Large

@@ -1,5 +1,5 @@
 // ignore-tidy-filelength
-// NOTE: the field error reporting code could be moved elsewhere.
+// FIXME: we should move the field error reporting code somewhere else.
 
 //! Type checking expressions.
 //!
@@ -579,7 +579,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 LangItem::TryTraitFromOutput
                     if expr.span.is_desugaring(DesugaringKind::TryBlock) =>
                 {
-                    // NOTE: it's a try block, not a question mark
+                    // FIXME it's a try block, not a question mark
                     Some(ObligationCauseCode::QuestionMark)
                 }
                 LangItem::TryTraitBranch | LangItem::TryTraitFromResidual
@@ -637,7 +637,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
             if tcx.is_intrinsic(did, sym::transmute) {
                 let Some(from) = fn_sig.inputs().skip_binder().get(0) else {
-                    // tRust: invariant — the compiler-known `transmute` intrinsic signature always has its source type as the first parameter
                     span_bug!(
                         tcx.def_span(did),
                         "intrinsic fn `transmute` defined with no parameters"
@@ -895,7 +894,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             self.check_return_or_body_tail(e, true);
         } else {
-            let mut coercion = self.ret_coercion.as_ref().expect("invariant: value is present").borrow_mut();
+            let mut coercion = self.ret_coercion.as_ref().unwrap().borrow_mut();
             if self.ret_coercion_span.get().is_none() {
                 self.ret_coercion_span.set(Some(expr.span));
             }
@@ -933,7 +932,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let call_expr_ty = self.check_expr_with_hint(call, ret_ty);
 
                 // N.B. don't coerce here, as tail calls can't support most/all coercions
-                // NOTE(explicit_tail_calls): add a diagnostic note that `become` doesn't allow coercions
+                // FIXME(explicit_tail_calls): add a diagnostic note that `become` doesn't allow coercions
                 self.demand_suptype(expr.span, ret_ty, call_expr_ty);
             }
             None => {
@@ -962,7 +961,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         explicit_return: bool,
     ) {
         let ret_coercion = self.ret_coercion.as_ref().unwrap_or_else(|| {
-            // tRust: invariant — return and body-tail checking only run while the enclosing function body has an active return coercion
             span_bug!(return_expr.span, "check_return_expr called outside fn body")
         });
 
@@ -1622,7 +1620,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let ascribed_ty =
                     hir_ty.map(|hir_ty| self.lower_ty_saving_user_provided_ty(hir_ty));
                 let hint_ty = ascribed_ty.unwrap_or_else(|| self.next_ty_var(inner_expr.span));
-                // NOTE(unsafe_binders): coerce here if needed?
+                // FIXME(unsafe_binders): coerce here if needed?
                 let binder_ty = self.check_expr_has_type_or_error(inner_expr, hint_ty, |_| {});
 
                 // Unwrap the binder. This will be ambiguous if it's an infer var, and will error
@@ -1675,7 +1673,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let mut coerce = CoerceMany::with_capacity(coerce_to, args.len());
 
             for e in args {
-                // NOTE: the element expectation should use
+                // FIXME: the element expectation should use
                 // `try_structurally_resolve_and_adjust_for_branches` just like in `if` and `match`.
                 // While that fixes nested coercion, it will break [some
                 // code like this](https://github.com/rust-lang/rust/pull/140283#issuecomment-2958776528).
@@ -1883,7 +1881,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
 
         let ty::Adt(adt, args) = adt_ty.kind() else {
-            // tRust: invariant — check_expr_struct_fields only proceeds after the struct path has been resolved to an ADT type
             span_bug!(path_span, "non-ADT passed to check_expr_struct_fields");
         };
         let adt_kind = adt.adt_kind();
@@ -2050,7 +2047,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 if !missing_mandatory_fields.is_empty() {
                     let s = pluralize!(missing_mandatory_fields.len());
-                    let fields = listify(&missing_mandatory_fields, |f| format!("`{f}`")).expect("invariant: value is present");
+                    let fields = listify(&missing_mandatory_fields, |f| format!("`{f}`")).unwrap();
                     self.dcx()
                         .struct_span_err(
                             span.shrink_to_lo(),
@@ -2082,7 +2079,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 self.typeck_results.borrow_mut().fru_field_types_mut().insert(expr.hir_id, fru_tys);
             }
             hir::StructTailExpr::Base(base_expr) => {
-                // NOTE: we are currently creating two branches here in order to maintain
+                // FIXME: We are currently creating two branches here in order to maintain
                 // consistency. But they should be merged as much as possible.
                 let fru_tys = if self.tcx.features().type_changing_struct_update() {
                     if adt.is_struct() {
@@ -2118,7 +2115,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                             self.register_predicates(obligations)
                                         }
                                         Err(_) => {
-                                            // tRust: invariant — remaining FRU fields compare the same field under fresh and target args, so subtyping can only constrain inference vars and cannot fail
                                             span_bug!(
                                                 cause.span,
                                                 "subtyping remaining fields of type changing FRU \
@@ -2580,7 +2576,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ty,
         );
 
-        let variant_ident_span = self.tcx.def_ident_span(variant.def_id).expect("invariant: def has ident span");
+        let variant_ident_span = self.tcx.def_ident_span(variant.def_id).unwrap();
         match variant.ctor {
             Some((CtorKind::Fn, def_id)) => match ty.kind() {
                 ty::Adt(adt, ..) if adt.is_enum() => {
@@ -2673,7 +2669,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 ));
                             }
                         }
-                        // tRust: invariant — report_unknown_field only emits available-field notes for struct or enum-variant ADTs
                         _ => bug!("non-ADT passed to report_unknown_field"),
                     }
                 };

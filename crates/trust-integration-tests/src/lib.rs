@@ -8,8 +8,9 @@
 
 // tRust: Allow std HashMap — FxHash lint only applies to compiler internals
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
-#![allow(dead_code)]
+// dead_code audit: crate-level suppression removed (#939)
 
+#[cfg(test)]
 pub mod framework;
 
 use trust_types::{
@@ -37,11 +38,7 @@ pub fn midpoint_function() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::usize(), name: None },
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::usize(), name: None },
                 LocalDecl { index: 5, ty: Ty::usize(), name: None },
             ],
@@ -231,11 +228,7 @@ pub fn contract_function() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {

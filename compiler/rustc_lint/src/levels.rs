@@ -187,7 +187,7 @@ fn shallow_lint_levels_on(tcx: TyCtxt<'_>, owner: hir::OwnerId) -> ShallowLintLe
         &[(local_id, _)] => levels.add_id(HirId { owner, local_id }),
         // Otherwise, we need to visit the attributes in source code order, so we fetch HIR and do
         // a standard visit.
-        // tRust: known issue — (#102522) Just iterate on attrs once that iteration order matches HIR's.
+        // FIXME(#102522) Just iterate on attrs once that iteration order matches HIR's.
         _ => match tcx.hir_owner_node(owner) {
             hir::OwnerNode::Item(item) => levels.visit_item(item),
             hir::OwnerNode::ForeignItem(item) => levels.visit_foreign_item(item),
@@ -509,7 +509,7 @@ impl<'s, P: LintLevelsProvider> LintLevelsBuilder<'s, P> {
                 }
                 CheckLintNameResult::NoTool => {
                     self.sess.dcx().emit_err(CheckNameUnknownTool {
-                        tool_name: tool_name.expect("invariant: tool_name is set in NoTool branch"), // tRust: unwrap -> expect
+                        tool_name: tool_name.unwrap(),
                         sub: RequestedLevel { level, lint_name },
                     });
                 }
@@ -678,13 +678,12 @@ impl<'s, P: LintLevelsProvider> LintLevelsBuilder<'s, P> {
                 Some((Level::Expect, Some(unstable_id))) if let Some(hir_id) = source_hir_id => {
                     let LintExpectationId::Unstable { lint_index: None, attr_id: _ } = unstable_id
                     else {
-                        // tRust: invariant — Level::Expect from attribute must carry an unstable expectation id
                         bug!("stable id Level::from_attr")
                     };
 
                     let stable_id = LintExpectationId::Stable {
                         hir_id,
-                        attr_index: attr_index.try_into().expect("invariant: attr_index fits in u32"), // tRust: unwrap -> expect
+                        attr_index: attr_index.try_into().unwrap(),
                         lint_index: None,
                     };
 
@@ -720,7 +719,7 @@ impl<'s, P: LintLevelsProvider> LintLevelsBuilder<'s, P> {
                                 });
                             }
                             // found reason, reslice meta list to exclude it
-                            metas.pop().expect("invariant: metas confirmed non-empty before pop"); // tRust: unwrap -> expect
+                            metas.pop().unwrap();
                         } else {
                             sess.dcx().emit_err(MalformedAttribute {
                                 span: item.span,
@@ -781,7 +780,7 @@ impl<'s, P: LintLevelsProvider> LintLevelsBuilder<'s, P> {
                         let name = match new_lint_name {
                             None => {
                                 let complete_name =
-                                    &format!("{}::{}", tool_ident.expect("invariant: tool_ident is set in Tool branch").name, name); // tRust: unwrap -> expect
+                                    &format!("{}::{}", tool_ident.unwrap().name, name);
                                 Symbol::intern(complete_name)
                             }
                             Some(new_lint_name) => {
@@ -811,7 +810,7 @@ impl<'s, P: LintLevelsProvider> LintLevelsBuilder<'s, P> {
                     CheckLintNameResult::NoTool => {
                         sess.dcx().emit_err(UnknownToolInScopedLint {
                             span: tool_ident.map(|ident| ident.span),
-                            tool_name: tool_name.expect("invariant: tool_name is set in NoTool branch"), // tRust: unwrap -> expect
+                            tool_name: tool_name.unwrap(),
                             lint_name: pprust::path_to_string(&meta_item.path),
                             is_nightly_build: sess.is_nightly_build(),
                         });

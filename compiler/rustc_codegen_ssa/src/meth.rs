@@ -80,8 +80,7 @@ fn dyn_trait_in_self<'tcx>(
         if let GenericArgKind::Type(ty) = arg.kind()
             && let ty::Dynamic(data, _) = ty.kind()
         {
-            // tRust: Upstream TODO -- tracked by rust-lang arbitrary_self_types feature gate.
-            // TODO(arbitrary_self_types): Likely broken for receivers which
+            // FIXME(arbitrary_self_types): This is likely broken for receivers which
             // have a "non-self" trait objects as a generic argument.
             return data
                 .principal()
@@ -89,7 +88,6 @@ fn dyn_trait_in_self<'tcx>(
         }
     }
 
-    // tRust: invariant: structural invariant — method resolution constrains vtable entry types
     bug!("expected a `dyn Trait` ty, found {ty:?}")
 }
 
@@ -143,7 +141,6 @@ pub(crate) fn load_vtable<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             let func = bx.type_checked_load(llvtable, vtable_byte_offset, typeid.as_bytes());
             return func;
         } else if nonnull {
-            // tRust: invariant: structural invariant — virtual call dispatch requires a trait object operand
             bug!("load nonnull value from a vtable without a principal trait")
         }
     }

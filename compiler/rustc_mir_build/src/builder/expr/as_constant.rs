@@ -102,7 +102,6 @@ pub(crate) fn as_constant_inner<'tcx>(
 
             ConstOperand { span, user_ty: None, const_ }
         }
-        // tRust: invariant — `as_constant_inner` is only called for THIR expressions already classified as compile-time constants.
         _ => span_bug!(span, "expression is not a valid constant {:?}", kind),
     }
 }
@@ -135,7 +134,7 @@ fn lit_to_mir_constant<'tcx>(tcx: TyCtxt<'tcx>, lit_input: LitToConstInput<'tcx>
             let s = s.as_str().as_bytes();
             let len = s.len();
             let allocation = tcx.allocate_bytes_dedup(s, CTFE_ALLOC_SALT);
-            ConstValue::Slice { alloc_id: allocation, meta: len.try_into().expect("invariant: value fits in target type") } // tRust: unwrap -> expect
+            ConstValue::Slice { alloc_id: allocation, meta: len.try_into().unwrap() }
         }
         (ast::LitKind::ByteStr(byte_sym, _), ty::Ref(_, inner_ty, _))
             if matches!(inner_ty.kind(), ty::Slice(_)) =>
@@ -143,7 +142,7 @@ fn lit_to_mir_constant<'tcx>(tcx: TyCtxt<'tcx>, lit_input: LitToConstInput<'tcx>
             let data = byte_sym.as_byte_str();
             let len = data.len();
             let allocation = tcx.allocate_bytes_dedup(data, CTFE_ALLOC_SALT);
-            ConstValue::Slice { alloc_id: allocation, meta: len.try_into().expect("invariant: value fits in target type") } // tRust: unwrap -> expect
+            ConstValue::Slice { alloc_id: allocation, meta: len.try_into().unwrap() }
         }
         (ast::LitKind::ByteStr(byte_sym, _), ty::Ref(_, inner_ty, _)) if inner_ty.is_array() => {
             let id = tcx.allocate_bytes_dedup(byte_sym.as_byte_str(), CTFE_ALLOC_SALT);
@@ -154,7 +153,7 @@ fn lit_to_mir_constant<'tcx>(tcx: TyCtxt<'tcx>, lit_input: LitToConstInput<'tcx>
             let data = byte_sym.as_byte_str();
             let len = data.len();
             let allocation = tcx.allocate_bytes_dedup(data, CTFE_ALLOC_SALT);
-            ConstValue::Slice { alloc_id: allocation, meta: len.try_into().expect("invariant: value fits in target type") } // tRust: unwrap -> expect
+            ConstValue::Slice { alloc_id: allocation, meta: len.try_into().unwrap() }
         }
         (ast::LitKind::Byte(n), ty::Uint(ty::UintTy::U8)) => {
             ConstValue::Scalar(Scalar::from_uint(n, Size::from_bytes(1)))
@@ -166,14 +165,13 @@ fn lit_to_mir_constant<'tcx>(tcx: TyCtxt<'tcx>, lit_input: LitToConstInput<'tcx>
             trunc(if neg { u128::wrapping_neg(n.get()) } else { n.get() })
         }
         (ast::LitKind::Float(n, _), ty::Float(fty)) => {
-            parse_float_into_constval(n, *fty, neg).expect("invariant: float literal is valid") // tRust: unwrap -> expect
+            parse_float_into_constval(n, *fty, neg).unwrap()
         }
         (ast::LitKind::Bool(b), ty::Bool) => ConstValue::Scalar(Scalar::from_bool(b)),
         (ast::LitKind::Char(c), ty::Char) => ConstValue::Scalar(Scalar::from_char(c)),
         (ast::LitKind::Err(guar), _) => {
             return Const::Ty(Ty::new_error(tcx, guar), ty::Const::new_error(tcx, guar));
         }
-        // tRust: invariant — literal typing guarantees only supported literal/type pairs reach MIR constant construction.
         _ => bug!("invalid lit/ty combination in `lit_to_mir_constant`: {lit:?}: {ty:?}"),
     };
 

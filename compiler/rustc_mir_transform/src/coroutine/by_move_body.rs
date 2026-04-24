@@ -94,7 +94,6 @@ pub(crate) fn coroutine_by_move_body_def_id<'tcx>(
     let Some(hir::CoroutineKind::Desugared(_, hir::CoroutineSource::Closure)) =
         tcx.coroutine_kind(coroutine_def_id)
     else {
-        // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
         bug!("should only be invoked on coroutine-closures");
     };
 
@@ -103,18 +102,16 @@ pub(crate) fn coroutine_by_move_body_def_id<'tcx>(
     let coroutine_ty = body.local_decls[ty::CAPTURE_STRUCT_LOCAL].ty;
 
     let ty::Coroutine(_, args) = *coroutine_ty.kind() else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!("tried to create by-move body of non-coroutine receiver");
     };
     let args = args.as_coroutine();
 
-    let coroutine_kind = args.kind_ty().to_opt_closure_kind().expect("invariant: coroutine must have a closure kind"); // tRust: unwrap elimination
+    let coroutine_kind = args.kind_ty().to_opt_closure_kind().unwrap();
 
     let parent_def_id = tcx.local_parent(coroutine_def_id);
     let ty::CoroutineClosure(_, parent_args) =
         *tcx.type_of(parent_def_id).instantiate_identity().kind()
     else {
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         bug!("coroutine's parent was not a coroutine-closure");
     };
     if parent_args.references_error() {
@@ -288,7 +285,6 @@ impl<'tcx> MutVisitor<'tcx> for MakeByMoveBody<'tcx> {
             let final_projections = if peel_deref {
                 let Some((mir::ProjectionElem::Deref, projection)) = projection.split_first()
                 else {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!(
                         "There should be at least a single deref for an upvar local initialization, found {projection:#?}"
                     );

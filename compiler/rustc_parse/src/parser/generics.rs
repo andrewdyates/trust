@@ -263,11 +263,11 @@ impl<'a> Parser<'a> {
                             this.dcx().emit_err(errors::BadAssocTypeBounds {
                                 span: lo.to(this.prev_token.span),
                             });
-                            // tRust: known issue — - try to continue parsing other generics?
+                            // FIXME - try to continue parsing other generics?
                         }
                         Err(err) => {
                             err.cancel();
-                            // tRust: known issue — - maybe we should overwrite 'self' outside of `collect_tokens`?
+                            // FIXME - maybe we should overwrite 'self' outside of `collect_tokens`?
                             this.restore_snapshot(snapshot);
                         }
                     }
@@ -591,8 +591,8 @@ impl<'a> Parser<'a> {
                 bounded_ty: ty,
                 bounds,
             }))
-        // tRust: known issue —: Decide what should be used here, `=` or `==`.
-        // tRust: known issue —: We are just dropping the binders in lifetime_defs on the floor here.
+        // FIXME: Decide what should be used here, `=` or `==`.
+        // FIXME: We are just dropping the binders in lifetime_defs on the floor here.
         } else if self.eat(exp!(Eq)) || self.eat(exp!(EqEq)) {
             let rhs_ty = self.parse_ty()?;
             Ok(ast::WherePredicateKind::EqPredicate(ast::WhereEqPredicate { lhs_ty: ty, rhs_ty }))

@@ -181,10 +181,7 @@ impl AuditTrail {
     /// automatically. Callers set the remaining fields via the builder.
     pub fn append(&mut self, entry: AuditEntryBuilder) {
         let sequence = self.entries.len() as u64;
-        let prev_hash = self
-            .entries
-            .last()
-            .map_or_else(String::new, |e| e.entry_hash.clone());
+        let prev_hash = self.entries.last().map_or_else(String::new, |e| e.entry_hash.clone());
 
         let entry_hash = AuditEntry::compute_hash(
             sequence,
@@ -241,19 +238,13 @@ impl AuditTrail {
     /// Query entries by function name.
     #[must_use]
     pub fn query_by_function(&self, name: &str) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| e.function_name == name)
-            .collect()
+        self.entries.iter().filter(|e| e.function_name == name).collect()
     }
 
     /// Query entries by action type.
     #[must_use]
     pub fn query_by_action(&self, action: &AuditAction) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| &e.action == action)
-            .collect()
+        self.entries.iter().filter(|e| &e.action == action).collect()
     }
 
     /// Verify the integrity of the hash chain.
@@ -301,55 +292,37 @@ impl AuditTrail {
     /// Query entries by source file path.
     #[must_use]
     pub fn query_by_file(&self, path: &str) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| e.file_path == path)
-            .collect()
+        self.entries.iter().filter(|e| e.file_path == path).collect()
     }
 
     /// Query entries by approval status.
     #[must_use]
     pub fn query_by_approval_status(&self, status: &ApprovalStatus) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| &e.approval_status == status)
-            .collect()
+        self.entries.iter().filter(|e| &e.approval_status == status).collect()
     }
 
     /// Query entries within a time range (inclusive bounds).
     #[must_use]
     pub fn query_by_time_range(&self, start: u64, end: u64) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| e.timestamp >= start && e.timestamp <= end)
-            .collect()
+        self.entries.iter().filter(|e| e.timestamp >= start && e.timestamp <= end).collect()
     }
 
     /// Query entries by iteration number.
     #[must_use]
     pub fn query_by_iteration(&self, iteration: u32) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| e.iteration == Some(iteration))
-            .collect()
+        self.entries.iter().filter(|e| e.iteration == Some(iteration)).collect()
     }
 
     /// Query entries that are safe to roll back.
     #[must_use]
     pub fn query_rollback_safe(&self) -> Vec<&AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| e.rollback_safe)
-            .collect()
+        self.entries.iter().filter(|e| e.rollback_safe).collect()
     }
 
     /// Compute summary statistics for this trail.
     #[must_use]
     pub fn summary(&self) -> AuditSummary {
-        let mut summary = AuditSummary {
-            total_entries: self.entries.len(),
-            ..Default::default()
-        };
+        let mut summary = AuditSummary { total_entries: self.entries.len(), ..Default::default() };
 
         let mut files = FxHashSet::default();
         let mut functions = FxHashSet::default();
@@ -419,7 +392,11 @@ pub struct AuditEntryBuilder {
 
 impl AuditEntryBuilder {
     /// Create a new builder with required fields.
-    pub fn new(action: AuditAction, file_path: impl Into<String>, function_name: impl Into<String>) -> Self {
+    pub fn new(
+        action: AuditAction,
+        file_path: impl Into<String>,
+        function_name: impl Into<String>,
+    ) -> Self {
         Self {
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -542,10 +519,7 @@ mod tests {
         trail.append(make_entry(AuditAction::SpecInserted, "foo"));
         trail.append(make_entry(AuditAction::RewriteApplied, "bar"));
 
-        assert_eq!(
-            trail.entries()[1].prev_hash,
-            trail.entries()[0].entry_hash
-        );
+        assert_eq!(trail.entries()[1].prev_hash, trail.entries()[0].entry_hash);
     }
 
     #[test]
@@ -651,11 +625,7 @@ mod tests {
 
     #[test]
     fn test_builder_default_values() {
-        let builder = AuditEntryBuilder::new(
-            AuditAction::SpecInserted,
-            "src/lib.rs",
-            "foo",
-        );
+        let builder = AuditEntryBuilder::new(AuditAction::SpecInserted, "src/lib.rs", "foo");
         assert_eq!(builder.approval_status, ApprovalStatus::Pending);
         assert_eq!(builder.reverification_result, ReverificationResult::NotRun);
         assert!(builder.old_spec.is_none());
@@ -868,10 +838,7 @@ mod tests {
 
         // Even though same action and timestamp, different function names
         // should produce different hashes (also different sequences).
-        assert_ne!(
-            trail.entries()[0].entry_hash,
-            trail.entries()[1].entry_hash
-        );
+        assert_ne!(trail.entries()[0].entry_hash, trail.entries()[1].entry_hash);
     }
 
     // --- New field tests ---
@@ -902,10 +869,7 @@ mod tests {
                 .timestamp(2000)
                 .before_after_diff("-old line\n+new line"),
         );
-        assert_eq!(
-            trail.entries()[0].before_after_diff.as_deref(),
-            Some("-old line\n+new line")
-        );
+        assert_eq!(trail.entries()[0].before_after_diff.as_deref(), Some("-old line\n+new line"));
     }
 
     #[test]
@@ -943,10 +907,7 @@ mod tests {
         );
 
         // Different iterations produce different hashes
-        assert_ne!(
-            trail1.entries()[0].entry_hash,
-            trail2.entries()[0].entry_hash
-        );
+        assert_ne!(trail1.entries()[0].entry_hash, trail2.entries()[0].entry_hash);
     }
 
     #[test]
@@ -974,16 +935,13 @@ mod tests {
     fn test_query_by_file_returns_matching() {
         let mut trail = AuditTrail::new();
         trail.append(
-            AuditEntryBuilder::new(AuditAction::SpecInserted, "src/lib.rs", "foo")
-                .timestamp(100),
+            AuditEntryBuilder::new(AuditAction::SpecInserted, "src/lib.rs", "foo").timestamp(100),
         );
         trail.append(
-            AuditEntryBuilder::new(AuditAction::SpecInserted, "src/util.rs", "bar")
-                .timestamp(101),
+            AuditEntryBuilder::new(AuditAction::SpecInserted, "src/util.rs", "bar").timestamp(101),
         );
         trail.append(
-            AuditEntryBuilder::new(AuditAction::RewriteApplied, "src/lib.rs", "baz")
-                .timestamp(102),
+            AuditEntryBuilder::new(AuditAction::RewriteApplied, "src/lib.rs", "baz").timestamp(102),
         );
 
         let results = trail.query_by_file("src/lib.rs");
@@ -1030,18 +988,12 @@ mod tests {
     #[test]
     fn test_query_by_time_range() {
         let mut trail = AuditTrail::new();
-        trail.append(
-            AuditEntryBuilder::new(AuditAction::SpecInserted, "a.rs", "f1")
-                .timestamp(100),
-        );
-        trail.append(
-            AuditEntryBuilder::new(AuditAction::SpecInserted, "a.rs", "f2")
-                .timestamp(200),
-        );
-        trail.append(
-            AuditEntryBuilder::new(AuditAction::SpecInserted, "a.rs", "f3")
-                .timestamp(300),
-        );
+        trail
+            .append(AuditEntryBuilder::new(AuditAction::SpecInserted, "a.rs", "f1").timestamp(100));
+        trail
+            .append(AuditEntryBuilder::new(AuditAction::SpecInserted, "a.rs", "f2").timestamp(200));
+        trail
+            .append(AuditEntryBuilder::new(AuditAction::SpecInserted, "a.rs", "f3").timestamp(300));
 
         let results = trail.query_by_time_range(100, 200);
         assert_eq!(results.len(), 2);
@@ -1132,16 +1084,13 @@ mod tests {
                 .rollback_safe(false),
         );
         trail.append(
-            AuditEntryBuilder::new(AuditAction::RewriteApplied, "a.rs", "f1")
-                .timestamp(103),
+            AuditEntryBuilder::new(AuditAction::RewriteApplied, "a.rs", "f1").timestamp(103),
         );
         trail.append(
-            AuditEntryBuilder::new(AuditAction::VerificationPassed, "a.rs", "f1")
-                .timestamp(104),
+            AuditEntryBuilder::new(AuditAction::VerificationPassed, "a.rs", "f1").timestamp(104),
         );
         trail.append(
-            AuditEntryBuilder::new(AuditAction::VerificationFailed, "b.rs", "f2")
-                .timestamp(105),
+            AuditEntryBuilder::new(AuditAction::VerificationFailed, "b.rs", "f2").timestamp(105),
         );
 
         let summary = trail.summary();

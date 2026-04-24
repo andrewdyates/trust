@@ -120,10 +120,7 @@ impl VcSimplifier {
     /// Create a simplifier with the given configuration.
     #[must_use]
     pub fn new(config: SimplificationConfig) -> Self {
-        Self {
-            config,
-            stats: SimplificationStats::default(),
-        }
+        Self { config, stats: SimplificationStats::default() }
     }
 
     /// Standard pass ordering for general use.
@@ -150,10 +147,7 @@ impl VcSimplifier {
     #[must_use]
     pub fn simplify(&mut self, vc: &str) -> SimplifiedVc {
         let original_size = expression_size(vc);
-        self.stats = SimplificationStats {
-            original_size,
-            ..Default::default()
-        };
+        self.stats = SimplificationStats { original_size, ..Default::default() };
 
         let mut current = vc.to_string();
         let mut iteration = 0;
@@ -177,11 +171,7 @@ impl VcSimplifier {
 
         let is_trivially_true = is_tautology(&current);
 
-        SimplifiedVc {
-            formula: current,
-            stats: self.stats.clone(),
-            is_trivially_true,
-        }
+        SimplifiedVc { formula: current, stats: self.stats.clone(), is_trivially_true }
     }
 
     /// Apply a single simplification pass.
@@ -199,8 +189,7 @@ impl VcSimplifier {
                 let reduced = self.remove_redundant(&constraints);
                 if reduced.len() < constraints.len() {
                     if self.config.enable_stats {
-                        self.stats.redundant_removed +=
-                            constraints.len() - reduced.len();
+                        self.stats.redundant_removed += constraints.len() - reduced.len();
                     }
                     rejoin_constraints(&reduced)
                 } else {
@@ -209,18 +198,10 @@ impl VcSimplifier {
             }
             VcSimplificationPass::ImpliesChainSimplification => {
                 let chain = extract_implies_chain(vc);
-                if chain.len() > 1 {
-                    self.simplify_implies_chain(&chain)
-                } else {
-                    vc.to_string()
-                }
+                if chain.len() > 1 { self.simplify_implies_chain(&chain) } else { vc.to_string() }
             }
-            VcSimplificationPass::CommonSubexprElimination => {
-                eliminate_common_subexprs(vc)
-            }
-            VcSimplificationPass::TruthValuePropagation => {
-                propagate_truth_values(vc)
-            }
+            VcSimplificationPass::CommonSubexprElimination => eliminate_common_subexprs(vc),
+            VcSimplificationPass::TruthValuePropagation => propagate_truth_values(vc),
         }
     }
 
@@ -257,7 +238,9 @@ impl VcSimplifier {
         // Double negation: (not (not P)) -> P
         if let Some(inner) = trimmed.strip_prefix("(not ").and_then(|s| s.strip_suffix(')')) {
             let inner = inner.trim();
-            if let Some(double_inner) = inner.strip_prefix("(not ").and_then(|s| s.strip_suffix(')')) {
+            if let Some(double_inner) =
+                inner.strip_prefix("(not ").and_then(|s| s.strip_suffix(')'))
+            {
                 if self.config.enable_stats {
                     self.stats.constants_folded += 1;
                 }
@@ -286,11 +269,8 @@ impl VcSimplifier {
             }
 
             // Filter out true constants
-            let filtered: Vec<&str> = parts
-                .iter()
-                .filter(|p| p.trim() != "true")
-                .copied()
-                .collect();
+            let filtered: Vec<&str> =
+                parts.iter().filter(|p| p.trim() != "true").copied().collect();
             if filtered.len() < parts.len() {
                 if self.config.enable_stats {
                     self.stats.constants_folded += parts.len() - filtered.len();
@@ -329,11 +309,8 @@ impl VcSimplifier {
             }
 
             // Filter out false constants
-            let filtered: Vec<&str> = parts
-                .iter()
-                .filter(|p| p.trim() != "false")
-                .copied()
-                .collect();
+            let filtered: Vec<&str> =
+                parts.iter().filter(|p| p.trim() != "false").copied().collect();
             if filtered.len() < parts.len() {
                 if self.config.enable_stats {
                     self.stats.constants_folded += parts.len() - filtered.len();
@@ -405,40 +382,39 @@ impl VcSimplifier {
         for quantifier in &["forall", "exists"] {
             let prefix = format!("({quantifier} (");
             if let Some(rest) = trimmed.strip_prefix(prefix.as_str())
-                && let Some(paren_end) = find_matching_paren(rest) {
-                    let bindings_str = &rest[..paren_end];
-                    let body = rest[paren_end + 1..].trim();
-                    let body = body.strip_suffix(')').unwrap_or(body);
+                && let Some(paren_end) = find_matching_paren(rest)
+            {
+                let bindings_str = &rest[..paren_end];
+                let body = rest[paren_end + 1..].trim();
+                let body = body.strip_suffix(')').unwrap_or(body);
 
-                    let binding_pairs = parse_bindings(bindings_str);
-                    let body_vars: FxHashSet<&str> = extract_variable_names(body)
-                        .into_iter()
-                        .collect();
+                let binding_pairs = parse_bindings(bindings_str);
+                let body_vars: FxHashSet<&str> = extract_variable_names(body).into_iter().collect();
 
-                    let mut eliminated = 0usize;
-                    let kept: Vec<String> = binding_pairs
-                        .into_iter()
-                        .filter(|(name, _)| {
-                            let keep = body_vars.contains(name.as_str())
-                                || live_set.contains(name.as_str());
-                            if !keep {
-                                eliminated += 1;
-                            }
-                            keep
-                        })
-                        .map(|(name, sort)| format!("({name} {sort})"))
-                        .collect();
+                let mut eliminated = 0usize;
+                let kept: Vec<String> = binding_pairs
+                    .into_iter()
+                    .filter(|(name, _)| {
+                        let keep =
+                            body_vars.contains(name.as_str()) || live_set.contains(name.as_str());
+                        if !keep {
+                            eliminated += 1;
+                        }
+                        keep
+                    })
+                    .map(|(name, sort)| format!("({name} {sort})"))
+                    .collect();
 
-                    if self.config.enable_stats {
-                        self.stats.dead_vars_eliminated += eliminated;
-                    }
-
-                    return if kept.is_empty() {
-                        body.to_string()
-                    } else {
-                        format!("({quantifier} ({}) {body})", kept.join(" "))
-                    };
+                if self.config.enable_stats {
+                    self.stats.dead_vars_eliminated += eliminated;
                 }
+
+                return if kept.is_empty() {
+                    body.to_string()
+                } else {
+                    format!("({quantifier} ({}) {body})", kept.join(" "))
+                };
+            }
         }
 
         trimmed.to_string()
@@ -484,11 +460,7 @@ impl VcSimplifier {
         if premises.len() == 1 {
             format!("(=> {} {conclusion})", premises[0])
         } else {
-            let and_part = premises
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join(" ");
+            let and_part = premises.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ");
             format!("(=> (and {and_part}) {conclusion})")
         }
     }
@@ -732,10 +704,32 @@ fn is_variable_name(token: &str) -> bool {
     }
     // Not an SMT-LIB keyword
     const KEYWORDS: &[&str] = &[
-        "and", "or", "not", "=>", "forall", "exists", "let",
-        "=", "<", "<=", ">", ">=", "+", "-", "*", "/", "mod",
-        "ite", "Int", "Bool", "BitVec", "Array", "assert",
-        "declare-fun", "define-fun", "check-sat",
+        "and",
+        "or",
+        "not",
+        "=>",
+        "forall",
+        "exists",
+        "let",
+        "=",
+        "<",
+        "<=",
+        ">",
+        ">=",
+        "+",
+        "-",
+        "*",
+        "/",
+        "mod",
+        "ite",
+        "Int",
+        "Bool",
+        "BitVec",
+        "Array",
+        "assert",
+        "declare-fun",
+        "define-fun",
+        "check-sat",
     ];
     !KEYWORDS.contains(&token)
 }
@@ -775,10 +769,7 @@ fn parse_bindings(s: &str) -> Vec<(String, String)> {
 fn extract_constraints(vc: &str) -> Vec<String> {
     let trimmed = vc.trim();
     if let Some(inner) = trimmed.strip_prefix("(and ").and_then(|s| s.strip_suffix(')')) {
-        split_sexp_args(inner)
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect()
+        split_sexp_args(inner).into_iter().map(|s| s.to_string()).collect()
     } else {
         vec![trimmed.to_string()]
     }
@@ -961,9 +952,10 @@ fn try_fold_arithmetic(expr: &str) -> Option<String> {
             let parts = split_sexp_args(inner);
             if parts.len() == 2
                 && let (Ok(a), Ok(b)) = (parts[0].parse::<i128>(), parts[1].parse::<i128>())
-                    && let Some(result) = op(a, b) {
-                        return Some(result.to_string());
-                    }
+                && let Some(result) = op(a, b)
+            {
+                return Some(result.to_string());
+            }
         }
     }
 
@@ -980,9 +972,10 @@ fn try_fold_arithmetic(expr: &str) -> Option<String> {
         if let Some(inner) = trimmed.strip_prefix(prefix).and_then(|s| s.strip_suffix(')')) {
             let parts = split_sexp_args(inner);
             if parts.len() == 2
-                && let (Ok(a), Ok(b)) = (parts[0].parse::<i128>(), parts[1].parse::<i128>()) {
-                    return Some(if op(a, b) { "true" } else { "false" }.to_string());
-                }
+                && let (Ok(a), Ok(b)) = (parts[0].parse::<i128>(), parts[1].parse::<i128>())
+            {
+                return Some(if op(a, b) { "true" } else { "false" }.to_string());
+            }
         }
     }
 
@@ -1179,11 +1172,7 @@ mod tests {
     #[test]
     fn test_simplifier_implies_chain() {
         let s = VcSimplifier::new(VcSimplifier::default_config());
-        let chain = vec![
-            "(> x 0)".to_string(),
-            "(< y 10)".to_string(),
-            "(= z 5)".to_string(),
-        ];
+        let chain = vec!["(> x 0)".to_string(), "(< y 10)".to_string(), "(= z 5)".to_string()];
         let result = s.simplify_implies_chain(&chain);
         assert_eq!(result, "(=> (and (> x 0) (< y 10)) (= z 5))");
     }
@@ -1205,10 +1194,7 @@ mod tests {
     #[test]
     fn test_simplifier_dead_var_elimination() {
         let mut s = VcSimplifier::new(VcSimplifier::default_config());
-        let result = s.eliminate_dead_vars(
-            "(forall ((x Int) (y Int)) (> x 0))",
-            &[],
-        );
+        let result = s.eliminate_dead_vars("(forall ((x Int) (y Int)) (> x 0))", &[]);
         assert_eq!(result, "(forall ((x Int)) (> x 0))");
         assert_eq!(s.stats().dead_vars_eliminated, 1);
     }
@@ -1216,20 +1202,14 @@ mod tests {
     #[test]
     fn test_simplifier_dead_var_keeps_live() {
         let mut s = VcSimplifier::new(VcSimplifier::default_config());
-        let result = s.eliminate_dead_vars(
-            "(forall ((x Int) (y Int)) (> x 0))",
-            &["y"],
-        );
+        let result = s.eliminate_dead_vars("(forall ((x Int) (y Int)) (> x 0))", &["y"]);
         assert_eq!(result, "(forall ((x Int) (y Int)) (> x 0))");
     }
 
     #[test]
     fn test_simplifier_dead_var_all_dead() {
         let mut s = VcSimplifier::new(VcSimplifier::default_config());
-        let result = s.eliminate_dead_vars(
-            "(exists ((x Int)) true)",
-            &[],
-        );
+        let result = s.eliminate_dead_vars("(exists ((x Int)) true)", &[]);
         assert_eq!(result, "true");
     }
 
@@ -1275,11 +1255,8 @@ mod tests {
 
     #[test]
     fn test_stats_reduction_ratio() {
-        let stats = SimplificationStats {
-            original_size: 100,
-            simplified_size: 75,
-            ..Default::default()
-        };
+        let stats =
+            SimplificationStats { original_size: 100, simplified_size: 75, ..Default::default() };
         let ratio = stats.reduction_ratio();
         assert!((ratio - 0.25).abs() < 1e-10);
     }

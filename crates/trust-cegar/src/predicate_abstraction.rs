@@ -124,11 +124,8 @@ impl BitVecState {
     /// Whether this is the bottom element (all predicates hold).
     #[must_use]
     pub fn is_bottom(&self) -> bool {
-        let mask = if self.num_predicates >= 128 {
-            u128::MAX
-        } else {
-            (1u128 << self.num_predicates) - 1
-        };
+        let mask =
+            if self.num_predicates >= 128 { u128::MAX } else { (1u128 << self.num_predicates) - 1 };
         self.bits == mask && self.num_predicates > 0
     }
 
@@ -147,11 +144,8 @@ impl BitVecState {
     #[must_use]
     pub fn meet(&self, other: &Self) -> Self {
         debug_assert_eq!(self.num_predicates, other.num_predicates);
-        let mask = if self.num_predicates >= 128 {
-            u128::MAX
-        } else {
-            (1u128 << self.num_predicates) - 1
-        };
+        let mask =
+            if self.num_predicates >= 128 { u128::MAX } else { (1u128 << self.num_predicates) - 1 };
         Self { bits: (self.bits | other.bits) & mask, num_predicates: self.num_predicates }
     }
 
@@ -180,9 +174,10 @@ impl BitVecState {
         let mut state = crate::predicate::AbstractState::top();
         for i in 0..self.num_predicates as usize {
             if self.get(i)
-                && let Some(pred) = predicates.get(i) {
-                    state.add(pred.clone());
-                }
+                && let Some(pred) = predicates.get(i)
+            {
+                state.add(pred.clone());
+            }
         }
         state
     }
@@ -287,11 +282,7 @@ fn evaluate_predicate(pred: &Predicate, values: &BTreeMap<String, i128>) -> bool
 
 /// Resolve a name to an integer value: either a literal or a variable lookup.
 fn resolve_value(name: &str, values: &BTreeMap<String, i128>) -> Option<i128> {
-    if let Ok(n) = name.parse::<i128>() {
-        Some(n)
-    } else {
-        values.get(name).copied()
-    }
+    if let Ok(n) = name.parse::<i128>() { Some(n) } else { values.get(name).copied() }
 }
 
 /// A block transfer function for abstract transfer.
@@ -329,9 +320,10 @@ pub fn abstract_transfer(
     for i in 0..n {
         if result.get(i)
             && let Some(pred) = predicates.get(i)
-                && mentions_any_var(pred, &transfer.kills) {
-                    result.clear(i);
-                }
+            && mentions_any_var(pred, &transfer.kills)
+        {
+            result.clear(i);
+        }
     }
 
     // Generate: set predicates established by this block.
@@ -663,7 +655,7 @@ mod tests {
         values.insert("y".to_string(), 10); // y = 10, not < 0
 
         let state = abstract_state_from_concrete(&values, &predicates);
-        assert!(state.get(0));  // x > 0: true
+        assert!(state.get(0)); // x > 0: true
         assert!(!state.get(1)); // y < 0: false
     }
 
@@ -678,15 +670,13 @@ mod tests {
         // z is missing
 
         let state = abstract_state_from_concrete(&values, &predicates);
-        assert!(state.get(0));  // x > 0: true
+        assert!(state.get(0)); // x > 0: true
         assert!(!state.get(1)); // z not present -> false
     }
 
     #[test]
     fn test_abstract_state_from_concrete_range() {
-        let predicates = PredicateSet::from_predicates(vec![
-            Predicate::range("i", 0, 100),
-        ]);
+        let predicates = PredicateSet::from_predicates(vec![Predicate::range("i", 0, 100)]);
         let mut values = BTreeMap::new();
         values.insert("i".to_string(), 50);
 
@@ -696,9 +686,7 @@ mod tests {
 
     #[test]
     fn test_abstract_state_from_concrete_range_outside() {
-        let predicates = PredicateSet::from_predicates(vec![
-            Predicate::range("i", 0, 100),
-        ]);
+        let predicates = PredicateSet::from_predicates(vec![Predicate::range("i", 0, 100)]);
         let mut values = BTreeMap::new();
         values.insert("i".to_string(), 200);
 
@@ -708,9 +696,7 @@ mod tests {
 
     #[test]
     fn test_abstract_state_from_concrete_non_null() {
-        let predicates = PredicateSet::from_predicates(vec![
-            Predicate::non_null("ptr"),
-        ]);
+        let predicates = PredicateSet::from_predicates(vec![Predicate::non_null("ptr")]);
         let mut values = BTreeMap::new();
         values.insert("ptr".to_string(), 0x1000);
 
@@ -745,14 +731,11 @@ mod tests {
             Predicate::comparison("x", CmpOp::Lt, "y"),
         ]);
         let state = BitVecState::from_bits(0b111, 3);
-        let transfer = BlockTransfer {
-            kills: vec!["x".to_string()],
-            generates: vec![],
-        };
+        let transfer = BlockTransfer { kills: vec!["x".to_string()], generates: vec![] };
 
         let result = abstract_transfer(&state, &predicates, &transfer);
         assert!(!result.get(0)); // x > 0 killed (mentions x)
-        assert!(result.get(1));  // y < 10 survives (doesn't mention x)
+        assert!(result.get(1)); // y < 10 survives (doesn't mention x)
         assert!(!result.get(2)); // x < y killed (mentions x)
     }
 
@@ -770,14 +753,13 @@ mod tests {
 
         let result = abstract_transfer(&state, &predicates, &transfer);
         assert!(!result.get(0)); // Not generated
-        assert!(result.get(1));  // Generated by transfer
+        assert!(result.get(1)); // Generated by transfer
     }
 
     #[test]
     fn test_abstract_transfer_kill_then_generate() {
-        let predicates = PredicateSet::from_predicates(vec![
-            Predicate::comparison("x", CmpOp::Ge, "0"),
-        ]);
+        let predicates =
+            PredicateSet::from_predicates(vec![Predicate::comparison("x", CmpOp::Ge, "0")]);
         let state = BitVecState::from_bits(0b1, 1); // x >= 0 holds
         let transfer = BlockTransfer {
             kills: vec!["x".to_string()],
@@ -792,10 +774,8 @@ mod tests {
 
     #[test]
     fn test_discovery_from_simple_comparison() {
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         let preds = PredicateDiscovery::from_interpolant(&formula);
         assert_eq!(preds.len(), 1);
         assert_eq!(preds[0], Predicate::comparison("x", CmpOp::Lt, "10"));
@@ -804,10 +784,7 @@ mod tests {
     #[test]
     fn test_discovery_from_conjunction() {
         let formula = Formula::And(vec![
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
             Formula::Lt(
                 Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Var("n".into(), Sort::Int)),
@@ -858,14 +835,8 @@ mod tests {
     fn test_discovery_deduplicates() {
         // Same comparison appears twice in a conjunction
         let formula = Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
         let preds = PredicateDiscovery::from_interpolant(&formula);
         assert_eq!(preds.len(), 1);
@@ -898,10 +869,8 @@ mod tests {
 
     #[test]
     fn test_discovery_with_vars() {
-        let formula = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let formula =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         let preds_with_vars = PredicateDiscovery::from_interpolant_with_vars(&formula);
         assert_eq!(preds_with_vars.len(), 1);
         let (pred, vars) = &preds_with_vars[0];
@@ -1038,14 +1007,8 @@ mod tests {
     fn test_discovery_from_disjunction() {
         // OR(x < 5, y > 10) should still extract both atoms
         let formula = Formula::Or(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(5)),
-            ),
-            Formula::Gt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(5))),
+            Formula::Gt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(10))),
         ]);
         let preds = PredicateDiscovery::from_interpolant(&formula);
         assert_eq!(preds.len(), 2);

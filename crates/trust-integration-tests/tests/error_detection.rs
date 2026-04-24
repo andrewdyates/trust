@@ -1,4 +1,3 @@
-#![cfg(not(feature = "pipeline-v2"))]
 // trust-integration-tests/tests/error_detection.rs: Comprehensive error detection test suite (#633, #635)
 //
 // Tests that tRust's verification pipeline detects common Rust errors across 12 VcKind categories:
@@ -23,7 +22,7 @@
 
 use std::process::Command;
 
-use trust_router::smtlib_backend::SmtLibBackend;
+use trust_router::IncrementalZ4Session;
 use trust_router::VerificationBackend;
 use trust_types::*;
 
@@ -31,13 +30,13 @@ use trust_types::*;
 // z4 setup
 // ---------------------------------------------------------------------------
 
-fn require_z4() -> SmtLibBackend {
+fn require_z4() -> IncrementalZ4Session {
     let output = Command::new("z4").arg("--version").output();
     match output {
         Ok(o) if o.status.success() => {
             let version = String::from_utf8_lossy(&o.stdout);
             eprintln!("z4 detected: {}", version.trim());
-            SmtLibBackend::new()
+            IncrementalZ4Session::new()
         }
         _ => panic!("z4 not found on PATH — install z4 to run these tests"),
     }
@@ -61,11 +60,7 @@ fn overflow_add_u32_buggy() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -121,11 +116,7 @@ fn overflow_sub_u32_buggy() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -184,11 +175,8 @@ fn overflow_add_safe_formula() -> VerificationCondition {
     ]);
 
     VerificationCondition {
-        kind: VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::u8(), Ty::u8()),
-        },
-        function: "safe_add_one".to_string(),
+        kind: VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u8(), Ty::u8()) },
+        function: "safe_add_one".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -333,7 +321,7 @@ fn index_safe_formula() -> VerificationCondition {
 
     VerificationCondition {
         kind: VcKind::IndexOutOfBounds,
-        function: "safe_checked_index".to_string(),
+        function: "safe_checked_index".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -428,11 +416,7 @@ fn overflow_mul_u32_buggy() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -489,11 +473,8 @@ fn overflow_mul_safe_formula() -> VerificationCondition {
     ]);
 
     VerificationCondition {
-        kind: VcKind::ArithmeticOverflow {
-            op: BinOp::Mul,
-            operand_tys: (Ty::u16(), Ty::u16()),
-        },
-        function: "safe_mul_two".to_string(),
+        kind: VcKind::ArithmeticOverflow { op: BinOp::Mul, operand_tys: (Ty::u16(), Ty::u16()) },
+        function: "safe_mul_two".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -552,12 +533,8 @@ fn shift_overflow_safe_formula() -> VerificationCondition {
     ]);
 
     VerificationCondition {
-        kind: VcKind::ShiftOverflow {
-            op: BinOp::Shl,
-            operand_ty: Ty::u32(),
-            shift_ty: Ty::u32(),
-        },
-        function: "safe_shift".to_string(),
+        kind: VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: Ty::u32(), shift_ty: Ty::u32() },
+        function: "safe_shift".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -583,10 +560,7 @@ fn cast_overflow_buggy() -> VerifiableFunction {
                 id: BlockId(0),
                 stmts: vec![Statement::Assign {
                     place: Place::local(0),
-                    rvalue: Rvalue::Cast(
-                        Operand::Copy(Place::local(1)),
-                        Ty::u8(),
-                    ),
+                    rvalue: Rvalue::Cast(Operand::Copy(Place::local(1)), Ty::u8()),
                     span: SourceSpan::default(),
                 }],
                 terminator: Terminator::Return,
@@ -616,11 +590,8 @@ fn cast_overflow_safe_formula() -> VerificationCondition {
     ]);
 
     VerificationCondition {
-        kind: VcKind::CastOverflow {
-            from_ty: Ty::u32(),
-            to_ty: Ty::u8(),
-        },
-        function: "safe_cast".to_string(),
+        kind: VcKind::CastOverflow { from_ty: Ty::u32(), to_ty: Ty::u8() },
+        function: "safe_cast".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -646,10 +617,7 @@ fn negation_overflow_buggy() -> VerifiableFunction {
                 id: BlockId(0),
                 stmts: vec![Statement::Assign {
                     place: Place::local(0),
-                    rvalue: Rvalue::UnaryOp(
-                        UnOp::Neg,
-                        Operand::Copy(Place::local(1)),
-                    ),
+                    rvalue: Rvalue::UnaryOp(UnOp::Neg, Operand::Copy(Place::local(1))),
                     span: SourceSpan::default(),
                 }],
                 terminator: Terminator::Return,
@@ -680,7 +648,7 @@ fn negation_overflow_safe_formula() -> VerificationCondition {
 
     VerificationCondition {
         kind: VcKind::NegationOverflow { ty: Ty::i32() },
-        function: "safe_negate".to_string(),
+        function: "safe_negate".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -715,11 +683,7 @@ fn assertion_buggy() -> VerifiableFunction {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 1,
             return_ty: Ty::Unit,
@@ -736,7 +700,7 @@ fn assertion_buggy() -> VerifiableFunction {
 fn assertion_safe_formula() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::Assertion { message: "safe assertion".to_string() },
-        function: "safe_assert".to_string(),
+        function: "safe_assert".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -780,16 +744,8 @@ fn unreachable_safe() -> VerifiableFunction {
         body: VerifiableBody {
             locals: vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
             blocks: vec![
-                BasicBlock {
-                    id: BlockId(0),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Unreachable,
-                },
+                BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Unreachable },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,
@@ -868,7 +824,7 @@ fn slice_bounds_safe_formula() -> VerificationCondition {
 
     VerificationCondition {
         kind: VcKind::SliceBoundsCheck,
-        function: "safe_slice_access".to_string(),
+        function: "safe_slice_access".into(),
         location: SourceSpan::default(),
         formula,
         contract_metadata: None,
@@ -974,19 +930,13 @@ fn test_detect_overflow_add_u32() {
         .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }))
         .collect();
 
-    assert!(
-        !overflow_vcs.is_empty(),
-        "vcgen must produce ArithmeticOverflow(Add) VC for u32 add"
-    );
+    assert!(!overflow_vcs.is_empty(), "vcgen must produce ArithmeticOverflow(Add) VC for u32 add");
 
     for vc in &overflow_vcs {
         let result = z4.verify(vc);
         eprintln!("z4 result: {:?}", result);
 
-        assert!(
-            result.is_failed(),
-            "z4 must find u32 add can overflow. Got: {result:?}"
-        );
+        assert!(result.is_failed(), "z4 must find u32 add can overflow. Got: {result:?}");
 
         if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             assert!(!cex.assignments.is_empty(), "counterexample must have assignments");
@@ -1017,10 +967,7 @@ fn test_detect_overflow_sub_u32() {
         let result = z4.verify(vc);
         eprintln!("z4 result for sub overflow: {:?}", result);
 
-        assert!(
-            result.is_failed(),
-            "z4 must find u32 subtract can underflow. Got: {result:?}"
-        );
+        assert!(result.is_failed(), "z4 must find u32 subtract can underflow. Got: {result:?}");
 
         if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             assert!(!cex.assignments.is_empty(), "counterexample must have assignments");
@@ -1053,24 +1000,16 @@ fn test_detect_divzero_variable() {
 
     eprintln!("Generated {} VCs for div_by_var", vcs.len());
 
-    let divzero_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let divzero_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
 
-    assert!(
-        !divzero_vcs.is_empty(),
-        "vcgen must produce DivisionByZero VC for variable divisor"
-    );
+    assert!(!divzero_vcs.is_empty(), "vcgen must produce DivisionByZero VC for variable divisor");
 
     for vc in &divzero_vcs {
         let result = z4.verify(vc);
         eprintln!("z4 result: {:?}", result);
 
-        assert!(
-            result.is_failed(),
-            "z4 must find variable divisor CAN be zero. Got: {result:?}"
-        );
+        assert!(result.is_failed(), "z4 must find variable divisor CAN be zero. Got: {result:?}");
 
         if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             eprintln!("  Counterexample: {cex}");
@@ -1086,10 +1025,8 @@ fn test_detect_divzero_constant_safe() {
 
     eprintln!("Generated {} VCs for div_by_three", vcs.len());
 
-    let divzero_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let divzero_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
 
     for vc in &divzero_vcs {
         let result = z4.verify(vc);
@@ -1115,10 +1052,8 @@ fn test_detect_index_oob_unchecked() {
         eprintln!("  VC: {:?} — {}", vc.kind, vc.function);
     }
 
-    let bounds_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .collect();
+    let bounds_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).collect();
 
     assert!(
         !bounds_vcs.is_empty(),
@@ -1148,10 +1083,7 @@ fn test_detect_index_bounds_safe() {
     let result = z4.verify(&vc);
     eprintln!("z4 result for safe index: {:?}", result);
 
-    assert!(
-        result.is_proved(),
-        "z4 must prove bounded index is safe (UNSAT). Got: {result:?}"
-    );
+    assert!(result.is_proved(), "z4 must prove bounded index is safe (UNSAT). Got: {result:?}");
 }
 
 // --- Category 4: Remainder by Zero ---
@@ -1164,24 +1096,16 @@ fn test_detect_remzero_variable() {
 
     eprintln!("Generated {} VCs for rem_by_var", vcs.len());
 
-    let rem_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::RemainderByZero))
-        .collect();
+    let rem_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::RemainderByZero)).collect();
 
-    assert!(
-        !rem_vcs.is_empty(),
-        "vcgen must produce RemainderByZero VC for variable modulus"
-    );
+    assert!(!rem_vcs.is_empty(), "vcgen must produce RemainderByZero VC for variable modulus");
 
     for vc in &rem_vcs {
         let result = z4.verify(vc);
         eprintln!("z4 result for rem by var: {:?}", result);
 
-        assert!(
-            result.is_failed(),
-            "z4 must find variable modulus CAN be zero. Got: {result:?}"
-        );
+        assert!(result.is_failed(), "z4 must find variable modulus CAN be zero. Got: {result:?}");
 
         if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             eprintln!("  Counterexample: {cex}");
@@ -1197,10 +1121,8 @@ fn test_detect_remzero_constant_safe() {
 
     eprintln!("Generated {} VCs for rem_by_seven", vcs.len());
 
-    let rem_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::RemainderByZero))
-        .collect();
+    let rem_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::RemainderByZero)).collect();
 
     for vc in &rem_vcs {
         let result = z4.verify(vc);
@@ -1240,10 +1162,7 @@ fn test_detect_overflow_mul_u32() {
         let result = z4.verify(vc);
         eprintln!("z4 result for mul overflow: {:?}", result);
 
-        assert!(
-            result.is_failed(),
-            "z4 must find u32 multiply can overflow. Got: {result:?}"
-        );
+        assert!(result.is_failed(), "z4 must find u32 multiply can overflow. Got: {result:?}");
 
         if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             assert!(!cex.assignments.is_empty(), "counterexample must have assignments");
@@ -1279,10 +1198,8 @@ fn test_detect_shift_overflow_unconstrained() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let shift_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::ShiftOverflow { .. }))
-        .collect();
+    let shift_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::ShiftOverflow { .. })).collect();
 
     assert!(
         !shift_vcs.is_empty(),
@@ -1331,24 +1248,16 @@ fn test_detect_cast_overflow_u32_to_u8() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let cast_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::CastOverflow { .. }))
-        .collect();
+    let cast_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::CastOverflow { .. })).collect();
 
-    assert!(
-        !cast_vcs.is_empty(),
-        "vcgen must produce CastOverflow VC for u32 -> u8 cast"
-    );
+    assert!(!cast_vcs.is_empty(), "vcgen must produce CastOverflow VC for u32 -> u8 cast");
 
     for vc in &cast_vcs {
         let result = z4.verify(vc);
         eprintln!("z4 result for cast overflow: {:?}", result);
 
-        assert!(
-            result.is_failed(),
-            "z4 must find u32 -> u8 cast CAN overflow. Got: {result:?}"
-        );
+        assert!(result.is_failed(), "z4 must find u32 -> u8 cast CAN overflow. Got: {result:?}");
 
         if let VerificationResult::Failed { counterexample: Some(cex), .. } = &result {
             eprintln!("  Counterexample: {cex}");
@@ -1383,10 +1292,8 @@ fn test_detect_negation_overflow_i32() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let neg_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::NegationOverflow { .. }))
-        .collect();
+    let neg_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::NegationOverflow { .. })).collect();
 
     assert!(
         !neg_vcs.is_empty(),
@@ -1435,10 +1342,8 @@ fn test_detect_assertion_buggy() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let assert_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::Assertion { .. }))
-        .collect();
+    let assert_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Assertion { .. })).collect();
 
     assert!(
         !assert_vcs.is_empty(),
@@ -1483,10 +1388,8 @@ fn test_detect_unreachable_buggy() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let unreach_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::Unreachable))
-        .collect();
+    let unreach_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Unreachable)).collect();
 
     assert!(
         !unreach_vcs.is_empty(),
@@ -1511,10 +1414,8 @@ fn test_detect_unreachable_safe() {
 
     eprintln!("Generated {} VCs for dead_unreachable", vcs.len());
 
-    let unreach_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::Unreachable))
-        .collect();
+    let unreach_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::Unreachable)).collect();
 
     assert!(
         unreach_vcs.is_empty(),
@@ -1535,10 +1436,8 @@ fn test_detect_slice_bounds_buggy() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let slice_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::SliceBoundsCheck))
-        .collect();
+    let slice_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::SliceBoundsCheck)).collect();
 
     assert!(
         !slice_vcs.is_empty(),
@@ -1583,10 +1482,8 @@ fn test_detect_invalid_discriminant_buggy() {
         eprintln!("  VC: {:?} -- {}", vc.kind, vc.function);
     }
 
-    let discr_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::InvalidDiscriminant { .. }))
-        .collect();
+    let discr_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::InvalidDiscriminant { .. })).collect();
 
     assert!(
         !discr_vcs.is_empty(),
@@ -1611,10 +1508,8 @@ fn test_detect_invalid_discriminant_safe() {
 
     eprintln!("Generated {} VCs for good_discriminant", vcs.len());
 
-    let discr_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::InvalidDiscriminant { .. }))
-        .collect();
+    let discr_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::InvalidDiscriminant { .. })).collect();
 
     assert!(
         discr_vcs.is_empty(),

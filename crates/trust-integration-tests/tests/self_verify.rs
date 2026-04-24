@@ -44,22 +44,14 @@ fn build_bv_extract_width_model() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::u32(), name: None },           // _0: return
+                LocalDecl { index: 0, ty: Ty::u32(), name: None }, // _0: return
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("high".into()) }, // _1: arg
-                LocalDecl { index: 2, ty: Ty::u32(), name: Some("low".into()) },  // _2: arg
+                LocalDecl { index: 2, ty: Ty::u32(), name: Some("low".into()) }, // _2: arg
                 // _3: (u32, bool) -- checked sub result
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::u32(), name: None }, // _4: high - low
                 // _5: (u32, bool) -- checked add result
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
                 LocalDecl { index: 6, ty: Ty::u32(), name: None }, // _6: width
             ],
             blocks: vec![
@@ -160,15 +152,11 @@ fn build_simplifier_loop_model() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::Unit, name: None },             // _0: return
+                LocalDecl { index: 0, ty: Ty::Unit, name: None }, // _0: return
                 LocalDecl { index: 1, ty: Ty::usize(), name: Some("max_iters".into()) }, // _1: arg
-                LocalDecl { index: 2, ty: Ty::usize(), name: Some("iter".into()) },      // _2: counter
+                LocalDecl { index: 2, ty: Ty::usize(), name: Some("iter".into()) }, // _2: counter
                 // _3: (usize, bool) -- checked add result
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None },
                 LocalDecl { index: 4, ty: Ty::usize(), name: None }, // _4: iter + 1
             ],
             blocks: vec![
@@ -251,10 +239,10 @@ fn build_bloom_filter_model() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::Bool, name: None },              // _0: return
-                LocalDecl { index: 1, ty: Ty::u64(), name: Some("hash".into()) },    // _1: arg
+                LocalDecl { index: 0, ty: Ty::Bool, name: None }, // _0: return
+                LocalDecl { index: 1, ty: Ty::u64(), name: Some("hash".into()) }, // _1: arg
                 LocalDecl { index: 2, ty: Ty::usize(), name: Some("bits_len".into()) }, // _2: arg
-                LocalDecl { index: 3, ty: Ty::usize(), name: Some("index".into()) },    // _3: hash % bits_len
+                LocalDecl { index: 3, ty: Ty::usize(), name: Some("index".into()) }, // _3: hash % bits_len
                 // _4: bits array (fixed-size model for bounds checking)
                 LocalDecl {
                     index: 4,
@@ -342,22 +330,14 @@ fn build_convergence_accumulator_model() -> VerifiableFunction {
         body: VerifiableBody {
             locals: vec![
                 LocalDecl { index: 0, ty: Ty::Unit, name: None }, // _0: return
-                LocalDecl { index: 1, ty: Ty::u64(), name: Some("wall_time_secs".into()) },     // _1: arg
-                LocalDecl { index: 2, ty: Ty::u64(), name: Some("obs_wall_time_secs".into()) },  // _2: arg
-                LocalDecl { index: 3, ty: Ty::u64(), name: Some("solver_calls".into()) },        // _3: arg
-                LocalDecl { index: 4, ty: Ty::u64(), name: Some("obs_solver_calls".into()) },    // _4: arg
+                LocalDecl { index: 1, ty: Ty::u64(), name: Some("wall_time_secs".into()) }, // _1: arg
+                LocalDecl { index: 2, ty: Ty::u64(), name: Some("obs_wall_time_secs".into()) }, // _2: arg
+                LocalDecl { index: 3, ty: Ty::u64(), name: Some("solver_calls".into()) }, // _3: arg
+                LocalDecl { index: 4, ty: Ty::u64(), name: Some("obs_solver_calls".into()) }, // _4: arg
                 // _5: (u64, bool) -- checked add result for wall_time
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None },
                 // _6: (u64, bool) -- checked add result for solver_calls
-                LocalDecl {
-                    index: 6,
-                    ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 6, ty: Ty::Tuple(vec![Ty::u64(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 // bb0: _5 = CheckedAdd(_1, _2); assert(!_5.1, overflow) -> bb1
@@ -401,11 +381,7 @@ fn build_convergence_accumulator_model() -> VerifiableFunction {
                     },
                 },
                 // bb2: return
-                BasicBlock {
-                    id: BlockId(2),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 4,
             return_ty: Ty::Unit,
@@ -550,10 +526,8 @@ fn test_self_verify_sv3_bloom_filter_vc_generation() {
     let vcs = trust_vcgen::generate_vcs(&func);
 
     // Should produce RemainderByZero for `hash % bits_len`
-    let rem_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::RemainderByZero))
-        .collect();
+    let rem_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::RemainderByZero)).collect();
     assert_eq!(
         rem_vcs.len(),
         1,
@@ -561,10 +535,8 @@ fn test_self_verify_sv3_bloom_filter_vc_generation() {
     );
 
     // Should produce IndexOutOfBounds for `bits[index]`
-    let idx_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .collect();
+    let idx_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).collect();
     assert_eq!(
         idx_vcs.len(),
         1,
@@ -691,14 +663,8 @@ fn test_self_verify_full_suite() {
     let sv3_vcs = trust_vcgen::generate_vcs(&sv3);
     let sv3_results = router.verify_all(&sv3_vcs);
 
-    let sv3_rem = sv3_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::RemainderByZero))
-        .count();
-    let sv3_idx = sv3_vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds))
-        .count();
+    let sv3_rem = sv3_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::RemainderByZero)).count();
+    let sv3_idx = sv3_vcs.iter().filter(|vc| matches!(vc.kind, VcKind::IndexOutOfBounds)).count();
     assert_eq!(sv3_rem, 1, "SV-3: expected 1 RemainderByZero VC");
     assert_eq!(sv3_idx, 1, "SV-3: expected 1 IndexOutOfBounds VC");
 
@@ -808,10 +774,7 @@ fn test_self_verify_report_generation() {
 
     // Verify text summary
     let text = trust_report::format_json_summary(&report);
-    assert!(
-        text.contains("bv_extract_width"),
-        "text report should mention bv_extract_width"
-    );
+    assert!(text.contains("bv_extract_width"), "text report should mention bv_extract_width");
     assert!(
         text.contains("bloom_filter_contains"),
         "text report should mention bloom_filter_contains"

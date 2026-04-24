@@ -1,6 +1,3 @@
-//! tRust: MIR lint that checks for live drops in const and static contexts
-//! tRust: after drop elaboration.
-
 use rustc_const_eval::check_consts;
 use rustc_middle::mir::*;
 use rustc_middle::ty::TyCtxt;

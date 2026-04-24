@@ -35,10 +35,8 @@ impl fmt::Display for AbstractDomain {
         match self {
             Self::Interval { lo, hi } => write!(f, "[{lo}, {hi}]"),
             Self::Octagon(constraints) => {
-                let parts: Vec<String> = constraints
-                    .iter()
-                    .map(|(a, b, c)| format!("{a} - {b} <= {c}"))
-                    .collect();
+                let parts: Vec<String> =
+                    constraints.iter().map(|(a, b, c)| format!("{a} - {b} <= {c}")).collect();
                 write!(f, "octagon({})", parts.join(", "))
             }
             Self::Sign(s) => write!(f, "sign({s})"),
@@ -58,13 +56,9 @@ impl AbstractDomain {
         match (self, other) {
             (Self::Bottom, x) | (x, Self::Bottom) => x.clone(),
             (Self::Top, _) | (_, Self::Top) => Self::Top,
-            (
-                Self::Interval { lo: l1, hi: h1 },
-                Self::Interval { lo: l2, hi: h2 },
-            ) => Self::Interval {
-                lo: (*l1).min(*l2),
-                hi: (*h1).max(*h2),
-            },
+            (Self::Interval { lo: l1, hi: h1 }, Self::Interval { lo: l2, hi: h2 }) => {
+                Self::Interval { lo: (*l1).min(*l2), hi: (*h1).max(*h2) }
+            }
             (Self::Sign(a), Self::Sign(b)) => {
                 if a == b {
                     Self::Sign(a.clone())
@@ -73,20 +67,11 @@ impl AbstractDomain {
                 }
             }
             (
-                Self::Congruence {
-                    modulus: m1,
-                    remainder: r1,
-                },
-                Self::Congruence {
-                    modulus: m2,
-                    remainder: r2,
-                },
+                Self::Congruence { modulus: m1, remainder: r1 },
+                Self::Congruence { modulus: m2, remainder: r2 },
             ) => {
                 if m1 == m2 && r1 == r2 {
-                    Self::Congruence {
-                        modulus: *m1,
-                        remainder: *r1,
-                    }
+                    Self::Congruence { modulus: *m1, remainder: *r1 }
                 } else {
                     Self::Top
                 }
@@ -102,17 +87,10 @@ impl AbstractDomain {
         match (self, other) {
             (Self::Top, x) | (x, Self::Top) => x.clone(),
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
-            (
-                Self::Interval { lo: l1, hi: h1 },
-                Self::Interval { lo: l2, hi: h2 },
-            ) => {
+            (Self::Interval { lo: l1, hi: h1 }, Self::Interval { lo: l2, hi: h2 }) => {
                 let lo = (*l1).max(*l2);
                 let hi = (*h1).min(*h2);
-                if lo > hi {
-                    Self::Bottom
-                } else {
-                    Self::Interval { lo, hi }
-                }
+                if lo > hi { Self::Bottom } else { Self::Interval { lo, hi } }
             }
             (Self::Sign(a), Self::Sign(b)) => {
                 if a == b {
@@ -185,11 +163,7 @@ pub struct AbstractInferenceConfig {
 
 impl Default for AbstractInferenceConfig {
     fn default() -> Self {
-        Self {
-            max_widening_steps: 100,
-            precision: DomainPrecision::Medium,
-            use_narrowing: true,
-        }
+        Self { max_widening_steps: 100, precision: DomainPrecision::Medium, use_narrowing: true }
     }
 }
 
@@ -272,11 +246,7 @@ impl InvariantInferrer {
         // Build candidates from the final abstract state
         let candidates = self.build_candidates(&state, loop_body, init_state);
 
-        AbstractInferenceResult {
-            candidates,
-            iterations,
-            converged,
-        }
+        AbstractInferenceResult { candidates, iterations, converged }
     }
 
     /// Apply the abstract transfer function for a single statement.
@@ -353,10 +323,7 @@ impl InvariantInferrer {
     }
 
     /// Strengthen a candidate by tightening its domain or raising confidence.
-    pub fn strengthen_candidate(
-        &self,
-        candidate: &InvariantCandidate,
-    ) -> InvariantCandidate {
+    pub fn strengthen_candidate(&self, candidate: &InvariantCandidate) -> InvariantCandidate {
         match &candidate.domain {
             AbstractDomain::Interval { lo, hi } => {
                 // If we have a finite interval, confidence is high
@@ -386,11 +353,7 @@ impl InvariantInferrer {
     ///
     /// Checks: applying the loop body to the invariant domain yields a state
     /// contained in (or equal to) the invariant domain.
-    pub fn validate_invariant(
-        &self,
-        candidate: &InvariantCandidate,
-        loop_body: &str,
-    ) -> bool {
+    pub fn validate_invariant(&self, candidate: &InvariantCandidate, loop_body: &str) -> bool {
         let statements: Vec<&str> = loop_body.lines().filter(|l| !l.trim().is_empty()).collect();
         let mut state = candidate.domain.clone();
 
@@ -432,10 +395,8 @@ impl InvariantInferrer {
             AbstractDomain::Bottom => "#[invariant(false)]".into(),
             AbstractDomain::Top => "#[invariant(true)]".into(),
             AbstractDomain::Octagon(constraints) => {
-                let parts: Vec<String> = constraints
-                    .iter()
-                    .map(|(a, b, c)| format!("{a} - {b} <= {c}"))
-                    .collect();
+                let parts: Vec<String> =
+                    constraints.iter().map(|(a, b, c)| format!("{a} - {b} <= {c}")).collect();
                 format!("#[invariant({})]", parts.join(" && "))
             }
         }
@@ -457,11 +418,7 @@ impl InvariantInferrer {
             ) => {
                 let lo = if *l1 == i64::MIN { *l2 } else { *l1 };
                 let hi = if *h1 == i64::MAX { *h2 } else { *h1 };
-                if lo > hi {
-                    AbstractDomain::Bottom
-                } else {
-                    AbstractDomain::Interval { lo, hi }
-                }
+                if lo > hi { AbstractDomain::Bottom } else { AbstractDomain::Interval { lo, hi } }
             }
             _ => old.clone(),
         }
@@ -527,7 +484,10 @@ impl InvariantInferrer {
             }
             AbstractDomain::Sign(s) => {
                 candidates.push(InvariantCandidate {
-                    expression: format!("sign({})", vars.first().map(|v| v.as_str()).unwrap_or("x")),
+                    expression: format!(
+                        "sign({})",
+                        vars.first().map(|v| v.as_str()).unwrap_or("x")
+                    ),
                     domain: state.clone(),
                     confidence: 0.6,
                     variables: vars.clone(),
@@ -658,10 +618,12 @@ fn extract_variables(loop_body: &str, init_state: &str) -> Vec<String> {
         let line = line.trim();
         if let Some(eq_pos) = line.find('=') {
             let lhs = line[..eq_pos].trim();
-            if !lhs.is_empty() && lhs.chars().all(|c| c.is_alphanumeric() || c == '_')
-                && !vars.contains(&lhs.to_string()) {
-                    vars.push(lhs.to_string());
-                }
+            if !lhs.is_empty()
+                && lhs.chars().all(|c| c.is_alphanumeric() || c == '_')
+                && !vars.contains(&lhs.to_string())
+            {
+                vars.push(lhs.to_string());
+            }
         }
     }
     if vars.is_empty() {
@@ -818,9 +780,10 @@ mod tests {
         assert!(!result.candidates.is_empty());
 
         // Should find that x >= 0
-        let has_lower_bound = result.candidates.iter().any(|c| {
-            matches!(&c.domain, AbstractDomain::Interval { lo, .. } if *lo == 0)
-        });
+        let has_lower_bound = result
+            .candidates
+            .iter()
+            .any(|c| matches!(&c.domain, AbstractDomain::Interval { lo, .. } if *lo == 0));
         assert!(has_lower_bound, "Expected lower bound of 0, candidates: {:?}", result.candidates);
     }
 
@@ -947,16 +910,10 @@ mod tests {
 
     #[test]
     fn test_domain_display() {
-        assert_eq!(
-            format!("{}", AbstractDomain::Interval { lo: 0, hi: 10 }),
-            "[0, 10]"
-        );
+        assert_eq!(format!("{}", AbstractDomain::Interval { lo: 0, hi: 10 }), "[0, 10]");
         assert_eq!(format!("{}", AbstractDomain::Top), "top");
         assert_eq!(format!("{}", AbstractDomain::Bottom), "bottom");
-        assert_eq!(
-            format!("{}", AbstractDomain::Sign("positive".into())),
-            "sign(positive)"
-        );
+        assert_eq!(format!("{}", AbstractDomain::Sign("positive".into())), "sign(positive)");
     }
 
     // -- Congruence join tests --

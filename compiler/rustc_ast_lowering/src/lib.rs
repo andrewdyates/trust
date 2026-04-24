@@ -201,7 +201,7 @@ impl<'a, 'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'a, 'hir, R> {
             allow_for_await: [sym::async_gen_internals, sym::async_iterator].into(),
             allow_async_fn_traits: [sym::async_fn_traits].into(),
             allow_async_gen: [sym::async_gen_internals].into(),
-            // tRust: known issue — (gen_blocks) how does `closure_track_caller`/`async_fn_track_caller`
+            // FIXME(gen_blocks): how does `closure_track_caller`/`async_fn_track_caller`
             // interact with `gen`/`async gen` blocks
             allow_async_iterator: [sym::gen_future, sym::async_iterator].into(),
 
@@ -243,7 +243,7 @@ struct ResolverDelayedAstLowering<'a, 'tcx> {
     base: &'a ResolverAstLowering<'tcx>,
 }
 
-// tRust: known issue — (fn_delegation) delegate this trait impl to `self.base`
+// FIXME(fn_delegation): delegate this trait impl to `self.base`
 impl<'a, 'tcx> ResolverAstLoweringExt<'tcx> for ResolverDelayedAstLowering<'a, 'tcx> {
     fn legacy_const_generic_args(&self, expr: &Expr, tcx: TyCtxt<'tcx>) -> Option<Vec<usize>> {
         self.base.legacy_const_generic_args(expr, tcx)
@@ -320,7 +320,7 @@ impl<'tcx> ResolverAstLowering<'tcx> {
 
         // Don't perform legacy const generics rewriting if the path already
         // has generic arguments.
-        if path.segments.last().expect("invariant: path has at least one segment").args.is_some() // tRust: {
+        if path.segments.last().unwrap().args.is_some() {
             return None;
         }
 
@@ -656,7 +656,7 @@ pub fn lower_delayed_owner(tcx: TyCtxt<'_>, def_id: LocalDefId) {
 
     let (resolver, krate) = &*krate.delayed_resolver.borrow();
 
-    // tRust: known issue — (fn_delegation) make ast index lifetime same as resolver,
+    // FIXME!!!(fn_delegation): make ast index lifetime same as resolver,
     // as it is too bad to reindex whole crate on each delegation lowering.
     let ast_index = index_crate(resolver, krate);
 
@@ -1246,7 +1246,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                         }
                     } else {
                         self.emit_bad_parenthesized_trait_in_assoc_ty(data);
-                        // tRust: known issue — (return_type_notation) we could issue a feature error
+                        // FIXME(return_type_notation): we could issue a feature error
                         // if the parens are empty and there's no return type.
                         self.lower_angle_bracketed_parameter_data(
                             &data.as_angle_bracketed_args(),
@@ -1333,12 +1333,12 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
             let open_param = data.inputs_span.shrink_to_lo().to(data
                 .inputs
                 .first()
-                .expect("invariant: fn inputs is non-empty in else branch") // tRust: unwrap -> expect
+                .unwrap()
                 .span
                 .shrink_to_lo());
             // End of last argument to end of parameters
             let close_param =
-                data.inputs.last().expect("invariant: fn inputs is non-empty for return type lowering").span.shrink_to_hi().to(data.inputs_span.shrink_to_hi()); // tRust:.shrink_to_hi().to(data.inputs_span.shrink_to_hi());
+                data.inputs.last().unwrap().span.shrink_to_hi().to(data.inputs_span.shrink_to_hi());
             AssocTyParenthesesSub::NotEmpty { open_param, close_param }
         };
         self.dcx().emit_err(AssocTyParentheses { span: data.span, sub });
@@ -1372,7 +1372,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     // type and value namespaces. If we resolved the path in the value namespace, we
                     // transform it into a generic const argument.
                     //
-                    // tRust: known issue — Should we be handling `(PATH_TO_CONST)`?
+                    // FIXME: Should we be handling `(PATH_TO_CONST)`?
                     TyKind::Path(None, path) => {
                         if let Some(res) = self
                             .resolver
@@ -1389,13 +1389,13 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
 
                                 let ct =
                                     self.lower_const_path_to_const_arg(path, res, ty.id, ty.span);
-                                return GenericArg::Const(ct.try_as_ambig_ct().expect("invariant: lowered const is representable as ambiguous const")); // tRust:);
+                                return GenericArg::Const(ct.try_as_ambig_ct().unwrap());
                             }
                         }
                     }
                     _ => {}
                 }
-                GenericArg::Type(self.lower_ty_alloc(ty, itctx).try_as_ambig_ty().expect("invariant: lowered type is representable as ambiguous type")) // tRust:)
+                GenericArg::Type(self.lower_ty_alloc(ty, itctx).try_as_ambig_ty().unwrap())
             }
             ast::GenericArg::Const(ct) => {
                 let ct = self.lower_anon_const_to_const_arg_and_alloc(ct);
@@ -2294,7 +2294,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         // other than `Sized` in a lot more positions (thereby bypassing the given policy), we don't
         // want to advertise it to the user (via a feature gate error) since it's super internal.
         //
-        // tRust: known issue — (more_maybe_bounds) Moreover, if we actually were to add proper default traits
+        // FIXME(more_maybe_bounds): Moreover, if we actually were to add proper default traits
         // (like a hypothetical `Move` or `Leak`) we would want to validate the location according
         // to default trait elaboration in HIR ty lowering (which depends on the specific trait in
         // question: E.g., `?Sized` & `?Move` most likely won't be allowed in all the same places).
@@ -2481,7 +2481,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                 path,
                 ParamMode::Explicit,
                 AllowReturnTypeNotation::No,
-                // tRust: known issue — (mgca) update for `fn foo() -> Bar<FOO<impl Trait>>` support
+                // FIXME(mgca): update for `fn foo() -> Bar<FOO<impl Trait>>` support
                 ImplTraitContext::Disallowed(ImplTraitPosition::Path),
                 None,
             );
@@ -2609,7 +2609,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     path,
                     ParamMode::Explicit,
                     AllowReturnTypeNotation::No,
-                    // tRust: known issue — (mgca) update for `fn foo() -> Bar<FOO<impl Trait>>` support
+                    // FIXME(mgca): update for `fn foo() -> Bar<FOO<impl Trait>>` support
                     ImplTraitContext::Disallowed(ImplTraitPosition::Path),
                     None,
                 );
@@ -2621,7 +2621,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                     expr.id,
                     &se.qself,
                     &se.path,
-                    // tRust: known issue — (mgca) we may want this to be `Optional` instead, but
+                    // FIXME(mgca): we may want this to be `Optional` instead, but
                     // we would also need to make sure that HIR ty lowering errors
                     // when these paths wind up in signatures.
                     ParamMode::Explicit,
@@ -2632,7 +2632,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
 
                 let fields = self.arena.alloc_from_iter(se.fields.iter().map(|f| {
                     let hir_id = self.lower_node_id(f.id);
-                    // tRust: known issue — (mgca) This might result in lowering attributes that
+                    // FIXME(mgca): This might result in lowering attributes that
                     // then go unused as the `Target::ExprField` is not actually
                     // corresponding to `Node::ExprField`.
                     self.lower_attrs(hir_id, &f.attrs, f.span, Target::ExprField);
@@ -2745,7 +2745,7 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         // we can only require feature gates to be active as a delayed check.
         // Thus we just parse anon consts generally and make the real decision
         // making in ast lowering.
-        // tRust: known issue — (min_generic_const_args) revisit once stable
+        // FIXME(min_generic_const_args): revisit once stable
         if tcx.features().min_generic_const_args() {
             return match anon.mgca_disambiguation {
                 MgcaDisambiguation::AnonConst => {

@@ -144,7 +144,7 @@ pub fn suggest_new_region_bound(
     scope_def_id: Option<LocalDefId>,
 ) {
     debug!("try_report_static_impl_trait: fn_return={:?}", fn_returns);
-    // tRust: known issue — account for the need of parens in `&(dyn Trait + '_)`
+    // FIXME: account for the need of parens in `&(dyn Trait + '_)`
     let consider = "consider changing";
     let declare = "to declare that";
     let explicit = format!("you can add an explicit `{lifetime_name}` lifetime bound");
@@ -158,7 +158,7 @@ pub fn suggest_new_region_bound(
             continue;
         }
         match fn_return.kind {
-            // tRust: known issue (precise_captures) — Suggest adding to `use<...>` list instead.
+            // FIXME(precise_captures): Suggest adding to `use<...>` list instead.
             TyKind::OpaqueDef(opaque) => {
                 // Get the identity type for this RPIT
                 let did = opaque.def_id.to_def_id();
@@ -371,7 +371,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                         kind: ItemKind::Impl(hir::Impl { self_ty, .. }), ..
                     }) = tcx.hir_node_by_def_id(impl_did)
                         && trait_objects.iter().all(|did| {
-                            // tRust: known issue — we should check `self_ty`, but for now, use
+                            // FIXME: we should check `self_ty`, but for now, use
                             // this imperfect proxy. This will fail if there are
                             // multiple `impl`s for the same trait like
                             // `impl Foo for Box<dyn Bar>` and `impl Foo for dyn Bar`.

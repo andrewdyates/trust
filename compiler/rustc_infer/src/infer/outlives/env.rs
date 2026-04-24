@@ -31,7 +31,7 @@ use crate::traits::query::OutlivesBound;
 pub struct OutlivesEnvironment<'tcx> {
     pub param_env: ty::ParamEnv<'tcx>,
     free_region_map: FreeRegionMap<'tcx>,
-    /// tRust: known issue —: Your first reaction may be that this is a bit strange. `RegionBoundPairs`
+    /// FIXME: Your first reaction may be that this is a bit strange. `RegionBoundPairs`
     /// does not contain lifetimes, which are instead in the `FreeRegionMap`, and other
     /// known type outlives are stored in the `known_type_outlives` set. So why do we
     /// have these at all? It turns out that removing these and using `known_type_outlives`
@@ -79,10 +79,9 @@ impl<'tcx> OutlivesEnvironment<'tcx> {
                         ty::ReStatic | ty::ReEarlyParam(_) | ty::ReLateParam(_),
                     ) => region_relation.add(r_a, r_b),
                     (ty::ReError(_), _) | (_, ty::ReError(_)) => {}
-                    // tRust: known issue —(#109628): We shouldn't have existential variables in implied bounds.
+                    // FIXME(#109628): We shouldn't have existential variables in implied bounds.
                     // Panic here once the linked issue is resolved!
                     (ty::ReVar(_), _) | (_, ty::ReVar(_)) => {}
-                    // tRust: invariant — outlives bounds must involve only named/static/placeholder regions
                     _ => bug!("add_outlives_bounds: unexpected regions: ({r_a:?}, {r_b:?})"),
                 },
             }

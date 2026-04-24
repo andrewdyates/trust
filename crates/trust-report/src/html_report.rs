@@ -36,7 +36,6 @@ pub enum ColorScheme {
     Dark,
 }
 
-
 /// Configuration for HTML report generation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HtmlReportConfig {
@@ -322,7 +321,8 @@ impl HtmlReportGenerator {
             let open_attr = if config.max_depth > 0 { " open" } else { "" };
             let data_status = func_data_status(func.summary.verdict);
 
-            let _ = write!(out, 
+            let _ = write!(
+                out,
                 "<div class=\"func-section\" data-status=\"{ds}\">\n\
                  <details class=\"func-details\"{open_attr}>\n\
                  <summary>\n\
@@ -375,7 +375,8 @@ impl HtmlReportGenerator {
                         String::new()
                     };
 
-                    let _ = writeln!(out, 
+                    let _ = writeln!(
+                        out,
                         "<tr><td class=\"{sc}\">{sl}{strength}</td>\
                          <td>{desc}</td><td>{solver}</td>\
                          <td>{time}ms</td>{loc}</tr>",
@@ -390,35 +391,31 @@ impl HtmlReportGenerator {
 
                     // Counterexample detail row
                     if config.include_counterexamples
-                        && let ObligationOutcome::Failed {
-                            counterexample: Some(cex),
-                        } = &ob.outcome
-                        {
-                            let colspan = if config.include_source { 5 } else { 4 };
-                            let vars: Vec<String> = cex
-                                .variables
-                                .iter()
-                                .map(|v| {
-                                    format!(
-                                        "{} = {}",
-                                        escape_html(&v.name),
-                                        escape_html(&v.display)
-                                    )
-                                })
-                                .collect();
-                            let _ = writeln!(out, 
-                                "<tr><td colspan=\"{colspan}\">\
+                        && let ObligationOutcome::Failed { counterexample: Some(cex) } = &ob.outcome
+                    {
+                        let colspan = if config.include_source { 5 } else { 4 };
+                        let vars: Vec<String> = cex
+                            .variables
+                            .iter()
+                            .map(|v| {
+                                format!("{} = {}", escape_html(&v.name), escape_html(&v.display))
+                            })
+                            .collect();
+                        let _ = writeln!(
+                            out,
+                            "<tr><td colspan=\"{colspan}\">\
                                  <div class=\"cex\">\
                                  <div class=\"cex-label\">Counterexample</div>\
                                  {vars}</div></td></tr>",
-                                vars = vars.join(", "),
-                            );
-                        }
+                            vars = vars.join(", "),
+                        );
+                    }
 
                     // Timeout detail row
                     if let ObligationOutcome::Timeout { timeout_ms } = &ob.outcome {
                         let colspan = if config.include_source { 5 } else { 4 };
-                        let _ = writeln!(out, 
+                        let _ = writeln!(
+                            out,
                             "<tr><td colspan=\"{colspan}\">\
                              <div class=\"func-meta\">\
                              Timed out after {timeout_ms}ms</div></td></tr>",
@@ -444,11 +441,7 @@ impl HtmlReportGenerator {
         solvers.sort();
         solvers.dedup();
 
-        let solver_list = if solvers.is_empty() {
-            "none".to_string()
-        } else {
-            solvers.join(", ")
-        };
+        let solver_list = if solvers.is_empty() { "none".to_string() } else { solvers.join(", ") };
 
         let timestamp = escape_html(&report.metadata.timestamp);
 
@@ -592,7 +585,7 @@ mod tests {
             results: vec![(
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "safe_div".to_string(),
+                    function: "safe_div".into(),
                     location: SourceSpan {
                         file: "src/math.rs".to_string(),
                         line_start: 10,
@@ -604,10 +597,12 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 2,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             )],
             from_notes: 0,
             with_assumptions: 0,
@@ -626,7 +621,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::u32(), Ty::u32()),
                     },
-                    function: "bad_add".to_string(),
+                    function: "bad_add".into(),
                     location: SourceSpan {
                         file: "src/math.rs".to_string(),
                         line_start: 5,
@@ -638,7 +633,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: Some(Counterexample::new(vec![
                         ("a".to_string(), CounterexampleValue::Uint(u32::MAX as u128)),
@@ -660,16 +655,18 @@ mod tests {
             results: vec![(
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "safe_div".to_string(),
+                    function: "safe_div".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             )],
             from_notes: 0,
             with_assumptions: 0,
@@ -683,7 +680,7 @@ mod tests {
                         op: BinOp::Add,
                         operand_tys: (Ty::u32(), Ty::u32()),
                     },
-                    function: "bad_add".to_string(),
+                    function: "bad_add".into(),
                     location: SourceSpan {
                         file: "src/math.rs".to_string(),
                         line_start: 20,
@@ -695,7 +692,7 @@ mod tests {
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 5,
                     counterexample: Some(Counterexample::new(vec![
                         ("x".to_string(), CounterexampleValue::Uint(u32::MAX as u128)),
@@ -712,15 +709,12 @@ mod tests {
             results: vec![(
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "slow_fn".to_string(),
+                    function: "slow_fn".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
-                VerificationResult::Timeout {
-                    solver: "z4".to_string(),
-                    timeout_ms: 5000,
-                },
+                VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 },
             )],
             from_notes: 0,
             with_assumptions: 0,
@@ -751,27 +745,29 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "f1".to_string(),
+                    function: "f1".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "f2".to_string(),
+                    function: "f2".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 2,
                     counterexample: None,
                 },
@@ -824,16 +820,18 @@ mod tests {
             results: vec![(
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "fn<T>(&self)".to_string(),
+                    function: "fn<T>(&self)".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             )],
             from_notes: 0,
             with_assumptions: 0,
@@ -863,10 +861,7 @@ mod tests {
     #[test]
     fn test_config_no_counterexamples() {
         let cr = single_failed_result();
-        let config = HtmlReportConfig {
-            include_counterexamples: false,
-            ..Default::default()
-        };
+        let config = HtmlReportConfig { include_counterexamples: false, ..Default::default() };
         let html = HtmlReportGenerator::generate(&cr, &config);
 
         assert!(html.contains("FAILED"));
@@ -877,10 +872,7 @@ mod tests {
     #[test]
     fn test_config_color_scheme_dark() {
         let cr = single_proved_result();
-        let config = HtmlReportConfig {
-            color_scheme: ColorScheme::Dark,
-            ..Default::default()
-        };
+        let config = HtmlReportConfig { color_scheme: ColorScheme::Dark, ..Default::default() };
         let html = HtmlReportGenerator::generate(&cr, &config);
 
         assert!(html.contains("#1a1b26"));
@@ -890,10 +882,7 @@ mod tests {
     #[test]
     fn test_config_color_scheme_light() {
         let cr = single_proved_result();
-        let config = HtmlReportConfig {
-            color_scheme: ColorScheme::Light,
-            ..Default::default()
-        };
+        let config = HtmlReportConfig { color_scheme: ColorScheme::Light, ..Default::default() };
         let html = HtmlReportGenerator::generate(&cr, &config);
 
         assert!(html.contains("#ffffff"));
@@ -903,10 +892,7 @@ mod tests {
     #[test]
     fn test_config_max_depth_zero_collapsed() {
         let cr = single_proved_result();
-        let config = HtmlReportConfig {
-            max_depth: 0,
-            ..Default::default()
-        };
+        let config = HtmlReportConfig { max_depth: 0, ..Default::default() };
         let html = HtmlReportGenerator::generate(&cr, &config);
 
         assert!(html.contains("<details class=\"func-details\">"));
@@ -917,10 +903,8 @@ mod tests {
     #[test]
     fn test_config_custom_title() {
         let cr = single_proved_result();
-        let config = HtmlReportConfig {
-            title: "Custom Report Title".to_string(),
-            ..Default::default()
-        };
+        let config =
+            HtmlReportConfig { title: "Custom Report Title".to_string(), ..Default::default() };
         let html = HtmlReportGenerator::generate(&cr, &config);
 
         assert!(html.contains("Custom Report Title"));
@@ -1018,16 +1002,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "test_fn".to_string(),
+                function: "test_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let json_report = build_json_report("json_test", &results);
         let config = HtmlReportConfig::default();
@@ -1068,10 +1054,7 @@ mod tests {
     #[test]
     fn test_config_no_source_locations() {
         let cr = single_proved_result();
-        let config = HtmlReportConfig {
-            include_source: false,
-            ..Default::default()
-        };
+        let config = HtmlReportConfig { include_source: false, ..Default::default() };
         let html = HtmlReportGenerator::generate(&cr, &config);
 
         assert!(!html.contains("<th onclick=\"trustSort(this,4)\">Location</th>"));
@@ -1088,13 +1071,13 @@ mod tests {
             results: vec![(
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "multi_var".to_string(),
+                    function: "multi_var".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 10,
                     counterexample: Some(Counterexample::new(vec![
                         ("x".to_string(), CounterexampleValue::Int(-42)),
@@ -1125,10 +1108,7 @@ mod tests {
         let html = generate_html_report(&report);
         let line_count = html.lines().count();
         // An empty report should produce compact HTML
-        assert!(
-            line_count < 200,
-            "Empty report HTML should be compact, got {line_count} lines"
-        );
+        assert!(line_count < 200, "Empty report HTML should be compact, got {line_count} lines");
     }
 
     // -------------------------------------------------------------------
@@ -1141,16 +1121,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_div".to_string(),
+                function: "safe_div".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let html = HtmlReportGenerator::generate_report("my_crate", &results);
 
@@ -1178,27 +1160,29 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "f1".to_string(),
+                    function: "f1".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "f2".to_string(),
+                    function: "f2".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 5,
                     counterexample: None,
                 },
@@ -1221,27 +1205,29 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "good_fn".to_string(),
+                    function: "good_fn".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "bad_fn".to_string(),
+                    function: "bad_fn".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 5,
                     counterexample: None,
                 },
@@ -1263,16 +1249,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "proven_fn".to_string(),
+                function: "proven_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 2,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let html = HtmlReportGenerator::generate_report("strength", &results);
 
@@ -1289,7 +1277,7 @@ mod tests {
                     op: BinOp::Add,
                     operand_tys: (Ty::u32(), Ty::u32()),
                 },
-                function: "overflow_fn".to_string(),
+                function: "overflow_fn".into(),
                 location: SourceSpan {
                     file: "src/lib.rs".to_string(),
                     line_start: 42,
@@ -1301,7 +1289,7 @@ mod tests {
                 contract_metadata: None,
             },
             VerificationResult::Failed {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 3,
                 counterexample: Some(Counterexample::new(vec![
                     ("a".to_string(), CounterexampleValue::Uint(u32::MAX as u128)),
@@ -1323,16 +1311,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let html = HtmlReportGenerator::generate_report("self_contained", &results);
 
@@ -1349,15 +1339,12 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::Postcondition,
-                function: "slow_fn".to_string(),
+                function: "slow_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(true),
                 contract_metadata: None,
             },
-            VerificationResult::Timeout {
-                solver: "z4".to_string(),
-                timeout_ms: 10000,
-            },
+            VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 10000 },
         )];
         let html = HtmlReportGenerator::generate_report("timeout_crate", &results);
 
@@ -1373,27 +1360,29 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::DivisionByZero,
-                    function: "alpha".to_string(),
+                    function: "alpha".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(false),
                     contract_metadata: None,
                 },
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 1,
-                    strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                    strength: ProofStrength::smt_unsat(),
+                    proof_certificate: None,
+                    solver_warnings: None,
+                },
             ),
             (
                 VerificationCondition {
                     kind: VcKind::Postcondition,
-                    function: "beta".to_string(),
+                    function: "beta".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Unknown {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 50,
                     reason: "nonlinear".to_string(),
                 },
@@ -1401,13 +1390,13 @@ mod tests {
             (
                 VerificationCondition {
                     kind: VcKind::IndexOutOfBounds,
-                    function: "gamma".to_string(),
+                    function: "gamma".into(),
                     location: SourceSpan::default(),
                     formula: Formula::Bool(true),
                     contract_metadata: None,
                 },
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 3,
                     counterexample: None,
                 },
@@ -1426,16 +1415,18 @@ mod tests {
         let results = vec![(
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "fn<T>(&self)".to_string(),
+                function: "fn<T>(&self)".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         )];
         let html = HtmlReportGenerator::generate_report("escape_test", &results);
 

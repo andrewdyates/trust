@@ -7,10 +7,10 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use trust_types::fx::FxHashMap;
 
 use crate::analyzer::FailurePattern;
 use crate::confidence::ProposalSource;
@@ -75,12 +75,10 @@ impl From<&ProposalKind> for SerializableProposalKind {
             ProposalKind::AddInvariant { spec_body } => {
                 Self::Invariant { spec_body: spec_body.clone() }
             }
-            ProposalKind::SafeArithmetic { original, replacement } => {
-                Self::SafeArithmetic {
-                    original: original.clone(),
-                    replacement: replacement.clone(),
-                }
-            }
+            ProposalKind::SafeArithmetic { original, replacement } => Self::SafeArithmetic {
+                original: original.clone(),
+                replacement: replacement.clone(),
+            },
             ProposalKind::AddBoundsCheck { check_expr } => {
                 Self::BoundsCheck { check_expr: check_expr.clone() }
             }
@@ -236,9 +234,7 @@ impl FeedbackCollector {
     pub fn success_rate_by_pattern(&self) -> FxHashMap<String, f64> {
         let mut counts: FxHashMap<String, (usize, usize)> = FxHashMap::default();
         for outcome in &self.outcomes {
-            let entry = counts
-                .entry(outcome.pattern_name.clone())
-                .or_insert((0, 0));
+            let entry = counts.entry(outcome.pattern_name.clone()).or_insert((0, 0));
             entry.1 += 1;
             if outcome.was_accepted {
                 entry.0 += 1;
@@ -281,8 +277,7 @@ impl FeedbackCollector {
                 // Strategy: add complementary invariant
                 if matches!(
                     failure_pattern,
-                    FailurePattern::ArithmeticOverflow { .. }
-                        | FailurePattern::IndexOutOfBounds
+                    FailurePattern::ArithmeticOverflow { .. } | FailurePattern::IndexOutOfBounds
                 ) {
                     improved.push(ImprovedProposal {
                         kind: ProposalKind::AddInvariant {
@@ -341,9 +336,7 @@ impl FeedbackCollector {
             ProposalKind::AddNonZeroCheck { .. } => {
                 // Strategy: make it a precondition
                 improved.push(ImprovedProposal {
-                    kind: ProposalKind::AddPrecondition {
-                        spec_body: "divisor != 0".to_string(),
-                    },
+                    kind: ProposalKind::AddPrecondition { spec_body: "divisor != 0".to_string() },
                     confidence: (proposal.confidence * 0.9).clamp(0.0, 1.0),
                     rationale: "Convert non-zero runtime check to static precondition".to_string(),
                 });
@@ -361,18 +354,10 @@ impl FeedbackCollector {
     pub fn adapt_strategy(&self) -> StrategyAdjustment {
         let source_rates = self.success_rate_by_source();
 
-        let heuristic_rate = source_rates
-            .get(&ProposalSource::Heuristic)
-            .copied()
-            .unwrap_or(0.5);
-        let wp_rate = source_rates
-            .get(&ProposalSource::WeakestPrecondition)
-            .copied()
-            .unwrap_or(0.5);
-        let llm_rate = source_rates
-            .get(&ProposalSource::Llm)
-            .copied()
-            .unwrap_or(0.3);
+        let heuristic_rate = source_rates.get(&ProposalSource::Heuristic).copied().unwrap_or(0.5);
+        let wp_rate =
+            source_rates.get(&ProposalSource::WeakestPrecondition).copied().unwrap_or(0.5);
+        let llm_rate = source_rates.get(&ProposalSource::Llm).copied().unwrap_or(0.3);
 
         // Prefer sources with >50% success rate
         let prefer_heuristic = heuristic_rate >= 0.5;
@@ -417,9 +402,7 @@ impl FeedbackCollector {
                 source_entry.0 += 1;
             }
 
-            let pattern_entry = by_pattern
-                .entry(outcome.pattern_name.clone())
-                .or_insert((0, 0));
+            let pattern_entry = by_pattern.entry(outcome.pattern_name.clone()).or_insert((0, 0));
             pattern_entry.1 += 1;
             if outcome.was_accepted {
                 pattern_entry.0 += 1;
@@ -434,11 +417,7 @@ impl FeedbackCollector {
                     SourceStats {
                         total,
                         accepted,
-                        success_rate: if total > 0 {
-                            accepted as f64 / total as f64
-                        } else {
-                            0.0
-                        },
+                        success_rate: if total > 0 { accepted as f64 / total as f64 } else { 0.0 },
                         avg_verify_time_ms: if total > 0 {
                             time as f64 / total as f64
                         } else {
@@ -457,11 +436,7 @@ impl FeedbackCollector {
                     PatternStats {
                         total,
                         accepted,
-                        success_rate: if total > 0 {
-                            accepted as f64 / total as f64
-                        } else {
-                            0.0
-                        },
+                        success_rate: if total > 0 { accepted as f64 / total as f64 } else { 0.0 },
                     },
                 )
             })
@@ -481,13 +456,10 @@ impl FeedbackCollector {
     /// # Errors
     /// Returns an error if the file cannot be written or serialization fails.
     pub fn persist_feedback(&self, path: &Path) -> Result<(), FeedbackError> {
-        let state = FeedbackState {
-            outcomes: self.outcomes.clone(),
-        };
+        let state = FeedbackState { outcomes: self.outcomes.clone() };
         let json = serde_json::to_string_pretty(&state)
             .map_err(|e| FeedbackError::Serialization(e.to_string()))?;
-        std::fs::write(path, json)
-            .map_err(|e| FeedbackError::Io(e.to_string()))?;
+        std::fs::write(path, json).map_err(|e| FeedbackError::Io(e.to_string()))?;
         Ok(())
     }
 
@@ -496,13 +468,10 @@ impl FeedbackCollector {
     /// # Errors
     /// Returns an error if the file cannot be read or deserialization fails.
     pub fn load_feedback(path: &Path) -> Result<Self, FeedbackError> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| FeedbackError::Io(e.to_string()))?;
+        let json = std::fs::read_to_string(path).map_err(|e| FeedbackError::Io(e.to_string()))?;
         let state: FeedbackState = serde_json::from_str(&json)
             .map_err(|e| FeedbackError::Deserialization(e.to_string()))?;
-        Ok(Self {
-            outcomes: state.outcomes,
-        })
+        Ok(Self { outcomes: state.outcomes })
     }
 
     /// Overall success rate across all outcomes.
@@ -592,9 +561,7 @@ mod tests {
         time_ms: u64,
     ) -> ProposalOutcome {
         ProposalOutcome {
-            proposal_kind: SerializableProposalKind::Precondition {
-                spec_body: "x != 0".into(),
-            },
+            proposal_kind: SerializableProposalKind::Precondition { spec_body: "x != 0".into() },
             source,
             pattern_name: pattern.to_string(),
             was_accepted: accepted,
@@ -621,24 +588,15 @@ mod tests {
     #[test]
     fn test_record_outcome_increments_count() {
         let mut collector = FeedbackCollector::new();
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "overflow",
-            true,
-            10,
-        ));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", true, 10));
         assert_eq!(collector.outcome_count(), 1);
     }
 
     #[test]
     fn test_record_via_proposal() {
         let mut collector = FeedbackCollector::new();
-        let proposal = make_proposal(
-            ProposalKind::AddPrecondition {
-                spec_body: "x != 0".into(),
-            },
-            0.9,
-        );
+        let proposal =
+            make_proposal(ProposalKind::AddPrecondition { spec_body: "x != 0".into() }, 0.9);
         collector.record(
             &proposal,
             ProposalSource::Heuristic,
@@ -669,12 +627,7 @@ mod tests {
         let mut collector = FeedbackCollector::new();
         collector.record_outcome(make_outcome(ProposalSource::Heuristic, "a", true, 10));
         collector.record_outcome(make_outcome(ProposalSource::Llm, "a", false, 100));
-        collector.record_outcome(make_outcome(
-            ProposalSource::WeakestPrecondition,
-            "a",
-            true,
-            50,
-        ));
+        collector.record_outcome(make_outcome(ProposalSource::WeakestPrecondition, "a", true, 50));
 
         let rates = collector.success_rate_by_source();
         assert!((rates[&ProposalSource::Heuristic] - 1.0).abs() < 1e-10);
@@ -687,24 +640,9 @@ mod tests {
     #[test]
     fn test_success_rate_by_pattern() {
         let mut collector = FeedbackCollector::new();
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "overflow",
-            true,
-            10,
-        ));
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "overflow",
-            false,
-            10,
-        ));
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "div_zero",
-            true,
-            5,
-        ));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", true, 10));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", false, 10));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "div_zero", true, 5));
 
         let rates = collector.success_rate_by_pattern();
         assert!((rates["overflow"] - 0.5).abs() < 1e-10);
@@ -716,47 +654,28 @@ mod tests {
     #[test]
     fn test_learn_from_precondition_failure() {
         let collector = FeedbackCollector::new();
-        let proposal = make_proposal(
-            ProposalKind::AddPrecondition {
-                spec_body: "x > 0".into(),
-            },
-            0.8,
-        );
+        let proposal =
+            make_proposal(ProposalKind::AddPrecondition { spec_body: "x > 0".into() }, 0.8);
         let improved = collector.learn_from_failure(
             &proposal,
-            &FailurePattern::ArithmeticOverflow {
-                op: trust_types::BinOp::Add,
-            },
+            &FailurePattern::ArithmeticOverflow { op: trust_types::BinOp::Add },
         );
 
         assert!(improved.len() >= 2, "should produce strengthened precondition and invariant");
-        assert!(matches!(
-            improved[0].kind,
-            ProposalKind::AddPrecondition { .. }
-        ));
-        assert!(matches!(
-            improved[1].kind,
-            ProposalKind::AddInvariant { .. }
-        ));
+        assert!(matches!(improved[0].kind, ProposalKind::AddPrecondition { .. }));
+        assert!(matches!(improved[1].kind, ProposalKind::AddInvariant { .. }));
     }
 
     #[test]
     fn test_learn_from_postcondition_failure() {
         let collector = FeedbackCollector::new();
-        let proposal = make_proposal(
-            ProposalKind::AddPostcondition {
-                spec_body: "result > 0".into(),
-            },
-            0.7,
-        );
+        let proposal =
+            make_proposal(ProposalKind::AddPostcondition { spec_body: "result > 0".into() }, 0.7);
         let improved =
             collector.learn_from_failure(&proposal, &FailurePattern::PostconditionViolation);
 
         assert!(!improved.is_empty());
-        assert!(matches!(
-            improved[0].kind,
-            ProposalKind::AddPostcondition { .. }
-        ));
+        assert!(matches!(improved[0].kind, ProposalKind::AddPostcondition { .. }));
         // Confidence should be reduced
         assert!(improved[0].confidence < proposal.confidence);
     }
@@ -773,78 +692,51 @@ mod tests {
         );
         let improved = collector.learn_from_failure(
             &proposal,
-            &FailurePattern::ArithmeticOverflow {
-                op: trust_types::BinOp::Add,
-            },
+            &FailurePattern::ArithmeticOverflow { op: trust_types::BinOp::Add },
         );
 
         assert!(!improved.is_empty());
         // Should suggest precondition instead
-        assert!(matches!(
-            improved[0].kind,
-            ProposalKind::AddPrecondition { .. }
-        ));
+        assert!(matches!(improved[0].kind, ProposalKind::AddPrecondition { .. }));
     }
 
     #[test]
     fn test_learn_from_bounds_check_failure() {
         let collector = FeedbackCollector::new();
         let proposal = make_proposal(
-            ProposalKind::AddBoundsCheck {
-                check_expr: "assert!(i < arr.len())".into(),
-            },
+            ProposalKind::AddBoundsCheck { check_expr: "assert!(i < arr.len())".into() },
             0.8,
         );
-        let improved =
-            collector.learn_from_failure(&proposal, &FailurePattern::IndexOutOfBounds);
+        let improved = collector.learn_from_failure(&proposal, &FailurePattern::IndexOutOfBounds);
 
         assert!(!improved.is_empty());
-        assert!(matches!(
-            improved[0].kind,
-            ProposalKind::AddPrecondition { .. }
-        ));
+        assert!(matches!(improved[0].kind, ProposalKind::AddPrecondition { .. }));
     }
 
     #[test]
     fn test_learn_from_invariant_failure() {
         let collector = FeedbackCollector::new();
-        let proposal = make_proposal(
-            ProposalKind::AddInvariant {
-                spec_body: "i < n".into(),
-            },
-            0.6,
-        );
+        let proposal = make_proposal(ProposalKind::AddInvariant { spec_body: "i < n".into() }, 0.6);
         let improved = collector.learn_from_failure(
             &proposal,
-            &FailurePattern::ArithmeticOverflow {
-                op: trust_types::BinOp::Add,
-            },
+            &FailurePattern::ArithmeticOverflow { op: trust_types::BinOp::Add },
         );
 
         assert!(!improved.is_empty());
-        assert!(matches!(
-            improved[0].kind,
-            ProposalKind::AddInvariant { .. }
-        ));
+        assert!(matches!(improved[0].kind, ProposalKind::AddInvariant { .. }));
     }
 
     #[test]
     fn test_learn_from_nonzero_check_failure() {
         let collector = FeedbackCollector::new();
         let proposal = make_proposal(
-            ProposalKind::AddNonZeroCheck {
-                check_expr: "assert!(y != 0)".into(),
-            },
+            ProposalKind::AddNonZeroCheck { check_expr: "assert!(y != 0)".into() },
             0.8,
         );
-        let improved =
-            collector.learn_from_failure(&proposal, &FailurePattern::DivisionByZero);
+        let improved = collector.learn_from_failure(&proposal, &FailurePattern::DivisionByZero);
 
         assert!(!improved.is_empty());
-        assert!(matches!(
-            improved[0].kind,
-            ProposalKind::AddPrecondition { .. }
-        ));
+        assert!(matches!(improved[0].kind, ProposalKind::AddPrecondition { .. }));
     }
 
     // --- adapt_strategy ---
@@ -862,12 +754,7 @@ mod tests {
         let mut collector = FeedbackCollector::new();
         // Heuristic succeeds often
         for _ in 0..10 {
-            collector.record_outcome(make_outcome(
-                ProposalSource::Heuristic,
-                "overflow",
-                true,
-                10,
-            ));
+            collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", true, 10));
         }
         // LLM fails often
         for _ in 0..10 {
@@ -905,12 +792,7 @@ mod tests {
         let mut collector = FeedbackCollector::new();
         // All successes
         for _ in 0..10 {
-            collector.record_outcome(make_outcome(
-                ProposalSource::Heuristic,
-                "overflow",
-                true,
-                10,
-            ));
+            collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", true, 10));
         }
 
         let strategy = collector.adapt_strategy();
@@ -934,18 +816,8 @@ mod tests {
     #[test]
     fn test_report_with_data() {
         let mut collector = FeedbackCollector::new();
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "overflow",
-            true,
-            10,
-        ));
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "div_zero",
-            false,
-            20,
-        ));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", true, 10));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "div_zero", false, 20));
         collector.record_outcome(make_outcome(
             ProposalSource::WeakestPrecondition,
             "overflow",
@@ -970,12 +842,7 @@ mod tests {
     #[test]
     fn test_persist_and_load_roundtrip() {
         let mut collector = FeedbackCollector::new();
-        collector.record_outcome(make_outcome(
-            ProposalSource::Heuristic,
-            "overflow",
-            true,
-            10,
-        ));
+        collector.record_outcome(make_outcome(ProposalSource::Heuristic, "overflow", true, 10));
         collector.record_outcome(make_outcome(ProposalSource::Llm, "div_zero", false, 100));
 
         let dir = std::env::temp_dir().join("trust_feedback_test");

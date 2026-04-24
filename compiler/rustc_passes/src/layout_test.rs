@@ -73,7 +73,7 @@ fn dump_layout_of(tcx: TyCtxt<'_>, item_def_id: LocalDefId, attrs: &[RustcLayout
         Ok(ty_layout) => {
             for attr in attrs {
                 match attr {
-                    // tRust: known issue — this never was about ABI and now this dump arg is confusing
+                    // FIXME: this never was about ABI and now this dump arg is confusing
                     RustcLayoutType::Abi => {
                         tcx.dcx().emit_err(LayoutAbi {
                             span,
@@ -106,7 +106,7 @@ fn dump_layout_of(tcx: TyCtxt<'_>, item_def_id: LocalDefId, attrs: &[RustcLayout
 
                     RustcLayoutType::Debug => {
                         let normalized_ty = tcx.normalize_erasing_regions(typing_env, ty);
-                        // tRust: known issue — using the `Debug` impl here isn't ideal.
+                        // FIXME: using the `Debug` impl here isn't ideal.
                         let ty_layout = format!("{:#?}", *ty_layout);
                         tcx.dcx().emit_err(LayoutOf { span, normalized_ty, ty_layout });
                     }
@@ -127,7 +127,6 @@ struct UnwrapLayoutCx<'tcx> {
 
 impl<'tcx> LayoutOfHelpers<'tcx> for UnwrapLayoutCx<'tcx> {
     fn handle_layout_err(&self, err: LayoutError<'tcx>, span: Span, ty: Ty<'tcx>) -> ! {
-        // tRust: invariant — rustc_layout test attribute expects layout computation to succeed
         span_bug!(span, "`#[rustc_layout(..)]` test resulted in `layout_of({ty}) = Err({err})`",);
     }
 }

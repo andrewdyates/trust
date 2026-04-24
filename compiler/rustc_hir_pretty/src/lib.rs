@@ -185,7 +185,7 @@ impl<'a> State<'a> {
             Node::ConstArg(a) => self.print_const_arg(a),
             Node::Expr(a) => self.print_expr(a),
             Node::ExprField(a) => self.print_expr_field(a),
-            // tRust: known issue (mgca) — proper printing for struct exprs
+            // FIXME(mgca): proper printing for struct exprs
             Node::ConstArgExprField(_) => self.word("/* STRUCT EXPR */"),
             Node::Stmt(a) => self.print_stmt(a),
             Node::PathSegment(a) => self.print_path_segment(a),
@@ -600,7 +600,7 @@ impl<'a> State<'a> {
 
                 match kind {
                     hir::UseKind::Single(ident) => {
-                        if path.segments.last().expect("invariant: use path must have at least one segment").ident != ident { // tRust: unwrap -> expect
+                        if path.segments.last().unwrap().ident != ident {
                             self.space();
                             self.word_space("as");
                             self.print_ident(ident);
@@ -1827,7 +1827,7 @@ impl<'a> State<'a> {
 
                 self.word(">");
                 self.word("::");
-                let item_segment = path.segments.last().expect("invariant: qualified path must have at least one segment"); // tRust: unwrap -> expect
+                let item_segment = path.segments.last().unwrap();
                 self.print_ident(item_segment.ident);
                 self.print_generic_args(item_segment.args(), colons_before_params)
             }
@@ -1898,7 +1898,7 @@ impl<'a> State<'a> {
                 }
             }
             hir::GenericArgsParentheses::ParenSugar => {
-                let (inputs, output) = generic_args.paren_sugar_inputs_output().expect("invariant: ParenSugar args must have paren sugar inputs/output"); // tRust: unwrap -> expect
+                let (inputs, output) = generic_args.paren_sugar_inputs_output().unwrap();
 
                 self.word("(");
                 self.commasep(Inconsistent, inputs, |s, ty| s.print_type(ty));

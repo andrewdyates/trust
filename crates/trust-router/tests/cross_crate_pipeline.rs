@@ -240,7 +240,6 @@ fn identity_function() -> VerifiableFunction {
 }
 
 /// Build a function with a trivially-false formula VC (always provable by mock).
-#[allow(dead_code)]
 fn trivially_safe_function() -> VerifiableFunction {
     VerifiableFunction {
         name: "safe_add".to_string(),
@@ -251,11 +250,7 @@ fn trivially_safe_function() -> VerifiableFunction {
                 LocalDecl { index: 0, ty: Ty::u32(), name: None },
                 LocalDecl { index: 1, ty: Ty::u32(), name: Some("a".into()) },
                 LocalDecl { index: 2, ty: Ty::u32(), name: Some("b".into()) },
-                LocalDecl {
-                    index: 3,
-                    ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]),
-                    name: None,
-                },
+                LocalDecl { index: 3, ty: Ty::Tuple(vec![Ty::u32(), Ty::Bool]), name: None },
             ],
             blocks: vec![
                 BasicBlock {
@@ -277,11 +272,7 @@ fn trivially_safe_function() -> VerifiableFunction {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 2,
             return_ty: Ty::u32(),
@@ -344,12 +335,8 @@ fn test_pipeline_types_vcgen_router_report_midpoint() {
 
 #[test]
 fn test_pipeline_multiple_functions_batch_verification() {
-    let functions = vec![
-        midpoint_function(),
-        division_function(),
-        guarded_function(),
-        identity_function(),
-    ];
+    let functions =
+        vec![midpoint_function(), division_function(), guarded_function(), identity_function()];
 
     // Generate VCs for all functions
     let mut all_vcs = Vec::new();
@@ -369,12 +356,9 @@ fn test_pipeline_multiple_functions_batch_verification() {
     );
 
     // Verify VC kinds are present
-    let has_overflow = all_vcs.iter().any(|vc| {
-        matches!(vc.kind, VcKind::ArithmeticOverflow { .. })
-    });
-    let has_divzero = all_vcs.iter().any(|vc| {
-        matches!(vc.kind, VcKind::DivisionByZero)
-    });
+    let has_overflow =
+        all_vcs.iter().any(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. }));
+    let has_divzero = all_vcs.iter().any(|vc| matches!(vc.kind, VcKind::DivisionByZero));
     assert!(has_overflow, "should have overflow VC from midpoint");
     assert!(has_divzero, "should have div-by-zero VC from divide or guarded_div");
 
@@ -385,10 +369,7 @@ fn test_pipeline_multiple_functions_batch_verification() {
 
     // Build JSON report spanning multiple functions
     let report = trust_report::build_json_report("batch_test", &results);
-    assert!(
-        report.summary.functions_analyzed >= 2,
-        "at least 2 functions should appear in report"
-    );
+    assert!(report.summary.functions_analyzed >= 2, "at least 2 functions should appear in report");
 
     // Verify report has data for each function that produced VCs
     let function_names: Vec<&str> = report.functions.iter().map(|f| f.function.as_str()).collect();
@@ -410,10 +391,8 @@ fn test_pipeline_guarded_vc_carries_guard_to_report() {
 
     // Generate VCs -- the div-by-zero VC should have a guard
     let vcs = trust_vcgen::generate_vcs(&func);
-    let div_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let div_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
     assert_eq!(div_vcs.len(), 1, "guarded_div should produce 1 div-by-zero VC");
 
     // Verify the guard is embedded in the formula
@@ -510,14 +489,8 @@ fn test_pipeline_parallel_verification_consistency() {
     let seq_report = trust_report::build_json_report("seq", &sequential_results);
     let par_report = trust_report::build_json_report("par", &parallel_results);
 
-    assert_eq!(
-        seq_report.summary.total_obligations,
-        par_report.summary.total_obligations
-    );
-    assert_eq!(
-        seq_report.summary.total_proved,
-        par_report.summary.total_proved
-    );
+    assert_eq!(seq_report.summary.total_obligations, par_report.summary.total_obligations);
+    assert_eq!(seq_report.summary.total_proved, par_report.summary.total_proved);
 }
 
 // ===========================================================================
@@ -531,15 +504,18 @@ fn test_pipeline_all_proved_verdict() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "safe_fn".to_string(),
+                function: "safe_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false), // trivially UNSAT -> proved
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
@@ -547,15 +523,18 @@ fn test_pipeline_all_proved_verdict() {
                     op: BinOp::Add,
                     operand_tys: (Ty::u32(), Ty::u32()),
                 },
-                function: "safe_fn".to_string(),
+                function: "safe_fn".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 0,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
     ];
 
@@ -576,15 +555,18 @@ fn test_pipeline_mixed_results_verdict() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "fn_a".to_string(),
+                function: "fn_a".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
@@ -592,13 +574,13 @@ fn test_pipeline_mixed_results_verdict() {
                     op: BinOp::Add,
                     operand_tys: (Ty::u32(), Ty::u32()),
                 },
-                function: "fn_b".to_string(),
+                function: "fn_b".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(true),
                 contract_metadata: None,
             },
             VerificationResult::Failed {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 1,
                 counterexample: Some(Counterexample::new(vec![
                     ("a".to_string(), CounterexampleValue::Uint(u32::MAX as u128)),
@@ -609,13 +591,13 @@ fn test_pipeline_mixed_results_verdict() {
         (
             VerificationCondition {
                 kind: VcKind::IndexOutOfBounds,
-                function: "fn_c".to_string(),
+                function: "fn_c".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Var("idx".to_string(), Sort::Int),
                 contract_metadata: None,
             },
             VerificationResult::Unknown {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 1,
                 reason: "complex formula".to_string(),
             },
@@ -653,7 +635,7 @@ fn test_pipeline_backend_plan_for_different_vc_kinds() {
 
     let l0_vc = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "f".to_string(),
+        function: "f".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -661,7 +643,7 @@ fn test_pipeline_backend_plan_for_different_vc_kinds() {
 
     let l1_vc = VerificationCondition {
         kind: VcKind::Postcondition,
-        function: "g".to_string(),
+        function: "g".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -669,7 +651,7 @@ fn test_pipeline_backend_plan_for_different_vc_kinds() {
 
     let l2_vc = VerificationCondition {
         kind: VcKind::Temporal { property: "liveness".to_string() },
-        function: "h".to_string(),
+        function: "h".into(),
         location: SourceSpan::default(),
         formula: Formula::Bool(false),
         contract_metadata: None,
@@ -813,10 +795,8 @@ fn test_pipeline_path_map_integrates_with_vcgen() {
 
     // Verify guard accumulation is reflected in generated VCs
     let vcs = trust_vcgen::generate_vcs(&func);
-    let div_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .collect();
+    let div_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).collect();
 
     // The div-by-zero VC in bb1 should have the SwitchInt guard
     assert_eq!(div_vcs.len(), 1);
@@ -866,13 +846,13 @@ fn test_pipeline_runtime_check_policy_propagation() {
     let results = vec![(
         VerificationCondition {
             kind: VcKind::IndexOutOfBounds,
-            function: "lookup".to_string(),
+            function: "lookup".into(),
             location: SourceSpan::default(),
             formula: Formula::Var("idx".to_string(), Sort::Int),
             contract_metadata: None,
         },
         VerificationResult::Unknown {
-            solver: "mock".to_string(),
+            solver: "mock".into(),
             time_ms: 5,
             reason: "nonlinear".to_string(),
         },
@@ -1009,26 +989,14 @@ fn test_pipeline_terminal_report_format() {
         terminal_output.contains("tRust verification report:"),
         "terminal output must have header"
     );
-    assert!(
-        terminal_output.contains("terminal_test"),
-        "terminal output must contain crate name"
-    );
+    assert!(terminal_output.contains("terminal_test"), "terminal output must contain crate name");
     assert!(
         terminal_output.contains("get_midpoint"),
         "terminal output must contain function names"
     );
-    assert!(
-        terminal_output.contains("divide"),
-        "terminal output must contain function names"
-    );
-    assert!(
-        terminal_output.contains("Verdict:"),
-        "terminal output must contain verdict"
-    );
-    assert!(
-        !terminal_output.is_empty(),
-        "terminal output must not be empty"
-    );
+    assert!(terminal_output.contains("divide"), "terminal output must contain function names");
+    assert!(terminal_output.contains("Verdict:"), "terminal output must contain verdict");
+    assert!(!terminal_output.is_empty(), "terminal output must not be empty");
 }
 
 // ===========================================================================
@@ -1088,10 +1056,8 @@ fn test_pipeline_write_report_files() {
     let _ = std::fs::remove_dir_all(&dir);
     trust_report::write_json_report(&report, &dir).expect("write json report");
 
-    let json_content =
-        std::fs::read_to_string(dir.join("report.json")).expect("read json report");
-    let parsed: JsonProofReport =
-        serde_json::from_str(&json_content).expect("parse json report");
+    let json_content = std::fs::read_to_string(dir.join("report.json")).expect("read json report");
+    let parsed: JsonProofReport = serde_json::from_str(&json_content).expect("parse json report");
     assert_eq!(parsed.crate_name, "file_io_test");
     assert_eq!(parsed.summary.total_obligations, report.summary.total_obligations);
 
@@ -1105,11 +1071,7 @@ fn test_pipeline_write_report_files() {
     let ndjson_content =
         std::fs::read_to_string(ndjson_dir.join("report.ndjson")).expect("read ndjson report");
     let lines: Vec<&str> = ndjson_content.trim_end().split('\n').collect();
-    assert_eq!(
-        lines.len(),
-        report.functions.len() + 2,
-        "NDJSON: header + functions + footer"
-    );
+    assert_eq!(lines.len(), report.functions.len() + 2, "NDJSON: header + functions + footer");
     for (i, line) in lines.iter().enumerate() {
         let _: serde_json::Value = serde_json::from_str(line)
             .unwrap_or_else(|e| panic!("NDJSON line {i} invalid JSON: {e}"));
@@ -1133,27 +1095,11 @@ fn test_pipeline_all_vc_kinds_through_mock() {
         VcKind::Precondition { callee: "callee_fn".to_string() },
         VcKind::Unreachable,
         VcKind::Assertion { message: "user assert".to_string() },
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Add,
-            operand_tys: (Ty::u32(), Ty::u32()),
-        },
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Sub,
-            operand_tys: (Ty::i32(), Ty::i32()),
-        },
-        VcKind::ArithmeticOverflow {
-            op: BinOp::Mul,
-            operand_tys: (Ty::u32(), Ty::u32()),
-        },
-        VcKind::ShiftOverflow {
-            op: BinOp::Shl,
-            operand_ty: Ty::u32(),
-            shift_ty: Ty::u32(),
-        },
-        VcKind::CastOverflow {
-            from_ty: Ty::usize(),
-            to_ty: Ty::u32(),
-        },
+        VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::u32(), Ty::u32()) },
+        VcKind::ArithmeticOverflow { op: BinOp::Sub, operand_tys: (Ty::i32(), Ty::i32()) },
+        VcKind::ArithmeticOverflow { op: BinOp::Mul, operand_tys: (Ty::u32(), Ty::u32()) },
+        VcKind::ShiftOverflow { op: BinOp::Shl, operand_ty: Ty::u32(), shift_ty: Ty::u32() },
+        VcKind::CastOverflow { from_ty: Ty::usize(), to_ty: Ty::u32() },
         VcKind::NegationOverflow { ty: Ty::i32() },
         VcKind::Temporal { property: "eventually done".to_string() },
         VcKind::Deadlock,
@@ -1170,7 +1116,7 @@ fn test_pipeline_all_vc_kinds_through_mock() {
         .enumerate()
         .map(|(i, kind)| VerificationCondition {
             kind,
-            function: format!("fn_{i}"),
+            function: format!("fn_{i}").into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -1215,7 +1161,7 @@ fn test_pipeline_counterexample_in_all_formats() {
                 op: BinOp::Add,
                 operand_tys: (Ty::usize(), Ty::usize()),
             },
-            function: "overflow_fn".to_string(),
+            function: "overflow_fn".into(),
             location: SourceSpan {
                 file: "src/overflow.rs".to_string(),
                 line_start: 10,
@@ -1227,7 +1173,7 @@ fn test_pipeline_counterexample_in_all_formats() {
             contract_metadata: None,
         },
         VerificationResult::Failed {
-            solver: "mock".to_string(),
+            solver: "mock".into(),
             time_ms: 2,
             counterexample: Some(Counterexample::new(vec![
                 ("x".to_string(), CounterexampleValue::Uint(u64::MAX as u128)),
@@ -1267,15 +1213,12 @@ fn test_pipeline_timeout_in_all_formats() {
     let results = vec![(
         VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "slow_fn".to_string(),
+            function: "slow_fn".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         },
-        VerificationResult::Timeout {
-            solver: "mock".to_string(),
-            timeout_ms: 30000,
-        },
+        VerificationResult::Timeout { solver: "mock".into(), timeout_ms: 30000 },
     )];
 
     let report = trust_report::build_json_report("timeout_test", &results);
@@ -1314,54 +1257,66 @@ fn test_pipeline_proof_strengths_in_report() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "z4".to_string(),
+                solver: "z4".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::Postcondition,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "sunder".to_string(),
+                solver: "sunder".into(),
                 time_ms: 10,
-                strength: ProofStrength::deductive(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::deductive(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::Deadlock,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "tla2".to_string(),
+                solver: "tla2".into(),
                 time_ms: 100,
-                strength: ProofStrength::inductive(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::inductive(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::IndexOutOfBounds,
-                function: "f".to_string(),
+                function: "f".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "zani".to_string(),
+                solver: "zani".into(),
                 time_ms: 5,
-                strength: ProofStrength::bounded(100), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::bounded(100),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
     ];
 
@@ -1405,41 +1360,50 @@ fn test_pipeline_proof_levels_in_report() {
         (
             VerificationCondition {
                 kind: VcKind::DivisionByZero, // L0
-                function: "mixed_levels".to_string(),
+                function: "mixed_levels".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 1,
-                strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::smt_unsat(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::Postcondition, // L1
-                function: "mixed_levels".to_string(),
+                function: "mixed_levels".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 1,
-                strength: ProofStrength::deductive(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::deductive(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
         (
             VerificationCondition {
                 kind: VcKind::Temporal { property: "liveness".to_string() }, // L2
-                function: "mixed_levels".to_string(),
+                function: "mixed_levels".into(),
                 location: SourceSpan::default(),
                 formula: Formula::Bool(false),
                 contract_metadata: None,
             },
             VerificationResult::Proved {
-                solver: "mock".to_string(),
+                solver: "mock".into(),
                 time_ms: 1,
-                strength: ProofStrength::inductive(), proof_certificate: None, solver_warnings: None, },
+                strength: ProofStrength::inductive(),
+                proof_certificate: None,
+                solver_warnings: None,
+            },
         ),
     ];
 
@@ -1502,14 +1466,9 @@ fn test_pipeline_shift_overflow_function() {
 
     let vcs = trust_vcgen::generate_vcs(&func);
     // Should produce a shift overflow VC
-    let shift_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::ShiftOverflow { .. }))
-        .collect();
-    assert!(
-        !shift_vcs.is_empty(),
-        "shift left should produce a ShiftOverflow VC"
-    );
+    let shift_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::ShiftOverflow { .. })).collect();
+    assert!(!shift_vcs.is_empty(), "shift left should produce a ShiftOverflow VC");
 
     let router = trust_router::Router::new();
     let results = router.verify_all(&vcs);
@@ -1563,23 +1522,15 @@ fn test_pipeline_negation_overflow_function() {
     };
 
     let vcs = trust_vcgen::generate_vcs(&func);
-    let neg_vcs: Vec<_> = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::NegationOverflow { .. }))
-        .collect();
-    assert!(
-        !neg_vcs.is_empty(),
-        "negation of i32 should produce a NegationOverflow VC"
-    );
+    let neg_vcs: Vec<_> =
+        vcs.iter().filter(|vc| matches!(vc.kind, VcKind::NegationOverflow { .. })).collect();
+    assert!(!neg_vcs.is_empty(), "negation of i32 should produce a NegationOverflow VC");
 
     let router = trust_router::Router::new();
     let results = router.verify_all(&vcs);
     let report = trust_report::build_json_report("negation_test", &results);
 
-    let neg_obs: Vec<_> = report.functions[0]
-        .obligations
-        .iter()
-        .filter(|o| o.kind == "negation_overflow")
-        .collect();
+    let neg_obs: Vec<_> =
+        report.functions[0].obligations.iter().filter(|o| o.kind == "negation_overflow").collect();
     assert!(!neg_obs.is_empty(), "report must contain negation_overflow obligation");
 }

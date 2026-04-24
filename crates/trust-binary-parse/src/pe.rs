@@ -10,7 +10,7 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use crate::error::ParseError;
-use crate::read::{read_fixed_name, read_strtab_entry, Cursor};
+use crate::read::{Cursor, read_fixed_name, read_strtab_entry};
 
 // --- PE/COFF constants ---
 
@@ -43,8 +43,6 @@ const IMAGE_DIRECTORY_ENTRY_IMPORT: usize = 1;
 
 // --- Machine type constants ---
 
-/// Machine type: Unknown
-pub const IMAGE_FILE_MACHINE_UNKNOWN: u16 = 0x0;
 /// Machine type: x86
 pub const IMAGE_FILE_MACHINE_I386: u16 = 0x14C;
 /// Machine type: x86-64 / AMD64
@@ -66,6 +64,7 @@ const IMAGE_SYM_CLASS_FUNCTION: u8 = 101;
 // --- Parsed structures ---
 
 /// DOS header — only the fields we need.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DosHeader {
     /// Magic number (must be 0x5A4D 'MZ')
@@ -255,8 +254,7 @@ impl CoffSymbol<'_> {
     /// Whether this is a function symbol.
     #[must_use]
     pub fn is_function(&self) -> bool {
-        self.storage_class == IMAGE_SYM_CLASS_FUNCTION
-            || (self.sym_type & 0xF0) == 0x20 // derived type == function
+        self.storage_class == IMAGE_SYM_CLASS_FUNCTION || (self.sym_type & 0xF0) == 0x20 // derived type == function
     }
 }
 
@@ -269,6 +267,7 @@ pub struct Pe<'a> {
     /// The raw file data.
     data: &'a [u8],
     /// DOS header.
+    #[cfg(test)]
     pub(crate) dos_header: DosHeader,
     /// COFF file header.
     pub(crate) coff_header: CoffHeader,
@@ -299,6 +298,7 @@ impl<'a> Pe<'a> {
         // e_lfanew is at offset 0x3C in the DOS header
         cursor.set_offset(0x3C);
         let e_lfanew = cursor.read_u32()?;
+        #[cfg(test)]
         let dos_header = DosHeader { e_magic, e_lfanew };
 
         // --- PE Signature ---
@@ -341,16 +341,13 @@ impl<'a> Pe<'a> {
         };
 
         // --- Section Headers ---
-        let sections_offset =
-            opt_hdr_offset + coff_header.size_of_optional_header as usize;
-        let sections = parse_section_headers(
-            data,
-            sections_offset,
-            coff_header.number_of_sections as usize,
-        )?;
+        let sections_offset = opt_hdr_offset + coff_header.size_of_optional_header as usize;
+        let sections =
+            parse_section_headers(data, sections_offset, coff_header.number_of_sections as usize)?;
 
         Ok(Self {
             data,
+            #[cfg(test)]
             dos_header,
             coff_header,
             optional_header,
@@ -373,17 +370,13 @@ impl<'a> Pe<'a> {
     /// Get the entry point RVA (0 if no optional header).
     #[must_use]
     pub fn entry_point(&self) -> u32 {
-        self.optional_header
-            .as_ref()
-            .map_or(0, |oh| oh.address_of_entry_point)
+        self.optional_header.as_ref().map_or(0, |oh| oh.address_of_entry_point)
     }
 
     /// Get the image base address (0 if no optional header).
     #[must_use]
     pub fn image_base(&self) -> u64 {
-        self.optional_header
-            .as_ref()
-            .map_or(0, |oh| oh.image_base)
+        self.optional_header.as_ref().map_or(0, |oh| oh.image_base)
     }
 
     /// Find a section by name (e.g., ".text", ".data").
@@ -434,13 +427,8 @@ impl<'a> Pe<'a> {
             return Err(ParseError::UnexpectedEof(offset));
         }
         let remaining = &self.data[offset..];
-        let end = remaining
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(remaining.len());
-        std::str::from_utf8(&remaining[..end]).map_err(|_| ParseError::InvalidUtf8 {
-            index: rva,
-        })
+        let end = remaining.iter().position(|&b| b == 0).unwrap_or(remaining.len());
+        std::str::from_utf8(&remaining[..end]).map_err(|_| ParseError::InvalidUtf8 { index: rva })
     }
 
     /// Parse the import table.
@@ -484,15 +472,9 @@ impl<'a> Pe<'a> {
             }
 
             let dll_name = self.read_string_at_rva(name_rva)?;
-            let functions = self.parse_import_lookup_table(
-                original_first_thunk,
-                is_pe32plus,
-            )?;
+            let functions = self.parse_import_lookup_table(original_first_thunk, is_pe32plus)?;
 
-            entries.push(ImportEntry {
-                dll_name,
-                functions,
-            });
+            entries.push(ImportEntry { dll_name, functions });
         }
 
         Ok(entries)
@@ -559,13 +541,9 @@ impl<'a> Pe<'a> {
             return Err(ParseError::UnexpectedEof(offset));
         }
         let remaining = &self.data[offset..];
-        let end = remaining
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(remaining.len());
-        std::str::from_utf8(&remaining[..end]).map_err(|_| ParseError::InvalidUtf8 {
-            index: offset as u32,
-        })
+        let end = remaining.iter().position(|&b| b == 0).unwrap_or(remaining.len());
+        std::str::from_utf8(&remaining[..end])
+            .map_err(|_| ParseError::InvalidUtf8 { index: offset as u32 })
     }
 
     /// Parse the export table.
@@ -634,18 +612,10 @@ impl<'a> Pe<'a> {
                 continue; // unused ordinal slot
             }
             let ordinal = (ordinal_base as u16).wrapping_add(i as u16);
-            let name = name_map
-                .iter()
-                .find(|(idx, _)| *idx == i as u16)
-                .map(|(_, n)| *n);
+            let name = name_map.iter().find(|(idx, _)| *idx == i as u16).map(|(_, n)| *n);
             // Forwarder: RVA points within the export directory itself
             let is_forwarder = rva >= export_dir.virtual_address && rva < export_end_rva;
-            entries.push(ExportEntry {
-                ordinal,
-                name,
-                rva,
-                is_forwarder,
-            });
+            entries.push(ExportEntry { ordinal, name, rva, is_forwarder });
         }
 
         Ok(entries)
@@ -720,11 +690,7 @@ impl<'a> Pe<'a> {
     }
 
     /// Read a string from the COFF string table.
-    fn read_coff_string(
-        &self,
-        strtab_base: usize,
-        offset: u32,
-    ) -> Result<&'a str, ParseError> {
+    fn read_coff_string(&self, strtab_base: usize, offset: u32) -> Result<&'a str, ParseError> {
         let abs_offset = strtab_base + offset as usize;
         // The first 4 bytes of the string table are its size; strings
         // start at offset 4, but callers pass the raw offset including
@@ -771,9 +737,7 @@ fn parse_optional_header(
             let _base_of_data = cursor.read_u32()?; // PE32 only
             cursor.read_u32()? as u64
         }
-        PeFormat::Pe32Plus => {
-            cursor.read_u64()?
-        }
+        PeFormat::Pe32Plus => cursor.read_u64()?,
     };
 
     let section_alignment = cursor.read_u32()?;
@@ -816,10 +780,7 @@ fn parse_optional_header(
     for _ in 0..dir_count {
         let virtual_address = cursor.read_u32()?;
         let dir_size = cursor.read_u32()?;
-        data_directories.push(DataDirectory {
-            virtual_address,
-            size: dir_size,
-        });
+        data_directories.push(DataDirectory { virtual_address, size: dir_size });
     }
 
     Ok(OptionalHeader {
@@ -934,8 +895,7 @@ mod tests {
         // --- COFF Header at 0x84 (20 bytes) ---
         let coff_off = 0x84usize;
         // Machine = AMD64
-        buf[coff_off..coff_off + 2]
-            .copy_from_slice(&IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
+        buf[coff_off..coff_off + 2].copy_from_slice(&IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
         // NumberOfSections = 3
         buf[coff_off + 2..coff_off + 4].copy_from_slice(&3u16.to_le_bytes());
         // TimeDateStamp
@@ -964,8 +924,7 @@ mod tests {
         // BaseOfCode
         buf[opt_off + 20..opt_off + 24].copy_from_slice(&text_rva.to_le_bytes());
         // ImageBase (u64 for PE32+)
-        buf[opt_off + 24..opt_off + 32]
-            .copy_from_slice(&0x0000_0001_4000_0000u64.to_le_bytes());
+        buf[opt_off + 24..opt_off + 32].copy_from_slice(&0x0000_0001_4000_0000u64.to_le_bytes());
         // SectionAlignment
         buf[opt_off + 32..opt_off + 36].copy_from_slice(&0x1000u32.to_le_bytes());
         // FileAlignment
@@ -990,13 +949,11 @@ mod tests {
         buf[opt_off + 70..opt_off + 72].copy_from_slice(&0x8160u16.to_le_bytes());
         // Stack/Heap sizes (PE32+ = u64 each, 4 fields = 32 bytes)
         // SizeOfStackReserve
-        buf[opt_off + 72..opt_off + 80]
-            .copy_from_slice(&0x100000u64.to_le_bytes());
+        buf[opt_off + 72..opt_off + 80].copy_from_slice(&0x100000u64.to_le_bytes());
         // SizeOfStackCommit
         buf[opt_off + 80..opt_off + 88].copy_from_slice(&0x1000u64.to_le_bytes());
         // SizeOfHeapReserve
-        buf[opt_off + 88..opt_off + 96]
-            .copy_from_slice(&0x100000u64.to_le_bytes());
+        buf[opt_off + 88..opt_off + 96].copy_from_slice(&0x100000u64.to_le_bytes());
         // SizeOfHeapCommit
         buf[opt_off + 96..opt_off + 104].copy_from_slice(&0x1000u64.to_le_bytes());
         // LoaderFlags = 0
@@ -1022,9 +979,9 @@ mod tests {
             &mut buf,
             sh_off,
             b".text\0\0\0",
-            0x200,      // virtual_size
+            0x200, // virtual_size
             text_rva,
-            0x200,      // size_of_raw_data
+            0x200, // size_of_raw_data
             text_file_off,
             0x6000_0020, // CODE | EXECUTE | READ
         );
@@ -1083,10 +1040,8 @@ mod tests {
         buf[exp_off + 0x28..exp_off + 0x28 + dll_name.len()].copy_from_slice(dll_name);
 
         // EAT at rdata_file_off + 0x38: [rva_func1, rva_func2]
-        buf[exp_off + 0x38..exp_off + 0x3C]
-            .copy_from_slice(&(text_rva).to_le_bytes()); // func1 at .text start
-        buf[exp_off + 0x3C..exp_off + 0x40]
-            .copy_from_slice(&(text_rva + 0x10).to_le_bytes()); // func2
+        buf[exp_off + 0x38..exp_off + 0x3C].copy_from_slice(&(text_rva).to_le_bytes()); // func1 at .text start
+        buf[exp_off + 0x3C..exp_off + 0x40].copy_from_slice(&(text_rva + 0x10).to_le_bytes()); // func2
 
         // Name pointers at rdata_file_off + 0x40: [name1_rva, name2_rva]
         // name1 at rdata_rva + 0x4C, name2 at rdata_rva + 0x52
@@ -1135,8 +1090,7 @@ mod tests {
 
         // DLL name "KERNEL32.dll\0" at rdata_file_off + 0xC0
         let k32_name = b"KERNEL32.dll\0";
-        buf[rdata_file_off as usize + 0xC0
-            ..rdata_file_off as usize + 0xC0 + k32_name.len()]
+        buf[rdata_file_off as usize + 0xC0..rdata_file_off as usize + 0xC0 + k32_name.len()]
             .copy_from_slice(k32_name);
 
         // Hint/Name entry at rdata_file_off + 0xD0: hint(u16) + name(nul-terminated)
@@ -1164,8 +1118,7 @@ mod tests {
         buf[offset + 8..offset + 12].copy_from_slice(&virtual_size.to_le_bytes());
         buf[offset + 12..offset + 16].copy_from_slice(&virtual_address.to_le_bytes());
         buf[offset + 16..offset + 20].copy_from_slice(&size_of_raw_data.to_le_bytes());
-        buf[offset + 20..offset + 24]
-            .copy_from_slice(&pointer_to_raw_data.to_le_bytes());
+        buf[offset + 20..offset + 24].copy_from_slice(&pointer_to_raw_data.to_le_bytes());
         // pointer_to_relocations = 0 (offset + 24..28)
         // pointer_to_line_numbers = 0 (offset + 28..32)
         // number_of_relocations = 0 (offset + 32..34)
@@ -1501,8 +1454,7 @@ mod tests {
 
         // --- COFF Header at 0x84 ---
         let coff_off = 0x84usize;
-        buf[coff_off..coff_off + 2]
-            .copy_from_slice(&IMAGE_FILE_MACHINE_I386.to_le_bytes());
+        buf[coff_off..coff_off + 2].copy_from_slice(&IMAGE_FILE_MACHINE_I386.to_le_bytes());
         buf[coff_off + 2..coff_off + 4].copy_from_slice(&1u16.to_le_bytes()); // 1 section
         buf[coff_off + 4..coff_off + 8].copy_from_slice(&0x5F00_0000u32.to_le_bytes());
         buf[coff_off + 16..coff_off + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());

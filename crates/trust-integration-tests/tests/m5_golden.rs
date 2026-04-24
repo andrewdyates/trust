@@ -15,8 +15,8 @@
 
 use trust_types::{
     AssertMessage, BasicBlock, BinOp, BlockId, ConstValue, Counterexample, CounterexampleValue,
-    CrateVerificationResult, FunctionVerificationResult, LocalDecl, Operand, Place,
-    Rvalue, SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody, VerifiableFunction,
+    CrateVerificationResult, FunctionVerificationResult, LocalDecl, Operand, Place, Rvalue,
+    SourceSpan, Statement, Terminator, Ty, VcKind, VerifiableBody, VerifiableFunction,
     VerificationCondition, VerificationResult,
 };
 
@@ -62,17 +62,21 @@ fn binary_search_function() -> VerifiableFunction {
         },
         body: VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::usize(), name: None },       // return
-                LocalDecl { index: 1, ty: Ty::Slice { elem: Box::new(Ty::Int { width: 32, signed: true }) }, name: Some("arr".into()) },
-                LocalDecl { index: 2, ty: Ty::Int { width: 32, signed: true }, name: Some("target".into()) },
+                LocalDecl { index: 0, ty: Ty::usize(), name: None }, // return
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Slice { elem: Box::new(Ty::Int { width: 32, signed: true }) },
+                    name: Some("arr".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 32, signed: true },
+                    name: Some("target".into()),
+                },
                 LocalDecl { index: 3, ty: Ty::usize(), name: Some("low".into()) },
                 LocalDecl { index: 4, ty: Ty::usize(), name: Some("high".into()) },
-                LocalDecl {
-                    index: 5,
-                    ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]),
-                    name: None,
-                }, // CheckedAdd result
-                LocalDecl { index: 6, ty: Ty::usize(), name: None },       // unwrapped sum
+                LocalDecl { index: 5, ty: Ty::Tuple(vec![Ty::usize(), Ty::Bool]), name: None }, // CheckedAdd result
+                LocalDecl { index: 6, ty: Ty::usize(), name: None }, // unwrapped sum
                 LocalDecl { index: 7, ty: Ty::usize(), name: Some("mid".into()) }, // mid
             ],
             blocks: vec![
@@ -190,10 +194,7 @@ fn test_m5_golden_binary_search_prove_strengthen_backprop() {
         .iter()
         .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { op: BinOp::Add, .. }))
         .collect();
-    assert!(
-        !overflow_vcs.is_empty(),
-        "vcgen must detect ArithmeticOverflow(Add) in binary_search"
-    );
+    assert!(!overflow_vcs.is_empty(), "vcgen must detect ArithmeticOverflow(Add) in binary_search");
     assert_eq!(
         overflow_vcs[0].function, "binary_search",
         "overflow VC should be attributed to binary_search"
@@ -216,10 +217,7 @@ fn test_m5_golden_binary_search_prove_strengthen_backprop() {
                         solver: "z4".into(),
                         time_ms: 8,
                         counterexample: Some(Counterexample::new(vec![
-                            (
-                                "low".to_string(),
-                                CounterexampleValue::Uint((u64::MAX - 1) as u128),
-                            ),
+                            ("low".to_string(), CounterexampleValue::Uint((u64::MAX - 1) as u128)),
                             ("high".to_string(), CounterexampleValue::Uint(2)),
                         ])),
                     };
@@ -249,14 +247,8 @@ fn test_m5_golden_binary_search_prove_strengthen_backprop() {
     let config = trust_strengthen::StrengthenConfig::default();
     let output = trust_strengthen::run(&crate_results, &config, &trust_strengthen::NoOpLlm);
 
-    assert!(
-        output.has_proposals,
-        "strengthen must propose at least one fix for the overflow"
-    );
-    assert!(
-        output.failures_analyzed >= 1,
-        "should have analyzed at least 1 failure"
-    );
+    assert!(output.has_proposals, "strengthen must propose at least one fix for the overflow");
+    assert!(output.failures_analyzed >= 1, "should have analyzed at least 1 failure");
 
     // Check that at least one proposal addresses the overflow
     let overflow_proposals: Vec<_> = output
@@ -283,10 +275,7 @@ fn test_m5_golden_binary_search_prove_strengthen_backprop() {
             "proposal should target binary_search, got: {}",
             proposal.function_name
         );
-        assert!(
-            proposal.confidence > 0.0,
-            "proposal confidence must be positive"
-        );
+        assert!(proposal.confidence > 0.0, "proposal confidence must be positive");
     }
 
     // -----------------------------------------------------------------------
@@ -296,25 +285,13 @@ fn test_m5_golden_binary_search_prove_strengthen_backprop() {
     let plan = trust_backprop::apply_plan(&output.proposals, &policy)
         .expect("backprop should produce a valid rewrite plan");
 
-    assert!(
-        !plan.is_empty(),
-        "rewrite plan must contain at least 1 rewrite"
-    );
-    assert!(
-        plan.summary.contains("proposals"),
-        "plan summary should describe the proposals"
-    );
+    assert!(!plan.is_empty(), "rewrite plan must contain at least 1 rewrite");
+    assert!(plan.summary.contains("proposals"), "plan summary should describe the proposals");
 
     // Verify the rewrite targets the right function
     for rewrite in &plan.rewrites {
-        assert_eq!(
-            rewrite.function_name, "binary_search",
-            "rewrite should target binary_search"
-        );
-        assert!(
-            !rewrite.rationale.is_empty(),
-            "rewrite should have a rationale"
-        );
+        assert_eq!(rewrite.function_name, "binary_search", "rewrite should target binary_search");
+        assert!(!rewrite.rationale.is_empty(), "rewrite should have a rationale");
     }
 
     // Check that we get the right kinds of rewrites
@@ -335,10 +312,7 @@ fn test_m5_golden_binary_search_prove_strengthen_backprop() {
     assert!(
         has_spec_attribute || has_safe_arithmetic,
         "plan should insert spec attributes or replace with safe arithmetic; got: {:?}",
-        plan.rewrites
-            .iter()
-            .map(|r| &r.kind)
-            .collect::<Vec<_>>()
+        plan.rewrites.iter().map(|r| &r.kind).collect::<Vec<_>>()
     );
 
     // -----------------------------------------------------------------------
@@ -381,10 +355,7 @@ fn test_m5_vcgen_detects_binary_search_overflow() {
 
     // The binary_search also has a Div by constant 2 — should NOT produce DivisionByZero
     // since the divisor is a nonzero constant.
-    let div_zero_count = vcs
-        .iter()
-        .filter(|vc| matches!(vc.kind, VcKind::DivisionByZero))
-        .count();
+    let div_zero_count = vcs.iter().filter(|vc| matches!(vc.kind, VcKind::DivisionByZero)).count();
     // Div by constant 2 should not generate a DivisionByZero VC (optimization),
     // but our current vcgen may still generate one. Just verify overflow is present.
     let _ = div_zero_count; // acknowledged but not asserted
@@ -396,10 +367,8 @@ fn test_m5_strengthen_overflow_proposal_quality() {
     let vcs = trust_vcgen::generate_vcs(&func);
 
     // Build a CrateVerificationResult with the overflow as Failed
-    let overflow_vcs: Vec<_> = vcs
-        .into_iter()
-        .filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. }))
-        .collect();
+    let overflow_vcs: Vec<_> =
+        vcs.into_iter().filter(|vc| matches!(vc.kind, VcKind::ArithmeticOverflow { .. })).collect();
 
     let crate_results = CrateVerificationResult {
         crate_name: "search".into(),
@@ -437,17 +406,11 @@ fn test_m5_strengthen_overflow_proposal_quality() {
         .proposals
         .iter()
         .any(|p| matches!(p.kind, trust_strengthen::ProposalKind::AddPrecondition { .. }));
-    assert!(
-        has_precondition,
-        "strengthen should propose a precondition for the overflow"
-    );
+    assert!(has_precondition, "strengthen should propose a precondition for the overflow");
 
     // All proposals should have meaningful confidence
     for p in &output.proposals {
-        assert!(
-            p.confidence >= 0.5,
-            "proposal confidence should meet default threshold"
-        );
+        assert!(p.confidence >= 0.5, "proposal confidence should meet default threshold");
     }
 }
 
@@ -486,12 +449,7 @@ fn test_m5_backprop_produces_valid_plan() {
     let attr_rewrites: Vec<_> = plan
         .rewrites
         .iter()
-        .filter(|r| {
-            matches!(
-                &r.kind,
-                trust_backprop::RewriteKind::InsertAttribute { .. }
-            )
-        })
+        .filter(|r| matches!(&r.kind, trust_backprop::RewriteKind::InsertAttribute { .. }))
         .collect();
     assert_eq!(attr_rewrites.len(), 1, "should have 1 attribute insertion");
 
@@ -499,12 +457,7 @@ fn test_m5_backprop_produces_valid_plan() {
     let expr_rewrites: Vec<_> = plan
         .rewrites
         .iter()
-        .filter(|r| {
-            matches!(
-                &r.kind,
-                trust_backprop::RewriteKind::ReplaceExpression { .. }
-            )
-        })
+        .filter(|r| matches!(&r.kind, trust_backprop::RewriteKind::ReplaceExpression { .. }))
         .collect();
     assert_eq!(expr_rewrites.len(), 1, "should have 1 expression replacement");
 }

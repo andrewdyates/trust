@@ -68,9 +68,9 @@ pub fn walk_native_lib_search_dirs<R>(
     // The targets here should be in sync with `copy_third_party_objects` in bootstrap.
     // Finally there is shared LLVM library, which unlike compiler libraries, is linked by the name,
     // therefore requiring the search path for the linker.
-    // tRust: known issue — implement `-Clink-self-contained=+/-unwind,+/-sanitizers`, move the shipped libunwind
+    // FIXME: implement `-Clink-self-contained=+/-unwind,+/-sanitizers`, move the shipped libunwind
     // and sanitizers to self-contained directory, and stop adding this search path.
-    // tRust: known issue — On AIX this also has the side-effect of making the list of library search paths
+    // FIXME: On AIX this also has the side-effect of making the list of library search paths
     // non-empty, which is needed or the linker may decide to record the LIBPATH env, if
     // defined, as the search path instead of appending the default search paths.
     if sess.target.cfg_abi == CfgAbi::Fortanix
@@ -302,7 +302,7 @@ impl<'tcx> Collector<'tcx> {
                 .libs
                 .extract_if(.., |lib| {
                     if lib.name.as_str() == passed_lib.name {
-                        // tRust: known issue — This whole logic is questionable, whether modifiers are
+                        // FIXME: This whole logic is questionable, whether modifiers are
                         // involved or not, library reordering and kind overriding without
                         // explicit `:rename` in particular.
                         if lib.has_modifiers() || passed_lib.has_modifiers() {

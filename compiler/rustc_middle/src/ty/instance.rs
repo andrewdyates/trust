@@ -399,7 +399,6 @@ impl<'tcx> fmt::Display for Instance<'tcx> {
 fn resolve_async_drop_poll<'tcx>(mut cor_ty: Ty<'tcx>) -> Instance<'tcx> {
     let first_cor = cor_ty;
     let ty::Coroutine(poll_def_id, proxy_args) = first_cor.kind() else {
-        // tRust: invariant: unexpected state reached in resolve_async_drop_poll
         bug!();
     };
     let poll_def_id = *poll_def_id;
@@ -408,7 +407,7 @@ fn resolve_async_drop_poll<'tcx>(mut cor_ty: Ty<'tcx>) -> Instance<'tcx> {
         if let ty::Coroutine(child_def, child_args) = child_ty.kind() {
             cor_ty = child_ty;
             if *child_def == poll_def_id {
-                child_ty = child_args.first().expect("invariant: collection is non-empty").expect_ty();
+                child_ty = child_args.first().unwrap().expect_ty();
                 continue;
             } else {
                 return Instance {
@@ -418,7 +417,6 @@ fn resolve_async_drop_poll<'tcx>(mut cor_ty: Ty<'tcx>) -> Instance<'tcx> {
             }
         } else {
             let ty::Coroutine(_, child_args) = cor_ty.kind() else {
-                // tRust: invariant: unexpected state reached in resolve_async_drop_poll
                 bug!();
             };
             if first_cor != cor_ty {
@@ -457,11 +455,9 @@ impl<'tcx> Instance<'tcx> {
         let args = GenericArgs::for_item(tcx, def_id, |param, _| match param.kind {
             ty::GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
             ty::GenericParamDefKind::Type { .. } => {
-                // tRust: invariant: Instance::mono: <...> has type parameters
                 bug!("Instance::mono: {:?} has type parameters", def_id)
             }
             ty::GenericParamDefKind::Const { .. } => {
-                // tRust: invariant: Instance::mono: <...> has const parameters
                 bug!("Instance::mono: {:?} has const parameters", def_id)
             }
         });
@@ -569,7 +565,6 @@ impl<'tcx> Instance<'tcx> {
                         type_length,
                     });
                 } else {
-                    // tRust: invariant: unexpected state in expect_resolve
                     span_bug!(
                         span_or_local_def_span(),
                         "failed to resolve instance for {}",
@@ -577,7 +572,6 @@ impl<'tcx> Instance<'tcx> {
                     )
                 }
             }
-            // tRust: invariant: unexpected state in expect_resolve
             instance => span_bug!(
                 span_or_local_def_span(),
                 "failed to resolve instance for {}: {instance:#?}",
@@ -767,7 +761,7 @@ impl<'tcx> Instance<'tcx> {
             .associated_items(fn_once)
             .in_definition_order()
             .find(|it| it.is_fn())
-            .expect("invariant: instance resolves successfully")
+            .unwrap()
             .def_id;
         let track_caller =
             tcx.codegen_fn_attrs(closure_did).flags.contains(CodegenFnAttrFlags::TRACK_CALLER);
@@ -792,7 +786,7 @@ impl<'tcx> Instance<'tcx> {
         let ty::Coroutine(coroutine_def_id, args) = *rcvr_args.type_at(0).kind() else {
             return None;
         };
-        let coroutine_kind = tcx.coroutine_kind(coroutine_def_id).expect("invariant: coroutine_kind returned a valid value");
+        let coroutine_kind = tcx.coroutine_kind(coroutine_def_id).unwrap();
 
         let coroutine_callable_item = if tcx.is_lang_item(trait_id, LangItem::Future) {
             assert_matches!(
@@ -825,7 +819,6 @@ impl<'tcx> Instance<'tcx> {
             }
             let ty::Coroutine(_, id_args) = *tcx.type_of(coroutine_def_id).skip_binder().kind()
             else {
-                // tRust: invariant: unexpected state reached in try_resolve_item_for_coroutine
                 bug!()
             };
 

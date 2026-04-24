@@ -45,7 +45,6 @@ impl<'ll> Iterator for ValueIter<'ll> {
     fn next(&mut self) -> Option<&'ll Value> {
         let old = self.cur;
         if let Some(old) = old {
-            // SAFETY: The module/global is a valid LLVM reference.
             self.cur = unsafe { (self.step)(old) };
         }
         old
@@ -53,7 +52,6 @@ impl<'ll> Iterator for ValueIter<'ll> {
 }
 
 pub(crate) fn iter_globals(llmod: &llvm::Module) -> ValueIter<'_> {
-    // SAFETY: The module/global is a valid LLVM reference.
     unsafe { ValueIter { cur: llvm::LLVMGetFirstGlobal(llmod), step: llvm::LLVMGetNextGlobal } }
 }
 
@@ -165,7 +163,6 @@ pub(crate) fn compile_codegen_unit(
             // Run replace-all-uses-with for statics that need it. This must
             // happen after the llvm.used variables are created.
             for &(old_g, new_g) in cx.statics_to_rauw().borrow().iter() {
-                // SAFETY: Both values are valid LLVM references with compatible types.
                 unsafe {
                     llvm::LLVMReplaceAllUsesWith(old_g, new_g);
                     llvm::LLVMDeleteGlobal(old_g);
@@ -216,13 +213,11 @@ pub(crate) fn set_variable_sanitizer_attrs(llval: &Value, attrs: &CodegenFnAttrs
     if attrs.sanitizers.disabled.contains(SanitizerSet::ADDRESS)
         || attrs.sanitizers.disabled.contains(SanitizerSet::KERNELADDRESS)
     {
-        // SAFETY: The global variable is a valid LLVM reference.
         unsafe { llvm::LLVMRustSetNoSanitizeAddress(llval) };
     }
     if attrs.sanitizers.disabled.contains(SanitizerSet::HWADDRESS)
         || attrs.sanitizers.disabled.contains(SanitizerSet::KERNELHWADDRESS)
     {
-        // SAFETY: The global variable is a valid LLVM reference.
         unsafe { llvm::LLVMRustSetNoSanitizeHWAddress(llval) };
     }
 }

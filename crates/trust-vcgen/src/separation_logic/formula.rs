@@ -21,10 +21,7 @@ use trust_types::Formula;
 #[non_exhaustive]
 pub enum SepFormula {
     /// `addr |-> value`: address `addr` points to `value` in the heap.
-    PointsTo {
-        addr: Formula,
-        value: Formula,
-    },
+    PointsTo { addr: Formula, value: Formula },
     /// `P * Q`: separating conjunction -- P and Q hold on disjoint heaps.
     SepStar(Box<SepFormula>, Box<SepFormula>),
     /// `P -* Q`: magic wand -- if P is added to the current heap, then Q holds.

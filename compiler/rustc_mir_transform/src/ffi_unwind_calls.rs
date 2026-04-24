@@ -1,6 +1,3 @@
-//! tRust: MIR lint that detects FFI calls that may unwind across Rust frames
-//! tRust: under `panic=abort`.
-
 use rustc_abi::ExternAbi;
 use rustc_ast::InlineAsmOptions;
 use rustc_hir::def_id::{LOCAL_CRATE, LocalDefId};
@@ -34,7 +31,6 @@ fn has_ffi_unwind_calls(tcx: TyCtxt<'_>, local_def_id: LocalDefId) -> bool {
         ty::CoroutineClosure(..) => ExternAbi::RustCall,
         ty::Coroutine(..) => ExternAbi::Rust,
         ty::Error(_) => return false,
-        // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
         _ => span_bug!(body.span, "unexpected body ty: {:?}", body_ty),
     };
     let body_can_unwind = layout::fn_can_unwind(tcx, Some(def_id), body_abi);
@@ -101,7 +97,6 @@ fn has_ffi_unwind_calls(tcx: TyCtxt<'_>, local_def_id: LocalDefId) -> bool {
                 }
                 Some(def_id)
             }
-            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
             _ => bug!("invalid callee of type {:?}", ty),
         };
 

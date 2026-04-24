@@ -72,7 +72,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         // 2. "Closed set" below means new names cannot appear after the current resolution attempt.
         // Places to search (in order of decreasing priority):
         // (Type NS)
-        // 1. NOTE: Ribs (type parameters), there's no necessary infrastructure yet
+        // 1. FIXME: Ribs (type parameters), there's no necessary infrastructure yet
         //    (open set, not controlled).
         // 2. Names in modules (both normal `mod`ules and blocks), loop through hygienic parents
         //    (open, not controlled).
@@ -81,7 +81,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         // 5. Standard library prelude (de-facto closed, controlled).
         // 6. Language prelude (closed, controlled).
         // (Value NS)
-        // 1. NOTE: Ribs (local variables), there's no necessary infrastructure yet
+        // 1. FIXME: Ribs (local variables), there's no necessary infrastructure yet
         //    (open set, not controlled).
         // 2. Names in modules (both normal `mod`ules and blocks), loop through hygienic parents
         //    (open, not controlled).
@@ -249,7 +249,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         }
 
         if let ModuleKind::Block = module.kind {
-            return Some((module.parent.expect("invariant: has parent def_id").nearest_item_scope(), None));
+            return Some((module.parent.unwrap().nearest_item_scope(), None));
         }
 
         // We need to support the next case under a deprecation warning
@@ -314,7 +314,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
     ) -> Option<LateDecl<'ra>> {
         let orig_ident = ident;
         let (general_span, normalized_span) = if ident.name == kw::SelfUpper {
-            // NOTE(jseyfried): improve `Self` hygiene
+            // FIXME(jseyfried) improve `Self` hygiene
             let empty_span = ident.span.with_ctxt(SyntaxContext::root());
             (empty_span, empty_span)
         } else if ns == TypeNS {
@@ -800,7 +800,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             return false;
         };
 
-        // NOTE: use `scope` instead of `res` to detect built-in attrs and derive helpers,
+        // FIXME: Use `scope` instead of `res` to detect built-in attrs and derive helpers,
         // it will exclude imports, make slightly more code legal, and will require lang approval.
         let module_only = matches!(scope_set, ScopeSet::Module(..));
         let is_builtin = |res| matches!(res, Res::NonMacroAttr(NonMacroAttrKind::Builtin(..)));
@@ -812,7 +812,6 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         } else if innermost_res == derive_helper_compat {
             Some(AmbiguityKind::DeriveHelper)
         } else if res == derive_helper_compat && innermost_res != derive_helper {
-            // tRust: invariant — derive_helper_compat cannot be the inner resolution when res is also derive_helper_compat
             span_bug!(orig_ident_span, "impossible inner resolution kind")
         } else if matches!(innermost_scope, Scope::MacroRules(_))
             && matches!(scope, Scope::ModuleNonGlobs(..) | Scope::ModuleGlobs(..))
@@ -827,7 +826,6 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             //
             // we visit all macro_rules scopes (e.g. textual scope macros)
             // before we visit any modules (e.g. path-based scope macros)
-            // tRust: invariant — macro_rules scopes are always visited before module scopes, so a module scope cannot be innermost
             span_bug!(
                 orig_ident_span,
                 "ambiguous scoped macro resolutions with path-based \
@@ -843,7 +841,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
             && let Scope::ModuleNonGlobs(m2, _) = innermost_scope
             && m1 == m2
         {
-            // NOTE: this error is too conservative and technically unnecessary now when module
+            // FIXME: this error is too conservative and technically unnecessary now when module
             // scope is split into two scopes, at least when not resolving in `ScopeSet::Module`,
             // remove it with lang team approval.
             Some(AmbiguityKind::GlobVsExpanded)
@@ -854,14 +852,14 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         if let Some(kind) = ambiguity_error_kind {
             // Skip ambiguity errors for extern flag bindings "overridden"
             // by extern item bindings.
-            // Accepted tradeoff: kept pending lang team approval.
+            // FIXME: Remove with lang team approval.
             let issue_145575_hack = matches!(scope, Scope::ExternPreludeFlags)
                 && innermost_results[1..]
                     .iter()
                     .any(|(b, s)| matches!(s, Scope::ExternPreludeItems) && *b != innermost_decl);
             // Skip ambiguity errors for nonglob module bindings "overridden"
             // by glob module bindings in the same module.
-            // Accepted tradeoff: kept pending lang team approval.
+            // FIXME: Remove with lang team approval.
             let issue_149681_hack = match scope {
                 Scope::ModuleGlobs(m1, _)
                     if innermost_results[1..]
@@ -877,7 +875,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                 self.issue_145575_hack_applied = true;
             } else {
                 // Turn ambiguity errors for core vs std panic into warnings.
-                // Accepted tradeoff: kept pending lang team approval.
+                // FIXME: Remove with lang team approval.
                 let is_issue_147319_hack = orig_ident_span.edition() <= Edition::Edition2024
                     && matches!(ident.name, sym::panic)
                     && matches!(scope, Scope::StdLibPrelude)
@@ -959,7 +957,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                     && let Some(module) =
                         self.resolve_super_in_module(ident, Some(module), parent_scope)
                 {
-                    return Ok(module.self_decl.expect("invariant: value is present"));
+                    return Ok(module.self_decl.unwrap());
                 }
 
                 let (ident_key, def) = IdentKey::new_adjusted(ident, module.expansion);
@@ -1013,22 +1011,22 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                     if ident.name == kw::SelfLower {
                         let mut ctxt = ident.span.ctxt().normalize_to_macros_2_0();
                         let module = self.resolve_self(&mut ctxt, parent_scope.module);
-                        return Ok(module.self_decl.expect("invariant: value is present"));
+                        return Ok(module.self_decl.unwrap());
                     }
                     if ident.name == kw::Super
                         && let Some(module) =
                             self.resolve_super_in_module(ident, None, parent_scope)
                     {
-                        return Ok(module.self_decl.expect("invariant: value is present"));
+                        return Ok(module.self_decl.unwrap());
                     }
                     if ident.name == kw::Crate
                         || ident.name == kw::DollarCrate
                         || self.path_root_is_crate_root(ident)
                     {
                         let module = self.resolve_crate_root(ident);
-                        return Ok(module.self_decl.expect("invariant: value is present"));
+                        return Ok(module.self_decl.unwrap());
                     } else if ident.name == kw::Super || ident.name == kw::SelfLower {
-                        // NOTE: implement these with renaming requirements so that e.g.
+                        // FIXME: Implement these with renaming requirements so that e.g.
                         // `use super;` doesn't work, but `use super as name;` does.
                         // Fall through here to get an error from `early_resolve_...`.
                     }
@@ -2027,7 +2025,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                                     }
                                     _ => format!("this scope"),
                                 };
-                                // NOTE: reword, as the reason we expected a module is because of
+                                // FIXME: reword, as the reason we expected a module is because of
                                 // the following path segment.
                                 let message = format!("cannot find module `{ident}` in {scope}");
                                 (message, label, None)
@@ -2042,7 +2040,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                         && !module.is_normal()
                     {
                         return PathResult::NonModule(PartialRes::with_unresolved_segments(
-                            module.res().expect("invariant: module has resolution"),
+                            module.res().unwrap(),
                             path.len() - segment_idx,
                         ));
                     }
@@ -2080,7 +2078,6 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
         PathResult::Module(match module {
             Some(module) => module,
             None if path.is_empty() => ModuleOrUniformRoot::CurrentScope,
-            // tRust: invariant — non-empty path segments always resolve to a module during path resolution
             _ => bug!("resolve_path: non-empty path `{:?}` has no module", path),
         })
     }

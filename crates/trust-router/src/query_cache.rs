@@ -10,8 +10,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::hash::{Hash, Hasher};
+use trust_types::fx::FxHashMap;
 
 use trust_types::{Formula, Sort, VerificationResult};
 
@@ -62,13 +62,7 @@ impl QueryCache {
     /// Create a new cache with the given maximum entry count.
     #[must_use]
     pub fn new(max_entries: usize) -> Self {
-        Self {
-            entries: FxHashMap::default(),
-            generation: 0,
-            max_entries,
-            hits: 0,
-            misses: 0,
-        }
+        Self { entries: FxHashMap::default(), generation: 0, max_entries, hits: 0, misses: 0 }
     }
 
     /// Look up a formula in the cache.
@@ -89,13 +83,7 @@ impl QueryCache {
     /// Store a result in the cache, evicting old entries if needed.
     pub fn store(&mut self, formula: &Formula, result: VerificationResult) {
         let key = structural_hash(formula);
-        self.entries.insert(
-            key,
-            CacheEntry {
-                result,
-                last_accessed: self.generation,
-            },
-        );
+        self.entries.insert(key, CacheEntry { result, last_accessed: self.generation });
 
         if self.entries.len() > self.max_entries {
             self.evict();
@@ -109,11 +97,8 @@ impl QueryCache {
         }
 
         // Collect entries with their last_accessed, sort, remove oldest.
-        let mut by_age: Vec<(u64, u64)> = self
-            .entries
-            .iter()
-            .map(|(&key, entry)| (key, entry.last_accessed))
-            .collect();
+        let mut by_age: Vec<(u64, u64)> =
+            self.entries.iter().map(|(&key, entry)| (key, entry.last_accessed)).collect();
         by_age.sort_by_key(|&(_, accessed)| accessed);
 
         let to_remove = self.entries.len() - self.max_entries;
@@ -130,11 +115,7 @@ impl QueryCache {
             entries: self.entries.len(),
             hits: self.hits,
             misses: self.misses,
-            hit_rate: if total == 0 {
-                0.0
-            } else {
-                self.hits as f64 / total as f64
-            },
+            hit_rate: if total == 0 { 0.0 } else { self.hits as f64 / total as f64 },
         }
     }
 
@@ -310,28 +291,23 @@ mod tests {
 
     fn proved_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 10,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed {
-            solver: "z4".to_string(),
-            time_ms: 20,
-            counterexample: None,
-        }
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 20, counterexample: None }
     }
 
     #[test]
     fn test_structural_hash_deterministic() {
         let f = Formula::And(vec![
             Formula::Var("x".into(), Sort::Int),
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
         let h1 = structural_hash(&f);
         let h2 = structural_hash(&f);

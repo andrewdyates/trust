@@ -398,5 +398,5 @@ fn mk_decls(cx: &mut ExtCtxt<'_>, macros: &[ProcMacro]) -> Box<ast::Item> {
 
     // Integrate the new item into existing module structures.
     let items = AstFragment::Items(smallvec![anon_constant]);
-    cx.monotonic_expander().fully_expand_fragment(items).make_items().pop().expect("invariant: expanded proc macro harness must produce at least one item") // tRust: unwrap -> expect
+    cx.monotonic_expander().fully_expand_fragment(items).make_items().pop().unwrap()
 }

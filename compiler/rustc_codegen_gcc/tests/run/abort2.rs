@@ -12,7 +12,6 @@ extern crate mini_core;
 use mini_core::*;
 
 fn fail() -> i32 {
-    // SAFETY: calling libc exit/abort to terminate the process.
     unsafe { intrinsics::abort() };
     0
 }

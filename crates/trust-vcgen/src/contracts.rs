@@ -9,17 +9,15 @@
 
 use trust_types::parse_spec_expr;
 use trust_types::{
-    ContractKind, ContractMetadata, Formula, LoopInvariantContract,
-    SunderContractIr, TypeRefinementContract, VcKind, VerifiableFunction,
-    VerificationCondition,
+    ContractKind, ContractMetadata, Formula, VcKind, VerifiableFunction, VerificationCondition,
 };
 
 #[cfg(test)]
 use trust_types::{
-    BasicBlock, BlockId, Contract, LocalDecl, SourceSpan, Terminator, Ty,
-    VerifiableBody,
+    BasicBlock, BlockId, Contract, LocalDecl, SourceSpan, Terminator, Ty, VerifiableBody,
 };
 
+#[cfg_attr(feature = "pipeline-v2", allow(dead_code))]
 pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<VerificationCondition>) {
     for contract in &func.contracts {
         let kind = match &contract.kind {
@@ -43,7 +41,7 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
                         invariant: inv_str.clone(),
                         header_block,
                     },
-                    function: func.name.clone(),
+                    function: func.name.as_str().into(),
                     location: contract.span.clone(),
                     formula: Formula::Not(Box::new(parsed.clone())),
                     contract_metadata: Some(sunder_metadata()),
@@ -53,7 +51,7 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
                         invariant: inv_str.clone(),
                         header_block,
                     },
-                    function: func.name.clone(),
+                    function: func.name.as_str().into(),
                     location: contract.span.clone(),
                     // Consecution: assume invariant holds, check it holds after one iteration.
                     // NOT(inv_pre => inv_post) = inv_pre AND NOT(inv_post)
@@ -64,11 +62,8 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
                     contract_metadata: Some(sunder_metadata()),
                 });
                 vcs.push(VerificationCondition {
-                    kind: VcKind::LoopInvariantSufficiency {
-                        invariant: inv_str,
-                        header_block,
-                    },
-                    function: func.name.clone(),
+                    kind: VcKind::LoopInvariantSufficiency { invariant: inv_str, header_block },
+                    function: func.name.as_str().into(),
                     location: contract.span.clone(),
                     // Sufficiency: invariant AND loop-exit-condition => postcondition.
                     // Simplified: check that invariant itself holds at exit.
@@ -88,7 +83,7 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
                         variable: variable.clone(),
                         predicate: predicate_str,
                     },
-                    function: func.name.clone(),
+                    function: func.name.as_str().into(),
                     location: contract.span.clone(),
                     formula: Formula::Not(Box::new(parsed)),
                     contract_metadata: Some(sunder_metadata()),
@@ -105,9 +100,9 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
                         vcs.push(VerificationCondition {
                             kind: VcKind::FrameConditionViolation {
                                 variable: name.to_string(),
-                                function: func.name.clone(),
+                                function: func.name.as_str().into(),
                             },
-                            function: func.name.clone(),
+                            function: func.name.as_str().into(),
                             location: contract.span.clone(),
                             // Frame condition: old(var) == new(var) for unmodified vars.
                             // Check negation: NOT(old == new) is SAT iff frame is violated.
@@ -116,10 +111,7 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
                                     format!("{name}__old"),
                                     trust_types::Sort::Int,
                                 )),
-                                Box::new(Formula::Var(
-                                    name.to_string(),
-                                    trust_types::Sort::Int,
-                                )),
+                                Box::new(Formula::Var(name.to_string(), trust_types::Sort::Int)),
                             ))),
                             contract_metadata: Some(sunder_metadata()),
                         });
@@ -136,7 +128,7 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
 
         vcs.push(VerificationCondition {
             kind,
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             location: contract.span.clone(),
             formula: Formula::Not(Box::new(parsed)),
             contract_metadata: None,
@@ -144,68 +136,22 @@ pub(crate) fn check_contracts(func: &VerifiableFunction, vcs: &mut Vec<Verificat
     }
 }
 
-/// Build a `SunderContractIr` from a function's contract annotations.
-///
-/// tRust #588: Aggregates all Sunder-relevant contracts into a single IR
-/// struct that can be consumed by the sunder backend for CHC construction.
-pub fn build_sunder_ir(func: &VerifiableFunction) -> SunderContractIr {
-    let mut ir = SunderContractIr::default();
-
-    for contract in &func.contracts {
-        match &contract.kind {
-            ContractKind::Requires => {
-                if let Some(parsed) = parse_spec_expr(&contract.body) {
-                    ir.preconditions.push(parsed);
-                }
-            }
-            ContractKind::Ensures => {
-                if let Some(parsed) = parse_spec_expr(&contract.body) {
-                    ir.postconditions.push(parsed);
-                }
-            }
-            ContractKind::LoopInvariant => {
-                let (header_block, expr) = parse_loop_invariant_body(&contract.body);
-                if let Some(parsed) = parse_spec_expr(&expr) {
-                    ir.loop_invariants.push(LoopInvariantContract {
-                        formula: parsed,
-                        header_block,
-                        expr,
-                    });
-                }
-            }
-            ContractKind::TypeRefinement => {
-                let (variable, predicate_str) = parse_refinement_body(&contract.body);
-                if let Some(parsed) = parse_spec_expr(&predicate_str) {
-                    ir.type_refinements.push(TypeRefinementContract {
-                        variable,
-                        predicate: parsed,
-                        expr: predicate_str,
-                    });
-                }
-            }
-            ContractKind::Modifies => {
-                ir.modifies_set.extend(parse_modifies_body(&contract.body));
-            }
-            _ => {}
-        }
-    }
-
-    ir
-}
-
 /// Parse a loop invariant body in "bb<N>: <expr>" format.
 /// Falls back to block 0 if no block prefix is found.
+#[cfg_attr(feature = "pipeline-v2", allow(dead_code))]
 fn parse_loop_invariant_body(body: &str) -> (usize, String) {
     if let Some(rest) = body.strip_prefix("bb")
         && let Some((block_str, expr)) = rest.split_once(':')
-            && let Ok(block) = block_str.trim().parse::<usize>() {
-                return (block, expr.trim().to_string());
-            }
+        && let Ok(block) = block_str.trim().parse::<usize>()
+    {
+        return (block, expr.trim().to_string());
+    }
     (0, body.to_string())
 }
 
 /// Parse a type refinement body in "var: predicate" format.
 /// Falls back to "v" as the variable name if no colon is found.
+#[cfg_attr(feature = "pipeline-v2", allow(dead_code))]
 fn parse_refinement_body(body: &str) -> (String, String) {
     if let Some((var, pred)) = body.split_once(':') {
         (var.trim().to_string(), pred.trim().to_string())
@@ -215,16 +161,15 @@ fn parse_refinement_body(body: &str) -> (String, String) {
 }
 
 /// Parse a modifies clause body as a comma-separated variable list.
+#[cfg_attr(feature = "pipeline-v2", allow(dead_code))]
 fn parse_modifies_body(body: &str) -> Vec<String> {
     body.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
 }
 
 /// Build a `ContractMetadata` indicating Sunder contract presence.
+#[cfg_attr(feature = "pipeline-v2", allow(dead_code))]
 fn sunder_metadata() -> ContractMetadata {
-    ContractMetadata {
-        has_loop_invariant: true,
-        ..ContractMetadata::default()
-    }
+    ContractMetadata { has_loop_invariant: true, ..ContractMetadata::default() }
 }
 
 #[cfg(test)]
@@ -362,7 +307,11 @@ mod tests {
 
         let vcs = crate::generate_vcs(&func);
 
-        assert_eq!(vcs.len(), 3, "loop invariant should generate 3 VCs (init, consec, sufficiency)");
+        assert_eq!(
+            vcs.len(),
+            3,
+            "loop invariant should generate 3 VCs (init, consec, sufficiency)"
+        );
         assert!(matches!(
             &vcs[0].kind,
             VcKind::LoopInvariantInitiation { invariant, header_block: 1 }
@@ -391,10 +340,7 @@ mod tests {
         let vcs = crate::generate_vcs(&func);
 
         assert_eq!(vcs.len(), 3);
-        assert!(matches!(
-            &vcs[0].kind,
-            VcKind::LoopInvariantInitiation { header_block: 0, .. }
-        ));
+        assert!(matches!(&vcs[0].kind, VcKind::LoopInvariantInitiation { header_block: 0, .. }));
     }
 
     #[test]
@@ -469,65 +415,6 @@ mod tests {
             .filter(|vc| matches!(&vc.kind, VcKind::FrameConditionViolation { variable, .. } if variable == "y"))
             .collect();
         assert_eq!(frame_vcs.len(), 1, "should have 1 frame VC for y");
-    }
-
-    #[test]
-    fn test_build_sunder_ir() {
-        let func = contract_test_function(vec![
-            Contract {
-                kind: ContractKind::Requires,
-                span: SourceSpan::default(),
-                body: "x > 0".to_string(),
-            },
-            Contract {
-                kind: ContractKind::Ensures,
-                span: SourceSpan::default(),
-                body: "result >= 0".to_string(),
-            },
-            Contract {
-                kind: ContractKind::LoopInvariant,
-                span: SourceSpan::default(),
-                body: "bb2: x > 0".to_string(),
-            },
-            Contract {
-                kind: ContractKind::TypeRefinement,
-                span: SourceSpan::default(),
-                body: "x: x > 0".to_string(),
-            },
-            Contract {
-                kind: ContractKind::Modifies,
-                span: SourceSpan::default(),
-                body: "x, y".to_string(),
-            },
-        ]);
-
-        let ir = build_sunder_ir(&func);
-
-        assert_eq!(ir.preconditions.len(), 1);
-        assert_eq!(ir.postconditions.len(), 1);
-        assert_eq!(ir.loop_invariants.len(), 1);
-        assert_eq!(ir.loop_invariants[0].header_block, 2);
-        assert_eq!(ir.loop_invariants[0].expr, "x > 0");
-        assert_eq!(ir.type_refinements.len(), 1);
-        assert_eq!(ir.type_refinements[0].variable, "x");
-        assert_eq!(ir.modifies_set, vec!["x", "y"]);
-        assert!(!ir.is_empty());
-
-        let meta = ir.to_metadata();
-        assert!(meta.has_requires);
-        assert!(meta.has_ensures);
-        assert!(meta.has_loop_invariant);
-        assert!(meta.has_type_refinement);
-        assert!(meta.has_modifies);
-        assert!(meta.has_any());
-        assert!(meta.has_sunder_contracts());
-    }
-
-    #[test]
-    fn test_build_sunder_ir_empty() {
-        let func = contract_test_function(vec![]);
-        let ir = build_sunder_ir(&func);
-        assert!(ir.is_empty());
     }
 
     #[test]

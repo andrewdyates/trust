@@ -14,14 +14,12 @@
 
 use trust_lift::{LiftedFunction, LocalLayout};
 use trust_types::{
-    ConstValue, Formula, Operand, Projection, Rvalue, Sort,
-    SourceSpan, Statement, Terminator, Ty, VerifiableFunction,
-    VerificationCondition, VcKind,
+    ConstValue, Formula, Operand, Projection, Rvalue, Sort, SourceSpan, Statement, Terminator, Ty,
+    VcKind, VerifiableFunction, VerificationCondition,
 };
 
 use crate::binary_analysis::lifter::{
-    AbstractInsn, AbstractOp, AbstractRegister, AbstractValue, LiftedProgram,
-    MemoryAccess,
+    AbstractInsn, AbstractOp, AbstractRegister, AbstractValue, LiftedProgram, MemoryAccess,
 };
 
 /// Convert a `LiftedFunction` into a `VerifiableFunction` suitable for VC generation.
@@ -78,7 +76,9 @@ pub fn lifted_to_legacy(lifted: &LiftedFunction) -> LiftedProgram {
 
         // Convert terminator
         let term_addr = block_base.saturating_add((block.stmts.len() as u64) * 4);
-        if let Some(insn) = terminator_to_abstract_insn(&block.terminator, term_addr, lifted.entry_point) {
+        if let Some(insn) =
+            terminator_to_abstract_insn(&block.terminator, term_addr, lifted.entry_point)
+        {
             instructions.push(insn);
         }
     }
@@ -92,10 +92,7 @@ pub fn lifted_to_legacy(lifted: &LiftedFunction) -> LiftedProgram {
             let width = ty_to_width(&local.ty);
             AbstractRegister {
                 id: local.index as u16,
-                name: local
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| format!("_{}", local.index)),
+                name: local.name.clone().unwrap_or_else(|| format!("_{}", local.index)),
                 width,
             }
         })
@@ -104,11 +101,7 @@ pub fn lifted_to_legacy(lifted: &LiftedFunction) -> LiftedProgram {
     // Ensure instructions are sorted by address and the entry point is present
     instructions.sort_by_key(|insn| insn.address);
 
-    LiftedProgram {
-        instructions,
-        entry_point: lifted.entry_point,
-        registers,
-    }
+    LiftedProgram { instructions, entry_point: lifted.entry_point, registers }
 }
 
 /// Convert a tMIR statement to an abstract instruction.
@@ -120,18 +113,12 @@ fn stmt_to_abstract_insn(stmt: &Statement, addr: u64) -> Option<AbstractInsn> {
             // Check for memory store (place has Deref projection)
             if place.projections.iter().any(|p| matches!(p, Projection::Deref)) {
                 let value = rvalue_to_formula(rvalue);
-                let store_addr = Formula::Var(
-                    format!("_store_addr_{}", place.local),
-                    Sort::BitVec(64),
-                );
+                let store_addr =
+                    Formula::Var(format!("_store_addr_{}", place.local), Sort::BitVec(64));
                 return Some(AbstractInsn {
                     address: addr,
                     op: AbstractOp::Store {
-                        access: MemoryAccess::Write {
-                            addr: store_addr,
-                            size: 8,
-                            value,
-                        },
+                        access: MemoryAccess::Write { addr: store_addr, size: 8, value },
                     },
                     size: 4,
                 });
@@ -158,40 +145,30 @@ fn stmt_to_abstract_insn(stmt: &Statement, addr: u64) -> Option<AbstractInsn> {
                 Rvalue::Use(operand) => {
                     // Check if operand is a deref (memory load)
                     if let Operand::Copy(src_place) | Operand::Move(src_place) = operand
-                        && src_place.projections.iter().any(|p| matches!(p, Projection::Deref)) {
-                            let load_addr = Formula::Var(
-                                format!("_load_addr_{}", src_place.local),
-                                Sort::BitVec(64),
-                            );
-                            return Some(AbstractInsn {
-                                address: addr,
-                                op: AbstractOp::Load {
-                                    dst,
-                                    access: MemoryAccess::Read {
-                                        addr: load_addr,
-                                        size: 8,
-                                    },
-                                },
-                                size: 4,
-                            });
-                        }
-                    AbstractOp::Assign {
-                        dst,
-                        src: operand_to_abstract_value(operand),
+                        && src_place.projections.iter().any(|p| matches!(p, Projection::Deref))
+                    {
+                        let load_addr = Formula::Var(
+                            format!("_load_addr_{}", src_place.local),
+                            Sort::BitVec(64),
+                        );
+                        return Some(AbstractInsn {
+                            address: addr,
+                            op: AbstractOp::Load {
+                                dst,
+                                access: MemoryAccess::Read { addr: load_addr, size: 8 },
+                            },
+                            size: 4,
+                        });
                     }
+                    AbstractOp::Assign { dst, src: operand_to_abstract_value(operand) }
                 }
-                Rvalue::Cast(operand, _) => AbstractOp::Assign {
-                    dst,
-                    src: operand_to_abstract_value(operand),
-                },
+                Rvalue::Cast(operand, _) => {
+                    AbstractOp::Assign { dst, src: operand_to_abstract_value(operand) }
+                }
                 _ => AbstractOp::Nop,
             };
 
-            Some(AbstractInsn {
-                address: addr,
-                op,
-                size: 4,
-            })
+            Some(AbstractInsn { address: addr, op, size: 4 })
         }
         _ => None,
     }
@@ -205,26 +182,16 @@ fn terminator_to_abstract_insn(
 ) -> Option<AbstractInsn> {
     let op = match term {
         Terminator::Return => AbstractOp::Return { value: None },
-        Terminator::Goto(target) => AbstractOp::Branch {
-            target: synthetic_block_address(entry_point, target.0),
-        },
-        Terminator::Call {
-            func: callee,
-            args,
-            target,
-            ..
-        } => AbstractOp::Call {
+        Terminator::Goto(target) => {
+            AbstractOp::Branch { target: synthetic_block_address(entry_point, target.0) }
+        }
+        Terminator::Call { func: callee, args, target, .. } => AbstractOp::Call {
             func: callee.clone(),
             args: args.iter().map(operand_to_abstract_value).collect(),
             dest: None,
             next: target.map(|t| synthetic_block_address(entry_point, t.0)),
         },
-        Terminator::SwitchInt {
-            discr,
-            targets,
-            otherwise,
-            ..
-        } => {
+        Terminator::SwitchInt { discr, targets, otherwise, .. } => {
             if let Some((_, true_target)) = targets.first() {
                 AbstractOp::CondBranch {
                     cond: operand_to_abstract_value(discr),
@@ -232,30 +199,22 @@ fn terminator_to_abstract_insn(
                     false_target: synthetic_block_address(entry_point, otherwise.0),
                 }
             } else {
-                AbstractOp::Branch {
-                    target: synthetic_block_address(entry_point, otherwise.0),
-                }
+                AbstractOp::Branch { target: synthetic_block_address(entry_point, otherwise.0) }
             }
         }
-        Terminator::Drop { target, .. } => AbstractOp::Branch {
-            target: synthetic_block_address(entry_point, target.0),
-        },
+        Terminator::Drop { target, .. } => {
+            AbstractOp::Branch { target: synthetic_block_address(entry_point, target.0) }
+        }
         _ => return None,
     };
 
-    Some(AbstractInsn {
-        address: addr,
-        op,
-        size: 4,
-    })
+    Some(AbstractInsn { address: addr, op, size: 4 })
 }
 
 /// Convert an operand to an AbstractValue.
 fn operand_to_abstract_value(op: &Operand) -> AbstractValue {
     match op {
-        Operand::Copy(place) | Operand::Move(place) => {
-            AbstractValue::Register(place.local as u16)
-        }
+        Operand::Copy(place) | Operand::Move(place) => AbstractValue::Register(place.local as u16),
         Operand::Constant(cv) => {
             let formula = match cv {
                 ConstValue::Bool(b) => Formula::Bool(*b),
@@ -266,11 +225,11 @@ fn operand_to_abstract_value(op: &Operand) -> AbstractValue {
                 },
                 ConstValue::Float(f) => Formula::Var(format!("float_{f}"), Sort::BitVec(64)),
                 ConstValue::Unit => Formula::Int(0),
-                _ => Formula::Var("__unknown".to_string(), Sort::Int),
+                _ => Formula::Var("__unknown".into(), Sort::Int),
             };
             AbstractValue::Formula(formula)
         }
-        _ => AbstractValue::Formula(Formula::Var("__unknown_op".to_string(), Sort::Int)),
+        _ => AbstractValue::Formula(Formula::Var("__unknown_op".into(), Sort::Int)),
     }
 }
 
@@ -284,12 +243,10 @@ fn rvalue_to_formula(rvalue: &Rvalue) -> Formula {
                 Err(_) => Formula::UInt(*n),
             },
             Operand::Constant(ConstValue::Bool(b)) => Formula::Bool(*b),
-            Operand::Copy(p) | Operand::Move(p) => {
-                Formula::Var(format!("_{}", p.local), Sort::Int)
-            }
-            _ => Formula::Var("__store_val".to_string(), Sort::Int),
+            Operand::Copy(p) | Operand::Move(p) => Formula::Var(format!("_{}", p.local), Sort::Int),
+            _ => Formula::Var("__store_val".into(), Sort::Int),
         },
-        _ => Formula::Var("__store_val".to_string(), Sort::Int),
+        _ => Formula::Var("__store_val".into(), Sort::Int),
     }
 }
 
@@ -331,6 +288,86 @@ pub fn generate_binary_vcs(lifted: &LiftedFunction) -> Vec<VerificationCondition
     vcs
 }
 
+fn detect_memory_local(lifted: &LiftedFunction) -> Option<usize> {
+    memory_local_from_store_formula(lifted)
+        .or_else(|| memory_local_from_decl_name(lifted))
+        .or_else(|| memory_local_from_known_layout(lifted))
+}
+
+fn memory_local_from_store_formula(lifted: &LiftedFunction) -> Option<usize> {
+    lifted.tmir_body.blocks.iter().flat_map(|block| block.stmts.iter()).find_map(|stmt| {
+        let Statement::Assign { place, rvalue, .. } = stmt else {
+            return None;
+        };
+
+        rvalue_stores_to_mem(rvalue).then_some(place.local)
+    })
+}
+
+fn memory_local_from_decl_name(lifted: &LiftedFunction) -> Option<usize> {
+    lifted
+        .tmir_body
+        .locals
+        .iter()
+        .find_map(|local| (local.name.as_deref() == Some("MEM")).then_some(local.index))
+}
+
+fn memory_local_from_known_layout(lifted: &LiftedFunction) -> Option<usize> {
+    let x86_64 = LocalLayout::x86_64();
+    if known_layout_matches(lifted, &x86_64, &[(1, "RAX"), (2, "RCX"), (19, "CF"), (20, "ZF")]) {
+        return Some(x86_64.mem_local);
+    }
+
+    let aarch64 = LocalLayout::aarch64();
+    if known_layout_matches(lifted, &aarch64, &[(1, "X0"), (2, "X1"), (34, "N"), (35, "Z")]) {
+        return Some(aarch64.mem_local);
+    }
+
+    None
+}
+
+fn known_layout_matches(
+    lifted: &LiftedFunction,
+    layout: &LocalLayout,
+    named_anchors: &[(usize, &str)],
+) -> bool {
+    let locals = &lifted.tmir_body.locals;
+    has_local_index(locals, layout.mem_local)
+        && (named_anchors.iter().any(|(index, name)| has_local_name(locals, *index, name))
+            || has_exact_dense_layout(locals, layout.total))
+}
+
+fn has_local_index(locals: &[trust_types::LocalDecl], index: usize) -> bool {
+    locals.iter().any(|local| local.index == index)
+}
+
+fn has_local_name(locals: &[trust_types::LocalDecl], index: usize, name: &str) -> bool {
+    locals.iter().any(|local| local.index == index && local.name.as_deref() == Some(name))
+}
+
+fn has_exact_dense_layout(locals: &[trust_types::LocalDecl], total: usize) -> bool {
+    locals.iter().map(|local| local.index).max() == Some(total - 1)
+        && (0..total).all(|index| has_local_index(locals, index))
+}
+
+fn rvalue_stores_to_mem(rvalue: &Rvalue) -> bool {
+    matches!(rvalue, Rvalue::Use(Operand::Symbolic(formula)) if formula_stores_to_mem(formula))
+}
+
+fn formula_stores_to_mem(formula: &Formula) -> bool {
+    matches!(formula, Formula::Store(base, _, _) if formula_is_mem_array(base))
+}
+
+fn formula_is_mem_array(formula: &Formula) -> bool {
+    match formula {
+        Formula::Store(base, _, _) => formula_is_mem_array(base),
+        _ => {
+            formula.var_name() == Some("MEM")
+                && matches!(formula.var_sort(), Some(Sort::Array(_, _)))
+        }
+    }
+}
+
 /// Generate memory model VCs for lifted binary code.
 ///
 /// These VCs are specific to binary analysis (not present in source-level MIR):
@@ -345,18 +382,14 @@ pub fn generate_binary_vcs(lifted: &LiftedFunction) -> Vec<VerificationCondition
 pub fn generate_memory_model_vcs(lifted: &LiftedFunction) -> Vec<VerificationCondition> {
     let mut vcs = Vec::new();
     let func_name = &lifted.name;
-    // tRust: derive MEM local index from the canonical layout in trust-lift,
-    // avoiding a hardcoded magic constant that would silently break if the
-    // layout changes (e.g., adding SIMD registers). See #566.
-    let layout = LocalLayout::standard();
-    let mem_local_index = layout.mem_local;
+    let mem_local_index = detect_memory_local(lifted);
 
     // Scan tMIR blocks for memory-related statements.
     for block in &lifted.tmir_body.blocks {
         for stmt in &block.stmts {
             if let Statement::Assign { place, rvalue: _, span } = stmt {
                 // Detect writes to MEM local (memory store operations from the binary).
-                if place.local == mem_local_index {
+                if Some(place.local) == mem_local_index {
                     // Memory write: generate an OOB check.
                     // VC: the write address must be within valid memory bounds.
                     // Formula: addr >= stack_base AND addr < stack_limit
@@ -365,15 +398,11 @@ pub fn generate_memory_model_vcs(lifted: &LiftedFunction) -> Vec<VerificationCon
                         format!("mem_addr_bb{}_{}", block.id.0, place.local),
                         Sort::BitVec(64),
                     );
-                    let stack_base = Formula::Var("stack_base".to_string(), Sort::BitVec(64));
-                    let stack_limit = Formula::Var("stack_limit".to_string(), Sort::BitVec(64));
+                    let stack_base = Formula::Var("stack_base".into(), Sort::BitVec(64));
+                    let stack_limit = Formula::Var("stack_limit".into(), Sort::BitVec(64));
 
                     let oob_formula = Formula::Or(vec![
-                        Formula::BvULt(
-                            Box::new(addr_var.clone()),
-                            Box::new(stack_base),
-                            64,
-                        ),
+                        Formula::BvULt(Box::new(addr_var.clone()), Box::new(stack_base), 64),
                         Formula::Not(Box::new(Formula::BvULt(
                             Box::new(addr_var),
                             Box::new(stack_limit),
@@ -383,12 +412,9 @@ pub fn generate_memory_model_vcs(lifted: &LiftedFunction) -> Vec<VerificationCon
 
                     vcs.push(VerificationCondition {
                         kind: VcKind::Assertion {
-                            message: format!(
-                                "binary memory write OOB in block bb{}",
-                                block.id.0,
-                            ),
+                            message: format!("binary memory write OOB in block bb{}", block.id.0,),
                         },
-                        function: func_name.clone(),
+                        function: func_name.clone().into(),
                         location: span.clone(),
                         formula: oob_formula,
                         contract_metadata: None,
@@ -399,15 +425,13 @@ pub fn generate_memory_model_vcs(lifted: &LiftedFunction) -> Vec<VerificationCon
 
         // Stack discipline: check that Return terminators restore SP.
         if matches!(block.terminator, Terminator::Return) {
-            let sp_current = Formula::Var("SP".to_string(), Sort::BitVec(64));
-            let sp_entry = Formula::Var("SP_entry".to_string(), Sort::BitVec(64));
+            let sp_current = Formula::Var("SP".into(), Sort::BitVec(64));
+            let sp_entry = Formula::Var("SP_entry".into(), Sort::BitVec(64));
 
             // VC: SP at return must equal SP at entry.
             // Negated (SAT = violation): SP_current != SP_entry
-            let sp_mismatch = Formula::Not(Box::new(Formula::Eq(
-                Box::new(sp_current),
-                Box::new(sp_entry),
-            )));
+            let sp_mismatch =
+                Formula::Not(Box::new(Formula::Eq(Box::new(sp_current), Box::new(sp_entry))));
 
             vcs.push(VerificationCondition {
                 kind: VcKind::Assertion {
@@ -416,7 +440,7 @@ pub fn generate_memory_model_vcs(lifted: &LiftedFunction) -> Vec<VerificationCon
                         block.id.0,
                     ),
                 },
-                function: func_name.clone(),
+                function: func_name.clone().into(),
                 location: SourceSpan {
                     file: format!("binary:0x{:x}", lifted.entry_point),
                     line_start: 0,
@@ -438,8 +462,8 @@ mod tests {
     use super::*;
     use trust_lift::cfg::{Cfg, LiftedBlock};
     use trust_types::{
-        BasicBlock, BlockId, ConstValue, LocalDecl, Operand, Place, Rvalue,
-        SourceSpan, Statement, Terminator, Ty, VerifiableBody,
+        BasicBlock, BlockId, ConstValue, LocalDecl, Operand, Place, Rvalue, SourceSpan, Statement,
+        Terminator, Ty, VerifiableBody,
     };
 
     /// Build a minimal LiftedFunction for testing.
@@ -456,9 +480,21 @@ mod tests {
 
         let body = VerifiableBody {
             locals: vec![
-                LocalDecl { index: 0, ty: Ty::Int { width: 64, signed: false }, name: Some("_lifted_result".into()) },
-                LocalDecl { index: 1, ty: Ty::Int { width: 64, signed: false }, name: Some("X0".into()) },
-                LocalDecl { index: 2, ty: Ty::Int { width: 64, signed: false }, name: Some("X1".into()) },
+                LocalDecl {
+                    index: 0,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("_lifted_result".into()),
+                },
+                LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("X0".into()),
+                },
+                LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("X1".into()),
+                },
             ],
             blocks: vec![BasicBlock {
                 id: BlockId(0),
@@ -495,13 +531,20 @@ mod tests {
 
     /// Build a LiftedFunction with memory operations for memory model VC tests.
     fn make_mem_lifted() -> LiftedFunction {
-        let layout = LocalLayout::standard();
+        make_mem_lifted_with_layout(LocalLayout::standard(), "test_mem", 0x2000)
+    }
+
+    fn make_mem_lifted_with_layout(
+        layout: LocalLayout,
+        name: &str,
+        entry_point: u64,
+    ) -> LiftedFunction {
         let mem_idx = layout.mem_local;
 
         let mut cfg = Cfg::new();
         cfg.add_block(LiftedBlock {
             id: 0,
-            start_addr: 0x2000,
+            start_addr: entry_point,
             instructions: vec![],
             successors: vec![],
             is_return: true,
@@ -510,11 +553,23 @@ mod tests {
         let body = VerifiableBody {
             locals: {
                 let mut locals = Vec::new();
-                // Build locals matching the standard layout up to MEM.
-                locals.push(LocalDecl { index: 0, ty: Ty::Int { width: 64, signed: false }, name: Some("_result".into()) });
-                locals.push(LocalDecl { index: 1, ty: Ty::Int { width: 64, signed: false }, name: Some("X0".into()) });
-                locals.push(LocalDecl { index: 2, ty: Ty::Int { width: 64, signed: false }, name: Some("X1".into()) });
-                // Pad locals 3..(mem_idx-1) to position MEM at the correct index.
+                // Build locals matching the selected layout up to MEM.
+                locals.push(LocalDecl {
+                    index: 0,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("_result".into()),
+                });
+                locals.push(LocalDecl {
+                    index: 1,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("X0".into()),
+                });
+                locals.push(LocalDecl {
+                    index: 2,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("X1".into()),
+                });
+                // Pad locals 3..(mem_idx-1) to position MEM at the selected index.
                 for i in 3..mem_idx {
                     locals.push(LocalDecl {
                         index: i,
@@ -522,18 +577,22 @@ mod tests {
                         name: Some(format!("_pad{i}")),
                     });
                 }
-                locals.push(LocalDecl { index: mem_idx, ty: Ty::Int { width: 64, signed: false }, name: Some("MEM".into()) });
+                locals.push(LocalDecl {
+                    index: mem_idx,
+                    ty: Ty::Int { width: 64, signed: false },
+                    name: Some("MEM".into()),
+                });
                 locals
             },
             blocks: vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![
-                    // Memory write (to MEM local from standard layout)
+                    // Memory write (to MEM local from the selected layout)
                     Statement::Assign {
                         place: Place::local(mem_idx),
                         rvalue: Rvalue::Use(Operand::Constant(ConstValue::Uint(0, 64))),
                         span: SourceSpan {
-                            file: "binary:0x2000".to_string(),
+                            file: format!("binary:0x{entry_point:x}"),
                             line_start: 0,
                             col_start: 0,
                             line_end: 0,
@@ -548,8 +607,8 @@ mod tests {
         };
 
         LiftedFunction {
-            name: "test_mem".to_string(),
-            entry_point: 0x2000,
+            name: name.to_string(),
+            entry_point,
             cfg,
             tmir_body: body,
             ssa: None,
@@ -594,7 +653,10 @@ mod tests {
         let vcs = generate_binary_vcs(&lifted);
 
         for vc in &vcs {
-            assert_eq!(vc.function, "test_add", "all VCs should reference the lifted function name");
+            assert_eq!(
+                vc.function, "test_add",
+                "all VCs should reference the lifted function name"
+            );
         }
     }
 
@@ -609,10 +671,63 @@ mod tests {
                 matches!(&vc.kind, VcKind::Assertion { message } if message.contains("memory write OOB"))
             })
             .collect();
-        assert!(
-            !oob_vcs.is_empty(),
-            "should produce memory OOB VCs for memory writes"
+        assert!(!oob_vcs.is_empty(), "should produce memory OOB VCs for memory writes");
+    }
+
+    #[test]
+    fn test_detect_memory_local_uses_x86_64_mem_decl() {
+        let layout = LocalLayout::x86_64();
+        let expected_mem = layout.mem_local;
+        let lifted = make_mem_lifted_with_layout(layout, "test_x86_mem", 0x2400);
+
+        assert_eq!(detect_memory_local(&lifted), Some(expected_mem));
+        assert_ne!(detect_memory_local(&lifted), Some(LocalLayout::standard().mem_local));
+    }
+
+    #[test]
+    fn test_generate_memory_model_vcs_x86_64_mem_write() {
+        let layout = LocalLayout::x86_64();
+        let lifted = make_mem_lifted_with_layout(layout, "test_x86_mem", 0x2400);
+        let mem_vcs = generate_memory_model_vcs(&lifted);
+
+        let oob_vcs: Vec<_> = mem_vcs
+            .iter()
+            .filter(|vc| {
+                matches!(&vc.kind, VcKind::Assertion { message } if message.contains("memory write OOB"))
+            })
+            .collect();
+
+        assert_eq!(oob_vcs.len(), 1, "should produce OOB VC for x86_64 MEM local");
+        assert_eq!(oob_vcs[0].location.file, "binary:0x2400");
+    }
+
+    #[test]
+    fn test_detect_memory_local_from_store_formula_without_mem_name() {
+        let layout = LocalLayout::x86_64();
+        let mem_idx = layout.mem_local;
+        let mut lifted = make_mem_lifted_with_layout(layout, "test_x86_mem_store", 0x2500);
+        lifted.tmir_body.locals = vec![
+            LocalDecl { index: 0, ty: Ty::Int { width: 64, signed: false }, name: None },
+            LocalDecl { index: mem_idx, ty: Ty::Int { width: 64, signed: false }, name: None },
+        ];
+
+        let store_formula = Formula::Store(
+            Box::new(Formula::Var(
+                "MEM".into(),
+                Sort::Array(Box::new(Sort::BitVec(64)), Box::new(Sort::BitVec(8))),
+            )),
+            Box::new(Formula::Var("addr".into(), Sort::BitVec(64))),
+            Box::new(Formula::Var("val".into(), Sort::BitVec(8))),
         );
+
+        match &mut lifted.tmir_body.blocks[0].stmts[0] {
+            Statement::Assign { rvalue, .. } => {
+                *rvalue = Rvalue::Use(Operand::Symbolic(store_formula));
+            }
+            _ => panic!("expected memory assignment"),
+        }
+
+        assert_eq!(detect_memory_local(&lifted), Some(mem_idx));
     }
 
     #[test]
@@ -644,9 +759,11 @@ mod tests {
         });
 
         let body = VerifiableBody {
-            locals: vec![
-                LocalDecl { index: 0, ty: Ty::Int { width: 64, signed: false }, name: None },
-            ],
+            locals: vec![LocalDecl {
+                index: 0,
+                ty: Ty::Int { width: 64, signed: false },
+                name: None,
+            }],
             blocks: vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![],
@@ -667,10 +784,11 @@ mod tests {
 
         let mem_vcs = generate_memory_model_vcs(&lifted);
         // Only stack pointer VC (from the Return terminator), no memory OOB.
-        let oob_vcs: Vec<_> = mem_vcs.iter()
-            .filter(|vc| {
-                matches!(&vc.kind, VcKind::Assertion { message } if message.contains("OOB"))
-            })
+        let oob_vcs: Vec<_> = mem_vcs
+            .iter()
+            .filter(
+                |vc| matches!(&vc.kind, VcKind::Assertion { message } if message.contains("OOB")),
+            )
             .collect();
         assert!(oob_vcs.is_empty(), "empty function should not produce OOB VCs");
 
@@ -737,13 +855,7 @@ mod tests {
         let legacy = lifted_to_legacy(&lifted);
 
         let has_add = legacy.instructions.iter().any(|insn| {
-            matches!(
-                &insn.op,
-                AbstractOp::BinArith {
-                    op: trust_types::BinOp::Add,
-                    ..
-                }
-            )
+            matches!(&insn.op, AbstractOp::BinArith { op: trust_types::BinOp::Add, .. })
         });
         assert!(has_add, "should have an Add instruction from the tMIR body");
     }
@@ -753,9 +865,8 @@ mod tests {
         let lifted = make_test_lifted();
         let legacy = lifted_to_legacy(&lifted);
 
-        let has_ret = legacy.instructions.iter().any(|insn| {
-            matches!(&insn.op, AbstractOp::Return { .. })
-        });
+        let has_ret =
+            legacy.instructions.iter().any(|insn| matches!(&insn.op, AbstractOp::Return { .. }));
         assert!(has_ret, "should have a Return instruction");
     }
 
@@ -764,10 +875,7 @@ mod tests {
         let lifted = make_test_lifted();
         let legacy = lifted_to_legacy(&lifted);
 
-        let has_entry = legacy
-            .instructions
-            .iter()
-            .any(|insn| insn.address == legacy.entry_point);
+        let has_entry = legacy.instructions.iter().any(|insn| insn.address == legacy.entry_point);
         assert!(
             has_entry,
             "entry point 0x{:x} should be present in instructions",

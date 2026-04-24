@@ -143,7 +143,7 @@ fn parse_recursive<'a>(buf: &'a [u8], ctx: Context) -> MdStream<'a> {
             // We found something: push our WIP and then push the found tree
             let prev_buf = &wip_buf[..(wip_buf.len() - loop_buf.len())];
             if !prev_buf.is_empty() {
-                let prev_str = str::from_utf8(prev_buf).expect("invariant: buffer must be valid UTF-8"); // tRust: unwrap -> expect
+                let prev_str = str::from_utf8(prev_buf).unwrap();
                 stream.push(MdTree::PlainText(prev_str));
             }
             stream.push(tree);
@@ -155,7 +155,7 @@ fn parse_recursive<'a>(buf: &'a [u8], ctx: Context) -> MdStream<'a> {
             loop_buf = &loop_buf[1..];
             // If we are at the end and haven't found anything, just push plain text
             if loop_buf.is_empty() && !wip_buf.is_empty() {
-                let final_str = str::from_utf8(wip_buf).expect("invariant: buffer must be valid UTF-8"); // tRust: unwrap -> expect
+                let final_str = str::from_utf8(wip_buf).unwrap();
                 stream.push(MdTree::PlainText(final_str));
             }
         };
@@ -180,7 +180,7 @@ where
     let ignore_esc = matches!(opts, ParseOpt::TrimNoEsc);
     let trim = matches!(opts, ParseOpt::TrimNoEsc);
     let (txt, rest) = parse_with_end_pat(&buf[start_pat.len()..], end_pat, ignore_esc)?;
-    let mut txt = str::from_utf8(txt).expect("invariant: text must be valid UTF-8"); // tRust: unwrap -> expect
+    let mut txt = str::from_utf8(txt).unwrap();
     if trim {
         txt = txt.trim();
     }
@@ -191,7 +191,7 @@ where
 fn parse_codeinline(buf: &[u8]) -> ParseResult<'_> {
     let seps = buf.iter().take_while(|ch| **ch == b'`').count();
     let (txt, rest) = parse_with_end_pat(&buf[seps..], &buf[..seps], true)?;
-    Some((MdTree::CodeInline(str::from_utf8(txt).expect("invariant: text must be valid UTF-8")), rest)) // tRust: unwrap -> expect
+    Some((MdTree::CodeInline(str::from_utf8(txt).unwrap()), rest))
 }
 
 /// Parse a codeblock. Accounts for >3 backticks and language specification
@@ -206,7 +206,7 @@ fn parse_codeblock(buf: &[u8]) -> Parsed<'_> {
 
     let lang = if next_ws_idx > 0 {
         // Munch the lang
-        let tmp = str::from_utf8(&working[..next_ws_idx]).expect("invariant: code language tag must be valid UTF-8"); // tRust: unwrap -> expect
+        let tmp = str::from_utf8(&working[..next_ws_idx]).unwrap();
         working = &working[next_ws_idx..];
         Some(tmp)
     } else {
@@ -227,7 +227,7 @@ fn parse_codeblock(buf: &[u8]) -> Parsed<'_> {
     }
 
     let (txt, rest) = found.unwrap_or((working, &[]));
-    let txt = str::from_utf8(txt).expect("invariant: text must be valid UTF-8").trim_matches('\n'); // tRust: unwrap -> expect
+    let txt = str::from_utf8(txt).unwrap().trim_matches('\n');
 
     (MdTree::CodeBlock { txt, lang }, rest)
 }
@@ -245,7 +245,7 @@ fn parse_heading(buf: &[u8]) -> ParseResult<'_> {
     let ctx = Context { .. };
     let stream = parse_recursive(txt, ctx);
 
-    Some((MdTree::Heading(level.try_into().expect("invariant: heading level must fit in target type"), stream), rest)) // tRust: unwrap -> expect
+    Some((MdTree::Heading(level.try_into().unwrap(), stream), rest))
 }
 
 /// Bulleted list
@@ -258,7 +258,7 @@ fn parse_unordered_li(buf: &[u8]) -> Parsed<'_> {
 
 /// Numbered list
 fn parse_ordered_li(buf: &[u8]) -> Parsed<'_> {
-    let (num, pos) = ord_list_start(buf).expect("invariant: caller verified buf starts with ordered list"); // tRust: unwrap -> expect
+    let (num, pos) = ord_list_start(buf).unwrap(); // success tested in caller
     let (txt, rest) = get_indented_section(&buf[pos..]);
     let ctx = Context { .. };
     let stream = parse_recursive(trim_ascii_start(txt), ctx);
@@ -306,11 +306,11 @@ fn parse_any_link(buf: &[u8], can_be_def: bool) -> ParseResult<'_> {
         return None;
     }
 
-    let disp = str::from_utf8(bracketed).expect("invariant: bracketed text must be valid UTF-8"); // tRust: unwrap -> expect
+    let disp = str::from_utf8(bracketed).unwrap();
     match (can_be_def, rest[0]) {
         (true, b':') => {
             let (link, tmp) = parse_to_newline(&rest[1..]);
-            let link = str::from_utf8(link).expect("invariant: link text must be valid UTF-8").trim(); // tRust: unwrap -> expect
+            let link = str::from_utf8(link).unwrap().trim();
             Some((MdTree::LinkDef { id: disp, link }, tmp))
         }
         (_, b'(') => parse_simple_pat(rest, b"(", b")", ParseOpt::TrimNoEsc, |link| MdTree::Link {
@@ -400,7 +400,7 @@ fn normalize<'a>(MdStream(stream): MdStream<'a>, linkdefs: &mut Vec<MdTree<'a>>)
         })
         .collect();
     let mut iter = iter::once(true).chain(to_keep).chain(iter::once(true));
-    new_stream.retain(|_| iter.next().expect("invariant: iterator must have enough elements for retain")); // tRust: unwrap -> expect
+    new_stream.retain(|_| iter.next().unwrap());
 
     // Insert line or paragraph breaks where there should be some
     let mut insertions = 0;

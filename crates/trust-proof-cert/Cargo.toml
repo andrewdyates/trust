@@ -20,5 +20,8 @@ bincode = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }
 
+# tRust #879: z4-proof-common shared types for proof checker integration
+z4-proof-common = { workspace = true }
+
 [dev-dependencies]
 proptest = { workspace = true }

@@ -124,7 +124,7 @@ fn parse_args<'a>(ecx: &ExtCtxt<'a>, sp: Span, tts: TokenStream) -> PResult<'a, 
                 if let Some((_, prev)) = args.by_name(ident.name) {
                     ecx.dcx().emit_err(errors::FormatDuplicateArg {
                         span: ident.span,
-                        prev: prev.kind.ident().expect("invariant: named format arg must have an ident").span, // tRust: unwrap -> expect
+                        prev: prev.kind.ident().unwrap().span,
                         duplicate: ident.span,
                         ident,
                     });
@@ -606,7 +606,7 @@ fn make_format_args(
                 }
                 Width => (span, span),
             };
-            let arg_name = args.explicit_args()[index].kind.ident().expect("invariant: positionally-used named arg must have an ident"); // tRust: unwrap -> expect
+            let arg_name = args.explicit_args()[index].kind.ident().unwrap();
             ecx.buffered_early_lint.push(BufferedEarlyLint {
                 span: Some(arg_name.span.into()),
                 node_id: rustc_ast::CRATE_NODE_ID,

@@ -163,7 +163,7 @@ impl<'a, 'tcx> InspectCandidate<'a, 'tcx> {
             instantiate_canonical_state(infcx, span, param_env, &mut orig_values, self.final_state);
 
         if let Some(term_hack) = &self.goal.normalizes_to_term_hack {
-            // tRust: known issue — We ignore the expected term of `NormalizesTo` goals
+            // FIXME: We ignore the expected term of `NormalizesTo` goals
             // when computing the result of its candidates. This is
             // scuffed.
             let _ = term_hack.constrain_and(infcx, span, param_env, |_| {});
@@ -221,7 +221,6 @@ impl<'a, 'tcx> InspectCandidate<'a, 'tcx> {
             }
         }
 
-        // tRust: invariant — the `instantiate_impl_args` step must appear as a probe step in the proof tree
         bug!("expected impl args probe step for `instantiate_impl_args`");
     }
 
@@ -363,7 +362,6 @@ impl<'a, 'tcx> InspectGoal<'a, 'tcx> {
         match probe.kind {
             inspect::ProbeKind::ProjectionCompatibility
             | inspect::ProbeKind::ShadowedEnvProbing => {
-                // tRust: invariant — | inspect::ProbeKind::ShadowedEnvProbing should not appear at this point in candidates_recur
                 bug!()
             }
 
@@ -402,7 +400,7 @@ impl<'a, 'tcx> InspectGoal<'a, 'tcx> {
     ///
     /// Returns `None` if there are either no or multiple applicable candidates.
     pub fn unique_applicable_candidate(&'a self) -> Option<InspectCandidate<'a, 'tcx>> {
-        // tRust: known issue (-Znext-solver) — This does not handle impl candidates
+        // FIXME(-Znext-solver): This does not handle impl candidates
         // hidden by env candidates.
         let mut candidates = self.candidates();
         candidates.retain(|c| c.result().is_ok());

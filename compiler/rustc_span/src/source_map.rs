@@ -123,7 +123,7 @@ impl FileLoader for RealFileLoader {
         let len = file.metadata()?.len();
 
         let mut bytes = Arc::new_uninit_slice(len as usize);
-        let mut buf = BorrowedBuf::from(Arc::get_mut(&mut bytes).expect("invariant: freshly created Arc has no other references")); // tRust: unwrap -> expect
+        let mut buf = BorrowedBuf::from(Arc::get_mut(&mut bytes).unwrap());
         match file.read_buf_exact(buf.unfilled()) {
             Ok(()) => {}
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
@@ -544,7 +544,7 @@ impl SourceMap {
         // numbers in Loc are 1-based, so we subtract 1 to get 0-based
         // lines.
         //
-        // tRust: known issue — now that we handle DUMMY_SP up above, we should consider
+        // FIXME: now that we handle DUMMY_SP up above, we should consider
         // asserting that the line numbers here are all indeed 1-based.
         let hi_line = hi.line.saturating_sub(1);
         for line_index in lo.line.saturating_sub(1)..hi_line {
@@ -897,7 +897,7 @@ impl SourceMap {
     ///
     /// *Only suitable for diagnostics.*
     pub fn guess_head_span(&self, sp: Span) -> Span {
-        // tRust: known issue — extend the AST items to have a head span, or replace callers with pointing at
+        // FIXME: extend the AST items to have a head span, or replace callers with pointing at
         // the item's ident when appropriate.
         self.span_until_char(sp, '{')
     }

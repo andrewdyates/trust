@@ -747,7 +747,7 @@ fn hash_iter_order_independent<
         }
         1 => {
             // No need to instantiate a hasher
-            it.next().expect("invariant: iterator must have at least one element").hash_stable(hcx, hasher); // tRust: unwrap -> expect
+            it.next().unwrap().hash_stable(hcx, hasher);
         }
         _ => {
             let mut accumulator = Fingerprint::ZERO;

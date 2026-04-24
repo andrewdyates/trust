@@ -41,8 +41,7 @@ impl TypeAbstraction {
         var: impl Into<String>,
         discriminants: impl IntoIterator<Item = i128>,
     ) {
-        self.enum_discriminants
-            .insert(var.into(), discriminants.into_iter().collect());
+        self.enum_discriminants.insert(var.into(), discriminants.into_iter().collect());
     }
 
     /// Get valid discriminant values for a variable.
@@ -54,9 +53,7 @@ impl TypeAbstraction {
     /// Check if a discriminant value is valid for a variable.
     #[must_use]
     pub fn is_valid_discriminant(&self, var: &str, value: i128) -> bool {
-        self.enum_discriminants
-            .get(var)
-            .is_none_or(|discs| discs.contains(&value))
+        self.enum_discriminants.get(var).is_none_or(|discs| discs.contains(&value))
     }
 
     /// Add integer range constraint from a Rust type.
@@ -73,9 +70,7 @@ impl TypeAbstraction {
     /// Check if a value is within the type's valid range.
     #[must_use]
     pub fn is_in_range(&self, var: &str, value: i128) -> bool {
-        self.integer_ranges
-            .get(var)
-            .is_none_or(|(min, max)| value >= *min && value <= *max)
+        self.integer_ranges.get(var).is_none_or(|(min, max)| value >= *min && value <= *max)
     }
 
     /// Mark a variable as boolean-typed.
@@ -118,7 +113,8 @@ impl TypeAbstraction {
         }
 
         let booleans = self.booleans.intersection(&other.booleans).cloned().collect();
-        let non_null_refs = self.non_null_refs.intersection(&other.non_null_refs).cloned().collect();
+        let non_null_refs =
+            self.non_null_refs.intersection(&other.non_null_refs).cloned().collect();
 
         Self { enum_discriminants, integer_ranges, booleans, non_null_refs }
     }
@@ -183,13 +179,15 @@ impl TypeAbstraction {
     #[must_use]
     pub fn is_consistent(&self, var: &str, value: i128) -> bool {
         if let Some((min, max)) = self.integer_ranges.get(var)
-            && (value < *min || value > *max) {
-                return false;
-            }
+            && (value < *min || value > *max)
+        {
+            return false;
+        }
         if let Some(discs) = self.enum_discriminants.get(var)
-            && !discs.contains(&value) {
-                return false;
-            }
+            && !discs.contains(&value)
+        {
+            return false;
+        }
         if self.booleans.contains(var) && value != 0 && value != 1 {
             return false;
         }

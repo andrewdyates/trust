@@ -84,16 +84,14 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
         _target: Option<BasicBlock>,
         _unwind: UnwindAction,
     ) -> interpret::InterpResult<'tcx, Option<(&'tcx Body<'tcx>, ty::Instance<'tcx>)>> {
-        // tRust: DummyMachine is const-prop only; function calls are not supported
-        throw_machine_stop_str!("DummyMachine does not support function calls")
+        unimplemented!()
     }
 
     fn panic_nounwind(
         _ecx: &mut InterpCx<'tcx, Self>,
         _msg: &str,
     ) -> interpret::InterpResult<'tcx> {
-        // tRust: DummyMachine is const-prop only; nounwind panics are not supported
-        throw_machine_stop_str!("DummyMachine does not support panic_nounwind")
+        unimplemented!()
     }
 
     fn call_intrinsic(
@@ -104,8 +102,7 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
         _target: Option<BasicBlock>,
         _unwind: UnwindAction,
     ) -> interpret::InterpResult<'tcx, Option<ty::Instance<'tcx>>> {
-        // tRust: DummyMachine is const-prop only; intrinsic calls are not supported
-        throw_machine_stop_str!("DummyMachine does not support intrinsic calls")
+        unimplemented!()
     }
 
     fn assert_panic(
@@ -113,8 +110,7 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
         _msg: &rustc_middle::mir::AssertMessage<'tcx>,
         _unwind: UnwindAction,
     ) -> interpret::InterpResult<'tcx> {
-        // tRust: DummyMachine is const-prop only; assert panics are not supported
-        throw_machine_stop_str!("DummyMachine does not support assert_panic")
+        unimplemented!()
     }
 
     #[inline(always)]
@@ -156,7 +152,6 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
                     Le => left <= right,
                     Gt => left > right,
                     Ge => left >= right,
-                    // tRust: invariant — match arms cover all valid cases for this type/value
                     _ => bug!(),
                 };
                 ImmTy::from_bool(res, *ecx.tcx)
@@ -168,7 +163,6 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
                 throw_machine_stop_str!("pointer arithmetic is not handled")
             }
 
-            // tRust: invariant — match covers all valid binary operators on pointer types
             _ => span_bug!(ecx.cur_span(), "Invalid operator on pointers: {:?}", bin_op),
         })
     }
@@ -177,8 +171,7 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
         _ecx: &InterpCx<'tcx, Self>,
         _provenance: Self::Provenance,
     ) -> interpret::InterpResult<'tcx> {
-        // tRust: DummyMachine is const-prop only; provenance exposure is not supported
-        throw_machine_stop_str!("DummyMachine does not support expose_provenance")
+        unimplemented!()
     }
 
     fn init_frame(
@@ -186,8 +179,7 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
         _frame: interpret::Frame<'tcx, Self::Provenance>,
     ) -> interpret::InterpResult<'tcx, interpret::Frame<'tcx, Self::Provenance, Self::FrameExtra>>
     {
-        // tRust: DummyMachine is const-prop only; frame initialization is not supported
-        throw_machine_stop_str!("DummyMachine does not support init_frame")
+        unimplemented!()
     }
 
     fn stack<'a>(
@@ -200,8 +192,7 @@ impl<'tcx> interpret::Machine<'tcx> for DummyMachine {
     fn stack_mut<'a>(
         _ecx: &'a mut InterpCx<'tcx, Self>,
     ) -> &'a mut Vec<interpret::Frame<'tcx, Self::Provenance, Self::FrameExtra>> {
-        // tRust: DummyMachine is const-prop only; mutable stack access is not supported
-        bug!("DummyMachine does not support stack_mut: const-prop should never need mutable stack access")
+        unimplemented!()
     }
 
     fn get_default_alloc_params(

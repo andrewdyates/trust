@@ -567,7 +567,7 @@ impl<'a> Diagnostic<'a, ()> for BuiltinUnpermittedTypeInit<'_> {
     }
 }
 
-// tRust: known issue — (davidtwco) make translatable
+// FIXME(davidtwco): make translatable
 pub(crate) struct BuiltinUnpermittedTypeInitSub {
     pub err: InitError,
 }
@@ -616,7 +616,7 @@ pub(crate) enum BuiltinClashingExtern<'a> {
     },
 }
 
-// tRust: known issue — (davidtwco) translatable expected/found
+// FIXME(davidtwco): translatable expected/found
 pub(crate) struct BuiltinClashingExternSub<'a> {
     pub tcx: TyCtxt<'a>,
     pub expected: Ty<'a>,
@@ -640,7 +640,7 @@ pub(crate) struct BuiltinDerefNullptr {
     pub label: Span,
 }
 
-// tRust: known issue — migrate fluent::lint::builtin_asm_labels
+// FIXME: migrate fluent::lint::builtin_asm_labels
 
 #[derive(Diagnostic)]
 pub(crate) enum BuiltinSpecialModuleNameUsed {
@@ -1359,7 +1359,7 @@ pub(crate) struct IgnoredUnlessCrateSpecified<'a> {
 #[note("a dangling pointer is safe, but dereferencing one is undefined behavior")]
 #[note("returning a pointer to a local variable will always result in a dangling pointer")]
 #[note("for more information, see <https://doc.rust-lang.org/reference/destructors.html>")]
-// tRust: known issue — put #[primary_span] on `ptr_span` once it does not cause conflicts
+// FIXME: put #[primary_span] on `ptr_span` once it does not cause conflicts
 pub(crate) struct DanglingPointersFromTemporaries<'tcx> {
     pub callee: Ident,
     pub ty: Ty<'tcx>,
@@ -2163,7 +2163,7 @@ pub(crate) enum AmbiguousWidePointerComparisons<'a> {
 #[multipart_suggestion(
     "use explicit `std::ptr::eq` method to compare metadata and addresses",
     style = "verbose",
-    // tRust: known issue — (#53934) make machine-applicable again
+    // FIXME(#53934): make machine-applicable again
     applicability = "maybe-incorrect"
 )]
 pub(crate) struct AmbiguousWidePointerComparisonsAddrMetadataSuggestion<'a> {
@@ -2184,7 +2184,7 @@ pub(crate) struct AmbiguousWidePointerComparisonsAddrMetadataSuggestion<'a> {
 #[multipart_suggestion(
     "use `std::ptr::addr_eq` or untyped pointers to only compare their addresses",
     style = "verbose",
-    // tRust: known issue — (#53934) make machine-applicable again
+    // FIXME(#53934): make machine-applicable again
     applicability = "maybe-incorrect"
 )]
 pub(crate) struct AmbiguousWidePointerComparisonsAddrSuggestion<'a> {
@@ -2205,7 +2205,7 @@ pub(crate) struct AmbiguousWidePointerComparisonsAddrSuggestion<'a> {
 #[multipart_suggestion(
     "use untyped pointers to only compare their addresses",
     style = "verbose",
-    // tRust: known issue — (#53934) make machine-applicable again
+    // FIXME(#53934): make machine-applicable again
     applicability = "maybe-incorrect"
 )]
 pub(crate) struct AmbiguousWidePointerComparisonsCastSuggestion<'a> {
@@ -2229,13 +2229,13 @@ pub(crate) struct AmbiguousWidePointerComparisonsCastSuggestion<'a> {
 #[multipart_suggestion(
     "or expect the lint to compare the pointers metadata and addresses",
     style = "verbose",
-    // tRust: known issue — (#53934) make machine-applicable again
+    // FIXME(#53934): make machine-applicable again
     applicability = "maybe-incorrect"
 )]
 pub(crate) struct AmbiguousWidePointerComparisonsExpectSuggestion<'a> {
     pub(crate) paren_left: &'a str,
     pub(crate) paren_right: &'a str,
-    // tRust: known issue — (#127436) Adjust once resolved
+    // FIXME(#127436): Adjust once resolved
     #[suggestion_part(
         code = r#"{{ #[expect(ambiguous_wide_pointer_comparisons, reason = "...")] {paren_left}"#
     )]
@@ -2428,7 +2428,7 @@ pub(crate) struct UnusedResult<'a> {
     pub ty: Ty<'a>,
 }
 
-// tRust: known issue — (davidtwco) this isn't properly translatable because of the
+// FIXME(davidtwco): this isn't properly translatable because of the
 // pre/post strings
 #[derive(Diagnostic)]
 #[diag(
@@ -2444,7 +2444,7 @@ pub(crate) struct UnusedClosure<'a> {
     pub post: &'a str,
 }
 
-// tRust: known issue — (davidtwco) this isn't properly translatable because of the
+// FIXME(davidtwco): this isn't properly translatable because of the
 // pre/post strings
 #[derive(Diagnostic)]
 #[diag(
@@ -2460,7 +2460,7 @@ pub(crate) struct UnusedCoroutine<'a> {
     pub post: &'a str,
 }
 
-// tRust: known issue — (davidtwco) this isn't properly translatable because of the pre/post
+// FIXME(davidtwco): this isn't properly translatable because of the pre/post
 // strings
 pub(crate) struct UnusedDef<'a, 'b> {
     pub pre: &'a str,
@@ -2994,7 +2994,7 @@ pub(crate) mod unexpected_cfg_value {
     }
 }
 
-// tRust: known issue — (jdonszelmann) duplicated in rustc_attr_parsing, should be moved there completely.
+// FIXME(jdonszelmann): duplicated in rustc_attr_parsing, should be moved there completely.
 #[derive(Diagnostic)]
 #[diag(
     "{$num_suggestions ->

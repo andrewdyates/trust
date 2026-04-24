@@ -158,9 +158,7 @@ impl FfiSummaryDb {
     /// Create a new database pre-populated with built-in libc summaries.
     #[must_use]
     pub fn new() -> Self {
-        let mut db = Self {
-            summaries: FxHashMap::default(),
-        };
+        let mut db = Self { summaries: FxHashMap::default() };
         db.register_builtins();
         db
     }
@@ -168,9 +166,7 @@ impl FfiSummaryDb {
     /// Create an empty database with no built-in summaries.
     #[must_use]
     pub fn empty() -> Self {
-        Self {
-            summaries: FxHashMap::default(),
-        }
+        Self { summaries: FxHashMap::default() }
     }
 
     /// Look up a summary by function name.
@@ -827,10 +823,11 @@ pub fn apply_summary(summary: &FfiSummary, args: &[Formula]) -> Formula {
     contract.map(&mut |node| {
         if let Formula::Var(ref name, _) = node
             && let Some(idx_str) = name.strip_prefix("__ffi_arg_")
-                && let Ok(idx) = idx_str.parse::<usize>()
-                    && let Some(arg) = args.get(idx) {
-                        return arg.clone();
-                    }
+            && let Ok(idx) = idx_str.parse::<usize>()
+            && let Some(arg) = args.get(idx)
+        {
+            return arg.clone();
+        }
         node
     })
 }
@@ -861,70 +858,61 @@ pub fn generate_ffi_vcs(
     // 1. Non-null checks for non-nullable pointer parameters
     for contract in &summary.parameter_contracts {
         if !contract.is_nullable
-            && let Some(arg) = args.get(contract.param_index) {
-                // VC: argument != 0 (null pointer check)
-                // Convention: we assert the negation (arg == 0) and check SAT.
-                // If UNSAT, the argument is never null.
-                let null_vc = Formula::Eq(
-                    Box::new(arg.clone()),
-                    Box::new(Formula::Int(0)),
-                );
-                vcs.push(VerificationCondition {
-                    kind: VcKind::Assertion {
-                        message: format!(
-                            "FFI `{}`: parameter {} must be non-null at {}",
-                            summary.function_name, contract.param_index, call_site,
-                        ),
-                    },
-                    function: call_site.to_string(),
-                    location: location.clone(),
-                    formula: null_vc,
-                    contract_metadata: None,
-                });
-            }
+            && let Some(arg) = args.get(contract.param_index)
+        {
+            // VC: argument != 0 (null pointer check)
+            // Convention: we assert the negation (arg == 0) and check SAT.
+            // If UNSAT, the argument is never null.
+            let null_vc = Formula::Eq(Box::new(arg.clone()), Box::new(Formula::Int(0)));
+            vcs.push(VerificationCondition {
+                kind: VcKind::Assertion {
+                    message: format!(
+                        "FFI `{}`: parameter {} must be non-null at {}",
+                        summary.function_name, contract.param_index, call_site,
+                    ),
+                },
+                function: call_site.into(),
+                location: location.clone(),
+                formula: null_vc,
+                contract_metadata: None,
+            });
+        }
     }
 
     // 2. Range checks for integer parameters
     for contract in &summary.parameter_contracts {
         if let Some((lo, hi)) = contract.valid_range
-            && let Some(arg) = args.get(contract.param_index) {
-                // VC: arg < lo OR arg > hi (violation formula)
-                // If UNSAT, the argument is always in range.
-                let range_violation = Formula::Or(vec![
-                    Formula::Lt(
-                        Box::new(arg.clone()),
-                        Box::new(Formula::Int(lo)),
+            && let Some(arg) = args.get(contract.param_index)
+        {
+            // VC: arg < lo OR arg > hi (violation formula)
+            // If UNSAT, the argument is always in range.
+            let range_violation = Formula::Or(vec![
+                Formula::Lt(Box::new(arg.clone()), Box::new(Formula::Int(lo))),
+                Formula::Gt(Box::new(arg.clone()), Box::new(Formula::Int(hi))),
+            ]);
+            vcs.push(VerificationCondition {
+                kind: VcKind::Assertion {
+                    message: format!(
+                        "FFI `{}`: parameter {} must be in range [{}, {}] at {}",
+                        summary.function_name, contract.param_index, lo, hi, call_site,
                     ),
-                    Formula::Gt(
-                        Box::new(arg.clone()),
-                        Box::new(Formula::Int(hi)),
-                    ),
-                ]);
-                vcs.push(VerificationCondition {
-                    kind: VcKind::Assertion {
-                        message: format!(
-                            "FFI `{}`: parameter {} must be in range [{}, {}] at {}",
-                            summary.function_name, contract.param_index, lo, hi, call_site,
-                        ),
-                    },
-                    function: call_site.to_string(),
-                    location: location.clone(),
-                    formula: range_violation,
-                    contract_metadata: None,
-                });
-            }
+                },
+                function: call_site.into(),
+                location: location.clone(),
+                formula: range_violation,
+                contract_metadata: None,
+            });
+        }
     }
 
     // 3. Non-aliasing checks for parameters in the same aliasing class
     let mut aliasing_groups: FxHashMap<&str, Vec<(usize, &Formula)>> = FxHashMap::default();
     for contract in &summary.parameter_contracts {
         if let Some(ref class) = contract.aliasing_class
-            && let Some(arg) = args.get(contract.param_index) {
-                aliasing_groups
-                    .entry(class.as_str())
-                    .or_default()
-                    .push((contract.param_index, arg));
-            }
+            && let Some(arg) = args.get(contract.param_index)
+        {
+            aliasing_groups.entry(class.as_str()).or_default().push((contract.param_index, arg));
+        }
     }
     for members in aliasing_groups.values() {
         // Check all pairs within each aliasing class
@@ -934,10 +922,7 @@ pub fn generate_ffi_vcs(
                 let (idx_b, arg_b) = &members[j];
                 // VC: arg_a == arg_b (alias violation)
                 // If UNSAT, the pointers never alias.
-                let alias_vc = Formula::Eq(
-                    Box::new((*arg_a).clone()),
-                    Box::new((*arg_b).clone()),
-                );
+                let alias_vc = Formula::Eq(Box::new((*arg_a).clone()), Box::new((*arg_b).clone()));
                 vcs.push(VerificationCondition {
                     kind: VcKind::Assertion {
                         message: format!(
@@ -945,7 +930,7 @@ pub fn generate_ffi_vcs(
                             summary.function_name, idx_a, idx_b, call_site,
                         ),
                     },
-                    function: call_site.to_string(),
+                    function: call_site.into(),
                     location: location.clone(),
                     formula: alias_vc,
                     contract_metadata: None,
@@ -968,10 +953,7 @@ mod tests {
 
         let names = db.function_names();
         for expected in &["malloc", "free", "memcpy", "strlen", "printf", "read", "write"] {
-            assert!(
-                names.contains(expected),
-                "missing builtin summary for `{expected}`"
-            );
+            assert!(names.contains(expected), "missing builtin summary for `{expected}`");
         }
     }
 
@@ -1140,10 +1122,8 @@ mod tests {
             })
             .with_safety(SafetyLevel::UnsafeRequiresContract);
 
-        let args = vec![
-            Formula::Var("dest".into(), Sort::Int),
-            Formula::Var("src".into(), Sort::Int),
-        ];
+        let args =
+            vec![Formula::Var("dest".into(), Sort::Int), Formula::Var("src".into(), Sort::Int)];
         let vcs = generate_ffi_vcs("test::call_memcpy", &summary, &args);
 
         // 2 null checks + 1 aliasing check
@@ -1179,16 +1159,12 @@ mod tests {
         let args = vec![Formula::Var("ptr".into(), Sort::Int)];
         let vcs = generate_ffi_vcs("test::call_free", &summary, &args);
 
-        assert!(
-            vcs.is_empty(),
-            "nullable parameter should not generate a null-check VC"
-        );
+        assert!(vcs.is_empty(), "nullable parameter should not generate a null-check VC");
     }
 
     #[test]
     fn test_generate_ffi_vcs_no_args_no_vcs() {
-        let summary = FfiSummary::new("getpid")
-            .with_safety(SafetyLevel::Safe);
+        let summary = FfiSummary::new("getpid").with_safety(SafetyLevel::Safe);
 
         let vcs = generate_ffi_vcs("test::call_getpid", &summary, &[]);
         assert!(vcs.is_empty(), "function with no contracts should produce no VCs");
@@ -1208,10 +1184,7 @@ mod tests {
         let args = vec![Formula::Var("ptr".into(), Sort::Int)];
         let vcs = generate_ffi_vcs("test::call_strlen", &summary, &args);
 
-        assert!(
-            vcs.is_empty(),
-            "contract referencing out-of-range param_index should be skipped"
-        );
+        assert!(vcs.is_empty(), "contract referencing out-of-range param_index should be skipped");
     }
 
     #[test]
@@ -1293,8 +1266,7 @@ mod tests {
     #[test]
     fn test_apply_summary_no_return_contract_returns_true() {
         // A summary with no return contract should produce Bool(true).
-        let summary = FfiSummary::new("getpid")
-            .with_safety(SafetyLevel::Safe);
+        let summary = FfiSummary::new("getpid").with_safety(SafetyLevel::Safe);
 
         let result = apply_summary(&summary, &[]);
         assert_eq!(result, Formula::Bool(true));
@@ -1355,9 +1327,7 @@ mod tests {
 
         match &result {
             Formula::Ge(lhs, rhs) => {
-                assert!(
-                    matches!(lhs.as_ref(), Formula::Var(name, _) if name == "__ffi_ret"),
-                );
+                assert!(matches!(lhs.as_ref(), Formula::Var(name, _) if name == "__ffi_ret"),);
                 assert_eq!(*rhs.as_ref(), Formula::Int(0));
             }
             other => panic!("expected Ge for strlen return contract, got: {other:?}"),
@@ -1449,16 +1419,12 @@ mod tests {
         // Verify the full set of 21 built-in summaries registered by register_builtins.
         let db = FfiSummaryDb::new();
         let expected = [
-            "malloc", "free", "memcpy", "strlen", "printf", "read", "write",
-            "calloc", "realloc", "memmove", "memset", "strcmp", "strncpy",
-            "strcpy", "strcat", "strncat", "puts", "fopen", "fclose",
-            "fread", "fwrite", "snprintf",
+            "malloc", "free", "memcpy", "strlen", "printf", "read", "write", "calloc", "realloc",
+            "memmove", "memset", "strcmp", "strncpy", "strcpy", "strcat", "strncat", "puts",
+            "fopen", "fclose", "fread", "fwrite", "snprintf",
         ];
         for name in &expected {
-            assert!(
-                db.lookup(name).is_some(),
-                "missing builtin summary for `{name}`"
-            );
+            assert!(db.lookup(name).is_some(), "missing builtin summary for `{name}`");
         }
         assert_eq!(db.len(), expected.len(), "should have exactly {} builtins", expected.len());
     }
@@ -1470,8 +1436,7 @@ mod tests {
         let original = db.lookup("malloc").expect("malloc exists").clone();
         assert_eq!(original.safety_level, SafetyLevel::Safe);
 
-        let custom_malloc = FfiSummary::new("malloc")
-            .with_safety(SafetyLevel::UnsafeUnknown);
+        let custom_malloc = FfiSummary::new("malloc").with_safety(SafetyLevel::UnsafeUnknown);
         db.register(custom_malloc);
 
         let updated = db.lookup("malloc").expect("malloc still exists");
@@ -1489,9 +1454,9 @@ mod tests {
         let read = db.lookup("read").expect("read should exist");
 
         let args = vec![
-            Formula::Int(0),                               // fd
-            Formula::Var("buf".into(), Sort::Int),          // buf
-            Formula::Int(1024),                             // count
+            Formula::Int(0),                       // fd
+            Formula::Var("buf".into(), Sort::Int), // buf
+            Formula::Int(1024),                    // count
         ];
         let result = apply_summary(read, &args);
 

@@ -216,7 +216,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         match self.match_where_clause_trait_ref(obligation, param) {
             Ok(obligations) => obligations,
             Err(()) => {
-                // tRust: invariant — a where clause that was applicable during candidate selection must remain applicable during confirmation
                 bug!(
                     "Where clause `{:?}` was applicable to `{:?}` but now is not",
                     param,
@@ -243,7 +242,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 self.sizedness_conditions(self_ty, SizedTraitKind::MetaSized)
             }
             Some(LangItem::PointeeSized) => {
-                // tRust: invariant — `PointeeSized` must be removed during lowering and should not appear post-lowering
                 bug!("`PointeeSized` is removing during lowering");
             }
             Some(LangItem::Copy | LangItem::Clone | LangItem::TrivialClone) => {
@@ -265,7 +263,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 | LangItem::Tuple
                 | LangItem::Unpin,
             ) => ty::Binder::dummy(vec![]),
-            // tRust: invariant — only recognized builtin traits (Clone, Copy, etc.) should reach builtin confirmation
             other => bug!("unexpected builtin trait {trait_def:?} ({other:?})"),
         };
         let types = self.infcx.enter_forall_and_leak_universe(types);
@@ -296,7 +293,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             assume: Assume,
         ) -> PredicateObligations<'tcx> {
             match cond {
-                // tRust: known issue (bryangarza) — Add separate `IfAny` case, instead of treating as `IfAll`
+                // FIXME(bryangarza): Add separate `IfAny` case, instead of treating as `IfAll`
                 // Not possible until the trait solver supports disjunctions of obligations
                 Condition::IfAll(conds) | Condition::IfAny(conds) => conds
                     .into_iter()
@@ -408,7 +405,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             // we don't want to cause ourselves to do extra work if we're not even able to
             // take advantage of these assumption clauses.
             if self.tcx().sess.opts.unstable_opts.higher_ranked_assumptions {
-                // tRust: known issue (coroutine_clone) — We could uplift this into `collect_predicates_for_types`
+                // FIXME(coroutine_clone): We could uplift this into `collect_predicates_for_types`
                 // and do this for `Copy`/`Clone` too, but that's feature-gated so it doesn't really
                 // matter yet.
                 for assumption in constituents.assumptions {
@@ -494,12 +491,10 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         let trait_predicate = self.infcx.enter_forall_and_leak_universe(obligation.predicate);
         let self_ty = self.infcx.shallow_resolve(trait_predicate.self_ty());
         let ty::Dynamic(data, ..) = *self_ty.kind() else {
-            // tRust: invariant — trait object candidates require a valid trait object type: object candidate with non-object
             span_bug!(obligation.cause.span, "object candidate with non-object");
         };
 
         let object_trait_ref = data.principal().unwrap_or_else(|| {
-            // tRust: invariant — trait object candidates require a valid trait object type: object candidate with no principal
             span_bug!(obligation.cause.span, "object candidate with no principal")
         });
         let object_trait_ref = self.infcx.instantiate_binder_with_fresh_vars(
@@ -670,7 +665,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         let placeholder_predicate = self.infcx.enter_forall_and_leak_universe(obligation.predicate);
         let self_ty = self.infcx.shallow_resolve(placeholder_predicate.self_ty());
         let ty::Coroutine(coroutine_def_id, args) = *self_ty.kind() else {
-            // tRust: invariant — a closure candidate can only be confirmed for an actual closure type
             bug!("closure candidate for non-closure {:?}", obligation);
         };
 
@@ -701,7 +695,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         let placeholder_predicate = self.infcx.enter_forall_and_leak_universe(obligation.predicate);
         let self_ty = self.infcx.shallow_resolve(placeholder_predicate.self_ty());
         let ty::Coroutine(coroutine_def_id, args) = *self_ty.kind() else {
-            // tRust: invariant — a closure candidate can only be confirmed for an actual closure type
             bug!("closure candidate for non-closure {:?}", obligation);
         };
 
@@ -732,7 +725,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         let placeholder_predicate = self.infcx.enter_forall_and_leak_universe(obligation.predicate);
         let self_ty = self.infcx.shallow_resolve(placeholder_predicate.self_ty());
         let ty::Coroutine(coroutine_def_id, args) = *self_ty.kind() else {
-            // tRust: invariant — a closure candidate can only be confirmed for an actual closure type
             bug!("closure candidate for non-closure {:?}", obligation);
         };
 
@@ -763,7 +755,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         let placeholder_predicate = self.infcx.enter_forall_and_leak_universe(obligation.predicate);
         let self_ty = self.infcx.shallow_resolve(placeholder_predicate.self_ty());
         let ty::Coroutine(coroutine_def_id, args) = *self_ty.kind() else {
-            // tRust: invariant — a closure candidate can only be confirmed for an actual closure type
             bug!("closure candidate for non-closure {:?}", obligation);
         };
 
@@ -809,7 +800,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 })
             }
             _ => {
-                // tRust: invariant — a closure candidate can only be confirmed for an actual closure type
                 bug!("closure candidate for non-closure {:?}", obligation);
             }
         };
@@ -904,7 +894,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
                 (trait_ref, args.kind_ty())
             }
-            // tRust: invariant — AsyncFn candidates can only be confirmed for callable types (closures or function items)
             _ => bug!("expected callable type for AsyncFn candidate"),
         };
 
@@ -913,7 +902,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         );
 
         let goal_kind =
-            self.tcx().async_fn_trait_kind_from_def_id(obligation.predicate.def_id()).expect("invariant: value is present");
+            self.tcx().async_fn_trait_kind_from_def_id(obligation.predicate.def_id()).unwrap();
 
         // If we have not yet determined the `ClosureKind` of the closure or coroutine-closure,
         // then additionally register an `AsyncFnKindHelper` goal which will fail if the kind
@@ -1013,22 +1002,20 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         // `assemble_candidates_for_unsizing` should ensure there are no late-bound
         // regions here. See the comment there for more details.
-        let predicate = obligation.predicate.no_bound_vars().expect("invariant: value is present");
+        let predicate = obligation.predicate.no_bound_vars().unwrap();
         let a_ty = self.infcx.shallow_resolve(predicate.self_ty());
         let b_ty = self.infcx.shallow_resolve(predicate.trait_ref.args.type_at(1));
 
         let ty::Dynamic(a_data, a_region) = *a_ty.kind() else {
-            // tRust: invariant — trait upcasting candidates require `dyn` types as both source and target
             bug!("expected `dyn` type in `confirm_trait_upcasting_unsize_candidate`")
         };
         let ty::Dynamic(b_data, b_region) = *b_ty.kind() else {
-            // tRust: invariant — trait upcasting candidates require `dyn` types as both source and target
             bug!("expected `dyn` type in `confirm_trait_upcasting_unsize_candidate`")
         };
 
-        let source_principal = a_data.principal().expect("invariant: value is present").with_self_ty(tcx, a_ty);
+        let source_principal = a_data.principal().unwrap().with_self_ty(tcx, a_ty);
         let unnormalized_upcast_principal =
-            util::supertraits(tcx, source_principal).nth(idx).expect("invariant: value is present");
+            util::supertraits(tcx, source_principal).nth(idx).unwrap();
 
         let nested = self
             .match_upcast_principal(
@@ -1052,7 +1039,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         // `assemble_candidates_for_unsizing` should ensure there are no late-bound
         // regions here. See the comment there for more details.
-        let source = self.infcx.shallow_resolve(obligation.self_ty().no_bound_vars().expect("invariant: value is present"));
+        let source = self.infcx.shallow_resolve(obligation.self_ty().no_bound_vars().unwrap());
         let target = obligation.predicate.skip_binder().trait_ref.args.type_at(1);
         let target = self.infcx.shallow_resolve(target);
         debug!(?source, ?target, "confirm_builtin_unsize_candidate");
@@ -1232,7 +1219,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 ImplSource::Builtin(BuiltinImplSource::Misc, nested)
             }
 
-            // tRust: invariant — trait upcasting unsize candidates require valid source and target `dyn` trait types
             _ => bug!("source: {source}, target: {target}"),
         })
     }

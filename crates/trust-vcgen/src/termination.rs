@@ -20,8 +20,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::*;
 use trust_types::fx::FxHashSet;
+use trust_types::*;
 
 /// A detected loop in the MIR control flow graph.
 #[derive(Debug, Clone)]
@@ -29,7 +29,7 @@ pub(crate) struct LoopInfo {
     /// Block ID of the loop header (target of the back-edge).
     pub(crate) header: BlockId,
     /// Block ID of the latch (source of the back-edge).
-    pub(crate) latch: BlockId,
+    pub(crate) _latch: BlockId,
     /// Block IDs of all blocks in the loop body (between header and latch).
     pub(crate) body_blocks: Vec<BlockId>,
 }
@@ -38,9 +38,9 @@ pub(crate) struct LoopInfo {
 #[derive(Debug, Clone)]
 pub(crate) struct RecursiveCallSite {
     /// Block containing the recursive call.
-    pub(crate) block: BlockId,
+    pub(crate) _block: BlockId,
     /// Arguments passed to the recursive call.
-    pub(crate) args: Vec<Operand>,
+    pub(crate) _args: Vec<Operand>,
     /// Source span of the call.
     pub(crate) span: SourceSpan,
 }
@@ -68,7 +68,7 @@ pub(crate) fn detect_loops(body: &VerifiableBody) -> Vec<LoopInfo> {
                     .map(|bb| bb.id)
                     .collect();
 
-                loops.push(LoopInfo { header, latch, body_blocks });
+                loops.push(LoopInfo { header, _latch: latch, body_blocks });
             }
         }
     }
@@ -85,8 +85,8 @@ pub(crate) fn detect_recursive_calls(func: &VerifiableFunction) -> Vec<Recursive
             // Match self-calls by function name or def_path
             if callee == &func.name || callee == &func.def_path {
                 sites.push(RecursiveCallSite {
-                    block: block.id,
-                    args: args.clone(),
+                    _block: block.id,
+                    _args: args.clone(),
                     span: span.clone(),
                 });
             }
@@ -114,15 +114,14 @@ pub(crate) fn modified_int_locals(
         for stmt in &block.stmts {
             if let Statement::Assign { place, .. } = stmt
                 && let Some(decl) = func.body.locals.get(place.local)
-                    && decl.ty.is_integer() && place.projections.is_empty() {
-                        let name = decl
-                            .name
-                            .clone()
-                            .unwrap_or_else(|| format!("_{}", place.local));
-                        if !modified.iter().any(|(idx, _)| *idx == place.local) {
-                            modified.push((place.local, name));
-                        }
-                    }
+                && decl.ty.is_integer()
+                && place.projections.is_empty()
+            {
+                let name = decl.name.clone().unwrap_or_else(|| format!("_{}", place.local));
+                if !modified.iter().any(|(idx, _)| *idx == place.local) {
+                    modified.push((place.local, name));
+                }
+            }
         }
     }
 
@@ -147,10 +146,7 @@ pub(crate) fn extract_decreases_contracts(func: &VerifiableFunction) -> Vec<Decr
 /// Produces VcKind::NonTermination VCs for:
 /// 1. Each detected loop without a provably decreasing variant.
 /// 2. Each recursive call without a decreases clause.
-pub(crate) fn check_termination(
-    func: &VerifiableFunction,
-    vcs: &mut Vec<VerificationCondition>,
-) {
+pub(crate) fn check_termination(func: &VerifiableFunction, vcs: &mut Vec<VerificationCondition>) {
     let loops = detect_loops(&func.body);
     let recursive_calls = detect_recursive_calls(func);
 
@@ -193,28 +189,20 @@ pub(crate) fn check_termination(
         // VC: the measure must be >= 0 AND must decrease on each iteration.
         // We encode: exists state where measure_before <= measure_after OR measure < 0
         // i.e., the negation of the termination argument.
-        let measure_var =
-            Formula::Var(format!("{measure}_before"), Sort::Int);
-        let measure_var_after =
-            Formula::Var(format!("{measure}_after"), Sort::Int);
+        let measure_var = Formula::Var(format!("{measure}_before"), Sort::Int);
+        let measure_var_after = Formula::Var(format!("{measure}_after"), Sort::Int);
 
         // Non-termination formula: measure doesn't decrease OR goes negative
         let not_decreasing = Formula::Or(vec![
             // measure_after >= measure_before (didn't decrease)
-            Formula::Ge(
-                Box::new(measure_var_after),
-                Box::new(measure_var.clone()),
-            ),
+            Formula::Ge(Box::new(measure_var_after), Box::new(measure_var.clone())),
             // measure_before < 0 (not bounded below)
             Formula::Lt(Box::new(measure_var), Box::new(Formula::Int(0))),
         ]);
 
         vcs.push(VerificationCondition {
-            kind: VcKind::NonTermination {
-                context: "loop".to_string(),
-                measure: measure.clone(),
-            },
-            function: func.name.clone(),
+            kind: VcKind::NonTermination { context: "loop".to_string(), measure: measure.clone() },
+            function: func.name.as_str().into(),
             location: span,
             formula: not_decreasing,
             contract_metadata: None,
@@ -230,14 +218,10 @@ pub(crate) fn check_termination(
             clause.measure.clone()
         } else if func.body.arg_count > 0 {
             // Heuristic: use the first integer argument as the candidate measure
-            let first_int_arg = func.body.locals[1..=func.body.arg_count]
-                .iter()
-                .find(|l| l.ty.is_integer());
+            let first_int_arg =
+                func.body.locals[1..=func.body.arg_count].iter().find(|l| l.ty.is_integer());
             match first_int_arg {
-                Some(decl) => decl
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| format!("_{}", decl.index)),
+                Some(decl) => decl.name.clone().unwrap_or_else(|| format!("_{}", decl.index)),
                 None => "unknown".to_string(),
             }
         } else {
@@ -260,7 +244,7 @@ pub(crate) fn check_termination(
                 context: "recursion".to_string(),
                 measure: measure.clone(),
             },
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             location: call_site.span.clone(),
             formula: not_decreasing,
             contract_metadata: None,
@@ -340,7 +324,13 @@ mod tests {
                             discr: Operand::Copy(Place::local(2)),
                             targets: vec![(1, BlockId(1))],
                             otherwise: BlockId(2),
-                            span: SourceSpan { file: "test.rs".into(), line_start: 2, col_start: 5, line_end: 2, col_end: 30 },
+                            span: SourceSpan {
+                                file: "test.rs".into(),
+                                line_start: 2,
+                                col_start: 5,
+                                line_end: 2,
+                                col_end: 30,
+                            },
                         },
                     },
                     BasicBlock {
@@ -359,11 +349,7 @@ mod tests {
                         ],
                         terminator: Terminator::Goto(BlockId(0)), // back-edge
                     },
-                    BasicBlock {
-                        id: BlockId(2),
-                        stmts: vec![],
-                        terminator: Terminator::Return,
-                    },
+                    BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
                 ],
                 arg_count: 1,
                 return_ty: Ty::Unit,
@@ -387,9 +373,7 @@ mod tests {
             def_path: "test::spin".to_string(),
             span: SourceSpan::default(),
             body: VerifiableBody {
-                locals: vec![
-                    LocalDecl { index: 0, ty: Ty::Unit, name: None },
-                ],
+                locals: vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
                 blocks: vec![BasicBlock {
                     id: BlockId(0),
                     stmts: vec![],
@@ -418,12 +402,12 @@ mod tests {
             span: SourceSpan::default(),
             body: VerifiableBody {
                 locals: vec![
-                    LocalDecl { index: 0, ty: Ty::u32(), name: None },      // return
+                    LocalDecl { index: 0, ty: Ty::u32(), name: None }, // return
                     LocalDecl { index: 1, ty: Ty::u32(), name: Some("n".into()) },
-                    LocalDecl { index: 2, ty: Ty::Bool, name: None },       // n == 0
-                    LocalDecl { index: 3, ty: Ty::u32(), name: None },      // n - 1
-                    LocalDecl { index: 4, ty: Ty::u32(), name: None },      // factorial(n-1)
-                    LocalDecl { index: 5, ty: Ty::u32(), name: None },      // n * factorial(n-1)
+                    LocalDecl { index: 2, ty: Ty::Bool, name: None }, // n == 0
+                    LocalDecl { index: 3, ty: Ty::u32(), name: None }, // n - 1
+                    LocalDecl { index: 4, ty: Ty::u32(), name: None }, // factorial(n-1)
+                    LocalDecl { index: 5, ty: Ty::u32(), name: None }, // n * factorial(n-1)
                 ],
                 blocks: vec![
                     // bb0: check n == 0
@@ -472,7 +456,13 @@ mod tests {
                             args: vec![Operand::Copy(Place::local(3))],
                             dest: Place::local(4),
                             target: Some(BlockId(3)),
-                            span: SourceSpan { file: "test.rs".into(), line_start: 3, col_start: 20, line_end: 3, col_end: 40 },
+                            span: SourceSpan {
+                                file: "test.rs".into(),
+                                line_start: 3,
+                                col_start: 20,
+                                line_end: 3,
+                                col_end: 40,
+                            },
                             atomic: None,
                         },
                     },
@@ -527,7 +517,7 @@ mod tests {
         let loops = detect_loops(&func.body);
         assert_eq!(loops.len(), 1, "countdown has exactly one loop");
         assert_eq!(loops[0].header, BlockId(0));
-        assert_eq!(loops[0].latch, BlockId(1));
+        assert_eq!(loops[0]._latch, BlockId(1));
         assert!(loops[0].body_blocks.contains(&BlockId(0)));
         assert!(loops[0].body_blocks.contains(&BlockId(1)));
     }
@@ -538,7 +528,7 @@ mod tests {
         let loops = detect_loops(&func.body);
         assert_eq!(loops.len(), 1, "infinite loop has one back-edge");
         assert_eq!(loops[0].header, BlockId(0));
-        assert_eq!(loops[0].latch, BlockId(0));
+        assert_eq!(loops[0]._latch, BlockId(0));
     }
 
     #[test]
@@ -553,7 +543,7 @@ mod tests {
         let func = recursive_function();
         let calls = detect_recursive_calls(&func);
         assert_eq!(calls.len(), 1, "factorial has one recursive call");
-        assert_eq!(calls[0].block, BlockId(2));
+        assert_eq!(calls[0]._block, BlockId(2));
     }
 
     #[test]
@@ -636,17 +626,15 @@ mod tests {
                     LocalDecl { index: 0, ty: Ty::u32(), name: None },
                     LocalDecl { index: 1, ty: Ty::u32(), name: Some("x".into()) },
                 ],
-                blocks: vec![
-                    BasicBlock {
-                        id: BlockId(0),
-                        stmts: vec![Statement::Assign {
-                            place: Place::local(0),
-                            rvalue: Rvalue::Use(Operand::Copy(Place::local(1))),
-                            span: SourceSpan::default(),
-                        }],
-                        terminator: Terminator::Return,
-                    },
-                ],
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    stmts: vec![Statement::Assign {
+                        place: Place::local(0),
+                        rvalue: Rvalue::Use(Operand::Copy(Place::local(1))),
+                        span: SourceSpan::default(),
+                    }],
+                    terminator: Terminator::Return,
+                }],
                 arg_count: 1,
                 return_ty: Ty::u32(),
             },
@@ -662,24 +650,15 @@ mod tests {
 
     #[test]
     fn test_non_termination_vc_has_no_runtime_fallback() {
-        let kind = VcKind::NonTermination {
-            context: "loop".to_string(),
-            measure: "n".to_string(),
-        };
+        let kind = VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() };
         assert!(!kind.has_runtime_fallback(true));
         assert!(!kind.has_runtime_fallback(false));
     }
 
     #[test]
     fn test_non_termination_vc_description() {
-        let kind = VcKind::NonTermination {
-            context: "loop".to_string(),
-            measure: "n".to_string(),
-        };
-        assert_eq!(
-            kind.description(),
-            "non-termination: loop measure `n` may not decrease"
-        );
+        let kind = VcKind::NonTermination { context: "loop".to_string(), measure: "n".to_string() };
+        assert_eq!(kind.description(), "non-termination: loop measure `n` may not decrease");
     }
 
     #[test]
@@ -735,9 +714,6 @@ mod tests {
             DecreasesKind::LoopVariant { header_block: 0 },
             DecreasesKind::LoopVariant { header_block: 0 }
         );
-        assert_ne!(
-            DecreasesKind::LoopVariant { header_block: 0 },
-            DecreasesKind::Recursion
-        );
+        assert_ne!(DecreasesKind::LoopVariant { header_block: 0 }, DecreasesKind::Recursion);
     }
 }

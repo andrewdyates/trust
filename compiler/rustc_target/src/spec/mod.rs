@@ -758,7 +758,7 @@ impl ToJson for LinkSelfContainedComponents {
             .map(|c| {
                 // We can unwrap because we're iterating over all the known singular components,
                 // not an actual set of flags where `as_str` can fail.
-                c.as_str().expect("invariant: singular component always has a string representation").to_owned() // tRust: unwrap -> expect
+                c.as_str().unwrap().to_owned()
             })
             .collect();
 
@@ -3163,7 +3163,7 @@ impl Target {
         // Check dynamic linking stuff.
         // We skip this for JSON targets since otherwise, our default values would fail this test.
         // These checks are not critical for correctness, but more like default guidelines.
-        // tRust: known issue (https://github.com/rust-lang/rust/issues/133459) — do we want to change the JSON
+        // FIXME (https://github.com/rust-lang/rust/issues/133459): do we want to change the JSON
         // target defaults so that they pass these checks?
         if kind == TargetKind::Builtin {
             // BPF: when targeting user space vms (like rbpf), those can load dynamic libraries.
@@ -3264,7 +3264,7 @@ impl Target {
                 check!(self.llvm_floatabi.is_none(), "`llvm_floatabi` is unused on x86-32");
                 check_matches!(
                     (&self.rustc_abi, &self.cfg_abi),
-                    // tRust: known issue — we do not currently set a target_abi for softfloat targets here,
+                    // FIXME: we do not currently set a target_abi for softfloat targets here,
                     // but we probably should, so we already allow it.
                     (
                         Some(RustcAbi::Softfloat),
@@ -3290,9 +3290,9 @@ impl Target {
                     "`llvm_abiname` is unused on x86-64"
                 );
                 check!(self.llvm_floatabi.is_none(), "`llvm_floatabi` is unused on x86-64");
-                // tRust: known issue — we do not currently set a target_abi for softfloat targets here, but we
+                // FIXME: we do not currently set a target_abi for softfloat targets here, but we
                 // probably should, so we already allow it.
-                // tRust: known issue — Ensure that target_abi = "x32" correlates with actually using that ABI.
+                // FIXME: Ensure that target_abi = "x32" correlates with actually using that ABI.
                 // Do any of the others need a similar check?
                 check_matches!(
                     (&self.rustc_abi, &self.cfg_abi),
@@ -3375,7 +3375,7 @@ impl Target {
                     "`llvm_abiname` is unused on aarch64"
                 );
                 check!(self.llvm_floatabi.is_none(), "`llvm_floatabi` is unused on aarch64");
-                // tRust: known issue — Ensure that target_abi = "ilp32" correlates with actually using that ABI.
+                // FIXME: Ensure that target_abi = "ilp32" correlates with actually using that ABI.
                 // Do any of the others need a similar check?
                 check_matches!(
                     (&self.rustc_abi, &self.cfg_abi),
@@ -3404,7 +3404,7 @@ impl Target {
                 );
                 check!(self.llvm_floatabi.is_none(), "`llvm_floatabi` is unused on PowerPC");
                 check!(self.rustc_abi.is_none(), "`rustc_abi` is unused on PowerPC");
-                // tRust: known issue — Check that `target_abi` matches the actually configured ABI (with or
+                // FIXME: Check that `target_abi` matches the actually configured ABI (with or
                 // without SPE).
                 check_matches!(
                     self.cfg_abi,
@@ -3417,7 +3417,7 @@ impl Target {
                 check!(self.rustc_abi.is_none(), "`rustc_abi` is unused on PowerPC64");
                 // PowerPC64 targets that are not AIX must set their ABI to either ELFv1 or ELFv2
                 if self.os == Os::Aix {
-                    // tRust: known issue — Check that `target_abi` matches the actually configured ABI
+                    // FIXME: Check that `target_abi` matches the actually configured ABI
                     // (vec-default vs vec-ext).
                     check_matches!(
                         (&self.llvm_abiname, &self.cfg_abi),
@@ -3533,7 +3533,7 @@ impl Target {
                 );
                 check!(self.llvm_floatabi.is_none(), "`llvm_floatabi` is unused on CSky");
                 check!(self.rustc_abi.is_none(), "`rustc_abi` is unused on CSky");
-                // tRust: known issue — Check that `target_abi` matches the actually configured ABI (v2 vs v2hf).
+                // FIXME: Check that `target_abi` matches the actually configured ABI (v2 vs v2hf).
                 check_matches!(
                     self.cfg_abi,
                     CfgAbi::AbiV2 | CfgAbi::AbiV2Hf,
@@ -3823,11 +3823,11 @@ impl Target {
     ///
     /// Every target that returns less than `Align::MAX` here is still has a soundness bug.
     pub fn max_reliable_alignment(&self) -> Align {
-        // tRust: known issue (#112480) — MSVC on x86-32 is unsound and fails to properly align many types with
+        // FIXME(#112480) MSVC on x86-32 is unsound and fails to properly align many types with
         // more-than-4-byte-alignment on the stack. This makes alignments larger than 4 generally
         // unreliable on 32bit Windows.
         if self.is_like_windows && self.arch == Arch::X86 {
-            Align::from_bytes(4).expect("invariant: 4-byte alignment is a valid power of two") // tRust: unwrap -> expect
+            Align::from_bytes(4).unwrap()
         } else {
             Align::MAX
         }

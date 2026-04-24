@@ -67,7 +67,7 @@ pub(crate) fn expand_assert<'cx>(
     }
     // If `generic_assert` is enabled, generates rich captured outputs
     //
-    // tRust: known issue (c410-f3r) — See https://github.com/rust-lang/rust/issues/96949
+    // FIXME(c410-f3r) See https://github.com/rust-lang/rust/issues/96949
     else if cx.ecfg.features.generic_assert() {
         context::Context::new(cx, call_site_span).build(cond_expr, panic_path())
     }

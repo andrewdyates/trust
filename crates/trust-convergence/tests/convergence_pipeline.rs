@@ -12,23 +12,23 @@ use std::time::Duration;
 
 use trust_convergence::integration::{VcStatus, VerificationConvergenceTracker};
 use trust_convergence::monotonicity::{MonotonicityPolicy, check_monotonicity};
-use trust_convergence::stagnation::{StagnationDetector, SnapshotStagnationDetector};
+use trust_convergence::stagnation::{SnapshotStagnationDetector, StagnationDetector};
 use trust_convergence::termination::{
-    ConvergenceRate, ResourceBudget, TerminationAnalyzer, TerminationCriterion,
-    TerminationReason, estimate_loop_bound, estimate_remaining_iterations, will_converge,
+    ConvergenceRate, ResourceBudget, TerminationAnalyzer, TerminationCriterion, TerminationReason,
+    estimate_loop_bound, estimate_remaining_iterations, will_converge,
 };
 use trust_convergence::visualization::FrontierSnapshot;
 use trust_convergence::widening::{
-    AbstractState, DelayedWidening, SimpleNarrowing, ThresholdWidening,
-    WideningOperator, WideningSchedule, accelerate_convergence, narrow_after_widening,
+    AbstractState, DelayedWidening, SimpleNarrowing, ThresholdWidening, WideningOperator,
+    WideningSchedule, accelerate_convergence, narrow_after_widening,
 };
 use trust_convergence::{
     ConvergenceDecision, ConvergenceTracker, IterationSnapshot, ProofFrontier, StepVerdict,
 };
 use trust_strengthen::{NoOpLlm, StrengthenConfig};
 use trust_types::{
-    BinOp, CrateVerificationResult, Formula, FunctionVerificationResult, ProofStrength,
-    SourceSpan, Ty, VcKind, VerificationCondition, VerificationResult,
+    BinOp, CrateVerificationResult, Formula, FunctionVerificationResult, ProofStrength, SourceSpan,
+    Ty, VcKind, VerificationCondition, VerificationResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -49,30 +49,22 @@ fn proved() -> VerificationResult {
     VerificationResult::Proved {
         solver: "z4".into(),
         time_ms: 5,
-        strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+        strength: ProofStrength::smt_unsat(),
+        proof_certificate: None,
+        solver_warnings: None,
+    }
 }
 
 fn failed() -> VerificationResult {
-    VerificationResult::Failed {
-        solver: "z4".into(),
-        time_ms: 10,
-        counterexample: None,
-    }
+    VerificationResult::Failed { solver: "z4".into(), time_ms: 10, counterexample: None }
 }
 
 fn unknown() -> VerificationResult {
-    VerificationResult::Unknown {
-        solver: "z4".into(),
-        time_ms: 100,
-        reason: "incomplete".into(),
-    }
+    VerificationResult::Unknown { solver: "z4".into(), time_ms: 100, reason: "incomplete".into() }
 }
 
 fn timeout() -> VerificationResult {
-    VerificationResult::Timeout {
-        solver: "z4".into(),
-        timeout_ms: 5000,
-    }
+    VerificationResult::Timeout { solver: "z4".into(), timeout_ms: 5000 }
 }
 
 /// Build a CrateVerificationResult with a single function and specified results.
@@ -80,10 +72,8 @@ fn crate_result(
     func_name: &str,
     results: Vec<(VcKind, VerificationResult)>,
 ) -> CrateVerificationResult {
-    let vcs: Vec<(VerificationCondition, VerificationResult)> = results
-        .into_iter()
-        .map(|(kind, vr)| (make_vc(kind, func_name), vr))
-        .collect();
+    let vcs: Vec<(VerificationCondition, VerificationResult)> =
+        results.into_iter().map(|(kind, vr)| (make_vc(kind, func_name), vr)).collect();
 
     let mut cr = CrateVerificationResult::new("test_crate");
     cr.add_function(FunctionVerificationResult {
@@ -102,10 +92,8 @@ fn multi_func_crate_result(
 ) -> CrateVerificationResult {
     let mut cr = CrateVerificationResult::new("test_crate");
     for (func_name, results) in funcs {
-        let vcs: Vec<(VerificationCondition, VerificationResult)> = results
-            .into_iter()
-            .map(|(kind, vr)| (make_vc(kind, func_name), vr))
-            .collect();
+        let vcs: Vec<(VerificationCondition, VerificationResult)> =
+            results.into_iter().map(|(kind, vr)| (make_vc(kind, func_name), vr)).collect();
         cr.add_function(FunctionVerificationResult {
             function_path: format!("test_crate::{func_name}"),
             function_name: func_name.into(),
@@ -118,13 +106,7 @@ fn multi_func_crate_result(
 }
 
 fn frontier(trusted: u32, certified: u32, rt: u32, failed: u32, unknown: u32) -> ProofFrontier {
-    ProofFrontier {
-        trusted,
-        certified,
-        runtime_checked: rt,
-        failed,
-        unknown,
-    }
+    ProofFrontier { trusted, certified, runtime_checked: rt, failed, unknown }
 }
 
 fn state_with(proved: &[&str], proposals: &[&str], round: u32) -> AbstractState {
@@ -146,47 +128,95 @@ fn test_pipeline_loop_simulation_converges() {
     let mut tracker = VerificationConvergenceTracker::new(2, 10);
 
     // Iteration 0: 1 proved, 2 failed, 1 unknown
-    let iter0 = crate_result("compute", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, failed()),
-        (VcKind::IndexOutOfBounds, failed()),
-        (VcKind::Postcondition, unknown()),
-    ]);
+    let iter0 = crate_result(
+        "compute",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                failed(),
+            ),
+            (VcKind::IndexOutOfBounds, failed()),
+            (VcKind::Postcondition, unknown()),
+        ],
+    );
     let changes0 = tracker.observe(&iter0);
     // All VCs are new, so no changes expected (no previous state).
     assert!(changes0.is_empty());
     assert!(!tracker.has_regressions());
 
     // Iteration 1: 2 proved, 1 failed, 1 unknown (improvement)
-    let iter1 = crate_result("compute", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-        (VcKind::Postcondition, unknown()),
-    ]);
+    let iter1 = crate_result(
+        "compute",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                proved(),
+            ),
+            (VcKind::IndexOutOfBounds, failed()),
+            (VcKind::Postcondition, unknown()),
+        ],
+    );
     let changes1 = tracker.observe(&iter1);
     let improvements: Vec<_> = changes1.iter().filter(|c| c.is_improvement()).collect();
     assert!(!improvements.is_empty(), "should detect ArithmeticOverflow improvement");
     assert!(!tracker.has_regressions());
 
     // Iteration 2: 3 proved, 0 failed, 1 unknown
-    let iter2 = crate_result("compute", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, proved()),
-        (VcKind::IndexOutOfBounds, proved()),
-        (VcKind::Postcondition, unknown()),
-    ]);
+    let iter2 = crate_result(
+        "compute",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                proved(),
+            ),
+            (VcKind::IndexOutOfBounds, proved()),
+            (VcKind::Postcondition, unknown()),
+        ],
+    );
     let changes2 = tracker.observe(&iter2);
     let improvements2: Vec<_> = changes2.iter().filter(|c| c.is_improvement()).collect();
     assert!(!improvements2.is_empty());
 
     // Iteration 3: all proved
-    let iter3 = crate_result("compute", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, proved()),
-        (VcKind::IndexOutOfBounds, proved()),
-        (VcKind::Postcondition, proved()),
-    ]);
+    let iter3 = crate_result(
+        "compute",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                proved(),
+            ),
+            (VcKind::IndexOutOfBounds, proved()),
+            (VcKind::Postcondition, proved()),
+        ],
+    );
     let _changes3 = tracker.observe(&iter3);
 
     // The convergence score should be 1.0 (all proved).
@@ -200,19 +230,25 @@ fn test_pipeline_loop_with_regression_detection() {
     let mut tracker = VerificationConvergenceTracker::new(2, 10);
 
     // Iteration 0: 2 proved, 1 failed
-    let iter0 = crate_result("safe_add", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::Postcondition, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-    ]);
+    let iter0 = crate_result(
+        "safe_add",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (VcKind::Postcondition, proved()),
+            (VcKind::IndexOutOfBounds, failed()),
+        ],
+    );
     tracker.observe(&iter0);
 
     // Iteration 1: regression — DivisionByZero no longer proved
-    let iter1 = crate_result("safe_add", vec![
-        (VcKind::DivisionByZero, failed()),
-        (VcKind::Postcondition, proved()),
-        (VcKind::IndexOutOfBounds, proved()),
-    ]);
+    let iter1 = crate_result(
+        "safe_add",
+        vec![
+            (VcKind::DivisionByZero, failed()),
+            (VcKind::Postcondition, proved()),
+            (VcKind::IndexOutOfBounds, proved()),
+        ],
+    );
     let changes = tracker.observe(&iter1);
     assert!(tracker.has_regressions(), "DivisionByZero regressed");
 
@@ -226,25 +262,32 @@ fn test_pipeline_loop_with_regression_detection() {
 fn test_pipeline_frontier_from_verification_result() {
     // Build a CrateVerificationResult with mixed results across multiple functions.
     let cr = multi_func_crate_result(vec![
-        ("func_a", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, proved()),
-        ]),
-        ("func_b", vec![
-            (VcKind::Postcondition, failed()),
-            (VcKind::ArithmeticOverflow { op: BinOp::Mul, operand_tys: (Ty::Int { width: 32, signed: true }, Ty::Int { width: 32, signed: true }) }, unknown()),
-        ]),
-        ("func_c", vec![
-            (VcKind::DivisionByZero, timeout()),
-        ]),
+        ("func_a", vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, proved())]),
+        (
+            "func_b",
+            vec![
+                (VcKind::Postcondition, failed()),
+                (
+                    VcKind::ArithmeticOverflow {
+                        op: BinOp::Mul,
+                        operand_tys: (
+                            Ty::Int { width: 32, signed: true },
+                            Ty::Int { width: 32, signed: true },
+                        ),
+                    },
+                    unknown(),
+                ),
+            ],
+        ),
+        ("func_c", vec![(VcKind::DivisionByZero, timeout())]),
     ]);
 
     let f = ProofFrontier::from_verification_result(&cr);
-    assert_eq!(f.trusted, 2);       // func_a's 2 proved VCs
+    assert_eq!(f.trusted, 2); // func_a's 2 proved VCs
     assert_eq!(f.certified, 0);
     assert_eq!(f.runtime_checked, 0);
-    assert_eq!(f.failed, 1);        // func_b's postcondition
-    assert_eq!(f.unknown, 2);       // func_b's overflow + func_c's timeout
+    assert_eq!(f.failed, 1); // func_b's postcondition
+    assert_eq!(f.unknown, 2); // func_b's overflow + func_c's timeout
     assert_eq!(f.total(), 5);
     assert_eq!(f.statically_proved(), 2);
     assert_eq!(f.unresolved(), 3);
@@ -263,46 +306,79 @@ fn test_pipeline_strengthen_improves_convergence() {
     let mut tracker = VerificationConvergenceTracker::new(3, 10);
 
     // Iteration 0: 2 failures that strengthen can propose specs for
-    let iter0_result = crate_result("midpoint", vec![
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, failed()),
-        (VcKind::DivisionByZero, failed()),
-    ]);
+    let iter0_result = crate_result(
+        "midpoint",
+        vec![
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                failed(),
+            ),
+            (VcKind::DivisionByZero, failed()),
+        ],
+    );
     tracker.observe(&iter0_result);
 
     // Run strengthen on the failures
-    let strengthen_output = trust_strengthen::run(
-        &iter0_result,
-        &StrengthenConfig::default(),
-        &NoOpLlm,
+    let strengthen_output =
+        trust_strengthen::run(&iter0_result, &StrengthenConfig::default(), &NoOpLlm);
+    assert!(
+        strengthen_output.has_proposals,
+        "strengthen should propose fixes for overflow + div-by-zero"
     );
-    assert!(strengthen_output.has_proposals, "strengthen should propose fixes for overflow + div-by-zero");
     assert_eq!(strengthen_output.failures_analyzed, 2);
     assert!(strengthen_output.proposals.len() >= 2);
 
     // Simulate: strengthen proposals accepted, re-verify with better specs.
     // Iteration 1: 1 proved (div-by-zero fixed), 1 still failing
-    let iter1_result = crate_result("midpoint", vec![
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, failed()),
-        (VcKind::DivisionByZero, proved()),
-    ]);
+    let iter1_result = crate_result(
+        "midpoint",
+        vec![
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                failed(),
+            ),
+            (VcKind::DivisionByZero, proved()),
+        ],
+    );
     let changes1 = tracker.observe(&iter1_result);
     let improvements: Vec<_> = changes1.iter().filter(|c| c.is_improvement()).collect();
     assert!(!improvements.is_empty());
 
     // Re-run strengthen on remaining failure
-    let strengthen_output2 = trust_strengthen::run(
-        &iter1_result,
-        &StrengthenConfig::default(),
-        &NoOpLlm,
-    );
+    let strengthen_output2 =
+        trust_strengthen::run(&iter1_result, &StrengthenConfig::default(), &NoOpLlm);
     assert!(strengthen_output2.has_proposals);
     assert_eq!(strengthen_output2.failures_analyzed, 1);
 
     // Iteration 2: all proved
-    let iter2_result = crate_result("midpoint", vec![
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }) }, proved()),
-        (VcKind::DivisionByZero, proved()),
-    ]);
+    let iter2_result = crate_result(
+        "midpoint",
+        vec![
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 64, signed: false },
+                        Ty::Int { width: 64, signed: false },
+                    ),
+                },
+                proved(),
+            ),
+            (VcKind::DivisionByZero, proved()),
+        ],
+    );
     tracker.observe(&iter2_result);
 
     let score = tracker.convergence_score().expect("has VCs");
@@ -313,10 +389,10 @@ fn test_pipeline_strengthen_improves_convergence() {
 #[test]
 fn test_pipeline_strengthen_no_proposals_when_all_proved() {
     // When all VCs are proved, strengthen should propose nothing.
-    let result = crate_result("always_ok", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::Postcondition, proved()),
-    ]);
+    let result = crate_result(
+        "always_ok",
+        vec![(VcKind::DivisionByZero, proved()), (VcKind::Postcondition, proved())],
+    );
 
     let output = trust_strengthen::run(&result, &StrengthenConfig::default(), &NoOpLlm);
     assert!(!output.has_proposals);
@@ -338,22 +414,28 @@ fn test_pipeline_stagnation_detection_with_verification_results() {
     let mut detector = StagnationDetector::with_threshold(3);
 
     // Iteration 0: some proved
-    let iter0 = crate_result("func", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-        (VcKind::Postcondition, failed()),
-    ]);
+    let iter0 = crate_result(
+        "func",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (VcKind::IndexOutOfBounds, failed()),
+            (VcKind::Postcondition, failed()),
+        ],
+    );
     let f0 = ProofFrontier::from_verification_result(&iter0);
     let r0 = detector.observe(&f0);
     assert!(!r0.is_stagnant());
 
     // Iterations 1-3: identical results (no progress)
     for _ in 0..3 {
-        let iter_same = crate_result("func", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, failed()),
-            (VcKind::Postcondition, failed()),
-        ]);
+        let iter_same = crate_result(
+            "func",
+            vec![
+                (VcKind::DivisionByZero, proved()),
+                (VcKind::IndexOutOfBounds, failed()),
+                (VcKind::Postcondition, failed()),
+            ],
+        );
         let f = ProofFrontier::from_verification_result(&iter_same);
         let r = detector.observe(&f);
         if r.stale_iterations >= 3 {
@@ -433,10 +515,10 @@ fn test_pipeline_stagnation_broken_by_strengthen() {
     assert!(r.is_stagnant());
 
     // Run strengthen on the stagnating result
-    let cr = crate_result("stuck_func", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-    ]);
+    let cr = crate_result(
+        "stuck_func",
+        vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())],
+    );
     let output = trust_strengthen::run(&cr, &StrengthenConfig::default(), &NoOpLlm);
     assert!(output.has_proposals, "strengthen should propose fix for OOB");
 
@@ -541,8 +623,10 @@ fn test_pipeline_widening_schedule_with_convergence_tracker() {
         }
     }
 
-    assert!(schedule.applications() > 0 || threshold_widen.stale_count() > 0,
-        "widening should have been triggered or stale count accumulated");
+    assert!(
+        schedule.applications() > 0 || threshold_widen.stale_count() > 0,
+        "widening should have been triggered or stale count accumulated"
+    );
 }
 
 #[test]
@@ -641,16 +725,13 @@ fn test_pipeline_termination_fixed_point_from_verification_results() {
     let analyzer = TerminationAnalyzer::with_criterion(TerminationCriterion::FixedPoint);
 
     // Two identical verification results -> fixed point.
-    let cr = crate_result("func", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-    ]);
+    let cr = crate_result(
+        "func",
+        vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())],
+    );
     let f = ProofFrontier::from_verification_result(&cr);
 
-    let history = vec![
-        IterationSnapshot::new(0, f.clone()),
-        IterationSnapshot::new(1, f.clone()),
-    ];
+    let history = vec![IterationSnapshot::new(0, f.clone()), IterationSnapshot::new(1, f.clone())];
 
     let reason = analyzer.should_terminate(&history).expect("fixed point");
     assert!(matches!(reason, TerminationReason::FixedPoint { stable_iterations: 2 }));
@@ -658,17 +739,28 @@ fn test_pipeline_termination_fixed_point_from_verification_results() {
 
 #[test]
 fn test_pipeline_termination_confidence_threshold() {
-    let analyzer = TerminationAnalyzer::with_criterion(
-        TerminationCriterion::ConfidenceThreshold(0.75),
-    );
+    let analyzer =
+        TerminationAnalyzer::with_criterion(TerminationCriterion::ConfidenceThreshold(0.75));
 
     // 4 out of 4 proved = 100% > 75%
-    let cr = crate_result("func", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, proved()),
-        (VcKind::Postcondition, proved()),
-        (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 32, signed: false }, Ty::Int { width: 32, signed: false }) }, proved()),
-    ]);
+    let cr = crate_result(
+        "func",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (VcKind::IndexOutOfBounds, proved()),
+            (VcKind::Postcondition, proved()),
+            (
+                VcKind::ArithmeticOverflow {
+                    op: BinOp::Add,
+                    operand_tys: (
+                        Ty::Int { width: 32, signed: false },
+                        Ty::Int { width: 32, signed: false },
+                    ),
+                },
+                proved(),
+            ),
+        ],
+    );
     let f = ProofFrontier::from_verification_result(&cr);
 
     let history = vec![IterationSnapshot::new(0, f)];
@@ -764,7 +856,10 @@ fn test_pipeline_full_loop_with_convergence_and_strengthen() {
         VcKind::DivisionByZero,
         VcKind::ArithmeticOverflow {
             op: BinOp::Add,
-            operand_tys: (Ty::Int { width: 64, signed: false }, Ty::Int { width: 64, signed: false }),
+            operand_tys: (
+                Ty::Int { width: 64, signed: false },
+                Ty::Int { width: 64, signed: false },
+            ),
         },
         VcKind::IndexOutOfBounds,
         VcKind::Postcondition,
@@ -781,11 +876,7 @@ fn test_pipeline_full_loop_with_convergence_and_strengthen() {
             .iter()
             .enumerate()
             .map(|(i, kind)| {
-                if i < target_proved {
-                    (kind.clone(), proved())
-                } else {
-                    (kind.clone(), failed())
-                }
+                if i < target_proved { (kind.clone(), proved()) } else { (kind.clone(), failed()) }
             })
             .collect();
 
@@ -847,8 +938,10 @@ fn test_pipeline_visualization_snapshots_from_tracker() {
     // Build a FrontierSnapshot from the tracker state.
     let snap = trust_convergence::visualization::from_tracker(&tracker);
     assert_eq!(snap.iteration, 1); // observe increments iteration
-    assert_eq!(snap.proved_count + snap.failed_count + snap.unknown_count,
-        tracker.current_statuses().len());
+    assert_eq!(
+        snap.proved_count + snap.failed_count + snap.unknown_count,
+        tracker.current_statuses().len()
+    );
 
     let ratio = snap.convergence_ratio().expect("has VCs");
     assert!(ratio > 0.0 && ratio < 1.0);
@@ -864,52 +957,76 @@ fn test_pipeline_multi_function_convergence_tracking() {
 
     // Iteration 0: 5 functions with mixed results
     let iter0 = multi_func_crate_result(vec![
-        ("parse_input", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, failed()),
-        ]),
-        ("validate", vec![
-            (VcKind::Postcondition, proved()),
-        ]),
-        ("transform", vec![
-            (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 32, signed: true }, Ty::Int { width: 32, signed: true }) }, failed()),
-            (VcKind::DivisionByZero, unknown()),
-        ]),
-        ("serialize", vec![
-            (VcKind::IndexOutOfBounds, proved()),
-            (VcKind::Postcondition, proved()),
-        ]),
-        ("cleanup", vec![
-            (VcKind::Unreachable, timeout()),
-        ]),
+        (
+            "parse_input",
+            vec![(VcKind::DivisionByZero, proved()), (VcKind::IndexOutOfBounds, failed())],
+        ),
+        ("validate", vec![(VcKind::Postcondition, proved())]),
+        (
+            "transform",
+            vec![
+                (
+                    VcKind::ArithmeticOverflow {
+                        op: BinOp::Add,
+                        operand_tys: (
+                            Ty::Int { width: 32, signed: true },
+                            Ty::Int { width: 32, signed: true },
+                        ),
+                    },
+                    failed(),
+                ),
+                (VcKind::DivisionByZero, unknown()),
+            ],
+        ),
+        (
+            "serialize",
+            vec![(VcKind::IndexOutOfBounds, proved()), (VcKind::Postcondition, proved())],
+        ),
+        ("cleanup", vec![(VcKind::Unreachable, timeout())]),
     ]);
 
     tracker.observe(&iter0);
     let f0 = ProofFrontier::from_verification_result(&iter0);
-    assert_eq!(f0.trusted, 4);  // parse_input::div, validate::post, serialize::oob, serialize::post
-    assert_eq!(f0.failed, 2);   // parse_input::oob, transform::overflow
-    assert_eq!(f0.unknown, 2);  // transform::div, cleanup::unreachable
+    assert_eq!(f0.trusted, 4); // parse_input::div, validate::post, serialize::oob, serialize::post
+    assert_eq!(f0.failed, 2); // parse_input::oob, transform::overflow
+    assert_eq!(f0.unknown, 2); // transform::div, cleanup::unreachable
 
     // Iteration 1: progress on some fronts
     let iter1 = multi_func_crate_result(vec![
-        ("parse_input", vec![
-            (VcKind::DivisionByZero, proved()),
-            (VcKind::IndexOutOfBounds, proved()),  // fixed!
-        ]),
-        ("validate", vec![
-            (VcKind::Postcondition, proved()),
-        ]),
-        ("transform", vec![
-            (VcKind::ArithmeticOverflow { op: BinOp::Add, operand_tys: (Ty::Int { width: 32, signed: true }, Ty::Int { width: 32, signed: true }) }, proved()),  // fixed!
-            (VcKind::DivisionByZero, proved()),     // fixed!
-        ]),
-        ("serialize", vec![
-            (VcKind::IndexOutOfBounds, proved()),
-            (VcKind::Postcondition, proved()),
-        ]),
-        ("cleanup", vec![
-            (VcKind::Unreachable, proved()),  // fixed!
-        ]),
+        (
+            "parse_input",
+            vec![
+                (VcKind::DivisionByZero, proved()),
+                (VcKind::IndexOutOfBounds, proved()), // fixed!
+            ],
+        ),
+        ("validate", vec![(VcKind::Postcondition, proved())]),
+        (
+            "transform",
+            vec![
+                (
+                    VcKind::ArithmeticOverflow {
+                        op: BinOp::Add,
+                        operand_tys: (
+                            Ty::Int { width: 32, signed: true },
+                            Ty::Int { width: 32, signed: true },
+                        ),
+                    },
+                    proved(),
+                ), // fixed!
+                (VcKind::DivisionByZero, proved()), // fixed!
+            ],
+        ),
+        (
+            "serialize",
+            vec![(VcKind::IndexOutOfBounds, proved()), (VcKind::Postcondition, proved())],
+        ),
+        (
+            "cleanup",
+            vec![
+                (VcKind::Unreachable, proved()), // fixed!
+            ],
+        ),
     ]);
 
     let changes = tracker.observe(&iter1);
@@ -930,18 +1047,24 @@ fn test_pipeline_convergence_report_with_deltas() {
     let mut tracker = ConvergenceTracker::new(3, 10);
 
     // Build frontiers from CrateVerificationResults.
-    let cr0 = crate_result("func", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, failed()),
-        (VcKind::Postcondition, failed()),
-    ]);
+    let cr0 = crate_result(
+        "func",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (VcKind::IndexOutOfBounds, failed()),
+            (VcKind::Postcondition, failed()),
+        ],
+    );
     let f0 = ProofFrontier::from_verification_result(&cr0);
 
-    let cr1 = crate_result("func", vec![
-        (VcKind::DivisionByZero, proved()),
-        (VcKind::IndexOutOfBounds, proved()),
-        (VcKind::Postcondition, failed()),
-    ]);
+    let cr1 = crate_result(
+        "func",
+        vec![
+            (VcKind::DivisionByZero, proved()),
+            (VcKind::IndexOutOfBounds, proved()),
+            (VcKind::Postcondition, failed()),
+        ],
+    );
     let f1 = ProofFrontier::from_verification_result(&cr1);
 
     tracker.observe(IterationSnapshot::new(0, f0));

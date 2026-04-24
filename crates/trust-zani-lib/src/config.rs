@@ -126,4 +126,3 @@ pub enum DiagConfig {
     /// Pass diagnostics through to stderr (useful for debugging).
     Passthrough,
 }
-

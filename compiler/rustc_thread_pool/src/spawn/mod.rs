@@ -64,8 +64,6 @@ where
     F: FnOnce() + Send + 'static,
 {
     // We assert that current registry has not terminated.
-    // SAFETY: `Registry::current` clones a live registry for the current worker, or the global
-    // registry outside any pool, so `spawn_in` receives a non-terminated registry.
     unsafe { spawn_in(func, &Registry::current()) }
 }
 
@@ -82,8 +80,6 @@ where
     // be able to panic, and hence the data won't leak but will be
     // enqueued into some deque for later execution.
     let abort_guard = unwind::AbortIfPanic; // just in case we are wrong, and code CAN panic
-    // SAFETY: `spawn_in` is only called with a live registry, so incrementing its terminate count
-    // is valid, and `F: 'static` lets the heap job be erased into a `JobRef` safely.
     let job_ref = unsafe { spawn_job(func, registry) };
     registry.inject_or_push(job_ref);
     mem::forget(abort_guard);
@@ -138,8 +134,6 @@ where
     F: FnOnce() + Send + 'static,
 {
     // We assert that current registry has not terminated.
-    // SAFETY: `Registry::current` clones a live registry for the current worker, or the global
-    // registry outside any pool, so `spawn_fifo_in` receives a non-terminated registry.
     unsafe { spawn_fifo_in(func, &Registry::current()) }
 }
 
@@ -156,15 +150,11 @@ where
     // be able to panic, and hence the data won't leak but will be
     // enqueued into some deque for later execution.
     let abort_guard = unwind::AbortIfPanic; // just in case we are wrong, and code CAN panic
-    // SAFETY: `spawn_fifo_in` is only called with a live registry, so incrementing its terminate
-    // count is valid, and `F: 'static` lets the heap job be erased into a `JobRef` safely.
     let job_ref = unsafe { spawn_job(func, registry) };
 
     // If we're in the pool, use our thread's private fifo for this thread to execute
     // in a locally-FIFO order. Otherwise, just use the pool's global injector.
     match registry.current_thread() {
-        // SAFETY: `current_thread` only returns workers belonging to `registry`, and that borrowed
-        // worker is the live current thread for this call, satisfying `push_fifo`'s contract.
         Some(worker) => unsafe { worker.push_fifo(job_ref) },
         None => registry.inject(job_ref),
     }

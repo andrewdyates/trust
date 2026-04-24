@@ -1,0 +1,10 @@
+[package]
+name = "basic-contracts"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+trust = { package = "trust-spec", path = "../../../crates/trust-spec" }

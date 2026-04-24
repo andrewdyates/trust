@@ -56,7 +56,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
     #[deprecated(note = "you already have a `TypeErrCtxt`")]
     #[allow(unused)]
     pub fn err_ctxt(&self) -> ! {
-        // tRust: invariant — API contract violation: called `err_ctxt` on `TypeErrCtxt`. Try removing the call
         bug!("called `err_ctxt` on `TypeErrCtxt`. Try removing the call");
     }
 }

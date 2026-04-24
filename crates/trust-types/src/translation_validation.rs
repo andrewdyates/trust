@@ -13,8 +13,8 @@
 use crate::fx::FxHashMap;
 
 use crate::{
-    BlockId, Formula, Sort, SourceSpan, Ty, VcKind, VerifiableBody,
-    VerifiableFunction, VerificationCondition,
+    BlockId, Formula, Sort, SourceSpan, Ty, VcKind, VerifiableBody, VerifiableFunction,
+    VerificationCondition,
 };
 
 /// Error type for translation validation operations.
@@ -23,10 +23,7 @@ use crate::{
 pub enum TranslationValidationError {
     /// Source and target functions have incompatible signatures.
     #[error("signature mismatch: source has {source_args} args, target has {target_args}")]
-    SignatureMismatch {
-        source_args: usize,
-        target_args: usize,
-    },
+    SignatureMismatch { source_args: usize, target_args: usize },
 
     /// A source block has no corresponding target block in the simulation relation.
     #[error("unmapped source block {0:?} has no target correspondence")]
@@ -115,25 +112,13 @@ impl SimulationRelation {
     /// or for validating trivial transformations.
     #[must_use]
     pub fn identity(func: &VerifiableFunction) -> Self {
-        let block_map: FxHashMap<BlockId, BlockId> = func
-            .body
-            .blocks
-            .iter()
-            .map(|bb| (bb.id, bb.id))
-            .collect();
+        let block_map: FxHashMap<BlockId, BlockId> =
+            func.body.blocks.iter().map(|bb| (bb.id, bb.id)).collect();
 
-        let variable_map: FxHashMap<usize, usize> = func
-            .body
-            .locals
-            .iter()
-            .map(|local| (local.index, local.index))
-            .collect();
+        let variable_map: FxHashMap<usize, usize> =
+            func.body.locals.iter().map(|local| (local.index, local.index)).collect();
 
-        Self {
-            block_map,
-            variable_map,
-            expression_map: FxHashMap::default(),
-        }
+        Self { block_map, variable_map, expression_map: FxHashMap::default() }
     }
 
     /// Validate that the simulation relation is well-formed with respect to
@@ -151,13 +136,10 @@ impl SimulationRelation {
         }
 
         // Check that all mapped target blocks actually exist.
-        let target_block_ids: Vec<BlockId> =
-            target.body.blocks.iter().map(|bb| bb.id).collect();
+        let target_block_ids: Vec<BlockId> = target.body.blocks.iter().map(|bb| bb.id).collect();
         for target_id in self.block_map.values() {
             if !target_block_ids.contains(target_id) {
-                return Err(TranslationValidationError::InvalidTargetBlock {
-                    block: *target_id,
-                });
+                return Err(TranslationValidationError::InvalidTargetBlock { block: *target_id });
             }
         }
 
@@ -179,7 +161,11 @@ impl SimulationRelation {
     /// Prefers `expression_map` (for optimized representations), falls back
     /// to `variable_map` (direct local-to-local mapping).
     #[must_use]
-    pub fn resolve_variable(&self, source_local: usize, target: &VerifiableFunction) -> Option<Formula> {
+    pub fn resolve_variable(
+        &self,
+        source_local: usize,
+        target: &VerifiableFunction,
+    ) -> Option<Formula> {
         // Check expression map first (handles constant folding, etc.)
         if let Some(expr) = self.expression_map.get(&source_local) {
             return Some(expr.clone());
@@ -232,7 +218,7 @@ impl RefinementVc {
                     self.check.kind, self.check.source_point, self.check.target_point
                 ),
             },
-            function: self.target_function.clone(),
+            function: crate::Symbol::intern(&self.target_function),
             location: SourceSpan::default(),
             formula: self.check.formula.clone(),
             contract_metadata: None,
@@ -263,14 +249,9 @@ pub fn infer_identity_relation(
         .collect();
 
     let local_count = source.body.locals.len().min(target.body.locals.len());
-    let variable_map: FxHashMap<usize, usize> =
-        (0..local_count).map(|i| (i, i)).collect();
+    let variable_map: FxHashMap<usize, usize> = (0..local_count).map(|i| (i, i)).collect();
 
-    Some(SimulationRelation {
-        block_map,
-        variable_map,
-        expression_map: FxHashMap::default(),
-    })
+    Some(SimulationRelation { block_map, variable_map, expression_map: FxHashMap::default() })
 }
 
 /// Detect back-edges in the CFG (header, latch) pairs.

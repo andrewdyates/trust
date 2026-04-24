@@ -42,6 +42,7 @@ impl From<usize> for Dummy {
     }
 }
 
+
 #[core::contracts::requires(true)]
 //~^ ERROR contract annotations can only be used on functions
 pub trait DummyBuilder {

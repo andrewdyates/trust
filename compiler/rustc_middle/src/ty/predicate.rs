@@ -76,13 +76,13 @@ impl<'tcx> Predicate<'tcx> {
         self.0.internee
     }
 
-    // tRust: known issue (compiler-errors) — Think about removing this.
+    // FIXME(compiler-errors): Think about removing this.
     #[inline(always)]
     pub fn flags(self) -> TypeFlags {
         self.0.flags
     }
 
-    // tRust: known issue (compiler-errors) — Think about removing this.
+    // FIXME(compiler-errors): Think about removing this.
     #[inline(always)]
     pub fn outer_exclusive_binder(self) -> DebruijnIndex {
         self.0.outer_exclusive_binder
@@ -435,7 +435,7 @@ impl<'tcx> Clause<'tcx> {
         let bound_vars =
             tcx.mk_bound_variable_kinds_from_iter(trait_bound_vars.iter().chain(pred_bound_vars));
 
-        // tRust: known issue — Is it really perf sensitive to use reuse_or_mk_predicate here?
+        // FIXME: Is it really perf sensitive to use reuse_or_mk_predicate here?
         tcx.reuse_or_mk_predicate(
             self.as_predicate(),
             ty::Binder::bind_with_vars(PredicateKind::Clause(new), bound_vars),
@@ -640,7 +640,6 @@ impl<'tcx> Predicate<'tcx> {
     pub fn expect_clause(self) -> Clause<'tcx> {
         match self.kind().skip_binder() {
             PredicateKind::Clause(..) => Clause(self.0),
-            // tRust: invariant: def must be an clause
             _ => bug!("{self} is not a clause"),
         }
     }

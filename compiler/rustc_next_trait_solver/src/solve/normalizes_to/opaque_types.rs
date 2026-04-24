@@ -116,7 +116,7 @@ where
                 };
 
                 let actual = cx.type_of(def_id.into()).instantiate(cx, opaque_ty.args);
-                // tRust: known issue — Actually use a proper binder here instead of relying on `ReErased`.
+                // FIXME: Actually use a proper binder here instead of relying on `ReErased`.
                 //
                 // This is also probably unsound or sth :shrug:
                 let actual = fold_regions(cx, actual, |re, _dbi| match re.kind() {
@@ -127,7 +127,7 @@ where
                 self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
             }
             TypingMode::PostAnalysis => {
-                // tRust: known issue — Add an assertion that opaque type storage is empty.
+                // FIXME: Add an assertion that opaque type storage is empty.
                 let actual = cx.type_of(opaque_ty.def_id).instantiate(cx, opaque_ty.args);
                 self.eq(goal.param_env, expected, actual)?;
                 self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)

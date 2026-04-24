@@ -21,12 +21,8 @@ pub(in crate::resilience) fn assert_msg_description(msg: &crate::AssertMessage) 
             "misaligned pointer dereference".to_string()
         }
         crate::AssertMessage::ResumedAfterDrop => "resumed after drop".to_string(),
-        crate::AssertMessage::NullPointerDereference => {
-            "null pointer dereference".to_string()
-        }
-        crate::AssertMessage::InvalidEnumConstruction => {
-            "invalid enum construction".to_string()
-        }
+        crate::AssertMessage::NullPointerDereference => "null pointer dereference".to_string(),
+        crate::AssertMessage::InvalidEnumConstruction => "invalid enum construction".to_string(),
         crate::AssertMessage::Custom(s) => s.clone(),
     }
 }
@@ -53,17 +49,19 @@ pub(in crate::resilience) fn classify_error_handling(
 ) -> ErrorHandlingPattern {
     // Check if the result is used in an unwrap call.
     if let Terminator::Call { func: next_func, args, .. } = &target_block.terminator
-        && next_func.contains("unwrap") && !next_func.contains("unwrap_or") {
-            let uses_dest = args.iter().any(|arg| {
-                matches!(arg, Operand::Copy(p) | Operand::Move(p) if p.local == dest.local)
-            });
-            if uses_dest {
-                return ErrorHandlingPattern::Panicking {
-                    call_path: call_func.to_string(),
-                    block: call_block,
-                };
-            }
+        && next_func.contains("unwrap")
+        && !next_func.contains("unwrap_or")
+    {
+        let uses_dest = args
+            .iter()
+            .any(|arg| matches!(arg, Operand::Copy(p) | Operand::Move(p) if p.local == dest.local));
+        if uses_dest {
+            return ErrorHandlingPattern::Panicking {
+                call_path: call_func.to_string(),
+                block: call_block,
+            };
         }
+    }
 
     // Check if result is discarded (no statements reference dest local).
     let dest_used = target_block.stmts.iter().any(|stmt| stmt_references_local(stmt, dest.local));
@@ -77,17 +75,23 @@ pub(in crate::resilience) fn classify_error_handling(
     }
 
     // Default: assume propagation (safe pattern).
-    ErrorHandlingPattern::Propagation {
-        call_path: call_func.to_string(),
-        block: call_block,
-    }
+    ErrorHandlingPattern::Propagation { call_path: call_func.to_string(), block: call_block }
 }
 
 /// Check if a statement references a given local variable.
 fn stmt_references_local(stmt: &Statement, local: usize) -> bool {
     match stmt {
         Statement::Assign { rvalue, .. } => rvalue_references_local(rvalue, local),
-        Statement::Nop => false,
+        // tRust: #828 — new statement variants: check place-bearing ones for local refs.
+        Statement::SetDiscriminant { place, .. }
+        | Statement::Deinit { place }
+        | Statement::Retag { place }
+        | Statement::PlaceMention(place) => place.local == local,
+        Statement::Intrinsic { args, .. } => {
+            args.iter().any(|op| operand_references_local(op, local))
+        }
+        Statement::StorageLive(l) | Statement::StorageDead(l) => *l == local,
+        Statement::Coverage | Statement::ConstEvalCounter | Statement::Nop => false,
     }
 }
 

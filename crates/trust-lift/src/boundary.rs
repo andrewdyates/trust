@@ -12,6 +12,7 @@ use trust_binary_parse::MachO;
 #[cfg(feature = "elf")]
 use trust_binary_parse::Elf64;
 
+#[cfg(any(feature = "macho", feature = "elf", test))]
 use crate::error::LiftError;
 
 /// A detected function boundary from the symbol table.
@@ -38,10 +39,11 @@ pub(crate) fn detect_functions(macho: &MachO<'_>) -> Result<Vec<FunctionBoundary
     // excluding stab debugging symbols.
     let mut func_addrs: Vec<(String, u64)> = symbols
         .iter()
-        .filter(|s| !s.is_stab() && s.n_value != 0 && s.n_sect != 0)
+        .filter(|s| !s.is_stab() && s.value() != 0 && s.section_index() != 0)
         .map(|s| {
-            let name = s.name.strip_prefix('_').unwrap_or(s.name).to_string();
-            (name, s.n_value)
+            let raw_name = s.name();
+            let name = raw_name.strip_prefix('_').unwrap_or(raw_name).to_string();
+            (name, s.value())
         })
         .collect();
 
@@ -50,10 +52,7 @@ pub(crate) fn detect_functions(macho: &MachO<'_>) -> Result<Vec<FunctionBoundary
     func_addrs.dedup_by_key(|(_, addr)| *addr);
 
     // Determine text section end for bounding the last function.
-    let text_end = macho
-        .text_section()
-        .map(|s| s.addr + s.size)
-        .unwrap_or(u64::MAX);
+    let text_end = macho.text_section().map(|s| s.addr() + s.size()).unwrap_or(u64::MAX);
 
     boundaries_from_sorted(&func_addrs, text_end)
 }
@@ -68,10 +67,8 @@ pub(crate) fn detect_functions_elf(elf: &Elf64<'_>) -> Result<Vec<FunctionBounda
     let func_syms = elf.function_symbols()?;
 
     // Build sorted (name, address) pairs; use st_size if available.
-    let mut func_addrs: Vec<(String, u64, u64)> = func_syms
-        .iter()
-        .map(|s| (s.name.to_string(), s.st_value, s.st_size))
-        .collect();
+    let mut func_addrs: Vec<(String, u64, u64)> =
+        func_syms.iter().map(|s| (s.name.to_string(), s.st_value, s.st_size)).collect();
 
     func_addrs.sort_by_key(|(_, addr, _)| *addr);
     func_addrs.dedup_by_key(|(_, addr, _)| *addr);
@@ -82,9 +79,7 @@ pub(crate) fn detect_functions_elf(elf: &Elf64<'_>) -> Result<Vec<FunctionBounda
         .map(|s| s.sh_addr + s.sh_size)
         .or_else(|| {
             // Fall back to first executable segment end
-            elf.executable_segments()
-                .first()
-                .map(|seg| seg.p_vaddr + seg.p_memsz)
+            elf.executable_segments().first().map(|seg| seg.p_vaddr + seg.p_memsz)
         })
         .unwrap_or(u64::MAX);
 
@@ -95,17 +90,10 @@ pub(crate) fn detect_functions_elf(elf: &Elf64<'_>) -> Result<Vec<FunctionBounda
             *sym_size
         } else {
             // Gap-based estimation
-            let next_start = func_addrs
-                .get(i + 1)
-                .map(|(_, a, _)| *a)
-                .unwrap_or(text_end);
+            let next_start = func_addrs.get(i + 1).map(|(_, a, _)| *a).unwrap_or(text_end);
             next_start.saturating_sub(*start)
         };
-        boundaries.push(FunctionBoundary {
-            name: name.clone(),
-            start: *start,
-            size,
-        });
+        boundaries.push(FunctionBoundary { name: name.clone(), start: *start, size });
     }
 
     Ok(boundaries)
@@ -115,6 +103,7 @@ pub(crate) fn detect_functions_elf(elf: &Elf64<'_>) -> Result<Vec<FunctionBounda
 ///
 /// This is the core algorithm, usable without Mach-O parsing.
 /// `text_end` is the address past the last byte of the code section.
+#[cfg(any(feature = "macho", test))]
 pub(crate) fn boundaries_from_sorted(
     func_addrs: &[(String, u64)],
     text_end: u64,
@@ -123,11 +112,7 @@ pub(crate) fn boundaries_from_sorted(
     for (i, (name, start)) in func_addrs.iter().enumerate() {
         let next_start = func_addrs.get(i + 1).map(|(_, a)| *a).unwrap_or(text_end);
         let size = next_start.saturating_sub(*start);
-        boundaries.push(FunctionBoundary {
-            name: name.clone(),
-            start: *start,
-            size,
-        });
+        boundaries.push(FunctionBoundary { name: name.clone(), start: *start, size });
     }
     Ok(boundaries)
 }
@@ -137,9 +122,7 @@ pub(crate) fn find_function_at(
     boundaries: &[FunctionBoundary],
     address: u64,
 ) -> Option<&FunctionBoundary> {
-    boundaries
-        .iter()
-        .find(|b| address >= b.start && address < b.start + b.size)
+    boundaries.iter().find(|b| address >= b.start && address < b.start + b.size)
 }
 
 #[cfg(test)]
@@ -148,10 +131,7 @@ mod tests {
 
     #[test]
     fn test_boundaries_from_sorted() {
-        let addrs = vec![
-            ("foo".to_string(), 0x1000u64),
-            ("bar".to_string(), 0x1100),
-        ];
+        let addrs = vec![("foo".to_string(), 0x1000u64), ("bar".to_string(), 0x1100)];
         let boundaries = boundaries_from_sorted(&addrs, 0x1200).expect("should succeed");
         assert_eq!(boundaries.len(), 2);
         assert_eq!(boundaries[0].name, "foo");
@@ -180,9 +160,7 @@ mod tests {
 
     #[test]
     fn test_find_function_at_miss() {
-        let boundaries = vec![
-            FunctionBoundary { name: "foo".into(), start: 0x1000, size: 0x100 },
-        ];
+        let boundaries = vec![FunctionBoundary { name: "foo".into(), start: 0x1000, size: 0x100 }];
         assert!(find_function_at(&boundaries, 0x2000).is_none());
     }
 }

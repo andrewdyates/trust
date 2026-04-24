@@ -176,7 +176,7 @@ pub fn check_crate(tcx: TyCtxt<'_>) {
                 if !tcx.generics_of(item_def_id).own_requires_monomorphization()
                     && !tcx.is_type_const(item_def_id) =>
             {
-                // tRust: known issue — (generic_const_items): Passing empty instead of identity args is fishy but
+                // FIXME(generic_const_items): Passing empty instead of identity args is fishy but
                 //                             seems to be fine for now. Revisit this!
                 let instance = ty::Instance::new_raw(item_def_id.into(), ty::GenericArgs::empty());
                 let cid = GlobalId { instance, promoted: None };
@@ -232,7 +232,7 @@ pub fn lower_ty<'tcx>(tcx: TyCtxt<'tcx>, hir_ty: &hir::Ty<'tcx>) -> Ty<'tcx> {
 }
 
 /// This is for rustdoc.
-// tRust: known issue — (const_generics): having special methods for rustdoc in `rustc_hir_analysis` is cursed
+// FIXME(const_generics): having special methods for rustdoc in `rustc_hir_analysis` is cursed
 pub fn lower_const_arg_for_rustdoc<'tcx>(
     tcx: TyCtxt<'tcx>,
     hir_ct: &hir::ConstArg<'tcx>,

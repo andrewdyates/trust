@@ -133,7 +133,7 @@ impl<'tcx> OpaqueTypeCollector<'tcx> {
             .uses_unique_generic_params(&alias_ty.args[..parent_count], CheckRegions::FromFunction)
         {
             Ok(()) => {
-                // tRust: known issue — implement higher kinded lifetime bounds on nested opaque types. They are not
+                // FIXME: implement higher kinded lifetime bounds on nested opaque types. They are not
                 // supported at all, so this is sound to do, but once we want to support them, you'll
                 // start seeing the error below.
 
@@ -207,7 +207,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for OpaqueTypeCollector<'tcx> {
                 self.visit_opaque_ty(alias_ty);
             }
             // Skips type aliases, as they are meant to be transparent.
-            // tRust: known issue (type_alias_impl_trait) — can we require mentioning nested type aliases explicitly?
+            // FIXME(type_alias_impl_trait): can we require mentioning nested type aliases explicitly?
             ty::Alias(ty::Free, alias_ty) if let Some(def_id) = alias_ty.def_id.as_local() => {
                 if !self.seen.insert(def_id) {
                     return;

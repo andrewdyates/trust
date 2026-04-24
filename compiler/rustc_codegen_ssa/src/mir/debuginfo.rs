@@ -1,6 +1,3 @@
-//! tRust: Debug info generation that maps MIR locals and scopes onto backend
-//! tRust: debug metadata such as DWARF locations and variable records.
-
 use std::collections::hash_map::Entry;
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -133,7 +130,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> DebugInfoOffsetLocation<'tcx, Bx>
 {
     fn deref(&self, bx: &mut Bx) -> Self {
         bx.cx().layout_of(
-            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
             self.ty.builtin_deref(true).unwrap_or_else(|| bug!("cannot deref `{}`", self.ty)),
         )
     }
@@ -176,7 +172,7 @@ fn calculate_debuginfo_offset<
     base: L,
 ) -> DebugInfoOffset<L> {
     let mut direct_offset = Size::ZERO;
-    // NOTE(eddyb): Could use SmallVec for better stack allocation performance.
+    // FIXME(eddyb) use smallvec here.
     let mut indirect_offsets = vec![];
     let mut place = base;
 
@@ -201,7 +197,6 @@ fn calculate_debuginfo_offset<
             } => {
                 let offset = indirect_offsets.last_mut().unwrap_or(&mut direct_offset);
                 let FieldsShape::Array { stride, count: _ } = place.layout().fields else {
-                    // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                     bug!("ConstantIndex on non-array type {:?}", place.layout())
                 };
                 *offset += stride * index;
@@ -210,7 +205,6 @@ fn calculate_debuginfo_offset<
             _ => {
                 // Sanity check for `can_use_in_debuginfo`.
                 assert!(!elem.can_use_in_debuginfo());
-                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                 bug!("unsupported var debuginfo projection `{:?}`", projection)
             }
         }
@@ -249,7 +243,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         // "Spill" the value onto the stack, for debuginfo,
         // without forcing non-debuginfo uses of the local
         // to also load from the stack every single time.
-        // NOTE(#68817): Should use llvm.dbg.value instead;
+        // FIXME(#68817) use `llvm.dbg.value` instead,
         // at least for the cases which LLVM handles correctly.
         let spill_slot = PlaceRef::alloca(bx, operand.layout);
         if let Some(name) = name {
@@ -322,16 +316,16 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             let arg_index = local.index() - 1;
 
             // Add debuginfo even to unnamed arguments.
-            // NOTE(eddyb): Closure debug info check; purpose unclear but kept for safety.
+            // FIXME(eddyb) is this really needed?
             if arg_index == 0 && has_proj() {
                 // Hide closure environments from debuginfo.
-                // NOTE(eddyb): ArgumentVariable indices should
+                // FIXME(eddyb) shouldn't `ArgumentVariable` indices
                 // be offset to account for the hidden environment?
                 None
             } else if whole_local_var.is_some() {
                 // No need to make up anything, there is a `mir::VarDebugInfo`
                 // covering the whole local.
-                // NOTE(eddyb): Should consider whole_local_var.source_info.scope.
+                // FIXME(eddyb) take `whole_local_var.source_info.scope` into
                 // account, just in case it doesn't use `ArgumentVariable`
                 // (after #67586 gets fixed).
                 None
@@ -341,7 +335,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 let dbg_var = if full_debug_info {
                     self.adjusted_span_and_dbg_scope(decl.source_info).map(
                         |(dbg_scope, _, span)| {
-                            // NOTE(eddyb): The +1 offset may be unnecessary; kept for compatibility.
+                            // FIXME(eddyb) is this `+ 1` needed at all?
                             let kind = VariableKind::ArgumentVariable(arg_index + 1);
 
                             let arg_ty = self.monomorphize(decl.ty);
@@ -386,7 +380,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         bx.set_var_name(x, name);
                     }
                     OperandValue::Pair(a, b) => {
-                        // NOTE(eddyb): These scalar components
+                        // FIXME(eddyb) these are scalar components,
                         // maybe extract the high-level fields?
                         bx.set_var_name(a, &(name.clone() + ".0"));
                         bx.set_var_name(b, &(name.clone() + ".1"));
@@ -457,7 +451,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             LocalRef::Place(place) => *place,
 
-            // NOTE(eddyb): Debuginfo for unsized places not yet supported.
+            // FIXME(eddyb) add debuginfo for unsized places too.
             LocalRef::UnsizedPlace(_) => return,
         };
 
@@ -606,7 +600,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             VariableKind::ArgumentVariable(arg_index)
                         }
                     } else {
-                        // NOTE(eddyb): ArgumentVariable indices should be
+                        // FIXME(eddyb) shouldn't `ArgumentVariable` indices be
                         // offset in closures to account for the hidden environment?
                         VariableKind::ArgumentVariable(arg_index)
                     }

@@ -295,7 +295,7 @@ pub fn parse_cfg_attr(
     sess: &Session,
     features: Option<&Features>,
 ) -> Option<(CfgEntry, Vec<(AttrItem, Span)>)> {
-    match cfg_attr.get_normal_item().args.unparsed_ref().expect("invariant: cfg_attr is a normal item with unparsed args") { // tRust: unwrap -> expect
+    match cfg_attr.get_normal_item().args.unparsed_ref().unwrap() {
         ast::AttrArgs::Delimited(ast::DelimArgs { dspan, delim, tokens }) if !tokens.is_empty() => {
             check_cfg_attr_bad_delim(&sess.psess, *dspan, *delim);
             match parse_in(&sess.psess, tokens.clone(), "`cfg_attr` input", |p| {

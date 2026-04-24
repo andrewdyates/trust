@@ -125,7 +125,6 @@ impl<'a, 'tcx> TypeFolder<TyCtxt<'tcx>> for TypeFreshener<'a, 'tcx> {
                 // This code is hot enough that a non-debug assertion here makes a noticeable
                 // difference on benchmarks like `wg-grammar`.
                 #[cfg(debug_assertions)]
-                // tRust: invariant — Placeholder and Bound types must not appear during type freshening
                 ty::Placeholder(..) | ty::Bound(..) => bug!("unexpected type {:?}", t),
 
                 _ => t.super_fold_with(self),
@@ -150,12 +149,10 @@ impl<'a, 'tcx> TypeFolder<TyCtxt<'tcx>> for TypeFreshener<'a, 'tcx> {
                 }
             }
             ty::ConstKind::Infer(ty::InferConst::Fresh(_)) => {
-                // tRust: invariant — already-freshened consts (Fresh) must not be freshened again
                 bug!("trying to freshen already-freshened const {ct:?}");
             }
 
             ty::ConstKind::Bound(..) | ty::ConstKind::Placeholder(_) => {
-                // tRust: invariant — Bound and Placeholder consts must not appear during freshening
                 bug!("unexpected const {ct:?}")
             }
 
@@ -213,7 +210,6 @@ impl<'a, 'tcx> TypeFreshener<'a, 'tcx> {
             }
 
             ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_) => {
-                // tRust: invariant — already-freshened types (Fresh*) must not be freshened again
                 bug!("trying to freshen already-freshened type {ty:?}");
             }
         }

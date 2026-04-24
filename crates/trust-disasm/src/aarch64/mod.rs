@@ -65,10 +65,7 @@ impl Arch for Aarch64Decoder {
 impl Decoder for Aarch64Decoder {
     fn decode(&self, bytes: &[u8], address: u64) -> Result<Instruction, DisasmError> {
         if bytes.len() < 4 {
-            return Err(DisasmError::InsufficientBytes {
-                needed: 4,
-                available: bytes.len(),
-            });
+            return Err(DisasmError::InsufficientBytes { needed: 4, available: bytes.len() });
         }
         // AArch64 is always little-endian for instruction fetch.
         let encoding = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);

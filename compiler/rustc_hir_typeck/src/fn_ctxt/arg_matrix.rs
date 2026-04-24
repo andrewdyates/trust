@@ -300,7 +300,7 @@ impl<'tcx> ArgMatrix<'tcx> {
         if permutation_found {
             // Map unwrap to remove the first layer of Some
             let final_permutation: Vec<Option<usize>> =
-                permutation.into_iter().map(|x| x.expect("invariant: value is present")).collect();
+                permutation.into_iter().map(|x| x.unwrap()).collect();
             return Some(Issue::Permutation(final_permutation));
         }
         None

@@ -22,8 +22,8 @@ use crate::config::{DiagConfig, SunderConfig};
 use crate::contract::ContractSet;
 use crate::error::SunderLibError;
 use crate::result::{
-    DiagLevel, DiagnosticMessage, FunctionVerdict, LoopInvariant, SunderResult,
-    VerificationCounts, Verdict,
+    DiagLevel, DiagnosticMessage, FunctionVerdict, LoopInvariant, SunderResult, Verdict,
+    VerificationCounts,
 };
 
 /// Wire line prefix for sunder's structured result protocol.
@@ -37,19 +37,21 @@ static SUNDER_PATH: OnceLock<Option<String>> = OnceLock::new();
 /// Priority: `SUNDER_PATH` env var > `cargo-sunder` on PATH > `sunder` on PATH.
 fn probe_sunder_path() -> Option<String> {
     if let Ok(path) = std::env::var("SUNDER_PATH")
-        && std::path::Path::new(&path).exists() {
-            return Some(path);
-        }
+        && std::path::Path::new(&path).exists()
+    {
+        return Some(path);
+    }
 
     // Try cargo-sunder first (the standard entry point)
     for name in &["cargo-sunder", "sunder"] {
         if let Ok(output) = Command::new("which").arg(name).output()
-            && output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() {
-                    return Some(path);
-                }
+            && output.status.success()
+        {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
             }
+        }
     }
 
     None
@@ -99,10 +101,8 @@ impl CliBackend {
         if let Some(ref path) = self.solver_path {
             Ok(path.as_str())
         } else {
-            cached_sunder_path().map(|s| s.as_str()).ok_or_else(|| {
-                SunderLibError::BinaryNotFound {
-                    reason: "set SUNDER_PATH env or install cargo-sunder on PATH".to_string(),
-                }
+            cached_sunder_path().map(|s| s.as_str()).ok_or_else(|| SunderLibError::BinaryNotFound {
+                reason: "set SUNDER_PATH env or install cargo-sunder on PATH".to_string(),
             })
         }
     }
@@ -145,10 +145,7 @@ impl CliBackend {
         let path = self.resolve_path()?;
 
         let mut cmd = Command::new(path);
-        cmd.args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
         // Enable structured result protocol
         if self.structured_results {
@@ -189,11 +186,7 @@ impl CliBackend {
                 } else {
                     (DiagLevel::Note, line.to_string())
                 };
-                DiagnosticMessage {
-                    level,
-                    message,
-                    location: None,
-                }
+                DiagnosticMessage { level, message, location: None }
             })
             .collect()
     }
@@ -255,10 +248,7 @@ impl SunderBackend for CliBackend {
         })
     }
 
-    fn infer_invariants(
-        &self,
-        function_name: &str,
-    ) -> Result<Vec<LoopInvariant>, SunderLibError> {
+    fn infer_invariants(&self, function_name: &str) -> Result<Vec<LoopInvariant>, SunderLibError> {
         let mut args = vec![
             "--function".to_string(),
             function_name.to_string(),
@@ -281,25 +271,17 @@ fn derive_verdict(exit_code: i32, counts: &VerificationCounts, _stdout: &str) ->
         1 => Verdict::Failed,
         2 => {
             if counts.errors > 0 {
-                Verdict::Error {
-                    message: format!("{} verification errors", counts.errors),
-                }
+                Verdict::Error { message: format!("{} verification errors", counts.errors) }
             } else if counts.assumed > 0 {
                 Verdict::Unknown {
                     reason: format!("{} functions assumed (not proven)", counts.assumed),
                 }
             } else {
-                Verdict::Unknown {
-                    reason: "verification inconclusive (exit code 2)".to_string(),
-                }
+                Verdict::Unknown { reason: "verification inconclusive (exit code 2)".to_string() }
             }
         }
-        3 => Verdict::Error {
-            message: "contract parse errors".to_string(),
-        },
-        _ => Verdict::Error {
-            message: format!("unexpected exit code: {exit_code}"),
-        },
+        3 => Verdict::Error { message: "contract parse errors".to_string() },
+        _ => Verdict::Error { message: format!("unexpected exit code: {exit_code}") },
     }
 }
 
@@ -319,12 +301,7 @@ fn parse_function_verdicts(stdout: &str, default_name: &str) -> Vec<FunctionVerd
         } else if let Some(rest) = trimmed.strip_prefix("Failed: ") {
             (Verdict::Failed, rest)
         } else if let Some(rest) = trimmed.strip_prefix("Error: ") {
-            (
-                Verdict::Error {
-                    message: rest.to_string(),
-                },
-                rest,
-            )
+            (Verdict::Error { message: rest.to_string() }, rest)
         } else {
             continue;
         };
@@ -388,9 +365,10 @@ fn parse_inferred_invariants(stdout: &str, default_function: &str) -> Vec<LoopIn
     for line in stdout.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("Invariant: ")
-            && let Some(inv) = parse_invariant_line(rest, default_function) {
-                invariants.push(inv);
-            }
+            && let Some(inv) = parse_invariant_line(rest, default_function)
+        {
+            invariants.push(inv);
+        }
     }
 
     invariants
@@ -422,13 +400,7 @@ fn parse_invariant_line(line: &str, default_function: &str) -> Option<LoopInvari
         (rest.trim().to_string(), 0.5, false)
     };
 
-    Some(LoopInvariant {
-        function_name,
-        loop_id,
-        expression,
-        confidence,
-        verified,
-    })
+    Some(LoopInvariant { function_name, loop_id, expression, confidence, verified })
 }
 
 /// Extract confidence value from "[confidence=0.95]" or similar.
@@ -473,30 +445,21 @@ mod tests {
 
     #[test]
     fn test_derive_verdict_exit_0_verified() {
-        let counts = VerificationCounts {
-            verified: 3,
-            ..Default::default()
-        };
+        let counts = VerificationCounts { verified: 3, ..Default::default() };
         let verdict = derive_verdict(0, &counts, "");
         assert_eq!(verdict, Verdict::Verified);
     }
 
     #[test]
     fn test_derive_verdict_exit_1_failed() {
-        let counts = VerificationCounts {
-            failed: 1,
-            ..Default::default()
-        };
+        let counts = VerificationCounts { failed: 1, ..Default::default() };
         let verdict = derive_verdict(1, &counts, "");
         assert_eq!(verdict, Verdict::Failed);
     }
 
     #[test]
     fn test_derive_verdict_exit_2_errors() {
-        let counts = VerificationCounts {
-            errors: 2,
-            ..Default::default()
-        };
+        let counts = VerificationCounts { errors: 2, ..Default::default() };
         let verdict = derive_verdict(2, &counts, "");
         assert!(matches!(verdict, Verdict::Error { .. }));
     }
@@ -580,7 +543,9 @@ mod tests {
 
     #[test]
     fn test_parse_counts() {
-        let counts = parse_counts("verified=3 failed=1 errors=0 warnings=0 assumed=0 trusted=0 skipped=2 verified_with_axiom_deps=0");
+        let counts = parse_counts(
+            "verified=3 failed=1 errors=0 warnings=0 assumed=0 trusted=0 skipped=2 verified_with_axiom_deps=0",
+        );
         assert_eq!(counts.verified, 3);
         assert_eq!(counts.failed, 1);
         assert_eq!(counts.skipped, 2);
@@ -673,9 +638,7 @@ mod tests {
         assert!(failed.is_failed());
 
         let unknown = SunderResult {
-            verdict: Verdict::Unknown {
-                reason: "test".to_string(),
-            },
+            verdict: Verdict::Unknown { reason: "test".to_string() },
             function_verdicts: Vec::new(),
             loop_invariants: Vec::new(),
             proof_certificate: None,

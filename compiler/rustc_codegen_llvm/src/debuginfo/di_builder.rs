@@ -15,9 +15,8 @@ pub(crate) struct DIBuilderBox<'ll> {
 
 impl<'ll> DIBuilderBox<'ll> {
     pub(crate) fn new(llmod: &'ll Module) -> Self {
-        // SAFETY: The module is a valid LLVM module reference.
         let raw = unsafe { llvm::LLVMCreateDIBuilder(llmod) };
-        let raw = ptr::NonNull::new(raw).expect("invariant: pointer is non-null");
+        let raw = ptr::NonNull::new(raw).unwrap();
         Self { raw }
     }
 
@@ -30,7 +29,6 @@ impl<'ll> DIBuilderBox<'ll> {
 
 impl<'ll> Drop for DIBuilderBox<'ll> {
     fn drop(&mut self) {
-        // SAFETY: The DIBuilder was created by `LLVMCreateDIBuilder` and is exclusively owned.
         unsafe { llvm::LLVMDisposeDIBuilder(self.raw) };
     }
 }
@@ -42,7 +40,6 @@ pub(crate) trait DIBuilderExt<'ll> {
 
     fn create_expression(&self, addr_ops: &[u64]) -> &'ll llvm::Metadata {
         let this = self.as_di_builder();
-        // SAFETY: The `DIBuilder` is valid, and the address operations slice and length are valid.
         unsafe { llvm::LLVMDIBuilderCreateExpression(this, addr_ops.as_ptr(), addr_ops.len()) }
     }
 
@@ -68,7 +65,6 @@ pub(crate) trait DIBuilderExt<'ll> {
         // method would do if given a null `DIExpression` pointer.
         let expr = self.create_expression(&[]);
 
-        // SAFETY: The value/global, metadata kind ID, and metadata node are all valid LLVM references.
         let global_var_expr = unsafe {
             llvm::LLVMDIBuilderCreateGlobalVariableExpression(
                 this,
@@ -87,7 +83,6 @@ pub(crate) trait DIBuilderExt<'ll> {
             )
         };
 
-        // SAFETY: The global value, kind ID, and metadata are valid LLVM references.
         unsafe { llvm::LLVMGlobalSetMetadata(val, llvm::MD_dbg, global_var_expr) };
 
         global_var_expr

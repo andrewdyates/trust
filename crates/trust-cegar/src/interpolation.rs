@@ -81,11 +81,8 @@ pub fn craig_interpolant(
     unsat_core: &UnsatCore,
 ) -> Result<Vec<Predicate>, CegarError> {
     // Validate that all core labels exist in either A or B.
-    let all_labels: Vec<&str> = path_a
-        .iter()
-        .chain(path_b.iter())
-        .map(|(label, _)| label.as_str())
-        .collect();
+    let all_labels: Vec<&str> =
+        path_a.iter().chain(path_b.iter()).map(|(label, _)| label.as_str()).collect();
 
     for core_label in &unsat_core.labels {
         if !all_labels.contains(&core_label.as_str()) {
@@ -164,7 +161,7 @@ fn collect_vars(formula: &Formula, out: &mut Vec<String>) {
         }
         Formula::Forall(bindings, body) | Formula::Exists(bindings, body) => {
             for (name, _) in bindings {
-                out.push(name.clone());
+                out.push(name.to_string());
             }
             collect_vars(body, out);
         }
@@ -200,7 +197,7 @@ fn collect_vars(formula: &Formula, out: &mut Vec<String>) {
         Formula::BvExtract { inner, .. } => collect_vars(inner, out),
         // Literals have no variables.
         Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } => {}
-        _ => {},
+        _ => {}
     }
 }
 
@@ -332,22 +329,15 @@ mod tests {
         // Core includes both -> interpolant should contain x < 10 (from A)
         let path_a = vec![(
             "a0".to_string(),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         )];
         let path_b = vec![(
             "b0".to_string(),
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(20)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(20))),
         )];
         let core = UnsatCore::new(vec!["a0".into(), "b0".into()]);
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("should extract interpolant");
+        let preds = craig_interpolant(&path_a, &path_b, &core).expect("should extract interpolant");
         assert!(!preds.is_empty());
         // Should contain "x < 10" from A-side
         assert!(preds.contains(&Predicate::comparison("x", CmpOp::Lt, "10")));
@@ -360,22 +350,15 @@ mod tests {
         // Only A-side formulas in core -> only A-side predicates extracted
         let path_a = vec![(
             "a0".to_string(),
-            Formula::Le(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Le(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(0))),
         )];
         let path_b = vec![(
             "b0".to_string(),
-            Formula::Gt(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(100))),
         )];
         let core = UnsatCore::new(vec!["a0".into()]);
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("should succeed");
+        let preds = craig_interpolant(&path_a, &path_b, &core).expect("should succeed");
         assert!(preds.contains(&Predicate::comparison("y", CmpOp::Le, "0")));
         // b0 not in core, so no B-side predicates
         assert!(!preds.contains(&Predicate::comparison("y", CmpOp::Le, "100")));
@@ -397,8 +380,7 @@ mod tests {
         let path_b = vec![("b0".to_string(), Formula::Bool(false))];
         let core = UnsatCore::default();
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("empty core should succeed");
+        let preds = craig_interpolant(&path_a, &path_b, &core).expect("empty core should succeed");
         assert!(preds.is_empty());
     }
 
@@ -414,8 +396,7 @@ mod tests {
         let path_b = vec![];
         let core = UnsatCore::new(vec!["a0".into()]);
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("should succeed");
+        let preds = craig_interpolant(&path_a, &path_b, &core).expect("should succeed");
         assert!(preds.contains(&Predicate::comparison("x", CmpOp::Eq, "y")));
     }
 
@@ -438,8 +419,8 @@ mod tests {
         let path_b = vec![];
         let core = UnsatCore::new(vec!["a0".into()]);
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("should extract from conjunction");
+        let preds =
+            craig_interpolant(&path_a, &path_b, &core).expect("should extract from conjunction");
         assert!(preds.contains(&Predicate::comparison("x", CmpOp::Lt, "5")));
         assert!(preds.contains(&Predicate::comparison("y", CmpOp::Gt, "0")));
     }
@@ -457,8 +438,7 @@ mod tests {
         let path_b = vec![];
         let core = UnsatCore::new(vec!["a0".into()]);
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("should handle negation");
+        let preds = craig_interpolant(&path_a, &path_b, &core).expect("should handle negation");
         // NOT(x >= 10) -> x < 10
         assert!(preds.contains(&Predicate::comparison("x", CmpOp::Lt, "10")));
     }
@@ -476,10 +456,7 @@ mod tests {
     #[test]
     fn test_formula_variables_nested() {
         let f = Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("a".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(10))),
             Formula::Ge(
                 Box::new(Formula::Var("b".into(), Sort::Int)),
                 Box::new(Formula::Var("a".into(), Sort::Int)),
@@ -501,24 +478,18 @@ mod tests {
         // Same predicate appears from both A and negated-B
         let path_a = vec![(
             "a0".to_string(),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         )];
         let path_b = vec![(
             "b0".to_string(),
-            Formula::Ge(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
         )];
         let core = UnsatCore::new(vec!["a0".into(), "b0".into()]);
 
-        let preds = craig_interpolant(&path_a, &path_b, &core)
-            .expect("should deduplicate");
+        let preds = craig_interpolant(&path_a, &path_b, &core).expect("should deduplicate");
         // x < 10 should appear only once
-        let count = preds.iter().filter(|p| **p == Predicate::comparison("x", CmpOp::Lt, "10")).count();
+        let count =
+            preds.iter().filter(|p| **p == Predicate::comparison("x", CmpOp::Lt, "10")).count();
         assert_eq!(count, 1);
     }
 }

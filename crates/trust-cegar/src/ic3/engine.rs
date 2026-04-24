@@ -17,7 +17,7 @@ use super::prime::prime_formula;
 use super::sat::SatResult;
 use super::types::{Cube, Frame, Ic3Config, Ic3Result, ProofObligation, TransitionSystem};
 use crate::error::CegarError;
-use crate::sat_oracle::{SatOracle, StructuralSatOracle, default_oracle};
+use crate::sat_oracle::{SatOracle, StructuralSatOracle};
 
 /// IC3/PDR model checking engine (safety properties only).
 ///
@@ -69,7 +69,6 @@ impl Ic3Engine {
     /// Use `SmtSatOracle::new()` for z4-backed checking, or
     /// `StructuralSatOracle` for fast tests.
     #[must_use]
-    #[allow(dead_code)]
     pub fn with_oracle(
         system: TransitionSystem,
         config: Ic3Config,
@@ -157,21 +156,6 @@ impl Ic3Engine {
                 }
             }
         }
-    }
-
-    /// Check if the initial states satisfy the property.
-    ///
-    /// Checks: SAT?(Init /\ !Property). If UNSAT, init satisfies property.
-    ///
-    /// Uses the configured SAT oracle (z4 SMT or structural fallback).
-    /// Returns `true` only when UNSAT is definitive. `Sat(None)` (unknown)
-    /// yields `false` (conservative).
-    pub(super) fn init_satisfies_property(&self) -> bool {
-        // Encode: init /\ !property
-        let neg_property = Formula::Not(Box::new(self.system.property.clone()));
-        let query = Formula::And(vec![self.system.init.clone(), neg_property]);
-        // If init /\ !property is unsatisfiable, init satisfies property.
-        self.oracle.check_sat(&query).unwrap_or(SatResult::Sat(None)) == SatResult::Unsat
     }
 
     /// Try to block all bad cubes at the current frontier frame.
@@ -603,46 +587,5 @@ enum BlockCubeResult {
 /// Returns `CegarError` on solver failures or depth bound exceeded.
 pub fn ic3_check(system: TransitionSystem) -> Result<Ic3Result, CegarError> {
     let mut engine = Ic3Engine::new(system, Ic3Config::default());
-    engine.check()
-}
-
-/// Run IC3 with custom configuration.
-///
-/// # Errors
-/// Returns `CegarError` on solver failures or depth bound exceeded.
-pub(crate) fn ic3_check_with_config(
-    system: TransitionSystem,
-    config: Ic3Config,
-) -> Result<Ic3Result, CegarError> {
-    let mut engine = Ic3Engine::new(system, config);
-    engine.check()
-}
-
-/// Run IC3 with z4 SMT oracle (if available, falls back to structural).
-///
-/// This is the production entry point: uses real z4 SMT queries for all
-/// IC3 satisfiability checks, giving complete decision procedures instead
-/// of the conservative structural approximations.
-///
-/// # Errors
-/// Returns `CegarError` on solver failures or depth bound exceeded.
-#[allow(dead_code)]
-pub(crate) fn ic3_check_with_smt(system: TransitionSystem) -> Result<Ic3Result, CegarError> {
-    let oracle = default_oracle();
-    let mut engine = Ic3Engine::with_oracle(system, Ic3Config::default(), oracle);
-    engine.check()
-}
-
-/// Run IC3 with z4 SMT oracle and custom configuration.
-///
-/// # Errors
-/// Returns `CegarError` on solver failures or depth bound exceeded.
-#[allow(dead_code)]
-pub(crate) fn ic3_check_with_smt_config(
-    system: TransitionSystem,
-    config: Ic3Config,
-) -> Result<Ic3Result, CegarError> {
-    let oracle = default_oracle();
-    let mut engine = Ic3Engine::with_oracle(system, config, oracle);
     engine.check()
 }

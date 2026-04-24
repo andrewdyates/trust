@@ -623,10 +623,7 @@ impl<'tcx> Map<'tcx> {
         if let Some(tail) = tail {
             let ty = match tail {
                 TrackElem::Discriminant => ty.ty.discriminant_ty(tcx),
-                // tRust: Variant/Field track elements are not valid as tail projections
-                TrackElem::Variant(..) | TrackElem::Field(..) => {
-                    bug!("Variant and Field track elements cannot be used as tail projections in register_with_tail")
-                }
+                TrackElem::Variant(..) | TrackElem::Field(..) => todo!(),
                 TrackElem::DerefLen => tcx.types.usize,
             };
             place_index = self.register_place_index(ty, place_index, tail);
@@ -710,7 +707,7 @@ impl<'tcx> Map<'tcx> {
             // Try to find corresponding child and recurse. Reasoning is similar as above.
             let source_info = &self.places[source_child];
             let source_ty = source_info.ty;
-            let source_elem = source_info.proj_elem.expect("invariant: child place always has a projection element"); // tRust: unwrap -> expect
+            let source_elem = source_info.proj_elem.unwrap();
             let target_child = self.register_place_index(source_ty, target, source_elem);
             self.register_copy_tree(source_child, target_child, f);
         }
@@ -927,7 +924,7 @@ impl<'tcx> Map<'tcx> {
         }
 
         for child in self.children(root) {
-            let elem = self.places[child].proj_elem.expect("invariant: child place always has a projection element"); // tRust: unwrap -> expect
+            let elem = self.places[child].proj_elem.unwrap();
             if let Some(value) = project(elem, &value) {
                 self.for_each_projection_value(child, value, project, f);
             }
@@ -952,7 +949,7 @@ impl<'tcx> Map<'tcx> {
         }
         for target_child in self.children(target) {
             // Try to find corresponding child and recurse. Reasoning is similar as above.
-            let projection = self.places[target_child].proj_elem.expect("invariant: child place always has a projection element"); // tRust: unwrap -> expect
+            let projection = self.places[target_child].proj_elem.unwrap();
             if let Some(source_child) = self.projections.get(&(source, projection)) {
                 self.for_each_value_pair(target_child, *source_child, f);
             }
@@ -1131,7 +1128,7 @@ fn debug_with_context_rec<V: Debug + Eq + HasBottom>(
     }
 
     for child in map.children(place) {
-        let info_elem = map.places[child].proj_elem.expect("invariant: child place always has a projection element"); // tRust: unwrap -> expect
+        let info_elem = map.places[child].proj_elem.unwrap();
         let child_place_str = match info_elem {
             TrackElem::Discriminant => {
                 format!("discriminant({place_str})")

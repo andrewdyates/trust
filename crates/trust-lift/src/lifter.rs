@@ -64,13 +64,7 @@ impl Lifter {
         text_size: u64,
         text_file_offset: usize,
     ) -> Self {
-        Self {
-            boundaries,
-            text_base,
-            text_size,
-            text_file_offset,
-            arch: LiftArch::Aarch64,
-        }
+        Self { boundaries, text_base, text_size, text_file_offset, arch: LiftArch::Aarch64 }
     }
 
     /// Create a lifter from pre-extracted binary metadata with an explicit architecture.
@@ -82,13 +76,7 @@ impl Lifter {
         text_file_offset: usize,
         arch: LiftArch,
     ) -> Self {
-        Self {
-            boundaries,
-            text_base,
-            text_size,
-            text_file_offset,
-            arch,
-        }
+        Self { boundaries, text_base, text_size, text_file_offset, arch }
     }
 
     /// Create a lifter by analyzing a Mach-O binary.
@@ -96,14 +84,21 @@ impl Lifter {
     /// Detects function boundaries from the symbol table and locates the text section.
     #[cfg(feature = "macho")]
     pub fn from_macho(macho: &trust_binary_parse::MachO<'_>) -> Result<Self, LiftError> {
+        if !macho.is_aarch64() {
+            return Err(LiftError::UnsupportedBinaryFormat {
+                format: "Mach-O",
+                reason: "only AArch64 Mach-O lifting is supported",
+            });
+        }
+
         let boundaries = crate::boundary::detect_functions(macho)?;
         let text_section = macho.text_section().ok_or(LiftError::NoTextSection)?;
 
         Ok(Self {
             boundaries,
-            text_base: text_section.addr,
-            text_size: text_section.size,
-            text_file_offset: text_section.offset as usize,
+            text_base: text_section.addr(),
+            text_size: text_section.size(),
+            text_file_offset: text_section.offset() as usize,
             arch: LiftArch::Aarch64, // Mach-O in this pipeline is always AArch64
         })
     }
@@ -134,13 +129,7 @@ impl Lifter {
             (seg.p_vaddr, seg.p_filesz, seg.p_offset as usize)
         };
 
-        Ok(Self {
-            boundaries,
-            text_base,
-            text_size,
-            text_file_offset,
-            arch,
-        })
+        Ok(Self { boundaries, text_base, text_size, text_file_offset, arch })
     }
 
     /// List all detected function boundaries.
@@ -153,11 +142,7 @@ impl Lifter {
     ///
     /// The `binary` parameter should be the full binary file bytes. The function
     /// is identified by matching `entry` against detected symbol boundaries.
-    pub fn lift_function(
-        &self,
-        binary: &[u8],
-        entry: u64,
-    ) -> Result<LiftedFunction, LiftError> {
+    pub fn lift_function(&self, binary: &[u8], entry: u64) -> Result<LiftedFunction, LiftError> {
         // Validate entry is within text section.
         let text_end = self.text_base + self.text_size;
         if entry < self.text_base || entry >= text_end {
@@ -168,13 +153,23 @@ impl Lifter {
             });
         }
 
-        // Find the function boundary.
-        let boundary = find_function_at(&self.boundaries, entry)
-            .ok_or(LiftError::NoFunctionAtAddress(entry))?;
-
-        let func_name = boundary.name.clone();
-        let func_start = boundary.start;
-        let func_end = func_start + boundary.size;
+        // Find the function boundary. Stripped binaries may not have a symbol
+        // covering the requested entry; in that case, synthesize a conservative
+        // boundary from the entry to the next known function or text end.
+        let (func_name, func_start, func_end) =
+            if let Some(boundary) = find_function_at(&self.boundaries, entry) {
+                let func_start = boundary.start;
+                (boundary.name.clone(), func_start, func_start + boundary.size)
+            } else {
+                let next_boundary = self
+                    .boundaries
+                    .iter()
+                    .filter(|boundary| boundary.start > entry)
+                    .map(|boundary| boundary.start)
+                    .min()
+                    .unwrap_or(text_end);
+                (format!("sub_{entry:x}"), entry, next_boundary)
+            };
 
         // Select decoder based on target architecture.
         let aarch64_dec = Aarch64Decoder::new();
@@ -346,15 +341,13 @@ fn is_source_register(insn: &trust_disasm::Instruction, reg: &Register) -> bool 
             match op {
                 DisasmOp::Reg(r)
                 | DisasmOp::ShiftedReg { reg: r, .. }
-                | DisasmOp::ExtendedReg { reg: r, .. } => {
-                    if r == reg {
-                        return true;
-                    }
+                | DisasmOp::ExtendedReg { reg: r, .. }
+                    if r == reg =>
+                {
+                    return true;
                 }
-                DisasmOp::Mem(mem) => {
-                    if mem_has_register(mem, reg) {
-                        return true;
-                    }
+                DisasmOp::Mem(mem) if mem_has_register(mem, reg) => {
+                    return true;
                 }
                 _ => {}
             }
@@ -367,9 +360,10 @@ fn is_source_register(insn: &trust_disasm::Instruction, reg: &Register) -> bool 
     // Memory operands at ANY position are source reads.
     if !insn.is_store()
         && let Some(DisasmOp::Mem(mem)) = insn.operand(0)
-            && mem_has_register(mem, reg) {
-                return true;
-            }
+        && mem_has_register(mem, reg)
+    {
+        return true;
+    }
 
     false
 }
@@ -399,10 +393,12 @@ fn extract_defined_vars(cfg: &crate::cfg::Cfg) -> FxHashMap<usize, Vec<String>> 
         for insn in &block.instructions {
             // For instructions that write a register (operand 0 for most data-processing),
             // record the register name.
-            if !insn.is_store() && insn.operand_count() > 0
-                && let Some(trust_disasm::Operand::Reg(reg)) = insn.operand(0) {
-                    vars.push(format!("{reg:?}"));
-                }
+            if !insn.is_store()
+                && insn.operand_count() > 0
+                && let Some(trust_disasm::Operand::Reg(reg)) = insn.operand(0)
+            {
+                vars.push(format!("{reg:?}"));
+            }
         }
         if !vars.is_empty() {
             result.insert(block.id, vars);
@@ -449,11 +445,7 @@ mod tests {
     #[test]
     fn test_lifter_entry_out_of_bounds() {
         let lifter = Lifter::new(
-            vec![FunctionBoundary {
-                name: "test".into(),
-                start: 0x1000,
-                size: 0x100,
-            }],
+            vec![FunctionBoundary { name: "test".into(), start: 0x1000, size: 0x100 }],
             0x1000,
             0x100,
             0,
@@ -472,11 +464,7 @@ mod tests {
     #[test]
     fn test_new_with_arch_x86_64() {
         let lifter = Lifter::new_with_arch(
-            vec![FunctionBoundary {
-                name: "main".into(),
-                start: 0x400000,
-                size: 0x20,
-            }],
+            vec![FunctionBoundary { name: "main".into(), start: 0x400000, size: 0x20 }],
             0x400000,
             0x100,
             0,
@@ -555,35 +543,35 @@ mod tests {
 
         // --- ELF Header (64 bytes) ---
         buf.extend_from_slice(&[0x7f, b'E', b'L', b'F']); // magic
-        buf.push(2);            // ELFCLASS64
-        buf.push(1);            // ELFDATA2LSB
-        buf.push(1);            // EV_CURRENT
-        buf.push(0);            // OS/ABI
+        buf.push(2); // ELFCLASS64
+        buf.push(1); // ELFDATA2LSB
+        buf.push(1); // EV_CURRENT
+        buf.push(0); // OS/ABI
         buf.extend_from_slice(&[0u8; 8]); // padding
-        buf.extend_from_slice(&2u16.to_le_bytes());        // ET_EXEC
-        buf.extend_from_slice(&machine.to_le_bytes());     // e_machine
-        buf.extend_from_slice(&1u32.to_le_bytes());        // e_version
-        buf.extend_from_slice(&text_vaddr.to_le_bytes());  // e_entry
-        buf.extend_from_slice(&phdr_off.to_le_bytes());    // e_phoff
-        buf.extend_from_slice(&shdr_off.to_le_bytes());    // e_shoff
-        buf.extend_from_slice(&0u32.to_le_bytes());        // e_flags
-        buf.extend_from_slice(&64u16.to_le_bytes());       // e_ehsize
-        buf.extend_from_slice(&56u16.to_le_bytes());       // e_phentsize
-        buf.extend_from_slice(&1u16.to_le_bytes());        // e_phnum
-        buf.extend_from_slice(&64u16.to_le_bytes());       // e_shentsize
-        buf.extend_from_slice(&5u16.to_le_bytes());        // e_shnum (NULL + shstrtab + symtab + strtab + .text)
-        buf.extend_from_slice(&1u16.to_le_bytes());        // e_shstrndx
+        buf.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        buf.extend_from_slice(&machine.to_le_bytes()); // e_machine
+        buf.extend_from_slice(&1u32.to_le_bytes()); // e_version
+        buf.extend_from_slice(&text_vaddr.to_le_bytes()); // e_entry
+        buf.extend_from_slice(&phdr_off.to_le_bytes()); // e_phoff
+        buf.extend_from_slice(&shdr_off.to_le_bytes()); // e_shoff
+        buf.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        buf.extend_from_slice(&64u16.to_le_bytes()); // e_ehsize
+        buf.extend_from_slice(&56u16.to_le_bytes()); // e_phentsize
+        buf.extend_from_slice(&1u16.to_le_bytes()); // e_phnum
+        buf.extend_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        buf.extend_from_slice(&5u16.to_le_bytes()); // e_shnum (NULL + shstrtab + symtab + strtab + .text)
+        buf.extend_from_slice(&1u16.to_le_bytes()); // e_shstrndx
         assert_eq!(buf.len(), 64);
 
         // --- Program Header (56 bytes at 0x40) ---
-        buf.extend_from_slice(&1u32.to_le_bytes());        // PT_LOAD
-        buf.extend_from_slice(&5u32.to_le_bytes());        // PF_R | PF_X
-        buf.extend_from_slice(&0u64.to_le_bytes());        // p_offset
-        buf.extend_from_slice(&text_vaddr.to_le_bytes());  // p_vaddr
-        buf.extend_from_slice(&text_vaddr.to_le_bytes());  // p_paddr
-        buf.extend_from_slice(&0x258u64.to_le_bytes());    // p_filesz (whole file)
-        buf.extend_from_slice(&0x258u64.to_le_bytes());    // p_memsz
-        buf.extend_from_slice(&0x1000u64.to_le_bytes());   // p_align
+        buf.extend_from_slice(&1u32.to_le_bytes()); // PT_LOAD
+        buf.extend_from_slice(&5u32.to_le_bytes()); // PF_R | PF_X
+        buf.extend_from_slice(&0u64.to_le_bytes()); // p_offset
+        buf.extend_from_slice(&text_vaddr.to_le_bytes()); // p_vaddr
+        buf.extend_from_slice(&text_vaddr.to_le_bytes()); // p_paddr
+        buf.extend_from_slice(&0x258u64.to_le_bytes()); // p_filesz (whole file)
+        buf.extend_from_slice(&0x258u64.to_le_bytes()); // p_memsz
+        buf.extend_from_slice(&0x1000u64.to_le_bytes()); // p_align
         assert_eq!(buf.len(), 0x78);
 
         // --- .text section at 0x78 (32 bytes) ---
@@ -616,25 +604,26 @@ mod tests {
 
         // --- .symtab data at 0xD0 (3 entries * 24 bytes = 72 bytes) ---
         // Symbol 0: null
-        buf.extend_from_slice(&0u32.to_le_bytes());  // st_name
-        buf.push(0); buf.push(0);                     // st_info, st_other
-        buf.extend_from_slice(&0u16.to_le_bytes());  // st_shndx
-        buf.extend_from_slice(&0u64.to_le_bytes());  // st_value
-        buf.extend_from_slice(&0u64.to_le_bytes());  // st_size
+        buf.extend_from_slice(&0u32.to_le_bytes()); // st_name
+        buf.push(0);
+        buf.push(0); // st_info, st_other
+        buf.extend_from_slice(&0u16.to_le_bytes()); // st_shndx
+        buf.extend_from_slice(&0u64.to_le_bytes()); // st_value
+        buf.extend_from_slice(&0u64.to_le_bytes()); // st_size
 
         // Symbol 1: _start (global func, section 4=.text, addr text_vaddr)
-        buf.extend_from_slice(&1u32.to_le_bytes());  // st_name => "_start"
-        buf.push((1 << 4) | 2);                      // STB_GLOBAL | STT_FUNC
-        buf.push(0);                                  // STV_DEFAULT
-        buf.extend_from_slice(&4u16.to_le_bytes());  // st_shndx => .text section
+        buf.extend_from_slice(&1u32.to_le_bytes()); // st_name => "_start"
+        buf.push((1 << 4) | 2); // STB_GLOBAL | STT_FUNC
+        buf.push(0); // STV_DEFAULT
+        buf.extend_from_slice(&4u16.to_le_bytes()); // st_shndx => .text section
         buf.extend_from_slice(&text_vaddr.to_le_bytes()); // st_value
         buf.extend_from_slice(&16u64.to_le_bytes()); // st_size
 
         // Symbol 2: main (global func, section 4=.text, addr text_vaddr+16)
-        buf.extend_from_slice(&8u32.to_le_bytes());  // st_name => "main"
-        buf.push((1 << 4) | 2);                      // STB_GLOBAL | STT_FUNC
+        buf.extend_from_slice(&8u32.to_le_bytes()); // st_name => "main"
+        buf.push((1 << 4) | 2); // STB_GLOBAL | STT_FUNC
         buf.push(0);
-        buf.extend_from_slice(&4u16.to_le_bytes());  // st_shndx
+        buf.extend_from_slice(&4u16.to_le_bytes()); // st_shndx
         buf.extend_from_slice(&(text_vaddr + 16).to_le_bytes()); // st_value
         buf.extend_from_slice(&16u64.to_le_bytes()); // st_size
 
@@ -808,11 +797,11 @@ mod tests {
         // 5D          POP RBP
         // C3          RET
         let func_bytes: Vec<u8> = vec![
-            0x55,                   // PUSH RBP
-            0x48, 0x89, 0xE5,      // MOV RBP, RSP
-            0x31, 0xC0,            // XOR EAX, EAX
-            0x5D,                   // POP RBP
-            0xC3,                   // RET
+            0x55, // PUSH RBP
+            0x48, 0x89, 0xE5, // MOV RBP, RSP
+            0x31, 0xC0, // XOR EAX, EAX
+            0x5D, // POP RBP
+            0xC3, // RET
         ];
         let func_size = func_bytes.len() as u64;
         let text_base: u64 = 0x401000;
@@ -860,6 +849,29 @@ mod tests {
         assert!(!func.annotations.is_empty(), "should have proof annotations");
     }
 
+    #[test]
+    fn test_lift_function_synthesizes_boundary_for_stripped_entry() {
+        let text_base: u64 = 0x401000;
+        let mut text_section = vec![0xC3]; // RET
+        text_section.resize(16, 0x90);
+
+        let lifter = Lifter::new_with_arch(
+            Vec::new(),
+            text_base,
+            text_section.len() as u64,
+            0,
+            LiftArch::X86_64,
+        );
+
+        let func = lifter
+            .lift_function(&text_section, text_base)
+            .expect("stripped entry should synthesize a function boundary");
+
+        assert_eq!(func.name, "sub_401000");
+        assert_eq!(func.entry_point, text_base);
+        assert_eq!(func.cfg.block_count(), 1);
+    }
+
     /// tRust: #573 — x86_64 arg_count analysis detects SysV ABI argument registers.
     #[test]
     fn test_arg_count_x86_64_two_args() {
@@ -868,12 +880,14 @@ mod tests {
         // 48 01 F0 = ADD RAX, RSI  (reads RSI at source operand 1)
         // C3       = RET
         let x86_64_dec = X86_64Decoder::new();
-        let mov_insn = trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0x48, 0x89, 0xF8], 0x1000)
-            .expect("decode MOV RAX, RDI");
-        let add_insn = trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0x48, 0x01, 0xF0], 0x1003)
-            .expect("decode ADD RAX, RSI");
-        let ret_insn = trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0xC3], 0x1006)
-            .expect("decode RET");
+        let mov_insn =
+            trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0x48, 0x89, 0xF8], 0x1000)
+                .expect("decode MOV RAX, RDI");
+        let add_insn =
+            trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0x48, 0x01, 0xF0], 0x1003)
+                .expect("decode ADD RAX, RSI");
+        let ret_insn =
+            trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0xC3], 0x1006).expect("decode RET");
 
         let cfg = cfg_with_entry_block(vec![mov_insn, add_insn, ret_insn]);
         // RDI=arg0 (slot 0), RSI=arg1 (slot 1) in SysV ABI.
@@ -889,8 +903,8 @@ mod tests {
         // C3 = RET
         let xor_insn = trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0x31, 0xC0], 0x1000)
             .expect("decode XOR EAX, EAX");
-        let ret_insn = trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0xC3], 0x1002)
-            .expect("decode RET");
+        let ret_insn =
+            trust_disasm::arch::Decoder::decode(&x86_64_dec, &[0xC3], 0x1002).expect("decode RET");
 
         let cfg = cfg_with_entry_block(vec![xor_insn, ret_insn]);
         assert_eq!(analyze_arg_count(&cfg, LiftArch::X86_64), 0);

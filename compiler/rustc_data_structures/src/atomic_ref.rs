@@ -10,8 +10,8 @@ impl<T: 'static> AtomicRef<T> {
     }
 
     pub fn swap(&self, new: &'static T) -> &'static T {
-        // SAFETY: We never allow storing anything but a `'static` reference so the
-        // pointer is always valid to dereference for the `'static` lifetime.
+        // We never allow storing anything but a `'static` reference so it's safe to
+        // return it for the same.
         unsafe { &*self.0.swap(new as *const T as *mut T, Ordering::SeqCst) }
     }
 }
@@ -19,8 +19,8 @@ impl<T: 'static> AtomicRef<T> {
 impl<T: 'static> std::ops::Deref for AtomicRef<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        // SAFETY: We never allow storing anything but a `'static` reference so the
-        // pointer is always valid to dereference for any lifetime.
+        // We never allow storing anything but a `'static` reference so it's safe to lend
+        // it out for any amount of time.
         unsafe { &*self.0.load(Ordering::SeqCst) }
     }
 }

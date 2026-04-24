@@ -20,7 +20,7 @@ where
     C: HasDataLayout,
 {
     if !arg.layout.is_sized() {
-        // tRust: known issue — Update offset?
+        // FIXME: Update offset?
         // Not touching this...
         return;
     }

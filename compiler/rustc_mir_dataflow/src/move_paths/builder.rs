@@ -380,13 +380,13 @@ impl<'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> MoveDataBuilder<'a, 'tcx, F> {
         debug!("gather_statement({:?}, {:?})", self.loc, stmt);
         match &stmt.kind {
             StatementKind::Assign(box (place, Rvalue::CopyForDeref(reffed))) => {
-                let local = place.as_local().expect("invariant: CopyForDeref place is always a local"); // tRust: unwrap -> expect
+                let local = place.as_local().unwrap();
                 assert!(self.body.local_decls[local].is_deref_temp());
 
                 let rev_lookup = &mut self.data.rev_lookup;
 
                 rev_lookup.un_derefer.insert(local, reffed.as_ref());
-                let base_local = rev_lookup.un_derefer.deref_chain(local).first().expect("invariant: deref chain is non-empty for CopyForDeref local").local; // tRust: unwrap -> expect
+                let base_local = rev_lookup.un_derefer.deref_chain(local).first().unwrap().local;
                 rev_lookup.locals[local] = rev_lookup.locals[base_local];
             }
             StatementKind::Assign(box (place, rval)) => {

@@ -117,8 +117,6 @@ impl CoreLatch {
     /// latch code.
     #[inline]
     unsafe fn set(this: *const Self) -> bool {
-        // SAFETY: The caller guarantees that `this` points to a live latch for the duration of
-        // this atomic swap, and atomics permit concurrent access to `state`.
         let old_state = unsafe { (*this).state.swap(SET, Ordering::AcqRel) };
         old_state == SLEEPING
     }
@@ -183,16 +181,12 @@ impl<'r> Latch for SpinLatch<'r> {
     unsafe fn set(this: *const Self) {
         let cross_registry;
 
-        // SAFETY: The caller guarantees `this` is valid on entry, so reading `cross` before any
-        // wakeup can invalidate the latch is sound.
         let registry: &Registry = if unsafe { (*this).cross } {
             // Ensure the registry stays alive while we notify it.
             // Otherwise, it would be possible that we set the spin
             // latch and the other thread sees it and exits, causing
             // the registry to be deallocated, all before we get a
             // chance to invoke `registry.notify_worker_latch_is_set`.
-            // SAFETY: `registry` is still reachable through this live latch on entry, and cloning
-            // the `Arc` takes our own strong reference before any wakeup can free the latch.
             cross_registry = Arc::clone(unsafe { (*this).registry });
             &cross_registry
         } else {
@@ -201,17 +195,11 @@ impl<'r> Latch for SpinLatch<'r> {
             // that the registry stays alive. However, that doesn't
             // include this *particular* `Arc` handle if the waiting
             // thread then exits, so we must completely dereference it.
-            // SAFETY: In the non-cross case, the caller keeps the registry alive for the whole
-            // call, so dereferencing the stored `&Arc<Registry>` is sound.
             unsafe { (*this).registry }
         };
-        // SAFETY: We read the target index before calling `CoreLatch::set`, which may wake the
-        // owner and allow the latch to be deallocated.
         let target_worker_index = unsafe { (*this).target_worker_index };
 
         // NOTE: Once we `set`, the target may proceed and invalidate `this`!
-        // SAFETY: The embedded `CoreLatch` is valid on entry, and we do not access `this` again
-        // after this call except through values copied out beforehand.
         if unsafe { CoreLatch::set(&(*this).core_latch) } {
             // Subtle: at this point, we can no longer read from
             // `self`, because the thread owning this spin latch may
@@ -257,12 +245,8 @@ impl LockLatch {
 impl Latch for LockLatch {
     #[inline]
     unsafe fn set(this: *const Self) {
-        // SAFETY: The caller guarantees that `this` points to a live `LockLatch`, and the mutex
-        // serializes access to the guarded boolean.
         let mut guard = unsafe { (*this).m.lock().unwrap() };
         *guard = true;
-        // SAFETY: The condition variable belongs to the same live latch, and notifying while
-        // holding the mutex guard is permitted.
         unsafe { (*this).v.notify_all() };
     }
 }
@@ -298,8 +282,6 @@ impl OnceLatch {
         registry: &Registry,
         target_worker_index: usize,
     ) {
-        // SAFETY: The caller guarantees `this` is a live `OnceLatch`, and any wakeup only uses the
-        // already-borrowed `registry` and copied worker index afterward.
         if unsafe { CoreLatch::set(&(*this).core_latch) } {
             registry.notify_worker_latch_is_set(target_worker_index);
         }
@@ -389,8 +371,6 @@ impl CountLatch {
         is_job: impl FnMut(&JobRef) -> bool,
     ) {
         match &self.kind {
-            // SAFETY: A stealing latch is only constructed with the owning worker's registry and
-            // index, and `self` keeps the embedded latch alive for the full wait.
             CountLatchKind::Stealing { latch, registry, worker_index } => unsafe {
                 let owner = owner.expect("owner thread");
                 debug_assert_eq!(registry.id(), owner.registry().id());
@@ -407,8 +387,6 @@ impl CountLatch {
 impl Latch for CountLatch {
     #[inline]
     unsafe fn set(this: *const Self) {
-        // SAFETY: The caller guarantees `this` is a live count latch on entry, and atomics permit
-        // concurrent updates to the counter while synchronizing completion with waiters.
         if unsafe { (*this).counter.fetch_sub(1, Ordering::SeqCst) == 1 } {
             // SAFETY: Once we call `set` on the internal `latch`,
             // the target may proceed and invalidate `this`!
@@ -423,8 +401,6 @@ impl Latch for CountLatch {
                         registry.notify_worker_latch_is_set(worker_index);
                     }
                 }
-                // SAFETY: `latch` was borrowed from the still-live `CountLatchKind`, and we do not
-                // touch `this` again after forwarding to `LockLatch::set`.
                 CountLatchKind::Blocking { latch } => unsafe { LockLatch::set(latch) },
             }
         }
@@ -457,8 +433,6 @@ impl<L> Deref for LatchRef<'_, L> {
 impl<L: Latch> Latch for LatchRef<'_, L> {
     #[inline]
     unsafe fn set(this: *const Self) {
-        // SAFETY: The caller guarantees the `LatchRef` itself is live on entry, and forwarding its
-        // stored raw latch pointer preserves `Latch::set`'s contract for the underlying latch.
         unsafe { L::set((*this).inner) };
     }
 }

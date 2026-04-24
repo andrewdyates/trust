@@ -11,19 +11,15 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::time::SystemTime;
+use trust_types::fx::FxHashMap;
 
 use thiserror::Error;
 
-use trust_types::{
-    BlockId, VerifiableFunction, VerificationCondition,
-};
+use trust_types::{BlockId, VerifiableFunction, VerificationCondition};
 
 use crate::cross_check::{CrossCheckResult, full_cross_check};
-use crate::translation_validation::{
-    CheckKind, SimulationRelation, TranslationValidationError,
-};
+use crate::translation_validation::{CheckKind, SimulationRelation, TranslationValidationError};
 
 // ---------------------------------------------------------------------------
 // tRust #445: Certification levels
@@ -97,10 +93,7 @@ pub enum ProofJustification {
     /// A direct computation or simplification.
     Compute,
     /// Application of a named lemma with arguments.
-    LemmaApplication {
-        lemma_name: String,
-        arguments: Vec<String>,
-    },
+    LemmaApplication { lemma_name: String, arguments: Vec<String> },
     /// Induction on a structure (e.g., block-by-block, statement-by-statement).
     Induction {
         variable: String,
@@ -219,11 +212,7 @@ impl CertifiedTranslation {
     /// Number of blocks with certification status.
     #[must_use]
     pub fn certified_block_count(&self) -> usize {
-        self.certificate
-            .block_certificates
-            .values()
-            .filter(|bc| bc.certified)
-            .count()
+        self.certificate.block_certificates.values().filter(|bc| bc.certified).count()
     }
 
     /// Fraction of blocks that are certified (0.0 to 1.0).
@@ -251,10 +240,7 @@ pub enum CertificationError {
 
     /// Cross-checking revealed a soundness alarm.
     #[error("cross-check soundness alarm for `{function}`: {details}")]
-    SoundnessAlarm {
-        function: String,
-        details: String,
-    },
+    SoundnessAlarm { function: String, details: String },
 
     /// The proof certificate is invalid or corrupted.
     #[error("invalid certificate: {0}")]
@@ -262,9 +248,7 @@ pub enum CertificationError {
 
     /// A proof judgment failed to verify.
     #[error("proof judgment failed: {conclusion}")]
-    JudgmentFailed {
-        conclusion: String,
-    },
+    JudgmentFailed { conclusion: String },
 
     /// lean5 backend is not available (feature not compiled in).
     #[error("lean5 backend not available")]
@@ -313,9 +297,7 @@ pub fn verify_certificate(cert: &TranslationCertificate) -> bool {
     }
 
     // Block certificates: at CrossChecked+, all blocks should be certified.
-    if cert.level >= CertificationLevel::CrossChecked
-        && !cert.block_certificates.is_empty()
-    {
+    if cert.level >= CertificationLevel::CrossChecked && !cert.block_certificates.is_empty() {
         let all_certified = cert.block_certificates.values().all(|bc| bc.certified);
         if !all_certified {
             return false;
@@ -333,9 +315,7 @@ pub fn verify_certificate(cert: &TranslationCertificate) -> bool {
 ///
 /// This is the baseline: generate VCs and wrap them in a certificate
 /// with `Uncertified` level. Used when no validation is requested.
-pub fn uncertified_translation(
-    func: &VerifiableFunction,
-) -> CertifiedTranslation {
+pub fn uncertified_translation(func: &VerifiableFunction) -> CertifiedTranslation {
     let vcs = crate::generate_vcs(func);
     CertifiedTranslation {
         function_name: func.name.clone(),
@@ -367,7 +347,7 @@ pub fn cross_checked_translation(
 
     if cross_result.has_soundness_alarm() {
         return Err(CertificationError::SoundnessAlarm {
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             details: format!("verdict: {:?}", cross_result.verdict),
         });
     }
@@ -420,7 +400,7 @@ pub fn proof_certified_translation(
     let cross_result = full_cross_check(func);
     if cross_result.has_soundness_alarm() {
         return Err(CertificationError::SoundnessAlarm {
-            function: func.name.clone(),
+            function: func.name.as_str().into(),
             details: format!("verdict: {:?}", cross_result.verdict),
         });
     }
@@ -433,7 +413,10 @@ pub fn proof_certified_translation(
     judgments.push(ProofJudgment {
         hypotheses: vec![
             format!("source_entry = {:?}", BlockId(0)),
-            format!("target_entry = {:?}", simulation_relation.block_map.get(&BlockId(0)).unwrap_or(&BlockId(0))),
+            format!(
+                "target_entry = {:?}",
+                simulation_relation.block_map.get(&BlockId(0)).unwrap_or(&BlockId(0))
+            ),
         ],
         conclusion: "entry_point_preserved".to_string(),
         justification: ProofJustification::Compute,
@@ -447,10 +430,7 @@ pub fn proof_certified_translation(
 
     // Per-block data flow preservation judgments.
     for block in &func.body.blocks {
-        let target_block = simulation_relation
-            .block_map
-            .get(&block.id)
-            .unwrap_or(&block.id);
+        let target_block = simulation_relation.block_map.get(&block.id).unwrap_or(&block.id);
 
         judgments.push(ProofJudgment {
             hypotheses: vec![
@@ -461,10 +441,7 @@ pub fn proof_certified_translation(
             conclusion: format!("dataflow_preserved_{}", block.id.0),
             justification: ProofJustification::LemmaApplication {
                 lemma_name: "sim_rel_preserves_dataflow".to_string(),
-                arguments: vec![
-                    format!("{:?}", block.id),
-                    format!("{:?}", target_block),
-                ],
+                arguments: vec![format!("{:?}", block.id), format!("{:?}", target_block)],
             },
         });
 
@@ -474,9 +451,7 @@ pub fn proof_certified_translation(
                 "apply sim_rel_preserves_dataflow; exact block_{}_map",
                 block.id.0
             ),
-            dependencies: vec![
-                "sim_rel_preserves_dataflow".to_string(),
-            ],
+            dependencies: vec!["sim_rel_preserves_dataflow".to_string()],
         });
     }
 
@@ -541,10 +516,7 @@ pub fn proof_certified_translation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trust_types::{
-        BasicBlock, BlockId, LocalDecl,
-        SourceSpan, Terminator, Ty, VerifiableBody,
-    };
+    use trust_types::{BasicBlock, BlockId, LocalDecl, SourceSpan, Terminator, Ty, VerifiableBody};
 
     fn midpoint_function() -> VerifiableFunction {
         crate::tests::midpoint_function()
@@ -614,8 +586,9 @@ mod tests {
         assert_eq!(ct.level(), CertificationLevel::Uncertified);
         assert!(!ct.is_cross_checked());
         assert!(!ct.is_proof_certified());
-        // tRust #792: overflow checks now in zani-lib, midpoint produces 0 VCs
-        assert_eq!(ct.vc_count(), 0);
+        // tRust #953: `generate_vcs` emits overflow VCs again — midpoint has
+        // one CheckedBinaryOp(Add) + Assert(Overflow(Add)) pair.
+        assert!(ct.vc_count() >= 1, "midpoint must produce at least one VC, got {}", ct.vc_count());
         assert!(ct.certificate.cross_check_result.is_none());
         assert!(ct.certificate.proof_judgments.is_empty());
     }
@@ -641,8 +614,10 @@ mod tests {
         assert_eq!(ct.level(), CertificationLevel::CrossChecked);
         assert!(ct.is_cross_checked());
         assert!(!ct.is_proof_certified());
-        // tRust #792: overflow checks now in zani-lib, midpoint produces 0 VCs
-        assert_eq!(ct.vc_count(), 0);
+        // tRust #953: primary and reference VC generators both emit the
+        // overflow VC for midpoint's CheckedBinaryOp(Add), and agree on the
+        // safety category.
+        assert!(ct.vc_count() >= 1, "midpoint must produce at least one VC, got {}", ct.vc_count());
         assert!(ct.certificate.cross_check_result.is_some());
         assert!(ct.certificate.cross_check_result.as_ref().unwrap().is_sound());
     }
@@ -693,11 +668,8 @@ mod tests {
         let sim_rel = SimulationRelation::identity(&func);
         let ct = proof_certified_translation(&func, &sim_rel).unwrap();
 
-        let has_entry = ct
-            .certificate
-            .proof_judgments
-            .iter()
-            .any(|j| j.conclusion == "entry_point_preserved");
+        let has_entry =
+            ct.certificate.proof_judgments.iter().any(|j| j.conclusion == "entry_point_preserved");
         assert!(has_entry, "should have entry_point_preserved judgment");
     }
 
@@ -707,11 +679,8 @@ mod tests {
         let sim_rel = SimulationRelation::identity(&func);
         let ct = proof_certified_translation(&func, &sim_rel).unwrap();
 
-        let has_return = ct
-            .certificate
-            .proof_judgments
-            .iter()
-            .any(|j| j.conclusion == "return_value_preserved");
+        let has_return =
+            ct.certificate.proof_judgments.iter().any(|j| j.conclusion == "return_value_preserved");
         assert!(has_return, "should have return_value_preserved judgment");
     }
 
@@ -878,7 +847,7 @@ mod tests {
     #[test]
     fn test_certification_error_display() {
         let err = CertificationError::SoundnessAlarm {
-            function: "my_fn".to_string(),
+            function: "my_fn".into(),
             details: "divergent".to_string(),
         };
         let msg = format!("{err}");

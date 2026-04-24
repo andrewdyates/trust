@@ -161,7 +161,11 @@ pub fn select_strategy_with_config(
 pub fn formula_nesting_depth(formula: &Formula) -> usize {
     match formula {
         // Leaves.
-        Formula::Bool(_) | Formula::Int(_) | Formula::UInt(_) | Formula::BitVec { .. } | Formula::Var(_, _) => 0,
+        Formula::Bool(_)
+        | Formula::Int(_)
+        | Formula::UInt(_)
+        | Formula::BitVec { .. }
+        | Formula::Var(_, _) => 0,
         // Unary.
         Formula::Not(inner) | Formula::Neg(inner) => 1 + formula_nesting_depth(inner),
         // Binary.
@@ -176,18 +180,14 @@ pub fn formula_nesting_depth(formula: &Formula) -> usize {
         | Formula::Mul(a, b)
         | Formula::Div(a, b)
         | Formula::Rem(a, b)
-        | Formula::Select(a, b) => {
-            1 + formula_nesting_depth(a).max(formula_nesting_depth(b))
-        }
+        | Formula::Select(a, b) => 1 + formula_nesting_depth(a).max(formula_nesting_depth(b)),
         // N-ary.
         Formula::And(children) | Formula::Or(children) => {
             1 + children.iter().map(formula_nesting_depth).max().unwrap_or(0)
         }
         // Ternary.
         Formula::Ite(c, t, e) | Formula::Store(c, t, e) => {
-            1 + formula_nesting_depth(c)
-                .max(formula_nesting_depth(t))
-                .max(formula_nesting_depth(e))
+            1 + formula_nesting_depth(c).max(formula_nesting_depth(t)).max(formula_nesting_depth(e))
         }
         // Quantifiers.
         Formula::Forall(_, body) | Formula::Exists(_, body) => {
@@ -211,9 +211,7 @@ pub fn formula_nesting_depth(formula: &Formula) -> usize {
         | Formula::BvULe(a, b, _)
         | Formula::BvSLt(a, b, _)
         | Formula::BvSLe(a, b, _)
-        | Formula::BvConcat(a, b) => {
-            1 + formula_nesting_depth(a).max(formula_nesting_depth(b))
-        }
+        | Formula::BvConcat(a, b) => 1 + formula_nesting_depth(a).max(formula_nesting_depth(b)),
         Formula::BvNot(inner, _)
         | Formula::BvToInt(inner, _, _)
         | Formula::IntToBv(inner, _)
@@ -264,10 +262,7 @@ mod tests {
 
     fn simple_formula() -> Formula {
         // x >= 0 -- 1 variable, depth 1
-        Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        )
+        Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)))
     }
 
     fn medium_formula() -> Formula {
@@ -313,10 +308,7 @@ mod tests {
 
     #[test]
     fn test_select_strategy_temporal() {
-        let vc = make_vc(
-            VcKind::Temporal { property: "always_safe".into() },
-            simple_formula(),
-        );
+        let vc = make_vc(VcKind::Temporal { property: "always_safe".into() }, simple_formula());
         assert_eq!(select_strategy(&vc), RefinementStrategy::Interpolation);
     }
 
@@ -339,7 +331,10 @@ mod tests {
         let vc = make_vc(
             VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
-                operand_tys: (Ty::Int { width: 32, signed: true }, Ty::Int { width: 32, signed: true }),
+                operand_tys: (
+                    Ty::Int { width: 32, signed: true },
+                    Ty::Int { width: 32, signed: true },
+                ),
             },
             medium_formula(),
         );
@@ -348,10 +343,7 @@ mod tests {
 
     #[test]
     fn test_select_strategy_with_custom_config() {
-        let config = StrategyConfig {
-            eager_complexity_threshold: 50,
-            ..StrategyConfig::default()
-        };
+        let config = StrategyConfig { eager_complexity_threshold: 50, ..StrategyConfig::default() };
         let vc = make_vc(VcKind::Postcondition, medium_formula());
         let strategy = select_strategy_with_config(&vc, &config);
         // With threshold raised to 50, 26 vars should be eager.
@@ -383,10 +375,8 @@ mod tests {
 
     #[test]
     fn test_formula_nesting_depth_comparison() {
-        let f = Formula::Lt(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(10)),
-        );
+        let f =
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10)));
         assert_eq!(formula_nesting_depth(&f), 1);
     }
 
@@ -397,10 +387,7 @@ mod tests {
                 Box::new(Formula::Var("x".into(), Sort::Int)),
                 Box::new(Formula::Int(0)),
             ))),
-            Formula::Ge(
-                Box::new(Formula::Var("y".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Ge(Box::new(Formula::Var("y".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
         // And(1 + max(Not(1 + Lt(1)) = 3, Ge(1) = 1)) = 1 + 3 = 4
         // Actually: And depth 1 + max(Not depth 1 + Lt depth 1 = 2, Ge depth 1) = 1 + 2 = 3
@@ -451,10 +438,7 @@ mod tests {
     #[test]
     fn test_non_termination_uses_interpolation() {
         let vc = make_vc(
-            VcKind::NonTermination {
-                context: "loop".into(),
-                measure: "n".into(),
-            },
+            VcKind::NonTermination { context: "loop".into(), measure: "n".into() },
             simple_formula(),
         );
         assert_eq!(select_strategy(&vc), RefinementStrategy::Interpolation);

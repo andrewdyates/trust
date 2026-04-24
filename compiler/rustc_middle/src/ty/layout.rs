@@ -93,7 +93,6 @@ impl abi::Integer {
             let discr = abi::Integer::from_attr(&tcx, ity);
             let fit = if ity.is_signed() { signed_fit } else { unsigned_fit };
             if discr < fit {
-                // tRust: invariant: unexpected state in discr_range_of_repr
                 bug!(
                     "Integer::repr_discr: `#[repr]` hint too small for \
                       discriminant range of enum `{}`",
@@ -153,7 +152,7 @@ impl Primitive {
         match *self {
             Primitive::Int(i, signed) => i.to_ty(tcx, signed),
             Primitive::Float(f) => f.to_ty(tcx),
-            // tRust: known issue (erikdesjardins) — handle non-default addrspace ptr sizes
+            // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
             Primitive::Pointer(_) => Ty::new_mut_ptr(tcx, tcx.types.unit),
         }
     }
@@ -164,12 +163,11 @@ impl Primitive {
     fn to_int_ty<'tcx>(&self, tcx: TyCtxt<'tcx>) -> Ty<'tcx> {
         match *self {
             Primitive::Int(i, signed) => i.to_ty(tcx, signed),
-            // tRust: known issue (erikdesjardins) — handle non-default addrspace ptr sizes
+            // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
             Primitive::Pointer(_) => {
                 let signed = false;
                 tcx.data_layout().ptr_sized_integer().to_ty(tcx, signed)
             }
-            // tRust: invariant: floats do not have an int type
             Primitive::Float(_) => bug!("floats do not have an int type"),
         }
     }
@@ -402,7 +400,6 @@ impl<'tcx> SizeSkeleton<'tcx> {
                         // Fixes ICE #124031
                         return Err(tcx.arena.alloc(LayoutError::ReferencesError(*guar)));
                     }
-                    // tRust: invariant: unexpected state in 
                     _ => bug!(
                         "SizeSkeleton::compute({ty}): layout errored ({err:?}), yet \
                               tail `{tail}` is not a type parameter or a projection",
@@ -539,7 +536,7 @@ pub trait HasTyCtxt<'tcx>: HasDataLayout {
 pub trait HasTypingEnv<'tcx> {
     fn typing_env(&self) -> ty::TypingEnv<'tcx>;
 
-    /// tRust: known issue (#132279) — This method should not be used as in the future
+    /// FIXME(#132279): This method should not be used as in the future
     /// everything should take a `TypingEnv` instead. Remove it as that point.
     fn param_env(&self) -> ty::ParamEnv<'tcx> {
         self.typing_env().param_env
@@ -664,7 +661,7 @@ pub trait LayoutOfHelpers<'tcx>: HasDataLayout + HasTyCtxt<'tcx> + HasTypingEnv<
     type LayoutOfResult: MaybeResult<TyAndLayout<'tcx>> = TyAndLayout<'tcx>;
 
     /// `Span` to use for `tcx.at(span)`, from `layout_of`.
-    // tRust: known issue (eddyb) — perhaps make this mandatory to get contexts to track it better?
+    // FIXME(eddyb) perhaps make this mandatory to get contexts to track it better?
     #[inline]
     fn layout_tcx_at_span(&self) -> Span {
         DUMMY_SP
@@ -696,7 +693,7 @@ pub trait LayoutOf<'tcx>: LayoutOfHelpers<'tcx> {
 
     /// Computes the layout of a type, at `span`. Note that this implicitly
     /// executes in `TypingMode::PostAnalysis`, and will normalize the input type.
-    // tRust: known issue (eddyb) — avoid passing information like this, and instead add more
+    // FIXME(eddyb) avoid passing information like this, and instead add more
     // `TyCtxt::at`-like APIs to be able to do e.g. `cx.at(span).layout_of(ty)`.
     #[inline]
     fn spanned_layout_of(&self, ty: Ty<'tcx>, span: Span) -> Self::LayoutOfResult {
@@ -756,11 +753,9 @@ where
 
                 let fields = match this.ty.kind() {
                     ty::Adt(def, _) if def.variants().is_empty() => {
-                        // tRust: invariant: for_variant called on zero-variant enum <...>
                         bug!("for_variant called on zero-variant enum {}", this.ty)
                     }
                     ty::Adt(def, _) => def.variant(variant_index).fields.len(),
-                    // tRust: invariant: ty_and_layout_for_variant on unexpected type <...>
                     _ => bug!("`ty_and_layout_for_variant` on unexpected type {}", this.ty),
                 };
                 tcx.mk_layout(LayoutData::uninhabited_variant(cx, variant_index, fields))
@@ -807,7 +802,6 @@ where
                 | ty::CoroutineWitness(..)
                 | ty::Foreign(..)
                 | ty::Dynamic(_, _) => {
-                    // tRust: invariant: TyAndLayout::field(<...>): not applicable
                     bug!("TyAndLayout::field({:?}): not applicable", this)
                 }
 
@@ -843,7 +837,7 @@ where
                         let typing_env = ty::TypingEnv::fully_monomorphized();
                         return TyMaybeWithLayout::TyAndLayout(TyAndLayout {
                             ty: this.ty,
-                            ..tcx.layout_of(typing_env.as_query_input(unit_ptr_ty)).expect("invariant: unit pointer type has a layout")
+                            ..tcx.layout_of(typing_env.as_query_input(unit_ptr_ty)).unwrap()
                         });
                     }
 
@@ -857,8 +851,8 @@ where
                         Ty::new_imm_ref(
                             tcx,
                             tcx.lifetimes.re_static,
-                            // tRust: known issue — properly type (e.g. usize and fn pointers) the fields.
-                            Ty::new_array(tcx, tcx.types.usize, min_count.try_into().expect("invariant: value fits in target type")),
+                            // FIXME: properly type (e.g. usize and fn pointers) the fields.
+                            Ty::new_array(tcx, tcx.types.usize, min_count.try_into().unwrap()),
                         )
                     };
 
@@ -888,7 +882,6 @@ where
                         match tcx.struct_tail_for_codegen(pointee, cx.typing_env()).kind() {
                             ty::Slice(_) | ty::Str => tcx.types.usize,
                             ty::Dynamic(data, _) => mk_dyn_vtable(data.principal()),
-                            // tRust: invariant: TyAndLayout::field(<...>): not applicable
                             _ => bug!("TyAndLayout::field({:?}): not applicable", this),
                         }
                     };
@@ -919,9 +912,9 @@ where
                         args.as_coroutine()
                             .state_tys(def_id, tcx)
                             .nth(index.as_usize())
-                            .expect("invariant: type has a computable layout")
+                            .unwrap()
                             .nth(i)
-                            .expect("invariant: type has a computable layout"),
+                            .unwrap(),
                     ),
                     Variants::Multiple { tag, tag_field, .. } => {
                         if FieldIdx::from_usize(i) == tag_field {
@@ -955,7 +948,6 @@ where
                 | ty::Placeholder(..)
                 | ty::Param(_)
                 | ty::Infer(_)
-                // tRust: invariant: TyAndLayout::field: unexpected type <...>
                 | ty::Error(_) => bug!("TyAndLayout::field: unexpected type `{}`", this.ty),
             }
         }
@@ -963,7 +955,6 @@ where
         match field_ty_or_layout(this, cx, i) {
             TyMaybeWithLayout::Ty(field_ty) => {
                 cx.tcx().layout_of(cx.typing_env().as_query_input(field_ty)).unwrap_or_else(|e| {
-                    // tRust: invariant: expected value must exist in 
                     bug!(
                         "failed to get layout for `{field_ty}`: {e:?},\n\
                          despite it being a field (#{i}) of an existing layout: {this:#?}",
@@ -1112,7 +1103,7 @@ where
                 let mut result = None;
 
                 if let Some(variant) = data_variant {
-                    // tRust: known issue (erikdesjardins) — handle non-default addrspace ptr sizes
+                    // FIXME(erikdesjardins): handle non-default addrspace ptr sizes
                     // (requires passing in the expected address space from the caller)
                     let ptr_end = offset + Primitive::Pointer(AddressSpace::ZERO).size(cx);
                     for i in 0..variant.fields.count() {
@@ -1299,7 +1290,7 @@ impl<'a, 'b, G: EmissionGuarantee> Diagnostic<'a, G> for FnAbiError<'b> {
     }
 }
 
-// tRust: known issue (eddyb) — maybe use something like this for an unified `fn_abi_of`, not
+// FIXME(eddyb) maybe use something like this for an unified `fn_abi_of`, not
 // just for error handling.
 #[derive(Debug)]
 pub enum FnAbiRequest<'tcx> {
@@ -1341,7 +1332,7 @@ pub trait FnAbiOf<'tcx>: FnAbiOfHelpers<'tcx> {
         sig: ty::PolyFnSig<'tcx>,
         extra_args: &'tcx ty::List<Ty<'tcx>>,
     ) -> Self::FnAbiOfResult {
-        // tRust: known issue (eddyb) — get a better `span` here.
+        // FIXME(eddyb) get a better `span` here.
         let span = self.layout_tcx_at_span();
         let tcx = self.tcx().at(span);
 
@@ -1370,7 +1361,7 @@ pub trait FnAbiOf<'tcx>: FnAbiOfHelpers<'tcx> {
         instance: ty::Instance<'tcx>,
         extra_args: &'tcx ty::List<Ty<'tcx>>,
     ) -> Self::FnAbiOfResult {
-        // tRust: known issue (eddyb) — get a better `span` here.
+        // FIXME(eddyb) get a better `span` here.
         let span = self.layout_tcx_at_span();
         let tcx = self.tcx().at(span);
 
@@ -1379,7 +1370,7 @@ pub trait FnAbiOf<'tcx>: FnAbiOfHelpers<'tcx> {
                 self.typing_env().as_query_input((instance, extra_args)),
             )
             .map_err(|err| {
-                // tRust: accepted tradeoff (eddyb) — at least for definitions of/calls to `Instance`s,
+                // HACK(eddyb) at least for definitions of/calls to `Instance`s,
                 // we can get some kind of span even if one wasn't provided.
                 // However, we don't do this early in order to avoid calling
                 // `def_span` unconditionally (which may have a perf penalty).
@@ -1409,14 +1400,14 @@ pub trait FnAbiOf<'tcx>: FnAbiOfHelpers<'tcx> {
         instance: ty::Instance<'tcx>,
         extra_args: &'tcx ty::List<Ty<'tcx>>,
     ) -> Self::FnAbiOfResult {
-        // tRust: known issue (eddyb) — get a better `span` here.
+        // FIXME(eddyb) get a better `span` here.
         let span = self.layout_tcx_at_span();
         let tcx = self.tcx().at(span);
 
         MaybeResult::from(
             tcx.fn_abi_of_instance(self.typing_env().as_query_input((instance, extra_args)))
                 .map_err(|err| {
-                    // tRust: accepted tradeoff (eddyb) — at least for definitions of/calls to `Instance`s,
+                    // HACK(eddyb) at least for definitions of/calls to `Instance`s,
                     // we can get some kind of span even if one wasn't provided.
                     // However, we don't do this early in order to avoid calling
                     // `def_span` unconditionally (which may have a perf penalty).

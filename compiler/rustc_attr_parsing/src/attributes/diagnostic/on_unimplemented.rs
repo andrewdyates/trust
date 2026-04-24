@@ -72,7 +72,7 @@ impl<S: Stage> AttributeParser<S> for OnUnimplementedParser {
             },
         ),
     ];
-    //tRust: known issue — attribute is not parsed for non-traits but diagnostics are issued in `check_attr.rs`
+    //FIXME attribute is not parsed for non-traits but diagnostics are issued in `check_attr.rs`
     const ALLOWED_TARGETS: AllowedTargets = AllowedTargets::AllowList(ALL_TARGETS);
 
     fn finalize(self, _cx: &FinalizeContext<'_, '_, S>) -> Option<AttributeKind> {

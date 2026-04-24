@@ -160,7 +160,7 @@ fn reg_component(cls: &[Option<Class>], i: &mut usize, size: Size) -> Option<Reg
 
 fn cast_target(cls: &[Option<Class>], size: Size) -> CastTarget {
     let mut i = 0;
-    let lo = reg_component(cls, &mut i, size).expect("invariant: classification has at least one register component"); // tRust: unwrap -> expect
+    let lo = reg_component(cls, &mut i, size).unwrap();
     let offset = Size::from_bytes(8) * (i as u64);
     let mut target = CastTarget::from(lo);
     if size > offset {
@@ -185,7 +185,7 @@ where
 
     let mut x86_64_arg_or_ret = |arg: &mut ArgAbi<'a, Ty>, is_arg: bool| {
         if !arg.layout.is_sized() {
-            // tRust: known issue — Update int_regs?
+            // FIXME: Update int_regs?
             // Not touching this...
             return;
         }

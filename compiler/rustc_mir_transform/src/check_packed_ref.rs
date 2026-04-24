@@ -1,6 +1,3 @@
-//! tRust: MIR lint that checks references to packed-struct fields, which may
-//! tRust: be unaligned.
-
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
 use rustc_middle::mir::*;
 use rustc_middle::span_bug;
@@ -51,7 +48,6 @@ impl<'tcx> Visitor<'tcx> for PackedRefChecker<'_, 'tcx> {
                 // If we ever reach here it means that the generated derive
                 // code is somehow doing an unaligned reference, which it
                 // shouldn't do.
-                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                 span_bug!(self.source_info.span, "builtin derive created an unaligned reference");
             } else {
                 self.tcx.dcx().emit_err(errors::UnalignedPackedRef {

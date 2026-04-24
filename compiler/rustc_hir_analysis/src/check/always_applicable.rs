@@ -73,7 +73,6 @@ pub(crate) fn check_drop_impl(
             )
         }
         _ => {
-            // tRust: invariant — Drop impl must be coherent (not implement Drop for foreign types)
             span_bug!(tcx.def_span(drop_impl_did), "incoherent impl of Drop");
         }
     }
@@ -255,7 +254,7 @@ fn ensure_impl_predicates_are_implied_by_item_defn<'tcx>(
                 );
             }
         }
-        return Err(guar.expect("invariant: value is present"));
+        return Err(guar.unwrap());
     }
 
     let errors = ocx.infcx.resolve_regions(impl_def_id, adt_env, []);
@@ -287,7 +286,7 @@ fn ensure_impl_predicates_are_implied_by_item_defn<'tcx>(
                 .emit(),
             );
         }
-        return Err(guar.expect("invariant: value is present"));
+        return Err(guar.unwrap());
     }
 
     Ok(())

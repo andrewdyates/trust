@@ -30,27 +30,20 @@ impl SpecScore {
     /// Create a score with all dimensions set to zero.
     #[must_use]
     pub fn zero() -> Self {
-        Self {
-            overall: 0.0,
-            correctness: 0.0,
-            precision: 0.0,
-            simplicity: 0.0,
-            coverage: 0.0,
-        }
+        Self { overall: 0.0, correctness: 0.0, precision: 0.0, simplicity: 0.0, coverage: 0.0 }
     }
 
     /// Create a score from individual dimensions using default weights.
     #[must_use]
-    pub fn from_dimensions(correctness: f64, precision: f64, simplicity: f64, coverage: f64) -> Self {
+    pub fn from_dimensions(
+        correctness: f64,
+        precision: f64,
+        simplicity: f64,
+        coverage: f64,
+    ) -> Self {
         let weights = ScoringWeights::default();
         let overall = weights.compute(correctness, precision, simplicity, coverage);
-        Self {
-            overall,
-            correctness,
-            precision,
-            simplicity,
-            coverage,
-        }
+        Self { overall, correctness, precision, simplicity, coverage }
     }
 
     /// Create a score from individual dimensions using custom weights.
@@ -63,13 +56,7 @@ impl SpecScore {
         weights: &ScoringWeights,
     ) -> Self {
         let overall = weights.compute(correctness, precision, simplicity, coverage);
-        Self {
-            overall,
-            correctness,
-            precision,
-            simplicity,
-            coverage,
-        }
+        Self { overall, correctness, precision, simplicity, coverage }
     }
 }
 
@@ -88,12 +75,7 @@ pub struct ScoringWeights {
 
 impl Default for ScoringWeights {
     fn default() -> Self {
-        Self {
-            correctness: 0.4,
-            precision: 0.25,
-            simplicity: 0.15,
-            coverage: 0.2,
-        }
+        Self { correctness: 0.4, precision: 0.25, simplicity: 0.15, coverage: 0.2 }
     }
 }
 
@@ -115,23 +97,13 @@ impl ScoringWeights {
     /// Create weights that prioritize correctness above all else.
     #[must_use]
     pub fn correctness_first() -> Self {
-        Self {
-            correctness: 0.6,
-            precision: 0.15,
-            simplicity: 0.1,
-            coverage: 0.15,
-        }
+        Self { correctness: 0.6, precision: 0.15, simplicity: 0.1, coverage: 0.15 }
     }
 
     /// Create weights that balance precision and simplicity equally.
     #[must_use]
     pub fn balanced() -> Self {
-        Self {
-            correctness: 0.3,
-            precision: 0.25,
-            simplicity: 0.25,
-            coverage: 0.2,
-        }
+        Self { correctness: 0.3, precision: 0.25, simplicity: 0.25, coverage: 0.2 }
     }
 }
 
@@ -165,32 +137,26 @@ pub fn score_proposal_weighted(proposal: &Proposal, weights: &ScoringWeights) ->
 /// Score and rank a list of proposals, returning them sorted by overall score descending.
 #[must_use]
 pub fn rank_by_score(proposals: &[Proposal]) -> Vec<(usize, SpecScore)> {
-    let mut scored: Vec<(usize, SpecScore)> = proposals
-        .iter()
-        .enumerate()
-        .map(|(i, p)| (i, score_proposal(p)))
-        .collect();
-    scored.sort_by(|a, b| {
-        b.1.overall
-            .partial_cmp(&a.1.overall)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    let mut scored: Vec<(usize, SpecScore)> =
+        proposals.iter().enumerate().map(|(i, p)| (i, score_proposal(p))).collect();
+    scored
+        .sort_by(|a, b| b.1.overall.partial_cmp(&a.1.overall).unwrap_or(std::cmp::Ordering::Equal));
     scored
 }
 
 /// Score and rank with custom weights.
 #[must_use]
-pub fn rank_by_score_weighted(proposals: &[Proposal], weights: &ScoringWeights) -> Vec<(usize, SpecScore)> {
+pub fn rank_by_score_weighted(
+    proposals: &[Proposal],
+    weights: &ScoringWeights,
+) -> Vec<(usize, SpecScore)> {
     let mut scored: Vec<(usize, SpecScore)> = proposals
         .iter()
         .enumerate()
         .map(|(i, p)| (i, score_proposal_weighted(p, weights)))
         .collect();
-    scored.sort_by(|a, b| {
-        b.1.overall
-            .partial_cmp(&a.1.overall)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    scored
+        .sort_by(|a, b| b.1.overall.partial_cmp(&a.1.overall).unwrap_or(std::cmp::Ordering::Equal));
     scored
 }
 
@@ -212,13 +178,14 @@ fn compute_simplicity(kind: &ProposalKind) -> f64 {
     let length_score = 1.0 / (1.0 + (body.len() as f64 / 50.0));
 
     // Nesting penalty
-    let max_depth = body.chars().fold((0i32, 0i32), |(max, cur), ch| {
-        match ch {
+    let max_depth = body
+        .chars()
+        .fold((0i32, 0i32), |(max, cur), ch| match ch {
             '(' => (max.max(cur + 1), cur + 1),
             ')' => (max, (cur - 1).max(0)),
             _ => (max, cur),
-        }
-    }).0;
+        })
+        .0;
     let nesting_score = 1.0 / (1.0 + max_depth as f64 * 0.2);
 
     // Weighted combination
@@ -328,17 +295,11 @@ mod tests {
     }
 
     fn precondition(spec: &str, confidence: f64) -> Proposal {
-        make_proposal(
-            ProposalKind::AddPrecondition { spec_body: spec.into() },
-            confidence,
-        )
+        make_proposal(ProposalKind::AddPrecondition { spec_body: spec.into() }, confidence)
     }
 
     fn postcondition(spec: &str, confidence: f64) -> Proposal {
-        make_proposal(
-            ProposalKind::AddPostcondition { spec_body: spec.into() },
-            confidence,
-        )
+        make_proposal(ProposalKind::AddPostcondition { spec_body: spec.into() }, confidence)
     }
 
     // --- SpecScore ---
@@ -407,12 +368,7 @@ mod tests {
 
     #[test]
     fn test_scoring_weights_compute_zero_weights() {
-        let w = ScoringWeights {
-            correctness: 0.0,
-            precision: 0.0,
-            simplicity: 0.0,
-            coverage: 0.0,
-        };
+        let w = ScoringWeights { correctness: 0.0, precision: 0.0, simplicity: 0.0, coverage: 0.0 };
         let score = w.compute(1.0, 1.0, 1.0, 1.0);
         assert!(score.abs() < 1e-10);
     }
@@ -472,9 +428,7 @@ mod tests {
     #[test]
     fn test_score_proposal_bounds_check() {
         let p = make_proposal(
-            ProposalKind::AddBoundsCheck {
-                check_expr: "assert!(i < arr.len())".into(),
-            },
+            ProposalKind::AddBoundsCheck { check_expr: "assert!(i < arr.len())".into() },
             0.85,
         );
         let score = score_proposal(&p);
@@ -500,19 +454,13 @@ mod tests {
         assert_eq!(ranked.len(), 3);
         // Scores should be descending
         for window in ranked.windows(2) {
-            assert!(
-                window[0].1.overall >= window[1].1.overall,
-                "should be sorted descending"
-            );
+            assert!(window[0].1.overall >= window[1].1.overall, "should be sorted descending");
         }
     }
 
     #[test]
     fn test_rank_by_score_preserves_indices() {
-        let proposals = vec![
-            precondition("x != 0", 0.3),
-            precondition("y > 0", 0.9),
-        ];
+        let proposals = vec![precondition("x != 0", 0.3), precondition("y > 0", 0.9)];
         let ranked = rank_by_score(&proposals);
         // The high-confidence proposal (index 1) should be first
         assert_eq!(ranked[0].0, 1);
@@ -521,13 +469,14 @@ mod tests {
 
     #[test]
     fn test_rank_by_score_weighted() {
-        let proposals = vec![
-            precondition("x != 0", 0.9),
-            precondition("x > 0 && x < MAX && y != 0", 0.5),
-        ];
+        let proposals =
+            vec![precondition("x != 0", 0.9), precondition("x > 0 && x < MAX && y != 0", 0.5)];
         // With correctness-first weights, high confidence should win
         let ranked = rank_by_score_weighted(&proposals, &ScoringWeights::correctness_first());
-        assert_eq!(ranked[0].0, 0, "high confidence should rank first with correctness-first weights");
+        assert_eq!(
+            ranked[0].0, 0,
+            "high confidence should rank first with correctness-first weights"
+        );
     }
 
     // --- compute_simplicity ---
@@ -571,9 +520,7 @@ mod tests {
 
     #[test]
     fn test_precision_with_bounds() {
-        let kind = ProposalKind::AddPrecondition {
-            spec_body: "x > 0 && x < MAX".into(),
-        };
+        let kind = ProposalKind::AddPrecondition { spec_body: "x > 0 && x < MAX".into() };
         let score = compute_precision(&kind);
         let simple_kind = ProposalKind::AddPrecondition { spec_body: "x > 0".into() };
         let simple_score = compute_precision(&simple_kind);

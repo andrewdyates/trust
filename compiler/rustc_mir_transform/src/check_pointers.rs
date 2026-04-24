@@ -1,6 +1,3 @@
-//! tRust: Shared infrastructure for MIR pointer validity checks used by the
-//! tRust: alignment and null checking passes.
-
 use rustc_hir::lang_items::LangItem;
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext, Visitor};

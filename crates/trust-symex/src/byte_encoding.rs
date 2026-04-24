@@ -77,10 +77,7 @@ impl SymbolicByte {
     #[must_use]
     pub fn to_formula(&self) -> Formula {
         match self {
-            Self::Concrete(v) => Formula::BitVec {
-                value: i128::from(*v),
-                width: 8,
-            },
+            Self::Concrete(v) => Formula::BitVec { value: i128::from(*v), width: 8 },
             Self::Symbolic(f) => f.clone(),
         }
     }
@@ -145,23 +142,13 @@ impl ByteMemory {
     /// Create a new byte memory with the given endianness.
     #[must_use]
     pub fn new(endian: Endian) -> Self {
-        Self {
-            cells: BTreeMap::new(),
-            lazy_init: true,
-            endian,
-            next_sym_id: 0,
-        }
+        Self { cells: BTreeMap::new(), lazy_init: true, endian, next_sym_id: 0 }
     }
 
     /// Create a new byte memory with lazy init disabled (strict mode).
     #[must_use]
     pub fn strict(endian: Endian) -> Self {
-        Self {
-            cells: BTreeMap::new(),
-            lazy_init: false,
-            endian,
-            next_sym_id: 0,
-        }
+        Self { cells: BTreeMap::new(), lazy_init: false, endian, next_sym_id: 0 }
     }
 
     /// Returns the endianness.
@@ -201,10 +188,7 @@ impl ByteMemory {
             self.cells.insert(address, byte.clone());
             Ok(byte)
         } else {
-            Err(ByteMemoryError::UninitializedRead {
-                address,
-                size: 1,
-            })
+            Err(ByteMemoryError::UninitializedRead { address, size: 1 })
         }
     }
 
@@ -221,12 +205,7 @@ impl ByteMemory {
     }
 
     /// Store a multi-byte value with explicit endianness.
-    pub fn store_bytes_endian(
-        &mut self,
-        address: u64,
-        bytes: &[SymbolicByte],
-        endian: Endian,
-    ) {
+    pub fn store_bytes_endian(&mut self, address: u64, bytes: &[SymbolicByte], endian: Endian) {
         match endian {
             Endian::Little => {
                 // bytes[0] = LSB goes to lowest address.
@@ -268,10 +247,9 @@ impl ByteMemory {
 
         let mut result = Vec::with_capacity(size as usize);
         for i in 0..size {
-            let addr = address.checked_add(i).ok_or(ByteMemoryError::AddressOverflow {
-                base: address,
-                offset: i,
-            })?;
+            let addr = address
+                .checked_add(i)
+                .ok_or(ByteMemoryError::AddressOverflow { base: address, offset: i })?;
             result.push(self.load_byte(addr)?);
         }
 
@@ -325,9 +303,7 @@ impl ByteMemory {
         let Some(raw) = concrete else {
             return Ok(None);
         };
-        let arr: [u8; 8] = [
-            raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
-        ];
+        let arr: [u8; 8] = [raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]];
         Ok(Some(match self.endian {
             Endian::Little => u64::from_le_bytes(arr),
             Endian::Big => u64::from_be_bytes(arr),
@@ -343,12 +319,7 @@ impl ByteMemory {
     /// For a `width`-bit load at `address`, produces a bitvector concatenation
     /// of individual bytes, respecting endianness.
     #[must_use]
-    pub fn encode_load_formula(
-        &self,
-        base_name: &str,
-        address: u64,
-        width_bytes: u64,
-    ) -> Formula {
+    pub fn encode_load_formula(&self, base_name: &str, address: u64, width_bytes: u64) -> Formula {
         if width_bytes == 0 {
             return Formula::BitVec { value: 0, width: 0 };
         }
@@ -357,10 +328,7 @@ impl ByteMemory {
             if let Some(byte) = self.cells.get(&address) {
                 return byte.to_formula();
             }
-            return Formula::Var(
-                format!("{base_name}_{address:#x}"),
-                Sort::BitVec(8),
-            );
+            return Formula::Var(format!("{base_name}_{address:#x}"), Sort::BitVec(8));
         }
 
         // Build concatenation based on endianness.
@@ -372,10 +340,7 @@ impl ByteMemory {
                 if let Some(byte) = self.cells.get(&addr) {
                     byte.to_formula()
                 } else {
-                    Formula::Var(
-                        format!("{base_name}_{addr:#x}"),
-                        Sort::BitVec(8),
-                    )
+                    Formula::Var(format!("{base_name}_{addr:#x}"), Sort::BitVec(8))
                 }
             })
             .collect();
@@ -417,10 +382,7 @@ impl ByteMemory {
 
         for i in 0..width_bytes {
             let addr = address + i;
-            let addr_formula = Formula::BitVec {
-                value: addr as i128,
-                width: 64,
-            };
+            let addr_formula = Formula::BitVec { value: addr as i128, width: 64 };
 
             // Extract the appropriate byte from the value.
             let byte_formula = match self.endian {
@@ -428,30 +390,19 @@ impl ByteMemory {
                     // Byte i is bits [i*8 + 7 : i*8].
                     let low = (i * 8) as u32;
                     let high = low + 7;
-                    Formula::BvExtract {
-                        inner: Box::new(value.clone()),
-                        high,
-                        low,
-                    }
+                    Formula::BvExtract { inner: Box::new(value.clone()), high, low }
                 }
                 Endian::Big => {
                     // Byte i is bits [(width_bytes - 1 - i)*8 + 7 : (width_bytes - 1 - i)*8].
                     let byte_idx = width_bytes - 1 - i;
                     let low = (byte_idx * 8) as u32;
                     let high = low + 7;
-                    Formula::BvExtract {
-                        inner: Box::new(value.clone()),
-                        high,
-                        low,
-                    }
+                    Formula::BvExtract { inner: Box::new(value.clone()), high, low }
                 }
             };
 
-            result = Formula::Store(
-                Box::new(result),
-                Box::new(addr_formula),
-                Box::new(byte_formula),
-            );
+            result =
+                Formula::Store(Box::new(result), Box::new(addr_formula), Box::new(byte_formula));
         }
 
         result
@@ -482,12 +433,7 @@ impl ByteMemoryRegion {
     /// Create a new uninitialized region.
     #[must_use]
     pub fn new(name: impl Into<String>, base: u64, size: u64) -> Self {
-        Self {
-            name: name.into(),
-            base,
-            size,
-            bytes: BTreeMap::new(),
-        }
+        Self { name: name.into(), base, size, bytes: BTreeMap::new() }
     }
 
     /// Returns the region name.
@@ -519,10 +465,7 @@ impl ByteMemoryRegion {
     /// Returns an error if the offset is out of bounds.
     pub fn store(&mut self, offset: u64, byte: SymbolicByte) -> Result<(), ByteMemoryError> {
         if offset >= self.size {
-            return Err(ByteMemoryError::AddressOverflow {
-                base: self.base,
-                offset,
-            });
+            return Err(ByteMemoryError::AddressOverflow { base: self.base, offset });
         }
         self.bytes.insert(offset, byte);
         Ok(())
@@ -557,11 +500,7 @@ impl ByteMemoryRegion {
     /// Convert an absolute address to a region-relative offset.
     #[must_use]
     pub fn to_offset(&self, address: u64) -> Option<u64> {
-        if self.contains(address) {
-            Some(address - self.base)
-        } else {
-            None
-        }
+        if self.contains(address) { Some(address - self.base) } else { None }
     }
 
     /// Generate an SMT formula asserting that all initialized bytes match.
@@ -577,10 +516,7 @@ impl ByteMemoryRegion {
 
         let mut conjuncts = Vec::new();
         for (&offset, byte) in &self.bytes {
-            let addr = Formula::BitVec {
-                value: (self.base + offset) as i128,
-                width: 64,
-            };
+            let addr = Formula::BitVec { value: (self.base + offset) as i128, width: 64 };
             let selected = Formula::Select(Box::new(array.clone()), Box::new(addr));
             let expected = byte.to_formula();
             conjuncts.push(Formula::Eq(Box::new(selected), Box::new(expected)));
@@ -590,7 +526,9 @@ impl ByteMemoryRegion {
             Formula::Bool(true)
         } else if conjuncts.len() == 1 {
             // SAFETY: len == 1 guarantees .next() returns Some.
-            conjuncts.into_iter().next()
+            conjuncts
+                .into_iter()
+                .next()
                 .expect("invariant: len == 1 guarantees .next() returns Some")
         } else {
             Formula::And(conjuncts)
@@ -674,22 +612,10 @@ mod tests {
         mem.store_u32(0x100, 0xDEAD_BEEF);
 
         // Little-endian: lowest address has LSB.
-        assert_eq!(
-            mem.load_byte(0x100).unwrap(),
-            SymbolicByte::Concrete(0xEF)
-        );
-        assert_eq!(
-            mem.load_byte(0x101).unwrap(),
-            SymbolicByte::Concrete(0xBE)
-        );
-        assert_eq!(
-            mem.load_byte(0x102).unwrap(),
-            SymbolicByte::Concrete(0xAD)
-        );
-        assert_eq!(
-            mem.load_byte(0x103).unwrap(),
-            SymbolicByte::Concrete(0xDE)
-        );
+        assert_eq!(mem.load_byte(0x100).unwrap(), SymbolicByte::Concrete(0xEF));
+        assert_eq!(mem.load_byte(0x101).unwrap(), SymbolicByte::Concrete(0xBE));
+        assert_eq!(mem.load_byte(0x102).unwrap(), SymbolicByte::Concrete(0xAD));
+        assert_eq!(mem.load_byte(0x103).unwrap(), SymbolicByte::Concrete(0xDE));
     }
 
     #[test]
@@ -698,32 +624,17 @@ mod tests {
         mem.store_u32(0x100, 0xDEAD_BEEF);
 
         // Big-endian: lowest address has MSB.
-        assert_eq!(
-            mem.load_byte(0x100).unwrap(),
-            SymbolicByte::Concrete(0xDE)
-        );
-        assert_eq!(
-            mem.load_byte(0x101).unwrap(),
-            SymbolicByte::Concrete(0xAD)
-        );
-        assert_eq!(
-            mem.load_byte(0x102).unwrap(),
-            SymbolicByte::Concrete(0xBE)
-        );
-        assert_eq!(
-            mem.load_byte(0x103).unwrap(),
-            SymbolicByte::Concrete(0xEF)
-        );
+        assert_eq!(mem.load_byte(0x100).unwrap(), SymbolicByte::Concrete(0xDE));
+        assert_eq!(mem.load_byte(0x101).unwrap(), SymbolicByte::Concrete(0xAD));
+        assert_eq!(mem.load_byte(0x102).unwrap(), SymbolicByte::Concrete(0xBE));
+        assert_eq!(mem.load_byte(0x103).unwrap(), SymbolicByte::Concrete(0xEF));
     }
 
     #[test]
     fn test_load_concrete_u32_little_endian() {
         let mut mem = ByteMemory::new(Endian::Little);
         mem.store_u32(0x0, 0x1234_5678);
-        let val = mem
-            .load_concrete_u32(0x0)
-            .expect("load ok")
-            .expect("concrete");
+        let val = mem.load_concrete_u32(0x0).expect("load ok").expect("concrete");
         assert_eq!(val, 0x1234_5678);
     }
 
@@ -731,10 +642,7 @@ mod tests {
     fn test_load_concrete_u32_big_endian() {
         let mut mem = ByteMemory::new(Endian::Big);
         mem.store_u32(0x0, 0x1234_5678);
-        let val = mem
-            .load_concrete_u32(0x0)
-            .expect("load ok")
-            .expect("concrete");
+        let val = mem.load_concrete_u32(0x0).expect("load ok").expect("concrete");
         assert_eq!(val, 0x1234_5678);
     }
 
@@ -753,10 +661,7 @@ mod tests {
     fn test_store_and_load_u64() {
         let mut mem = ByteMemory::new(Endian::Little);
         mem.store_u64(0x0, 0x0102_0304_0506_0708);
-        let val = mem
-            .load_concrete_u64(0x0)
-            .expect("load ok")
-            .expect("concrete");
+        let val = mem.load_concrete_u64(0x0).expect("load ok").expect("concrete");
         assert_eq!(val, 0x0102_0304_0506_0708);
     }
 
@@ -813,12 +718,8 @@ mod tests {
     #[test]
     fn test_region_store_and_load() {
         let mut region = ByteMemoryRegion::new("heap0", 0x2000, 64);
-        region
-            .store(0, SymbolicByte::Concrete(0xAA))
-            .expect("store ok");
-        region
-            .store(63, SymbolicByte::Concrete(0xBB))
-            .expect("store end");
+        region.store(0, SymbolicByte::Concrete(0xAA)).expect("store ok");
+        region.store(63, SymbolicByte::Concrete(0xBB)).expect("store end");
 
         assert_eq!(region.load(0), SymbolicByte::Concrete(0xAA));
         assert_eq!(region.load(63), SymbolicByte::Concrete(0xBB));
@@ -828,9 +729,7 @@ mod tests {
     #[test]
     fn test_region_store_out_of_bounds() {
         let mut region = ByteMemoryRegion::new("small", 0x0, 4);
-        let err = region
-            .store(4, SymbolicByte::Concrete(0xFF))
-            .expect_err("oob");
+        let err = region.store(4, SymbolicByte::Concrete(0xFF)).expect_err("oob");
         assert!(matches!(err, ByteMemoryError::AddressOverflow { .. }));
     }
 
@@ -916,10 +815,7 @@ mod tests {
             "mem".into(),
             Sort::Array(Box::new(Sort::BitVec(64)), Box::new(Sort::BitVec(8))),
         );
-        let value = Formula::BitVec {
-            value: 0xDEAD,
-            width: 16,
-        };
+        let value = Formula::BitVec { value: 0xDEAD, width: 16 };
         let f = mem.encode_store_formula(&array, 0x0, &value, 2);
         // Should be nested Store(Store(array, addr0, byte0), addr1, byte1).
         match &f {
@@ -943,9 +839,7 @@ mod tests {
     #[test]
     fn test_region_equality_formula_single_byte() {
         let mut region = ByteMemoryRegion::new("test", 0x100, 16);
-        region
-            .store(0, SymbolicByte::Concrete(0xAB))
-            .expect("store");
+        region.store(0, SymbolicByte::Concrete(0xAB)).expect("store");
         let f = region.equality_formula("mem");
         match &f {
             Formula::Eq(_, _) => {}
@@ -970,9 +864,7 @@ mod tests {
     #[test]
     fn test_load_bytes_address_overflow() {
         let mut mem = ByteMemory::new(Endian::Little);
-        let err = mem
-            .load_bytes(u64::MAX, 2)
-            .expect_err("should overflow");
+        let err = mem.load_bytes(u64::MAX, 2).expect_err("should overflow");
         assert!(matches!(err, ByteMemoryError::AddressOverflow { .. }));
     }
 }

@@ -10,6 +10,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
+use std::sync::Mutex;
+
 use crate::analyzer::FailureAnalysis;
 use crate::llm_budget::{
     ContentPriority, PromptSection, TokenBudget, TruncationRecord, truncate_to_budget,
@@ -20,7 +22,6 @@ use crate::llm_escalation::EscalationTrigger;
 use crate::source_reader::SourceContext;
 use crate::spec_proposal::{SpecKind, SpecProposal, validate_spec};
 use crate::{LlmBackend, LlmRequest};
-use std::sync::Mutex;
 
 /// Three-view context for a function: original source, MIR, and reconstructed source.
 ///
@@ -201,11 +202,7 @@ impl<'a> LlmSpecInference<'a> {
     /// Access the cache statistics.
     #[must_use]
     pub fn cache_stats(&self) -> crate::llm_cache::CacheStats {
-        self.cache
-            .lock()
-            .expect("cache lock poisoned")
-            .stats()
-            .clone()
+        self.cache.lock().expect("cache lock poisoned").stats().clone()
     }
 
     /// Number of escalations used across the engine's lifetime (Phase 6, #616).
@@ -237,16 +234,11 @@ impl<'a> LlmSpecInference<'a> {
             return Some(EscalationTrigger::EmptyResponse);
         }
         // Check if all proposals have low confidence
-        let max_conf = filtered_proposals
-            .iter()
-            .map(|p| (p.confidence * 100.0) as u32)
-            .max()
-            .unwrap_or(0);
+        let max_conf =
+            filtered_proposals.iter().map(|p| (p.confidence * 100.0) as u32).max().unwrap_or(0);
         let threshold = self.config.escalation.confidence_threshold_pct();
         if max_conf < threshold {
-            return Some(EscalationTrigger::LowConfidence {
-                max_confidence: max_conf,
-            });
+            return Some(EscalationTrigger::LowConfidence { max_confidence: max_conf });
         }
         None
     }
@@ -344,8 +336,7 @@ impl<'a> LlmSpecInference<'a> {
         // Call the LLM backend, then parse the response into proposals
         let (raw_proposals, response_for_cache, model_used) = match self.backend.send(&request) {
             Ok(response) => {
-                let proposals =
-                    parse_llm_response(&response.content, function_name, function_path);
+                let proposals = parse_llm_response(&response.content, function_name, function_path);
                 let model = response.model_used.clone();
                 (proposals, Some(response), model)
             }
@@ -364,75 +355,79 @@ impl<'a> LlmSpecInference<'a> {
 
         // Phase 6 (#616): Evaluate escalation triggers after parsing/validation
         let escalation_cfg = &self.config.escalation;
-        if escalation_cfg.enabled && proposals.is_empty()
-            && let Some(trigger) = self.detect_escalation_trigger(
-                &raw_proposals, &proposals, validation_rejected,
-            ) {
-                let mut esc_count = self.escalation_count.lock().expect("escalation count lock");
-                if *esc_count < escalation_cfg.max_escalations {
-                    *esc_count += 1;
-                    drop(esc_count); // release lock before backend call
+        if escalation_cfg.enabled
+            && proposals.is_empty()
+            && let Some(trigger) =
+                self.detect_escalation_trigger(&raw_proposals, &proposals, validation_rejected)
+        {
+            let mut esc_count = self.escalation_count.lock().expect("escalation count lock");
+            if *esc_count < escalation_cfg.max_escalations {
+                *esc_count += 1;
+                drop(esc_count); // release lock before backend call
 
-                    // Enrich prompt with failure reason from prior attempt
-                    let enriched_prompt = format!(
-                        "{}\n\n## Prior Attempt Failed\n\n\
+                // Enrich prompt with failure reason from prior attempt
+                let enriched_prompt = format!(
+                    "{}\n\n## Prior Attempt Failed\n\n\
                          The previous attempt with the initial model failed: {}.\n\
                          Please provide higher-quality specifications.",
-                        prompt, trigger,
-                    );
+                    prompt, trigger,
+                );
 
-                    let escalation_request = LlmRequest {
-                        prompt: enriched_prompt,
-                        model: escalation_cfg.escalation_model.clone(),
-                        max_response_tokens,
-                        use_tool_use,
-                    };
+                let escalation_request = LlmRequest {
+                    prompt: enriched_prompt,
+                    model: escalation_cfg.escalation_model.clone(),
+                    max_response_tokens,
+                    use_tool_use,
+                };
 
-                    if let Ok(esc_response) = self.backend.send(&escalation_request) {
-                        let esc_proposals = parse_llm_response(
-                            &esc_response.content, function_name, function_path,
-                        );
-                        let esc_raw_count = esc_proposals.len();
-                        let esc_model = esc_response.model_used.clone();
+                if let Ok(esc_response) = self.backend.send(&escalation_request) {
+                    let esc_proposals =
+                        parse_llm_response(&esc_response.content, function_name, function_path);
+                    let esc_raw_count = esc_proposals.len();
+                    let esc_model = esc_response.model_used.clone();
 
-                        // Cache the escalated response
-                        if !self.bypass_cache {
-                            let esc_cache_key = CacheKey::new(
-                                &prompt, &escalation_cfg.escalation_model, use_tool_use,
-                            );
-                            let mut cache = self.cache.lock().expect("cache lock poisoned");
-                            cache.insert(esc_cache_key, esc_response, source_hash);
-                        }
-
-                        let (esc_filtered, esc_rejected) = self.validate_and_filter(
-                            &esc_proposals, function_name, function_path, context, iteration,
-                        );
-
-                        return InferenceResult {
-                            proposals: esc_filtered,
-                            prompt_used: prompt,
-                            raw_count: esc_raw_count,
-                            validation_rejected: esc_rejected,
-                            cache_hit: false,
-                            truncations_applied: truncation_record,
-                            model_used: esc_model,
-                            escalated: true,
-                        };
+                    // Cache the escalated response
+                    if !self.bypass_cache {
+                        let esc_cache_key =
+                            CacheKey::new(&prompt, &escalation_cfg.escalation_model, use_tool_use);
+                        let mut cache = self.cache.lock().expect("cache lock poisoned");
+                        cache.insert(esc_cache_key, esc_response, source_hash);
                     }
-                } else {
-                    eprintln!(
-                        "[trust-strengthen] escalation budget exhausted ({}/{}) for {}",
-                        *esc_count, escalation_cfg.max_escalations, function_name,
+
+                    let (esc_filtered, esc_rejected) = self.validate_and_filter(
+                        &esc_proposals,
+                        function_name,
+                        function_path,
+                        context,
+                        iteration,
                     );
+
+                    return InferenceResult {
+                        proposals: esc_filtered,
+                        prompt_used: prompt,
+                        raw_count: esc_raw_count,
+                        validation_rejected: esc_rejected,
+                        cache_hit: false,
+                        truncations_applied: truncation_record,
+                        model_used: esc_model,
+                        escalated: true,
+                    };
                 }
+            } else {
+                eprintln!(
+                    "[trust-strengthen] escalation budget exhausted ({}/{}) for {}",
+                    *esc_count, escalation_cfg.max_escalations, function_name,
+                );
             }
+        }
 
         // Cache the initial response on success
         if !self.bypass_cache
-            && let Some(response) = response_for_cache {
-                let mut cache = self.cache.lock().expect("cache lock poisoned");
-                cache.insert(cache_key, response, source_hash);
-            }
+            && let Some(response) = response_for_cache
+        {
+            let mut cache = self.cache.lock().expect("cache lock poisoned");
+            cache.insert(cache_key, response, source_hash);
+        }
 
         InferenceResult {
             proposals,
@@ -615,34 +610,36 @@ impl<'a> LlmSpecInference<'a> {
 
         // Section: MIR (optional, can be very verbose)
         if self.config.include_mir
-            && let Some(ref mir) = context.mir_text {
-                prompt_sections.push(PromptSection::new(
-                    ContentPriority::MirText,
-                    format!(
-                        "## View 2: MIR (Compiler Internal Representation)\n\n\
+            && let Some(ref mir) = context.mir_text
+        {
+            prompt_sections.push(PromptSection::new(
+                ContentPriority::MirText,
+                format!(
+                    "## View 2: MIR (Compiler Internal Representation)\n\n\
                          This shows the function after type checking, borrow checking, \
                          and monomorphization. It reveals implicit operations.\n\n\
                          ```\n{mir}\n```"
-                    ),
-                    safety_margin,
-                ));
-            }
+                ),
+                safety_margin,
+            ));
+        }
 
         // Section: Reconstructed source (optional)
         if self.config.include_reconstructed
-            && let Some(ref reconstructed) = context.reconstructed_source {
-                prompt_sections.push(PromptSection::new(
-                    ContentPriority::ReconstructedSource,
-                    format!(
-                        "## View 3: Reconstructed Source (from MIR)\n\n\
+            && let Some(ref reconstructed) = context.reconstructed_source
+        {
+            prompt_sections.push(PromptSection::new(
+                ContentPriority::ReconstructedSource,
+                format!(
+                    "## View 3: Reconstructed Source (from MIR)\n\n\
                          This is source code reconstructed from the compiler's internal \
                          representation. It shows what the compiler actually sees, including \
                          macro expansions, trait resolution, and implicit coercions.\n\n\
                          ```rust\n{reconstructed}\n```"
-                    ),
-                    safety_margin,
-                ));
-            }
+                ),
+                safety_margin,
+            ));
+        }
 
         // Section: Existing specs
         if !context.existing_specs.is_empty() {
@@ -665,24 +662,18 @@ impl<'a> LlmSpecInference<'a> {
 
         // Apply token budget truncation (Phase 5, #613)
         let effective_budget = self.config.token_budget.effective_prompt_budget(use_tool_use);
-        let (surviving, truncation_record) =
-            truncate_to_budget(&prompt_sections, effective_budget);
+        let (surviving, truncation_record) = truncate_to_budget(&prompt_sections, effective_budget);
 
         // Assemble the final prompt from surviving sections
         if surviving.len() <= 1 {
             // Only the base prompt survived (or no sections at all)
-            let prompt = surviving
-                .first()
-                .map(|s| s.content.clone())
-                .unwrap_or(base);
+            let prompt = surviving.first().map(|s| s.content.clone()).unwrap_or(base);
             (prompt, truncation_record)
         } else {
             // Base prompt is first, then three-view sections
             let base_text = &surviving[0].content;
-            let three_view_parts: Vec<&str> = surviving[1..]
-                .iter()
-                .map(|s| s.content.as_str())
-                .collect();
+            let three_view_parts: Vec<&str> =
+                surviving[1..].iter().map(|s| s.content.as_str()).collect();
             let three_view_text = three_view_parts.join("\n\n");
             let prompt = format!(
                 "{base_text}\n\n\
@@ -698,10 +689,11 @@ impl<'a> LlmSpecInference<'a> {
 
 #[cfg(test)]
 mod tests {
+    use trust_types::{BinOp, Ty, VcKind};
+
     use super::*;
     use crate::analyzer::{FailureAnalysis, FailurePattern};
     use crate::source_reader::extract_function;
-    use trust_types::{BinOp, Ty, VcKind};
 
     /// Mock LLM that returns a canned JSON response via the typed `send()` interface.
     struct MockInferenceLlm {
@@ -710,14 +702,15 @@ mod tests {
 
     impl MockInferenceLlm {
         fn with_response(json: &str) -> Self {
-            Self {
-                response_json: json.to_string(),
-            }
+            Self { response_json: json.to_string() }
         }
     }
 
     impl LlmBackend for MockInferenceLlm {
-        fn send(&self, _request: &crate::LlmRequest) -> Result<crate::LlmResponse, crate::LlmError> {
+        fn send(
+            &self,
+            _request: &crate::LlmRequest,
+        ) -> Result<crate::LlmResponse, crate::LlmError> {
             Ok(crate::LlmResponse {
                 content: self.response_json.clone(),
                 used_tool_use: false,
@@ -731,14 +724,8 @@ mod tests {
             vc_kind: VcKind::ArithmeticOverflow {
                 op: BinOp::Add,
                 operand_tys: (
-                    Ty::Int {
-                        width: 64,
-                        signed: false,
-                    },
-                    Ty::Int {
-                        width: 64,
-                        signed: false,
-                    },
+                    Ty::Int { width: 64, signed: false },
+                    Ty::Int { width: 64, signed: false },
                 ),
             },
             function: "get_midpoint".into(),
@@ -821,10 +808,7 @@ mod tests {
                 {"kind": "precondition", "spec_body": "b > 0", "confidence": 0.8, "rationale": "High confidence"}
             ]"#,
         );
-        let config = InferenceConfig {
-            min_confidence: 0.5,
-            ..Default::default()
-        };
+        let config = InferenceConfig { min_confidence: 0.5, ..Default::default() };
         let engine = LlmSpecInference::new(&mock, config);
 
         let result = engine.infer(
@@ -867,10 +851,7 @@ mod tests {
         let mock = MockInferenceLlm::with_response(
             r#"[{"kind": "precondition", "spec_body": "result > 0", "confidence": 0.9, "rationale": "Would normally fail validation"}]"#,
         );
-        let config = InferenceConfig {
-            validate_against_signature: false,
-            ..Default::default()
-        };
+        let config = InferenceConfig { validate_against_signature: false, ..Default::default() };
         let engine = LlmSpecInference::new(&mock, config);
 
         let result = engine.infer(
@@ -894,10 +875,7 @@ mod tests {
                 {"kind": "postcondition", "spec_body": "result < a", "confidence": 0.7, "rationale": "r3"}
             ]"#,
         );
-        let config = InferenceConfig {
-            max_specs: 2,
-            ..Default::default()
-        };
+        let config = InferenceConfig { max_specs: 2, ..Default::default() };
         let engine = LlmSpecInference::new(&mock, config);
 
         let result = engine.infer(
@@ -916,13 +894,8 @@ mod tests {
         let mock = MockInferenceLlm::with_response("[]");
         let engine = LlmSpecInference::new(&mock, InferenceConfig::default());
 
-        let result = engine.infer(
-            "get_midpoint",
-            "test::get_midpoint",
-            &midpoint_context(),
-            &[],
-            1,
-        );
+        let result =
+            engine.infer("get_midpoint", "test::get_midpoint", &midpoint_context(), &[], 1);
 
         assert_eq!(result.raw_count, 0);
         assert!(result.proposals.is_empty());
@@ -939,31 +912,19 @@ mod tests {
         let (prompt, _record) =
             engine.build_three_view_prompt("get_midpoint", &ctx, &[overflow_failure()], false);
 
-        assert!(
-            prompt.contains("View 1: Original Source"),
-            "should have original source view"
-        );
-        assert!(
-            prompt.contains("View 2: MIR"),
-            "should have MIR view"
-        );
+        assert!(prompt.contains("View 1: Original Source"), "should have original source view");
+        assert!(prompt.contains("View 2: MIR"), "should have MIR view");
         assert!(
             prompt.contains("View 3: Reconstructed Source"),
             "should have reconstructed source view"
         );
-        assert!(
-            prompt.contains("Three-View Analysis"),
-            "should have three-view section"
-        );
+        assert!(prompt.contains("Three-View Analysis"), "should have three-view section");
     }
 
     #[test]
     fn test_prompt_without_mir() {
         let mock = MockInferenceLlm::with_response("[]");
-        let config = InferenceConfig {
-            include_mir: false,
-            ..Default::default()
-        };
+        let config = InferenceConfig { include_mir: false, ..Default::default() };
         let engine = LlmSpecInference::new(&mock, config);
         let ctx = midpoint_context();
 
@@ -978,18 +939,12 @@ mod tests {
         let mock = MockInferenceLlm::with_response("[]");
         let engine = LlmSpecInference::new(&mock, InferenceConfig::default());
         let mut ctx = midpoint_context();
-        ctx.existing_specs = vec![ExistingSpec {
-            kind: SpecKind::Requires,
-            body: "a > 0".into(),
-        }];
+        ctx.existing_specs = vec![ExistingSpec { kind: SpecKind::Requires, body: "a > 0".into() }];
 
         let (prompt, _record) =
             engine.build_three_view_prompt("get_midpoint", &ctx, &[overflow_failure()], false);
 
-        assert!(
-            prompt.contains("Existing Specifications"),
-            "should include existing specs"
-        );
+        assert!(prompt.contains("Existing Specifications"), "should include existing specs");
         assert!(prompt.contains("a > 0"), "should show existing spec body");
     }
 
@@ -1032,13 +987,8 @@ mod tests {
         let mut ctx = midpoint_context();
         ctx.mir_text = Some("bb0: { _1 = Add(_2, _3); }\n".repeat(500));
 
-        let result = engine.infer(
-            "get_midpoint",
-            "test::get_midpoint",
-            &ctx,
-            &[overflow_failure()],
-            1,
-        );
+        let result =
+            engine.infer("get_midpoint", "test::get_midpoint", &ctx, &[overflow_failure()], 1);
 
         // Truncation should have been applied
         assert!(result.truncations_applied.was_truncated);
@@ -1053,13 +1003,8 @@ mod tests {
         let engine = LlmSpecInference::new(&mock, InferenceConfig::default());
         let ctx = midpoint_context();
 
-        let result = engine.infer(
-            "get_midpoint",
-            "test::get_midpoint",
-            &ctx,
-            &[overflow_failure()],
-            1,
-        );
+        let result =
+            engine.infer("get_midpoint", "test::get_midpoint", &ctx, &[overflow_failure()], 1);
 
         // Default budget is 24K tokens, midpoint context is tiny
         assert!(!result.truncations_applied.was_truncated);
@@ -1070,10 +1015,7 @@ mod tests {
     fn test_budget_response_tokens_from_config() {
         use crate::llm_budget::TokenBudget;
         let config = InferenceConfig {
-            token_budget: TokenBudget {
-                max_response_tokens: 4096,
-                ..Default::default()
-            },
+            token_budget: TokenBudget { max_response_tokens: 4096, ..Default::default() },
             ..Default::default()
         };
         assert_eq!(config.token_budget.max_response_tokens, 4096);
@@ -1227,8 +1169,11 @@ mod tests {
         );
         let engine = LlmSpecInference::new(&mock, InferenceConfig::default());
         let result = engine.infer(
-            "get_midpoint", "test::get_midpoint", &midpoint_context(),
-            &[overflow_failure()], 1,
+            "get_midpoint",
+            "test::get_midpoint",
+            &midpoint_context(),
+            &[overflow_failure()],
+            1,
         );
         // MockInferenceLlm returns "mock" as model_used
         assert_eq!(result.model_used, "mock");
@@ -1242,16 +1187,16 @@ mod tests {
             r#"[{"kind": "precondition", "spec_body": "a <= usize::MAX - b", "confidence": 0.9, "rationale": "Overflow guard"}]"#,
         );
         let config = InferenceConfig {
-            escalation: EscalationConfig {
-                enabled: true,
-                ..Default::default()
-            },
+            escalation: EscalationConfig { enabled: true, ..Default::default() },
             ..Default::default()
         };
         let engine = LlmSpecInference::new(&mock, config);
         let result = engine.infer(
-            "get_midpoint", "test::get_midpoint", &midpoint_context(),
-            &[overflow_failure()], 1,
+            "get_midpoint",
+            "test::get_midpoint",
+            &midpoint_context(),
+            &[overflow_failure()],
+            1,
         );
         assert!(result.escalated, "should have escalated");
         assert!(!result.proposals.is_empty(), "should have proposals from escalated model");
@@ -1269,16 +1214,16 @@ mod tests {
         );
         let config = InferenceConfig {
             min_confidence: 0.3,
-            escalation: EscalationConfig {
-                enabled: true,
-                ..Default::default()
-            },
+            escalation: EscalationConfig { enabled: true, ..Default::default() },
             ..Default::default()
         };
         let engine = LlmSpecInference::new(&mock, config);
         let result = engine.infer(
-            "get_midpoint", "test::get_midpoint", &midpoint_context(),
-            &[overflow_failure()], 1,
+            "get_midpoint",
+            "test::get_midpoint",
+            &midpoint_context(),
+            &[overflow_failure()],
+            1,
         );
         // Low confidence proposals are filtered out, triggering escalation
         assert!(result.escalated);
@@ -1299,15 +1244,11 @@ mod tests {
         let engine = LlmSpecInference::new(&mock, config);
 
         // First call uses 1 escalation
-        let _r1 = engine.infer(
-            "f1", "test::f1", &midpoint_context(), &[overflow_failure()], 1,
-        );
+        let _r1 = engine.infer("f1", "test::f1", &midpoint_context(), &[overflow_failure()], 1);
         assert_eq!(engine.escalation_count(), 1);
 
         // Second call should NOT escalate (budget exhausted)
-        let _r2 = engine.infer(
-            "f2", "test::f2", &midpoint_context(), &[overflow_failure()], 1,
-        );
+        let _r2 = engine.infer("f2", "test::f2", &midpoint_context(), &[overflow_failure()], 1);
         assert_eq!(engine.escalation_count(), 1, "should not have escalated again");
         // First call: 2 backend calls (initial + escalation), second: 1 (initial only)
         assert_eq!(mock.calls(), 3);
@@ -1315,18 +1256,21 @@ mod tests {
 
     #[test]
     fn test_escalation_disabled_no_escalation() {
-        let mock = EscalationAwareMock::new("[]", r#"[{"kind": "precondition", "spec_body": "a > 0", "confidence": 0.9, "rationale": "ok"}]"#);
+        let mock = EscalationAwareMock::new(
+            "[]",
+            r#"[{"kind": "precondition", "spec_body": "a > 0", "confidence": 0.9, "rationale": "ok"}]"#,
+        );
         let config = InferenceConfig {
-            escalation: EscalationConfig {
-                enabled: false,
-                ..Default::default()
-            },
+            escalation: EscalationConfig { enabled: false, ..Default::default() },
             ..Default::default()
         };
         let engine = LlmSpecInference::new(&mock, config);
         let result = engine.infer(
-            "get_midpoint", "test::get_midpoint", &midpoint_context(),
-            &[overflow_failure()], 1,
+            "get_midpoint",
+            "test::get_midpoint",
+            &midpoint_context(),
+            &[overflow_failure()],
+            1,
         );
         assert!(!result.escalated);
         assert!(result.proposals.is_empty(), "should be empty since sonnet returns []");
@@ -1340,16 +1284,16 @@ mod tests {
             "should not be called",
         );
         let config = InferenceConfig {
-            escalation: EscalationConfig {
-                enabled: true,
-                ..Default::default()
-            },
+            escalation: EscalationConfig { enabled: true, ..Default::default() },
             ..Default::default()
         };
         let engine = LlmSpecInference::new(&mock, config);
         let result = engine.infer(
-            "get_midpoint", "test::get_midpoint", &midpoint_context(),
-            &[overflow_failure()], 1,
+            "get_midpoint",
+            "test::get_midpoint",
+            &midpoint_context(),
+            &[overflow_failure()],
+            1,
         );
         assert!(!result.escalated);
         assert!(!result.proposals.is_empty());

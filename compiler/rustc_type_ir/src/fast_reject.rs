@@ -84,7 +84,7 @@ pub enum TreatParams {
     ///
     /// This also treats projections with inference variables as infer vars
     /// since they could be further normalized.
-    // tRust: known issue (@lcnr) -- This treats aliases as rigid. This is only correct if the
+    // FIXME(@lcnr): This treats aliases as rigid. This is only correct if the
     // type has been structurally normalized. We should reflect this requirement
     // in the variant name. It is currently incorrectly used in diagnostics.
     AsRigid,
@@ -462,7 +462,7 @@ impl<I: Interner, const INSTANTIATE_LHS_WITH_INFER: bool, const INSTANTIATE_RHS_
             },
 
             ty::Pat(lhs_ty, _) => {
-                // tRust: known issue (pattern_types) -- take pattern into account
+                // FIXME(pattern_types): take pattern into account
                 matches!(rhs.kind(), ty::Pat(rhs_ty, _) if self.types_may_unify_inner(lhs_ty, rhs_ty, depth))
             }
 

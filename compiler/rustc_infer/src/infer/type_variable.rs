@@ -385,7 +385,6 @@ impl<'tcx> ut::UnifyValue for TypeVariableValue<'tcx> {
             // have known types. Instead, we recursively equate
             // those types.
             (&TypeVariableValue::Known { .. }, &TypeVariableValue::Known { .. }) => {
-                // tRust: invariant — type unification must resolve one side before equating known types
                 bug!("equating two type variables, both of which have known types")
             }
 

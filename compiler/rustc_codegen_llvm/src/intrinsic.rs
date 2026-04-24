@@ -112,14 +112,14 @@ fn call_simple_intrinsic<'ll, 'tcx>(
         sym::fabsf64 => ("llvm.fabs", &[bx.type_f64()]),
         sym::fabsf128 => ("llvm.fabs", &[bx.type_f128()]),
 
-        // tRust: known issue — LLVM currently mis-compile those intrinsics, re-enable them
+        // FIXME: LLVM currently mis-compile those intrinsics, re-enable them
         // when llvm/llvm-project#{139380,139381,140445} are fixed.
         //sym::minimumf16 => ("llvm.minimum", &[bx.type_f16()]),
         //sym::minimumf32 => ("llvm.minimum", &[bx.type_f32()]),
         //sym::minimumf64 => ("llvm.minimum", &[bx.type_f64()]),
         //sym::minimumf128 => ("llvm.minimum", &[cx.type_f128()]),
         //
-        // tRust: known issue — LLVM currently mis-compile those intrinsics, re-enable them
+        // FIXME: LLVM currently mis-compile those intrinsics, re-enable them
         // when llvm/llvm-project#{139380,139381,140445} are fixed.
         //sym::maximumf16 => ("llvm.maximum", &[bx.type_f16()]),
         //sym::maximumf32 => ("llvm.maximum", &[bx.type_f32()]),
@@ -184,7 +184,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
 
         let simple = call_simple_intrinsic(self, name, args);
         let llval = match name {
-            _ if simple.is_some() => simple.expect("invariant: simple intrinsic mapping exists"),
+            _ if simple.is_some() => simple.unwrap(),
             sym::minimum_number_nsz_f16
             | sym::minimum_number_nsz_f32
             | sym::minimum_number_nsz_f64
@@ -208,7 +208,6 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                 );
                 // `nsz` on minimumnum/maximumnum is special: its only effect is to make
                 // signed-zero ordering non-deterministic.
-                // SAFETY: The call instruction is a valid LLVM floating-point instruction that supports the no-signed-zeros flag.
                 unsafe { llvm::LLVMRustSetNoSignedZeros(call) };
                 call
             }
@@ -273,9 +272,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                         select(self, true_val, false_val)
                     }
                     (OperandValue::ZeroSized, OperandValue::ZeroSized) => return Ok(()),
-                    _ =>
-                        // tRust: invariant — the two `select_unpredictable` operands must lower to compatible `OperandValue` shapes
-                        span_bug!(span, "Incompatible OperandValue for select_unpredictable"),
+                    _ => span_bug!(span, "Incompatible OperandValue for select_unpredictable"),
                 }
             }
             sym::catch_unwind => {
@@ -306,7 +303,6 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                                 }
                             }
                             Primitive::Float(Float::F16) => {
-                                // tRust: invariant — the `va_arg` intrinsic must not be instantiated with an `f16` result type
                                 bug!("the va_arg intrinsic does not work with `f16`")
                             }
                             Primitive::Float(Float::F64) | Primitive::Pointer(_) => {
@@ -314,18 +310,14 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                             }
                             // `va_arg` should never be used with the return type f32.
                             Primitive::Float(Float::F32) => {
-                                // tRust: invariant — the `va_arg` intrinsic must not be instantiated with an `f32` result type
                                 bug!("the va_arg intrinsic does not work with `f32`")
                             }
                             Primitive::Float(Float::F128) => {
-                                // tRust: invariant — the `va_arg` intrinsic must not be instantiated with an `f128` result type
                                 bug!("the va_arg intrinsic does not work with `f128`")
                             }
                         }
                     }
-                    _ =>
-                        // tRust: invariant — the `va_arg` intrinsic must only be instantiated for scalar result layouts
-                        bug!("the va_arg intrinsic does not work with non-scalar types"),
+                    _ => bug!("the va_arg intrinsic does not work with non-scalar types"),
                 }
             }
 
@@ -337,7 +329,6 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                 } else {
                     result.layout.align.bytes() as u32
                 };
-                // SAFETY: The value is a valid LLVM global, alloca, load, or store instruction, and the alignment is a valid power of two.
                 unsafe {
                     llvm::LLVMSetAlignment(load, align);
                 }
@@ -365,9 +356,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                     sym::prefetch_write_data => (1, 1),
                     sym::prefetch_read_instruction => (0, 0),
                     sym::prefetch_write_instruction => (1, 0),
-                    _ =>
-                        // tRust: invariant — only the four prefetch intrinsics may reach this lowering branch
-                        bug!(),
+                    _ => bug!(),
                 };
                 let ptr = args[0].immediate();
                 let locality = fn_args.const_at(1).to_leaf().to_i32();
@@ -386,7 +375,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                 let (size, signed) = fn_args.type_at(0).int_size_and_signed(self.tcx);
 
                 let wide_llty = self.type_ix(size.bits() * 2);
-                let args = args.as_array().expect("invariant: value is an array");
+                let args = args.as_array().unwrap();
                 let [a, b, c, d] = args.map(|a| self.intcast(a.immediate(), wide_llty, signed));
 
                 let wide = if signed {
@@ -404,7 +393,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                 let bits_const = self.const_uint(wide_llty, size.bits());
                 // No need for ashr when signed; LLVM changes it to lshr anyway.
                 let high = self.lshr(wide, bits_const);
-                // tRust: known issue — could be `trunc nuw`, even for signed.
+                // FIXME: could be `trunc nuw`, even for signed.
                 let high = self.trunc(high, narrow_llty);
 
                 let pair_llty = self.type_struct(&[narrow_llty, narrow_llty], false);
@@ -414,7 +403,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                 pair
             }
 
-            // tRust: known issue — move into the branch below when LLVM 22 is the lowest version we support.
+            // FIXME move into the branch below when LLVM 22 is the lowest version we support.
             sym::carryless_mul if crate::llvm_util::get_version() >= (22, 0, 0) => {
                 let ty = args[0].layout.ty;
                 if !ty.is_integral() {
@@ -509,9 +498,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                         );
                         self.call_intrinsic(llvm_name, &[llty], &[lhs, rhs])
                     }
-                    _ =>
-                        // tRust: invariant — this integer-intrinsic dispatch must only be reached for the handled scalar integer intrinsics
-                        bug!(),
+                    _ => bug!(),
                 }
             }
 
@@ -597,9 +584,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                     None,
                     None,
                 )
-                .unwrap_or_else(||
-                    // tRust: invariant — the inline-asm-based `black_box` lowering must be able to emit its callsite
-                    bug!("failed to generate inline asm call for `black_box`"));
+                .unwrap_or_else(|| bug!("failed to generate inline asm call for `black_box`"));
 
                 // We have copied the value to `result` already.
                 return Ok(());
@@ -729,7 +714,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         } else {
             let sym = tcx.symbol_name(instance).name;
 
-            // tRust: known issue — use get_intrinsic
+            // FIXME use get_intrinsic
             let llfn = if let Some(llfn) = self.get_declared_value(sym) {
                 llfn
             } else {
@@ -784,7 +769,6 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
 
         debug!("call intrinsic {:?} with args ({:?})", instance, llargs);
         let args = self.check_call("call", fn_ty, fn_ptr, &llargs);
-        // SAFETY: `self.llbuilder` is positioned at a valid insertion point, `llfn` is a valid function pointer matching `llty`, all arguments are valid LLVM values with types matching the callee signature, and operand bundles (if any) are valid.
         let llret = unsafe {
             llvm::LLVMBuildCallWithOperandBundles(
                 self.llbuilder,
@@ -1265,7 +1249,7 @@ fn gen_fn<'a, 'll, 'tcx>(
     let llfn = cx.declare_fn(name, fn_abi, None);
     cx.set_frame_pointer_type(llfn);
     cx.apply_target_cpu_attr(llfn);
-    // tRust: known issue — (eddyb) find a nicer way to do this.
+    // FIXME(eddyb) find a nicer way to do this.
     llvm::set_linkage(llfn, llvm::Linkage::InternalLinkage);
     let llbb = Builder::append_block(cx, llfn, "entry-block");
     let bx = Builder::build(cx, llbb);
@@ -1359,16 +1343,12 @@ fn codegen_autodiff<'ll, 'tcx>(
 
     let (diff_id, diff_args) = match fn_args.into_type_list(tcx)[1].kind() {
         ty::FnDef(def_id, diff_args) => (def_id, diff_args),
-        _ =>
-            // tRust: invariant — the autodiff intrinsic's second type argument must be the function definition being differentiated
-            bug!("invalid args"),
+        _ => bug!("invalid args"),
     };
 
     let fn_diff = match Instance::try_resolve(tcx, bx.cx.typing_env(), *diff_id, diff_args) {
         Ok(Some(instance)) => instance,
-        Ok(None) =>
-            // tRust: invariant — the autodiff target function and substitutions must resolve to a concrete instance during codegen
-            bug!(
+        Ok(None) => bug!(
             "could not resolve ({:?}, {:?}) to a specific autodiff instance",
             diff_id,
             diff_args
@@ -1385,7 +1365,6 @@ fn codegen_autodiff<'ll, 'tcx>(
     let Some(Some(mut diff_attrs)) =
         find_attr!(tcx, fn_diff.def_id(), RustcAutodiff(attr) => attr.clone())
     else {
-        // tRust: invariant — the resolved autodiff helper function must carry `#[rustc_autodiff]` metadata
         bug!("could not find autodiff attrs")
     };
 
@@ -1427,16 +1406,12 @@ fn codegen_offload<'ll, 'tcx>(
 
     let (target_id, target_args) = match fn_args.into_type_list(tcx)[0].kind() {
         ty::FnDef(def_id, params) => (def_id, params),
-        _ =>
-            // tRust: invariant — the offload intrinsic's first type argument must be the target function definition
-            bug!("invalid offload intrinsic arg"),
+        _ => bug!("invalid offload intrinsic arg"),
     };
 
     let fn_target = match Instance::try_resolve(tcx, cx.typing_env(), *target_id, target_args) {
         Ok(Some(instance)) => instance,
-        Ok(None) =>
-            // tRust: invariant — the offload target function and substitutions must resolve to a concrete instance during codegen
-            bug!(
+        Ok(None) => bug!(
             "could not resolve ({:?}, {:?}) to a specific offload instance",
             target_id,
             target_args
@@ -1736,7 +1711,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             .enumerate()
             .map(|(arg_idx, val)| {
                 let idx = val.to_leaf().to_i32();
-                if idx >= i32::try_from(total_len).expect("invariant: value fits in target type") {
+                if idx >= i32::try_from(total_len).unwrap() {
                     bx.sess().dcx().emit_err(InvalidMonomorphization::SimdIndexOutOfBounds {
                         span,
                         name,
@@ -1789,9 +1764,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             let val = bx.const_get_elt(indices, i as u64);
             let idx = bx
                 .const_to_opt_u128(val, true)
-                .unwrap_or_else(||
-                    // tRust: invariant — SIMD shuffle indices must already be compile-time constants after type checking
-                    bug!("typeck should have already ensured that these are const"));
+                .unwrap_or_else(|| bug!("typeck should have already ensured that these are const"));
             if idx >= total_len {
                 return_error!(InvalidMonomorphization::SimdIndexOutOfBounds {
                     span,
@@ -2703,11 +2676,11 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             // disallowed before here, so this unwrap is safe.
             ty::Int(i) => (
                 Style::Int(Signed),
-                i.normalize(bx.tcx().sess.target.pointer_width).bit_width().expect("invariant: type has known bit width"),
+                i.normalize(bx.tcx().sess.target.pointer_width).bit_width().unwrap(),
             ),
             ty::Uint(u) => (
                 Style::Int(Unsigned),
-                u.normalize(bx.tcx().sess.target.pointer_width).bit_width().expect("invariant: type has known bit width"),
+                u.normalize(bx.tcx().sess.target.pointer_width).bit_width().unwrap(),
             ),
             ty::Float(f) => (Style::Float, f.bit_width()),
             _ => (Style::Unsupported, 0),
@@ -2715,11 +2688,11 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
         let (out_style, out_width) = match out_elem.kind() {
             ty::Int(i) => (
                 Style::Int(Signed),
-                i.normalize(bx.tcx().sess.target.pointer_width).bit_width().expect("invariant: type has known bit width"),
+                i.normalize(bx.tcx().sess.target.pointer_width).bit_width().unwrap(),
             ),
             ty::Uint(u) => (
                 Style::Int(Unsigned),
-                u.normalize(bx.tcx().sess.target.pointer_width).bit_width().expect("invariant: type has known bit width"),
+                u.normalize(bx.tcx().sess.target.pointer_width).bit_width().unwrap(),
             ),
             ty::Float(f) => (Style::Float, f.bit_width()),
             _ => (Style::Unsupported, 0),
@@ -2887,7 +2860,6 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
                         &[args[0].immediate(), args[1].immediate()],
                     ))
                 } else {
-                    // tRust: invariant — `simd_carryless_mul` must only be lowered when the backend LLVM version is at least 22
                     span_bug!(span, "`simd_carryless_mul` needs LLVM 22 or higher");
                 }
             }
@@ -2898,7 +2870,6 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
     if name == sym::simd_arith_offset {
         // This also checks that the first operand is a ptr type.
         let pointee = in_elem.builtin_deref(true).unwrap_or_else(|| {
-            // tRust: invariant — the first argument to `simd_arith_offset` must be a SIMD vector of pointers
             span_bug!(span, "must be called with a vector of pointer types as first argument")
         });
         let layout = bx.layout_of(pointee);
@@ -2907,7 +2878,6 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
         // (We don't care about the signedness, this is wrapping anyway.)
         let (_offsets_len, offsets_elem) = args[1].layout.ty.simd_size_and_type(bx.tcx());
         if !matches!(offsets_elem.kind(), ty::Int(ty::IntTy::Isize) | ty::Uint(ty::UintTy::Usize)) {
-            // tRust: invariant — the second argument to `simd_arith_offset` must be a SIMD vector of `isize` or `usize` offsets
             span_bug!(
                 span,
                 "must be called with a vector of pointer-sized integers as second argument"
@@ -2944,6 +2914,5 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
         return Ok(bx.call_intrinsic(llvm_intrinsic, &[vec_ty], &[lhs, rhs]));
     }
 
-    // tRust: invariant — every `simd_*` intrinsic reaching generic SIMD codegen must have a recognized lowering
     span_bug!(span, "unknown SIMD intrinsic");
 }

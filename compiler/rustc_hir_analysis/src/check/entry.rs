@@ -30,7 +30,6 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: DefId) {
         if let Some(local_def_id) = def_id.as_local() {
             let hir_type = tcx.type_of(local_def_id).instantiate_identity();
             if !matches!(hir_type.kind(), ty::FnDef(..)) {
-                // tRust: invariant — main function must have a function type
                 span_bug!(sp, "main has a non-function type: found `{}`", hir_type);
             }
             local_def_id
@@ -48,7 +47,6 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: DefId) {
                 generics.params.is_empty().not().then_some(generics.span)
             }
             _ => {
-                // tRust: invariant — main function must have a function type
                 span_bug!(tcx.def_span(def_id), "main has a non-function type");
             }
         }
@@ -63,7 +61,6 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: DefId) {
                 Some(generics.where_clause_span)
             }
             _ => {
-                // tRust: invariant — main function must have a function type
                 span_bug!(tcx.def_span(def_id), "main has a non-function type");
             }
         }
@@ -85,7 +82,6 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: DefId) {
                 Some(fn_sig.decl.output.span())
             }
             _ => {
-                // tRust: invariant — main function must have a function type
                 span_bug!(tcx.def_span(def_id), "main has a non-function type");
             }
         }

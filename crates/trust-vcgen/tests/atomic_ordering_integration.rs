@@ -17,10 +17,7 @@ use trust_vcgen::memory_ordering::MemoryModelChecker;
 
 /// Build a minimal VerifiableFunction with a single Call terminator carrying
 /// an atomic operation.
-fn make_atomic_func(
-    name: &str,
-    atomic_ops: Vec<AtomicOperation>,
-) -> VerifiableFunction {
+fn make_atomic_func(name: &str, atomic_ops: Vec<AtomicOperation>) -> VerifiableFunction {
     let mut blocks = Vec::new();
 
     for (i, op) in atomic_ops.iter().enumerate() {
@@ -107,10 +104,13 @@ fn extract_atomic_ops(func: &VerifiableFunction) -> Vec<AtomicOperation> {
 
 #[test]
 fn test_integration_valid_load_store_no_vcs() {
-    let func = make_atomic_func("valid_load_store", vec![
-        make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None),
-        make_op(AtomicOpKind::Store, AtomicOrdering::Release, None),
-    ]);
+    let func = make_atomic_func(
+        "valid_load_store",
+        vec![
+            make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None),
+            make_op(AtomicOpKind::Store, AtomicOrdering::Release, None),
+        ],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -119,9 +119,10 @@ fn test_integration_valid_load_store_no_vcs() {
 
 #[test]
 fn test_integration_l1_load_release_produces_vc() {
-    let func = make_atomic_func("bad_load", vec![
-        make_op(AtomicOpKind::Load, AtomicOrdering::Release, None),
-    ]);
+    let func = make_atomic_func(
+        "bad_load",
+        vec![make_op(AtomicOpKind::Load, AtomicOrdering::Release, None)],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -132,9 +133,10 @@ fn test_integration_l1_load_release_produces_vc() {
 
 #[test]
 fn test_integration_l2_store_acquire_produces_vc() {
-    let func = make_atomic_func("bad_store", vec![
-        make_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None),
-    ]);
+    let func = make_atomic_func(
+        "bad_store",
+        vec![make_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None)],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -144,13 +146,14 @@ fn test_integration_l2_store_acquire_produces_vc() {
 
 #[test]
 fn test_integration_l3_cas_failure_release_produces_vc() {
-    let func = make_atomic_func("bad_cas", vec![
-        make_op(
+    let func = make_atomic_func(
+        "bad_cas",
+        vec![make_op(
             AtomicOpKind::CompareExchange,
             AtomicOrdering::SeqCst,
             Some(AtomicOrdering::Release),
-        ),
-    ]);
+        )],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -159,13 +162,14 @@ fn test_integration_l3_cas_failure_release_produces_vc() {
 
 #[test]
 fn test_integration_l4_cas_failure_stronger_than_success() {
-    let func = make_atomic_func("bad_cas_order", vec![
-        make_op(
+    let func = make_atomic_func(
+        "bad_cas_order",
+        vec![make_op(
             AtomicOpKind::CompareExchange,
             AtomicOrdering::Relaxed,
             Some(AtomicOrdering::Acquire),
-        ),
-    ]);
+        )],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -174,9 +178,10 @@ fn test_integration_l4_cas_failure_stronger_than_success() {
 
 #[test]
 fn test_integration_l5_fence_relaxed_produces_vc() {
-    let func = make_atomic_func("bad_fence", vec![
-        make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),
-    ]);
+    let func = make_atomic_func(
+        "bad_fence",
+        vec![make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None)],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -185,16 +190,19 @@ fn test_integration_l5_fence_relaxed_produces_vc() {
 
 #[test]
 fn test_integration_mixed_valid_and_invalid() {
-    let func = make_atomic_func("mixed_ops", vec![
-        // Valid
-        make_op(AtomicOpKind::Load, AtomicOrdering::SeqCst, None),
-        // Invalid (L2)
-        make_op(AtomicOpKind::Store, AtomicOrdering::AcqRel, None),
-        // Valid
-        make_op(AtomicOpKind::FetchAdd, AtomicOrdering::Relaxed, None),
-        // Invalid (L5)
-        make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),
-    ]);
+    let func = make_atomic_func(
+        "mixed_ops",
+        vec![
+            // Valid
+            make_op(AtomicOpKind::Load, AtomicOrdering::SeqCst, None),
+            // Invalid (L2)
+            make_op(AtomicOpKind::Store, AtomicOrdering::AcqRel, None),
+            // Valid
+            make_op(AtomicOpKind::FetchAdd, AtomicOrdering::Relaxed, None),
+            // Invalid (L5)
+            make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),
+        ],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -215,10 +223,8 @@ fn test_integration_all_rmw_with_acqrel_valid() {
         AtomicOpKind::FetchMax,
     ];
 
-    let ops: Vec<_> = rmw_kinds
-        .into_iter()
-        .map(|kind| make_op(kind, AtomicOrdering::AcqRel, None))
-        .collect();
+    let ops: Vec<_> =
+        rmw_kinds.into_iter().map(|kind| make_op(kind, AtomicOrdering::AcqRel, None)).collect();
 
     let func = make_atomic_func("all_rmw", ops);
     let extracted = extract_atomic_ops(&func);
@@ -228,18 +234,21 @@ fn test_integration_all_rmw_with_acqrel_valid() {
 
 #[test]
 fn test_integration_cas_with_valid_failure_ordering() {
-    let func = make_atomic_func("valid_cas", vec![
-        make_op(
-            AtomicOpKind::CompareExchange,
-            AtomicOrdering::AcqRel,
-            Some(AtomicOrdering::Acquire),
-        ),
-        make_op(
-            AtomicOpKind::CompareExchangeWeak,
-            AtomicOrdering::SeqCst,
-            Some(AtomicOrdering::Relaxed),
-        ),
-    ]);
+    let func = make_atomic_func(
+        "valid_cas",
+        vec![
+            make_op(
+                AtomicOpKind::CompareExchange,
+                AtomicOrdering::AcqRel,
+                Some(AtomicOrdering::Acquire),
+            ),
+            make_op(
+                AtomicOpKind::CompareExchangeWeak,
+                AtomicOrdering::SeqCst,
+                Some(AtomicOrdering::Relaxed),
+            ),
+        ],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -248,9 +257,10 @@ fn test_integration_cas_with_valid_failure_ordering() {
 
 #[test]
 fn test_integration_compiler_fence_relaxed_violation() {
-    let func = make_atomic_func("bad_compiler_fence", vec![
-        make_op(AtomicOpKind::CompilerFence, AtomicOrdering::Relaxed, None),
-    ]);
+    let func = make_atomic_func(
+        "bad_compiler_fence",
+        vec![make_op(AtomicOpKind::CompilerFence, AtomicOrdering::Relaxed, None)],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -259,9 +269,10 @@ fn test_integration_compiler_fence_relaxed_violation() {
 
 #[test]
 fn test_integration_compiler_fence_seqcst_valid() {
-    let func = make_atomic_func("valid_compiler_fence", vec![
-        make_op(AtomicOpKind::CompilerFence, AtomicOrdering::SeqCst, None),
-    ]);
+    let func = make_atomic_func(
+        "valid_compiler_fence",
+        vec![make_op(AtomicOpKind::CompilerFence, AtomicOrdering::SeqCst, None)],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
@@ -276,10 +287,13 @@ fn test_integration_compiler_fence_seqcst_valid() {
 fn test_integration_generate_vcs_does_not_crash_with_atomics() {
     // Verify that generate_vcs can handle functions with atomic terminators
     // without panicking, even though it may not produce atomic-specific VCs yet.
-    let func = make_atomic_func("atomic_fn", vec![
-        make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None),
-        make_op(AtomicOpKind::Store, AtomicOrdering::Release, None),
-    ]);
+    let func = make_atomic_func(
+        "atomic_fn",
+        vec![
+            make_op(AtomicOpKind::Load, AtomicOrdering::Acquire, None),
+            make_op(AtomicOpKind::Store, AtomicOrdering::Release, None),
+        ],
+    );
 
     // This should not panic
     let vcs = trust_vcgen::generate_vcs(&func);
@@ -299,9 +313,7 @@ fn test_integration_function_with_no_atomics() {
         def_path: "integration::plain_fn".to_string(),
         span: SourceSpan::default(),
         body: VerifiableBody {
-            locals: vec![
-                LocalDecl { index: 0, ty: Ty::Unit, name: None },
-            ],
+            locals: vec![LocalDecl { index: 0, ty: Ty::Unit, name: None }],
             blocks: vec![BasicBlock {
                 id: BlockId(0),
                 stmts: vec![],
@@ -325,42 +337,42 @@ fn test_integration_function_with_no_atomics() {
 #[test]
 fn test_integration_every_legality_rule_in_one_function() {
     // Build a function that violates all 5 rules at once
-    let func = make_atomic_func("all_violations", vec![
-        // L1: load with Release
-        make_op(AtomicOpKind::Load, AtomicOrdering::Release, None),
-        // L2: store with Acquire
-        make_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None),
-        // L3: CAS failure=AcqRel
-        make_op(
-            AtomicOpKind::CompareExchange,
-            AtomicOrdering::SeqCst,
-            Some(AtomicOrdering::AcqRel),
-        ),
-        // L4: CAS failure > success (Relaxed success, Acquire failure)
-        make_op(
-            AtomicOpKind::CompareExchangeWeak,
-            AtomicOrdering::Relaxed,
-            Some(AtomicOrdering::Acquire),
-        ),
-        // L5: fence with Relaxed
-        make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),
-    ]);
+    let func = make_atomic_func(
+        "all_violations",
+        vec![
+            // L1: load with Release
+            make_op(AtomicOpKind::Load, AtomicOrdering::Release, None),
+            // L2: store with Acquire
+            make_op(AtomicOpKind::Store, AtomicOrdering::Acquire, None),
+            // L3: CAS failure=AcqRel
+            make_op(
+                AtomicOpKind::CompareExchange,
+                AtomicOrdering::SeqCst,
+                Some(AtomicOrdering::AcqRel),
+            ),
+            // L4: CAS failure > success (Relaxed success, Acquire failure)
+            make_op(
+                AtomicOpKind::CompareExchangeWeak,
+                AtomicOrdering::Relaxed,
+                Some(AtomicOrdering::Acquire),
+            ),
+            // L5: fence with Relaxed
+            make_op(AtomicOpKind::Fence, AtomicOrdering::Relaxed, None),
+        ],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);
     // L1 + L2 + L3 + L4 + L5 = at least 5 VCs
-    assert!(
-        vcs.len() >= 5,
-        "should detect at least one violation per rule, got {} VCs",
-        vcs.len()
-    );
+    assert!(vcs.len() >= 5, "should detect at least one violation per rule, got {} VCs", vcs.len());
 }
 
 #[test]
 fn test_integration_vc_kind_details() {
-    let func = make_atomic_func("vc_detail_check", vec![
-        make_op(AtomicOpKind::Store, AtomicOrdering::AcqRel, None),
-    ]);
+    let func = make_atomic_func(
+        "vc_detail_check",
+        vec![make_op(AtomicOpKind::Store, AtomicOrdering::AcqRel, None)],
+    );
 
     let ops = extract_atomic_ops(&func);
     let vcs = MemoryModelChecker::check_operation_legality(&ops, &func.name);

@@ -305,7 +305,7 @@ pub(crate) fn transform_instance<'tcx>(
     mut instance: Instance<'tcx>,
     options: TransformTyOptions,
 ) -> Instance<'tcx> {
-    // tRust: known issue — account for async-drop-glue
+    // FIXME: account for async-drop-glue
     if (matches!(instance.def, ty::InstanceKind::Virtual(..))
         && tcx.is_lang_item(instance.def_id(), LangItem::DropInPlace))
         || matches!(instance.def, ty::InstanceKind::DropGlue(..))
@@ -320,7 +320,7 @@ pub(crate) fn transform_instance<'tcx>(
         // declaration/definition, and during code generation at call sites so they have the same
         // type id and match.
         //
-        // tRust: known issue (rcvalle) — This allows a drop call on any trait object to call the drop function of
+        // FIXME(rcvalle): This allows a drop call on any trait object to call the drop function of
         //   any other type.
         //
         let def_id = tcx
@@ -406,12 +406,12 @@ pub(crate) fn transform_instance<'tcx>(
             let (trait_id, inputs) = match closure_ty.kind() {
                 ty::Closure(..) => {
                     let closure_args = instance.args.as_closure();
-                    let trait_id = tcx.fn_trait_kind_to_def_id(closure_args.kind()).expect("invariant: closure kind must map to a known Fn trait def id"); // tRust: unwrap -> expect
+                    let trait_id = tcx.fn_trait_kind_to_def_id(closure_args.kind()).unwrap();
                     let tuple_args =
                         tcx.instantiate_bound_regions_with_erased(closure_args.sig()).inputs()[0];
                     (trait_id, Some(tuple_args))
                 }
-                ty::Coroutine(..) => match tcx.coroutine_kind(instance.def_id()).expect("invariant: coroutine def_id must have a coroutine kind") { // tRust: unwrap -> expect
+                ty::Coroutine(..) => match tcx.coroutine_kind(instance.def_id()).unwrap() {
                     hir::CoroutineKind::Coroutine(..) => (
                         tcx.require_lang_item(LangItem::Coroutine, DUMMY_SP),
                         Some(instance.args.as_coroutine().resume_ty()),

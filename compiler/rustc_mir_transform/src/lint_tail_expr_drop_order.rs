@@ -1,6 +1,3 @@
-//! tRust: MIR lint for Edition 2024 tail-expression drop order migration
-//! tRust: diagnostics.
-
 use std::cell::RefCell;
 use std::collections::hash_map;
 use std::rc::Rc;
@@ -148,8 +145,9 @@ impl<'a, 'mir, 'tcx> DropsReachable<'a, 'mir, 'tcx> {
                 // Let's check the observed dropped places in.
                 self.collected_drops.union(&*dropped_local_there.borrow());
                 if self.drop_span.is_none() {
-                    // NOTE: source_scopes may produce block-level spans instead of statement
-                    // semicolons; span accuracy is best-effort here.
+                    // FIXME(@dingxiangfei2009): it turns out that `self.body.source_scopes` are
+                    // still a bit wonky. There is a high chance that this span still points to a
+                    // block rather than a statement semicolon.
                     *self.drop_span = Some(terminator.source_info.span);
                 }
                 // Now we have discovered a simple control flow path from a future drop point
@@ -195,8 +193,8 @@ pub(crate) fn run_lint<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId, body: &Body<
         return;
     }
 
-    // NOTE(typing_env): Uses non_body_analysis; ideally would reveal local opaques
-    // via typeck results.
+    // FIXME(typing_env): This should be able to reveal the opaques local to the
+    // body using the typeck results.
     let typing_env = ty::TypingEnv::non_body_analysis(tcx, def_id);
 
     // ## About BIDs in blocks ##
@@ -373,7 +371,6 @@ pub(crate) fn run_lint<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId, body: &Body<
         for &(_, place) in candidates {
             let linted_local_decl = &body.local_decls[place.local];
             let Some(&(ref name, is_generated_name)) = local_names.get(&place.local) else {
-                // tRust: invariant: structural invariant — drop elaboration invariant constrains the MIR structure at this point
                 bug!("a name should have been assigned")
             };
             let name = name.as_str();
@@ -389,7 +386,7 @@ pub(crate) fn run_lint<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId, body: &Body<
             let mut seen_dyn = false;
             let destructors = ty_dropped_components
                 .get(&linted_local_decl.ty)
-                .expect("invariant: linted local type must have computed drop components") // tRust: unwrap elimination
+                .unwrap()
                 .iter()
                 .filter_map(|&ty| {
                     if let Some(span) = ty_dtor_span(tcx, ty) {
@@ -423,7 +420,6 @@ pub(crate) fn run_lint<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId, body: &Body<
 
             let observer_local_decl = &body.local_decls[place.local];
             let Some(&(ref name, is_generated_name)) = local_names.get(&place.local) else {
-                // tRust: invariant: structural invariant — drop elaboration invariant constrains the MIR structure at this point
                 bug!("a name should have been assigned")
             };
             let name = name.as_str();

@@ -367,7 +367,6 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> for UnsafetyVisitor<'a, 'tcx> {
             PatKind::Binding { mode: BindingMode(ByRef::Yes(_, rm), _), ty, .. } => {
                 if self.inside_adt {
                     let ty::Ref(_, ty, _) = ty.kind() else {
-                        // tRust: invariant — a `ByRef::Yes` pattern binding always has a reference type from type checking, even inside ADT field patterns.
                         span_bug!(
                             pat.span,
                             "ByRef::Yes in pattern, but found non-reference type {}",
@@ -768,7 +767,7 @@ impl UnsafeOpKind {
         });
         let unsafe_not_inherited_note = if should_suggest {
             suggest_unsafe_block.then(|| {
-                let body_span = tcx.hir_body(parent_owner.body_id().expect("invariant: owner has a body")).value.span; // tRust: unwrap -> expect
+                let body_span = tcx.hir_body(parent_owner.body_id().unwrap()).value.span;
                 UnsafeNotInheritedLintNote {
                     signature_span: tcx.def_span(parent_id.def_id),
                     body_span,
@@ -777,7 +776,7 @@ impl UnsafeOpKind {
         } else {
             None
         };
-        // tRust: known issue — ideally we would want to trim the def paths, but this is not
+        // FIXME: ideally we would want to trim the def paths, but this is not
         // feasible with the current lint emission API (see issue #106126).
         match self {
             CallToUnsafeFunction(Some(did)) => tcx.emit_node_span_lint(
@@ -1182,7 +1181,7 @@ pub(crate) fn check_unsafety(tcx: TyCtxt<'_>, def: LocalDefId) {
         body_target_features,
         assignment_info: None,
         in_union_destructure: false,
-        // tRust: known issue — we're clearly in a body here. (upstream #132279)
+        // FIXME(#132279): we're clearly in a body here.
         typing_env: ty::TypingEnv::non_body_analysis(tcx, def),
         inside_adt: false,
         warnings: &mut warnings,

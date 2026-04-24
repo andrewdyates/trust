@@ -5,24 +5,24 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::SourceSpan;
 use super::Formula;
 use super::contracts::ContractMetadata;
 use super::vc_kind::VcKind;
-
+use crate::Symbol;
+use crate::model::SourceSpan;
 
 /// A verification condition — the thing we send to solvers.
 ///
 /// # Examples
 ///
 /// ```
-/// use trust_types::{VerificationCondition, VcKind, Formula, Sort, SourceSpan};
+/// use trust_types::{VerificationCondition, VcKind, Formula, Sort, SourceSpan, Symbol};
 ///
 /// // Division-by-zero check: denominator != 0
 /// let denom = Formula::Var("d".into(), Sort::Int);
 /// let vc = VerificationCondition {
 ///     kind: VcKind::DivisionByZero,
-///     function: "my_crate::div".to_string(),
+///     function: Symbol::intern("my_crate::div"),
 ///     location: SourceSpan::default(),
 ///     formula: Formula::Eq(Box::new(denom), Box::new(Formula::Int(0))),
 ///     contract_metadata: None,
@@ -34,7 +34,9 @@ use super::vc_kind::VcKind;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerificationCondition {
     pub kind: VcKind,
-    pub function: String,
+    // tRust #883: Interned function name — reduces heap allocations for repeated
+    // function names across verification conditions.
+    pub function: Symbol,
     pub location: SourceSpan,
     /// The formula to check. Convention: we assert this formula and check SAT.
     /// If UNSAT, the property holds (no violation exists).
@@ -66,7 +68,8 @@ impl VerificationCondition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableVc {
     pub kind: VcKind,
-    pub function: String,
+    // tRust #883: Interned function name for consistency with VerificationCondition.
+    pub function: Symbol,
     pub location: SourceSpan,
     /// The formula to check (always an owned `Formula` for serialization).
     pub formula: Formula,
@@ -80,7 +83,7 @@ impl SerializableVc {
     pub fn from_vc(vc: &VerificationCondition) -> Self {
         Self {
             kind: vc.kind.clone(),
-            function: vc.function.clone(),
+            function: vc.function,
             location: vc.location.clone(),
             formula: vc.formula.clone(),
             contract_metadata: vc.contract_metadata,
@@ -131,4 +134,3 @@ impl OwnershipMetadata {
         self.regions.is_empty() && self.borrows.is_empty() && self.lifetime_constraints.is_empty()
     }
 }
-

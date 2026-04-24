@@ -42,8 +42,6 @@ static mut STORAGE: *mut u8 = core::ptr::null_mut();
 const PAGE_SIZE: usize = 1 << 15;
 
 fn main() {
-    // SAFETY: calling `libc::sigaction` with a valid signal number and a properly
-    // initialized `sigaction` struct; `mmap` is called with valid flags.
     unsafe {
         // Register a segfault handler
         libc::sigaction(

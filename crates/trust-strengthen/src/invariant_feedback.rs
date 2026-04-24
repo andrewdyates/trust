@@ -42,10 +42,7 @@ pub struct InvariantHint {
 ///
 /// A list of annotation strings suitable for source-level insertion.
 #[must_use]
-pub fn apply_invariant_hints(
-    _function_name: &str,
-    invariants: &[InvariantHint],
-) -> Vec<String> {
+pub fn apply_invariant_hints(_function_name: &str, invariants: &[InvariantHint]) -> Vec<String> {
     invariants
         .iter()
         .filter(|inv| inv.confidence > 0.0)
@@ -89,19 +86,11 @@ pub fn from_sunder_invariants(
 ///
 /// Filtered and sorted hints (highest confidence first).
 #[must_use]
-pub fn rank_invariant_hints(
-    hints: &[InvariantHint],
-    min_confidence: f64,
-) -> Vec<InvariantHint> {
-    let mut ranked: Vec<InvariantHint> = hints
-        .iter()
-        .filter(|h| h.confidence >= min_confidence)
-        .cloned()
-        .collect();
+pub fn rank_invariant_hints(hints: &[InvariantHint], min_confidence: f64) -> Vec<InvariantHint> {
+    let mut ranked: Vec<InvariantHint> =
+        hints.iter().filter(|h| h.confidence >= min_confidence).cloned().collect();
     ranked.sort_by(|a, b| {
-        b.confidence
-            .partial_cmp(&a.confidence)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
     });
     ranked
 }

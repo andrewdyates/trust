@@ -98,7 +98,6 @@ impl<'tcx> InherentCollect<'tcx> {
             {
                 self.impls_map.incoherent_impls.entry(simp).or_default().push(impl_def_id);
             } else {
-                // tRust: invariant — all valid self types for inherent impls handled above
                 bug!("unexpected self type: {:?}", self_ty);
             }
             Ok(())
@@ -153,7 +152,6 @@ impl<'tcx> InherentCollect<'tcx> {
         if let Some(simp) = simplify_type(self.tcx, ty, TreatParams::InstantiateWithInfer) {
             self.impls_map.incoherent_impls.entry(simp).or_default().push(impl_def_id);
         } else {
-            // tRust: invariant — all primitive types valid for inherent impls handled above
             bug!("unexpected primitive type: {:?}", ty);
         }
         Ok(())
@@ -169,7 +167,7 @@ impl<'tcx> InherentCollect<'tcx> {
         let self_ty = self.tcx.type_of(id).instantiate_identity();
         let mut self_ty = self.tcx.peel_off_free_alias_tys(self_ty);
         // We allow impls on pattern types exactly when we allow impls on the base type.
-        // tRust: known issue — (pattern_types): Figure out the exact coherence rules we want here.
+        // FIXME(pattern_types): Figure out the exact coherence rules we want here.
         while let ty::Pat(base, _) = *self_ty.kind() {
             self_ty = base;
         }
@@ -177,7 +175,7 @@ impl<'tcx> InherentCollect<'tcx> {
             ty::Adt(def, _) => self.check_def_id(id, self_ty, def.did()),
             ty::Foreign(did) => self.check_def_id(id, self_ty, did),
             ty::Dynamic(data, ..) if data.principal_def_id().is_some() => {
-                self.check_def_id(id, self_ty, data.principal_def_id().expect("invariant: value is present"))
+                self.check_def_id(id, self_ty, data.principal_def_id().unwrap())
             }
             ty::Dynamic(..) => {
                 Err(self.tcx.dcx().emit_err(errors::InherentDyn { span: item_span }))
@@ -209,7 +207,6 @@ impl<'tcx> InherentCollect<'tcx> {
             | ty::Bound(..)
             | ty::Placeholder(_)
             | ty::Infer(_) => {
-                // tRust: invariant — all valid self types for inherent impls handled above
                 bug!("unexpected impl self type of impl: {:?} {:?}", id, self_ty);
             }
             // We could bail out here, but that will silence other useful errors.

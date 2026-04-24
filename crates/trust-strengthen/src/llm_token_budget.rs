@@ -40,11 +40,7 @@ impl TokenBudget {
     /// If `reserved_for_response >= model_context_size`, `max_prompt_tokens` is 0.
     pub fn new(model_context_size: usize, reserved_for_response: usize) -> Self {
         let max_prompt_tokens = model_context_size.saturating_sub(reserved_for_response);
-        Self {
-            model_context_size,
-            reserved_for_response,
-            max_prompt_tokens,
-        }
+        Self { model_context_size, reserved_for_response, max_prompt_tokens }
     }
 }
 
@@ -89,11 +85,8 @@ pub fn truncate_to_budget(sections: Vec<(Priority, String)>, budget: &TokenBudge
 
     // Sort sections by priority (descending) while preserving original index
     // for stable ordering within the same priority.
-    let mut indexed: Vec<(usize, Priority, String)> = sections
-        .into_iter()
-        .enumerate()
-        .map(|(i, (p, s))| (i, p, s))
-        .collect();
+    let mut indexed: Vec<(usize, Priority, String)> =
+        sections.into_iter().enumerate().map(|(i, (p, s))| (i, p, s)).collect();
     indexed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
     // Greedily add sections in priority order until budget is exhausted.
@@ -128,10 +121,7 @@ pub fn truncate_to_budget(sections: Vec<(Priority, String)>, budget: &TokenBudge
     // Restore original order for output.
     kept.sort_by_key(|(idx, _)| *idx);
 
-    kept.into_iter()
-        .map(|(_, text)| text)
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    kept.into_iter().map(|(_, text)| text).collect::<Vec<_>>().join("\n\n")
 }
 
 #[cfg(test)]
@@ -268,9 +258,7 @@ mod tests {
     fn test_truncate_section_gets_truncated() {
         // Budget for ~5 tokens = ~20 chars total.
         let budget = TokenBudget::new(5, 0);
-        let sections = vec![
-            (Priority::SystemPrompt, "a".repeat(100)),
-        ];
+        let sections = vec![(Priority::SystemPrompt, "a".repeat(100))];
         let result = truncate_to_budget(sections, &budget);
         // Result should be truncated, not the full 100 chars.
         assert!(result.len() <= 20);
@@ -280,9 +268,7 @@ mod tests {
     #[test]
     fn test_truncate_zero_budget() {
         let budget = TokenBudget::new(0, 0);
-        let sections = vec![
-            (Priority::SystemPrompt, "anything".to_string()),
-        ];
+        let sections = vec![(Priority::SystemPrompt, "anything".to_string())];
         let result = truncate_to_budget(sections, &budget);
         assert!(result.is_empty());
     }
@@ -291,9 +277,7 @@ mod tests {
     fn test_truncate_budget_equals_reserved() {
         // All budget reserved for response => 0 for prompt.
         let budget = TokenBudget::new(1000, 1000);
-        let sections = vec![
-            (Priority::SystemPrompt, "hello".to_string()),
-        ];
+        let sections = vec![(Priority::SystemPrompt, "hello".to_string())];
         let result = truncate_to_budget(sections, &budget);
         assert!(result.is_empty());
     }

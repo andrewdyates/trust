@@ -6,7 +6,8 @@
 //   2. Safe midpoint using `low + (high - low) / 2`
 //   3. Safe decrement using `mid.checked_sub(1)`
 //
-// All verification conditions should be discharged by z4.
+// This is the intended fixed version of the example. The source-level bugs are
+// removed, but current proof results may still leave open obligations.
 //
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0

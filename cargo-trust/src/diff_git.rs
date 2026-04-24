@@ -15,9 +15,7 @@ use std::process::Command;
 
 use serde::Serialize;
 
-use crate::source_analysis::{
-    self, ParsedFunction, SourceAnalysisSummary, StandaloneOutcome,
-};
+use crate::source_analysis::{self, ParsedFunction, SourceAnalysisSummary, StandaloneOutcome};
 
 // ---------------------------------------------------------------------------
 // Git ref range parsing
@@ -43,10 +41,7 @@ pub(crate) fn parse_ref_range(arg: &str) -> Option<GitRefRange> {
         if from.is_empty() || to.is_empty() {
             return None;
         }
-        Some(GitRefRange {
-            from: from.to_string(),
-            to: to.to_string(),
-        })
+        Some(GitRefRange { from: from.to_string(), to: to.to_string() })
     } else {
         None
     }
@@ -78,11 +73,7 @@ pub(crate) fn resolve_ref(git_ref: &str, repo_dir: &Path) -> Result<String, Stri
 /// Returns `None` if the file doesn't exist at that ref.
 fn git_show_file(git_ref: &str, file_path: &str, repo_dir: &Path) -> Option<String> {
     let spec = format!("{git_ref}:{file_path}");
-    let output = Command::new("git")
-        .args(["show", &spec])
-        .current_dir(repo_dir)
-        .output()
-        .ok()?;
+    let output = Command::new("git").args(["show", &spec]).current_dir(repo_dir).output().ok()?;
 
     if output.status.success() {
         Some(String::from_utf8_lossy(&output.stdout).to_string())
@@ -96,15 +87,7 @@ fn git_show_file(git_ref: &str, file_path: &str, repo_dir: &Path) -> Option<Stri
 /// Returns paths relative to the repo root.
 fn changed_rs_files(from_ref: &str, to_ref: &str, repo_dir: &Path) -> Vec<String> {
     let output = Command::new("git")
-        .args([
-            "diff",
-            "--name-only",
-            "--diff-filter=ACMR",
-            from_ref,
-            to_ref,
-            "--",
-            "*.rs",
-        ])
+        .args(["diff", "--name-only", "--diff-filter=ACMR", from_ref, to_ref, "--", "*.rs"])
         .current_dir(repo_dir)
         .output();
 
@@ -121,15 +104,7 @@ fn changed_rs_files(from_ref: &str, to_ref: &str, repo_dir: &Path) -> Vec<String
 /// List Rust source files that were deleted between two refs.
 fn deleted_rs_files(from_ref: &str, to_ref: &str, repo_dir: &Path) -> Vec<String> {
     let output = Command::new("git")
-        .args([
-            "diff",
-            "--name-only",
-            "--diff-filter=D",
-            from_ref,
-            to_ref,
-            "--",
-            "*.rs",
-        ])
+        .args(["diff", "--name-only", "--diff-filter=D", from_ref, to_ref, "--", "*.rs"])
         .current_dir(repo_dir)
         .output();
 
@@ -142,8 +117,6 @@ fn deleted_rs_files(from_ref: &str, to_ref: &str, repo_dir: &Path) -> Vec<String
         _ => Vec::new(),
     }
 }
-
-
 
 // ---------------------------------------------------------------------------
 // Function-level diff
@@ -280,27 +253,17 @@ pub(crate) fn run_git_diff(
 
     // Filter by scope if provided (e.g., "crates/" or "src/").
     let changed: Vec<String> = if let Some(scope_prefix) = scope {
-        changed
-            .into_iter()
-            .filter(|f| f.starts_with(scope_prefix))
-            .collect()
+        changed.into_iter().filter(|f| f.starts_with(scope_prefix)).collect()
     } else {
         changed
     };
     let deleted: Vec<String> = if let Some(scope_prefix) = scope {
-        deleted
-            .into_iter()
-            .filter(|f| f.starts_with(scope_prefix))
-            .collect()
+        deleted.into_iter().filter(|f| f.starts_with(scope_prefix)).collect()
     } else {
         deleted
     };
 
-    eprintln!(
-        "cargo-trust: {} files changed, {} files deleted",
-        changed.len(),
-        deleted.len()
-    );
+    eprintln!("cargo-trust: {} files changed, {} files deleted", changed.len(), deleted.len());
 
     // Analyze functions at both refs for changed files.
     let mut from_functions: HashMap<String, ParsedFunction> = HashMap::new();
@@ -312,10 +275,8 @@ pub(crate) fn run_git_diff(
     for file_path in &changed {
         // Get file at from-ref.
         if let Some(content) = git_show_file(&from_commit, file_path, repo_dir) {
-            let funcs = source_analysis::extract_functions_from_source(
-                &content,
-                Path::new(file_path),
-            );
+            let funcs =
+                source_analysis::extract_functions_from_source(&content, Path::new(file_path));
             for f in &funcs {
                 let key = format!("{}::{}", file_path, f.name);
                 from_functions.insert(key, f.clone());
@@ -325,10 +286,8 @@ pub(crate) fn run_git_diff(
 
         // Get file at to-ref.
         if let Some(content) = git_show_file(&to_commit, file_path, repo_dir) {
-            let funcs = source_analysis::extract_functions_from_source(
-                &content,
-                Path::new(file_path),
-            );
+            let funcs =
+                source_analysis::extract_functions_from_source(&content, Path::new(file_path));
             for f in &funcs {
                 let key = format!("{}::{}", file_path, f.name);
                 to_functions.insert(key, f.clone());
@@ -340,10 +299,8 @@ pub(crate) fn run_git_diff(
     // Also analyze deleted files (only in from-ref).
     for file_path in &deleted {
         if let Some(content) = git_show_file(&from_commit, file_path, repo_dir) {
-            let funcs = source_analysis::extract_functions_from_source(
-                &content,
-                Path::new(file_path),
-            );
+            let funcs =
+                source_analysis::extract_functions_from_source(&content, Path::new(file_path));
             for f in &funcs {
                 let key = format!("{}::{}", file_path, f.name);
                 from_functions.insert(key, f.clone());
@@ -397,10 +354,10 @@ pub(crate) fn run_git_diff(
                     specs_gained += 1;
                     let mut parts = Vec::new();
                     if !from_func.has_requires && to_func.has_requires {
-                        parts.push("#[requires] added");
+                        parts.push("requires spec added");
                     }
                     if !from_func.has_ensures && to_func.has_ensures {
-                        parts.push("#[ensures] added");
+                        parts.push("ensures spec added");
                     }
                     entries.push(FunctionDiffEntry {
                         function: to_func.name.clone(),
@@ -416,10 +373,10 @@ pub(crate) fn run_git_diff(
                     specs_lost += 1;
                     let mut parts = Vec::new();
                     if from_func.has_requires && !to_func.has_requires {
-                        parts.push("#[requires] removed");
+                        parts.push("requires spec removed");
                     }
                     if from_func.has_ensures && !to_func.has_ensures {
-                        parts.push("#[ensures] removed");
+                        parts.push("ensures spec removed");
                     }
                     entries.push(FunctionDiffEntry {
                         function: to_func.name.clone(),
@@ -520,14 +477,8 @@ pub(crate) fn run_git_diff(
             .filter(|f| f.has_requires || f.has_ensures)
             .count(),
         total_vcs: from_vcs.len(),
-        proved: from_vcs
-            .iter()
-            .filter(|v| v.outcome == StandaloneOutcome::Proved)
-            .count(),
-        unknown: from_vcs
-            .iter()
-            .filter(|v| v.outcome == StandaloneOutcome::Unknown)
-            .count(),
+        proved: from_vcs.iter().filter(|v| v.outcome == StandaloneOutcome::Proved).count(),
+        unknown: from_vcs.iter().filter(|v| v.outcome == StandaloneOutcome::Unknown).count(),
     };
 
     let to_summary = DiffSummaryStats {
@@ -539,14 +490,8 @@ pub(crate) fn run_git_diff(
             .filter(|f| f.has_requires || f.has_ensures)
             .count(),
         total_vcs: to_vcs.len(),
-        proved: to_vcs
-            .iter()
-            .filter(|v| v.outcome == StandaloneOutcome::Proved)
-            .count(),
-        unknown: to_vcs
-            .iter()
-            .filter(|v| v.outcome == StandaloneOutcome::Unknown)
-            .count(),
+        proved: to_vcs.iter().filter(|v| v.outcome == StandaloneOutcome::Proved).count(),
+        unknown: to_vcs.iter().filter(|v| v.outcome == StandaloneOutcome::Unknown).count(),
     };
 
     Ok(GitDiffReport {
@@ -582,34 +527,22 @@ impl GitDiffReport {
             self.to_ref,
             &self.to_commit[..8.min(self.to_commit.len())],
         );
-        eprintln!(
-            "  {} files changed, {} files deleted",
-            self.files_changed, self.files_deleted
-        );
+        eprintln!("  {} files changed, {} files deleted", self.files_changed, self.files_deleted);
         eprintln!();
 
         // Summary table.
+        eprintln!("  {:>20}  {:>8}  {:>8}", "", &self.from_ref, &self.to_ref);
         eprintln!(
             "  {:>20}  {:>8}  {:>8}",
-            "", &self.from_ref, &self.to_ref
+            "Functions", self.from_summary.functions, self.to_summary.functions,
         );
         eprintln!(
             "  {:>20}  {:>8}  {:>8}",
-            "Functions",
-            self.from_summary.functions,
-            self.to_summary.functions,
+            "Public", self.from_summary.public_functions, self.to_summary.public_functions,
         );
         eprintln!(
             "  {:>20}  {:>8}  {:>8}",
-            "Public",
-            self.from_summary.public_functions,
-            self.to_summary.public_functions,
-        );
-        eprintln!(
-            "  {:>20}  {:>8}  {:>8}",
-            "Unsafe",
-            self.from_summary.unsafe_functions,
-            self.to_summary.unsafe_functions,
+            "Unsafe", self.from_summary.unsafe_functions, self.to_summary.unsafe_functions,
         );
         eprintln!(
             "  {:>20}  {:>8}  {:>8}",
@@ -619,15 +552,11 @@ impl GitDiffReport {
         );
         eprintln!(
             "  {:>20}  {:>8}  {:>8}",
-            "VCs (proved)",
-            self.from_summary.proved,
-            self.to_summary.proved,
+            "VCs (proved)", self.from_summary.proved, self.to_summary.proved,
         );
         eprintln!(
             "  {:>20}  {:>8}  {:>8}",
-            "VCs (unknown)",
-            self.from_summary.unknown,
-            self.to_summary.unknown,
+            "VCs (unknown)", self.from_summary.unknown, self.to_summary.unknown,
         );
         eprintln!();
 
@@ -643,18 +572,15 @@ impl GitDiffReport {
                     FunctionChange::VisibilityChanged => "~",
                     FunctionChange::Unchanged => " ",
                 };
-                eprintln!(
-                    "  [{icon}] {}::{} -- {}",
-                    entry.file, entry.function, entry.detail
-                );
+                eprintln!("  [{icon}] {}::{} -- {}", entry.file, entry.function, entry.detail);
             }
         }
 
         eprintln!();
 
         // Delta summary.
-        let delta_specs =
-            self.to_summary.specified_functions as i64 - self.from_summary.specified_functions as i64;
+        let delta_specs = self.to_summary.specified_functions as i64
+            - self.from_summary.specified_functions as i64;
         let delta_proved = self.to_summary.proved as i64 - self.from_summary.proved as i64;
         let delta_unsafe =
             self.to_summary.unsafe_functions as i64 - self.from_summary.unsafe_functions as i64;
@@ -696,9 +622,7 @@ impl GitDiffReport {
         self.specs_lost > 0
             || self.entries.iter().any(|e| {
                 e.change == FunctionChange::Removed
-                    && e.from_state
-                        .as_ref()
-                        .is_some_and(|s| s.has_requires || s.has_ensures)
+                    && e.from_state.as_ref().is_some_and(|s| s.has_requires || s.has_ensures)
             })
             || self.entries.iter().any(|e| {
                 e.change == FunctionChange::SafetyChanged
@@ -825,7 +749,7 @@ mod tests {
                 function: "foo".into(),
                 file: "src/lib.rs".into(),
                 change: FunctionChange::LostSpec,
-                detail: "#[requires] removed".into(),
+                detail: "requires spec removed".into(),
                 from_state: Some(FunctionState {
                     name: "foo".into(),
                     file: "src/lib.rs".into(),
@@ -884,7 +808,7 @@ mod tests {
                 function: "foo".into(),
                 file: "src/lib.rs".into(),
                 change: FunctionChange::GainedSpec,
-                detail: "#[ensures] added".into(),
+                detail: "ensures spec added".into(),
                 from_state: None,
                 to_state: None,
             }],

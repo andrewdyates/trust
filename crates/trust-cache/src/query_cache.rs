@@ -6,8 +6,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::path::Path;
+use trust_types::fx::FxHashMap;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -184,8 +184,7 @@ impl QueryCache {
         let contents = std::fs::read_to_string(path)?;
         match serde_json::from_str::<QueryCacheFile>(&contents) {
             Ok(file) if file.version == QUERY_CACHE_VERSION => {
-                let entries =
-                    file.entries.into_iter().map(|(k, v)| (k, v.result)).collect();
+                let entries = file.entries.into_iter().map(|(k, v)| (k, v.result)).collect();
                 Ok(QueryCache { entries, hits: 0, misses: 0 })
             }
             _ => Ok(Self::new()),
@@ -282,11 +281,7 @@ pub struct SubsumptionCache {
 impl SubsumptionCache {
     /// Create an empty subsumption cache.
     pub fn new() -> Self {
-        SubsumptionCache {
-            proved_formulas: Vec::new(),
-            hits: 0,
-            misses: 0,
-        }
+        SubsumptionCache { proved_formulas: Vec::new(), hits: 0, misses: 0 }
     }
 
     /// Record a proved formula in the subsumption cache.
@@ -382,23 +377,26 @@ fn formula_is_subsumed_by(query: &Formula, proved: &Formula) -> bool {
     // Rule 2: proved = And(...) containing query as a conjunct
     // Proving (A AND B) means both A and B hold; so query=A is subsumed.
     if let Formula::And(conjuncts) = proved
-        && conjuncts.iter().any(|c| c == query) {
-            return true;
-        }
+        && conjuncts.iter().any(|c| c == query)
+    {
+        return true;
+    }
 
     // Rule 3: query = Or(...) containing proved as a disjunct
     // If proved=A holds and query=(A OR B), then query holds.
     if let Formula::Or(disjuncts) = query
-        && disjuncts.iter().any(|d| d == proved) {
-            return true;
-        }
+        && disjuncts.iter().any(|d| d == proved)
+    {
+        return true;
+    }
 
     // Rule 4: both are And; query's conjuncts are a subset of proved's
     // proved = (A AND B AND C), query = (A AND B) => proved implies query
     if let (Formula::And(p_conj), Formula::And(q_conj)) = (proved, query)
-        && q_conj.iter().all(|qc| p_conj.contains(qc)) {
-            return true;
-        }
+        && q_conj.iter().all(|qc| p_conj.contains(qc))
+    {
+        return true;
+    }
 
     false
 }
@@ -407,10 +405,7 @@ fn formula_is_subsumed_by(query: &Formula, proved: &Formula) -> bool {
 ///
 /// Convenience function for callers that want a simple yes/no check.
 /// Returns the cached result if subsumed, `None` otherwise.
-pub fn is_subsumed(
-    formula: &Formula,
-    cache: &mut SubsumptionCache,
-) -> Option<VerificationResult> {
+pub fn is_subsumed(formula: &Formula, cache: &mut SubsumptionCache) -> Option<VerificationResult> {
     cache.check(formula).cloned()
 }
 
@@ -423,7 +418,7 @@ mod tests {
     fn make_vc(name: &str, formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: name.to_string(),
+            function: name.into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -432,14 +427,16 @@ mod tests {
 
     fn proved_result() -> VerificationResult {
         VerificationResult::Proved {
-            solver: "z4".to_string(),
+            solver: "z4".into(),
             time_ms: 10,
-            strength: ProofStrength::smt_unsat(), proof_certificate: None,
-                solver_warnings: None, }
+            strength: ProofStrength::smt_unsat(),
+            proof_certificate: None,
+            solver_warnings: None,
+        }
     }
 
     fn failed_result() -> VerificationResult {
-        VerificationResult::Failed { solver: "z4".to_string(), time_ms: 5, counterexample: None }
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 5, counterexample: None }
     }
 
     #[test]
@@ -527,10 +524,7 @@ mod tests {
 
     #[test]
     fn test_formula_hash_deterministic() {
-        let f = Formula::And(vec![
-            Formula::Var("x".into(), Sort::Int),
-            Formula::Bool(true),
-        ]);
+        let f = Formula::And(vec![Formula::Var("x".into(), Sort::Int), Formula::Bool(true)]);
         let h1 = QueryCache::formula_hash(&f);
         let h2 = QueryCache::formula_hash(&f);
         assert_eq!(h1, h2);
@@ -605,7 +599,7 @@ mod tests {
     #[test]
     fn test_cache_key_deterministic() {
         let f = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)));
-        let vars: FxHashSet<String> = ["x".to_string()].into();
+        let vars: FxHashSet<String> = ["x".to_string()].into_iter().collect();
         let k1 = CacheKey::new(&f, &vars);
         let k2 = CacheKey::new(&f, &vars);
         assert_eq!(k1, k2);
@@ -615,8 +609,8 @@ mod tests {
     #[test]
     fn test_cache_key_different_vars_different_key() {
         let f = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)));
-        let vars1: FxHashSet<String> = ["x".to_string()].into();
-        let vars2: FxHashSet<String> = ["x".to_string(), "y".to_string()].into();
+        let vars1: FxHashSet<String> = ["x".to_string()].into_iter().collect();
+        let vars2: FxHashSet<String> = ["x".to_string(), "y".to_string()].into_iter().collect();
         let k1 = CacheKey::new(&f, &vars1);
         let k2 = CacheKey::new(&f, &vars2);
         assert_ne!(k1.vars_hash, k2.vars_hash);
@@ -628,7 +622,7 @@ mod tests {
     fn test_cache_key_different_formula_different_key() {
         let f1 = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(0)));
         let f2 = Formula::Eq(Box::new(var("x")), Box::new(Formula::Int(1)));
-        let vars: FxHashSet<String> = ["x".to_string()].into();
+        let vars: FxHashSet<String> = ["x".to_string()].into_iter().collect();
         let k1 = CacheKey::new(&f1, &vars);
         let k2 = CacheKey::new(&f2, &vars);
         assert_ne!(k1.formula_hash, k2.formula_hash);
@@ -955,10 +949,7 @@ mod tests {
             ),
         );
 
-        assert!(
-            cache.lookup(&vc2).is_none(),
-            "structurally different formula should NOT hit"
-        );
+        assert!(cache.lookup(&vc2).is_none(), "structurally different formula should NOT hit");
     }
 
     #[test]

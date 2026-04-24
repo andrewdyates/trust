@@ -40,8 +40,7 @@ pub fn derive_cache_key() -> [u8; 32] {
 /// Returns a hex-encoded HMAC tag (64 characters).
 #[must_use]
 pub fn compute_hmac(key: &[u8; 32], data: &[u8]) -> String {
-    let mut mac =
-        HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
     mac.update(data);
     let result = mac.finalize();
     format!("{:x}", result.into_bytes())
@@ -52,8 +51,7 @@ pub fn compute_hmac(key: &[u8; 32], data: &[u8]) -> String {
 /// Returns `true` if the tag matches, `false` if tampered or wrong key.
 /// Uses constant-time comparison to prevent timing attacks.
 pub fn verify_hmac(key: &[u8; 32], data: &[u8], expected_hex: &str) -> bool {
-    let mut mac =
-        HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
     mac.update(data);
 
     // Decode the expected hex tag
@@ -181,10 +179,7 @@ mod tests {
         let data = b"original data";
         let tag = compute_hmac(&key, data);
         let tampered = b"tampered data";
-        assert!(
-            !verify_hmac(&key, tampered, &tag),
-            "tampered data must fail verification"
-        );
+        assert!(!verify_hmac(&key, tampered, &tag), "tampered data must fail verification");
     }
 
     #[test]
@@ -193,10 +188,7 @@ mod tests {
         let key2 = [0x43u8; 32];
         let data = b"cache data";
         let tag = compute_hmac(&key1, data);
-        assert!(
-            !verify_hmac(&key2, data, &tag),
-            "wrong key must fail verification"
-        );
+        assert!(!verify_hmac(&key2, data, &tag), "wrong key must fail verification");
     }
 
     #[test]
@@ -211,10 +203,7 @@ mod tests {
     fn test_verify_hmac_empty_tag() {
         let key = [0x42u8; 32];
         let data = b"test";
-        assert!(
-            !verify_hmac(&key, data, ""),
-            "empty tag must fail verification"
-        );
+        assert!(!verify_hmac(&key, data, ""), "empty tag must fail verification");
     }
 
     #[test]

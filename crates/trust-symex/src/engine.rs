@@ -3,8 +3,8 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashSet;
 use std::fmt::Write;
+use trust_types::fx::FxHashSet;
 
 use serde::{Deserialize, Serialize};
 use trust_types::{
@@ -134,9 +134,7 @@ impl SymbolicExecutor {
             Terminator::Goto(target) => Ok(BlockResult::Continue(target.0)),
             Terminator::Return => Ok(BlockResult::Terminated),
             Terminator::Unreachable => Err(SymexError::UnreachableReached),
-            Terminator::SwitchInt {
-                discr, targets, otherwise, ..
-            } => {
+            Terminator::SwitchInt { discr, targets, otherwise, .. } => {
                 let discr_val = self.eval_operand(discr)?;
 
                 let mut forks = Vec::new();
@@ -177,18 +175,10 @@ impl SymbolicExecutor {
 
                 Ok(BlockResult::Fork(forks))
             }
-            Terminator::Assert {
-                cond,
-                expected,
-                target,
-                ..
-            } => {
+            Terminator::Assert { cond, expected, target, .. } => {
                 let cond_val = self.eval_operand(cond)?;
-                let constraint_cond = if *expected {
-                    cond_val
-                } else {
-                    SymbolicValue::Not(Box::new(cond_val))
-                };
+                let constraint_cond =
+                    if *expected { cond_val } else { SymbolicValue::Not(Box::new(cond_val)) };
                 self.path.add_constraint(constraint_cond, true);
                 Ok(BlockResult::Continue(target.0))
             }
@@ -275,7 +265,7 @@ impl SymbolicExecutor {
                     None => Ok(SymbolicValue::Symbol(name)),
                 }
             }
-                    _ => Ok(SymbolicValue::Symbol("unknown_rvalue".into())),
+            _ => Ok(SymbolicValue::Symbol("unknown_rvalue".into())),
         }
     }
 
@@ -326,7 +316,7 @@ pub(crate) fn place_to_name(place: &Place) -> String {
                     let _ = write!(name, "[{from}..{to}]");
                 }
             }
-            _ => {},
+            _ => {}
         }
     }
     name
@@ -380,17 +370,10 @@ fn build_overflow_condition(
                     BinOp::Lt,
                     SymbolicValue::Concrete(min_val),
                 );
-                let above_max = SymbolicValue::bin_op(
-                    result,
-                    BinOp::Gt,
-                    SymbolicValue::Concrete(max_val),
-                );
+                let above_max =
+                    SymbolicValue::bin_op(result, BinOp::Gt, SymbolicValue::Concrete(max_val));
                 // Encode OR as: if below_min then 1 else above_max
-                SymbolicValue::ite(
-                    below_min,
-                    SymbolicValue::Concrete(1),
-                    above_max,
-                )
+                SymbolicValue::ite(below_min, SymbolicValue::Concrete(1), above_max)
             } else {
                 // Without type info, cannot detect overflow in unbounded domain.
                 SymbolicValue::Concrete(0)
@@ -399,11 +382,8 @@ fn build_overflow_condition(
         BinOp::Mul => {
             // For Mul, integer division truncates so (result / rhs != lhs) is
             // NOT a tautology — it correctly detects when the product wraps.
-            let rhs_nonzero = SymbolicValue::bin_op(
-                rhs.clone(),
-                BinOp::Ne,
-                SymbolicValue::Concrete(0),
-            );
+            let rhs_nonzero =
+                SymbolicValue::bin_op(rhs.clone(), BinOp::Ne, SymbolicValue::Concrete(0));
             let div_check = SymbolicValue::bin_op(
                 SymbolicValue::bin_op(result, BinOp::Div, rhs),
                 BinOp::Ne,
@@ -425,11 +405,7 @@ fn type_range(width: u32, signed: bool) -> (i128, i128) {
             (-half, half - 1)
         }
     } else {
-        let max = if width >= 128 {
-            i128::MAX
-        } else {
-            (1i128 << width) - 1
-        };
+        let max = if width >= 128 { i128::MAX } else { (1i128 << width) - 1 };
         (0, max)
     }
 }
@@ -467,11 +443,8 @@ fn apply_cast(val: SymbolicValue, dest_ty: &Ty) -> SymbolicValue {
             }
             let mask = (1i128 << w) - 1;
             // Truncate to destination width via BitAnd with mask.
-            let truncated = SymbolicValue::bin_op(
-                val,
-                BinOp::BitAnd,
-                SymbolicValue::Concrete(mask),
-            );
+            let truncated =
+                SymbolicValue::bin_op(val, BinOp::BitAnd, SymbolicValue::Concrete(mask));
             if *signed {
                 // Sign-extend: if the sign bit (bit w-1) is set, the value
                 // should be interpreted as negative. We model this as:
@@ -531,10 +504,7 @@ mod tests {
             BlockResult::Continue(next) => assert_eq!(next, 1),
             other => panic!("expected Continue, got {other:?}"),
         }
-        assert_eq!(
-            exec.state.get("_local1").unwrap(),
-            &SymbolicValue::Concrete(42)
-        );
+        assert_eq!(exec.state.get("_local1").unwrap(), &SymbolicValue::Concrete(42));
     }
 
     #[test]
@@ -564,11 +534,7 @@ mod tests {
 
     #[test]
     fn test_engine_return_terminates() {
-        let block = BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Return,
-        };
+        let block = BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Return };
 
         let mut exec = SymbolicExecutor::new(100);
         let result = exec.execute_block(&block).expect("should succeed");
@@ -577,11 +543,8 @@ mod tests {
 
     #[test]
     fn test_engine_depth_limit() {
-        let block = BasicBlock {
-            id: BlockId(0),
-            stmts: vec![],
-            terminator: Terminator::Goto(BlockId(0)),
-        };
+        let block =
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(0)) };
 
         let mut exec = SymbolicExecutor::new(1);
         exec.execute_block(&block).expect("first block ok");
@@ -641,16 +604,10 @@ mod tests {
 
     #[test]
     fn test_engine_coverage_tracking() {
-        let blocks = [BasicBlock {
-                id: BlockId(0),
-                stmts: vec![],
-                terminator: Terminator::Goto(BlockId(1)),
-            },
-            BasicBlock {
-                id: BlockId(1),
-                stmts: vec![],
-                terminator: Terminator::Return,
-            }];
+        let blocks = [
+            BasicBlock { id: BlockId(0), stmts: vec![], terminator: Terminator::Goto(BlockId(1)) },
+            BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
+        ];
 
         let mut exec = SymbolicExecutor::new(100);
         exec.execute_block(&blocks[0]).expect("block 0");
@@ -664,10 +621,7 @@ mod tests {
     fn test_engine_place_to_name_projections() {
         let p = Place {
             local: 3,
-            projections: vec![
-                trust_types::Projection::Field(1),
-                trust_types::Projection::Deref,
-            ],
+            projections: vec![trust_types::Projection::Field(1), trust_types::Projection::Deref],
         };
         assert_eq!(place_to_name(&p), "_local3.f1.*");
     }
@@ -728,11 +682,7 @@ mod tests {
         let result = exec.execute_block(&block).expect("call should execute");
 
         assert!(matches!(result, BlockResult::Continue(1)));
-        match exec
-            .state
-            .get("_local2")
-            .expect("call destination should be initialized")
-        {
+        match exec.state.get("_local2").expect("call destination should be initialized") {
             SymbolicValue::Symbol(name) => {
                 assert!(name.starts_with("call_result_"));
                 assert!(name.ends_with("_local2"));
@@ -757,16 +707,10 @@ mod tests {
         };
 
         let mut exec = SymbolicExecutor::new(100);
-        let result = exec
-            .execute_block(&block)
-            .expect("call without target should terminate");
+        let result = exec.execute_block(&block).expect("call without target should terminate");
 
         assert!(matches!(result, BlockResult::Terminated));
-        match exec
-            .state
-            .get("_local3")
-            .expect("call destination should still be initialized")
-        {
+        match exec.state.get("_local3").expect("call destination should still be initialized") {
             SymbolicValue::Symbol(name) => {
                 assert!(name.starts_with("call_result_"));
                 assert!(name.ends_with("_local3"));
@@ -811,14 +755,8 @@ mod tests {
         let mut exec = SymbolicExecutor::new(100);
         exec.execute_block(&block).expect("unary neg should execute");
 
-        let result = exec
-            .state
-            .get("_local2")
-            .expect("unary result should be stored");
-        assert_eq!(
-            result,
-            &SymbolicValue::Neg(Box::new(SymbolicValue::Concrete(5)))
-        );
+        let result = exec.state.get("_local2").expect("unary result should be stored");
+        assert_eq!(result, &SymbolicValue::Neg(Box::new(SymbolicValue::Concrete(5))));
         // Verify concrete evaluation: -5
         let state = crate::state::SymbolicState::new();
         assert_eq!(crate::state::eval(&state, result), Some(-5));
@@ -842,14 +780,8 @@ mod tests {
         let mut exec = SymbolicExecutor::new(100);
         exec.execute_block(&block).expect("unary not should execute");
 
-        let result = exec
-            .state
-            .get("_local2")
-            .expect("unary not result should be stored");
-        assert_eq!(
-            result,
-            &SymbolicValue::BitwiseNot(Box::new(SymbolicValue::Concrete(0)))
-        );
+        let result = exec.state.get("_local2").expect("unary not result should be stored");
+        assert_eq!(result, &SymbolicValue::BitwiseNot(Box::new(SymbolicValue::Concrete(0))));
         let state = crate::state::SymbolicState::new();
         assert_eq!(crate::state::eval(&state, result), Some(!0i128));
     }
@@ -898,11 +830,7 @@ mod tests {
         let mut exec = SymbolicExecutor::new(100);
         exec.execute_block(&block).expect("len rvalue should execute");
 
-        match exec
-            .state
-            .get("_local2")
-            .expect("len result should be stored")
-        {
+        match exec.state.get("_local2").expect("len result should be stored") {
             SymbolicValue::Symbol(name) => {
                 assert!(name.starts_with("len_"));
                 assert!(name.ends_with("_local3"));
@@ -924,14 +852,9 @@ mod tests {
         };
 
         let mut exec = SymbolicExecutor::new(100);
-        exec.execute_block(&block)
-            .expect("discriminant rvalue should execute");
+        exec.execute_block(&block).expect("discriminant rvalue should execute");
 
-        match exec
-            .state
-            .get("_local2")
-            .expect("discriminant result should be stored")
-        {
+        match exec.state.get("_local2").expect("discriminant result should be stored") {
             SymbolicValue::Symbol(name) => {
                 assert!(name.starts_with("discr_"));
                 assert!(name.ends_with("_local4"));
@@ -949,10 +872,7 @@ mod tests {
             id: BlockId(0),
             stmts: vec![Statement::Assign {
                 place: Place::local(1),
-                rvalue: Rvalue::Cast(
-                    Operand::Constant(ConstValue::Int(300)),
-                    Ty::u8(),
-                ),
+                rvalue: Rvalue::Cast(Operand::Constant(ConstValue::Int(300)), Ty::u8()),
                 span: span(),
             }],
             terminator: Terminator::Return,
@@ -974,10 +894,7 @@ mod tests {
             id: BlockId(0),
             stmts: vec![Statement::Assign {
                 place: Place::local(1),
-                rvalue: Rvalue::Cast(
-                    Operand::Constant(ConstValue::Int(200)),
-                    Ty::u32(),
-                ),
+                rvalue: Rvalue::Cast(Operand::Constant(ConstValue::Int(200)), Ty::u32()),
                 span: span(),
             }],
             terminator: Terminator::Return,
@@ -998,10 +915,7 @@ mod tests {
             id: BlockId(0),
             stmts: vec![Statement::Assign {
                 place: Place::local(1),
-                rvalue: Rvalue::Cast(
-                    Operand::Constant(ConstValue::Int(0xFF)),
-                    Ty::i8(),
-                ),
+                rvalue: Rvalue::Cast(Operand::Constant(ConstValue::Int(0xFF)), Ty::i8()),
                 span: span(),
             }],
             terminator: Terminator::Return,
@@ -1022,10 +936,7 @@ mod tests {
             id: BlockId(0),
             stmts: vec![Statement::Assign {
                 place: Place::local(1),
-                rvalue: Rvalue::Cast(
-                    Operand::Constant(ConstValue::Int(42)),
-                    Ty::i8(),
-                ),
+                rvalue: Rvalue::Cast(Operand::Constant(ConstValue::Int(42)), Ty::i8()),
                 span: span(),
             }],
             terminator: Terminator::Return,
@@ -1046,10 +957,7 @@ mod tests {
             id: BlockId(0),
             stmts: vec![Statement::Assign {
                 place: Place::local(1),
-                rvalue: Rvalue::Cast(
-                    Operand::Constant(ConstValue::Int(0x1_FFFF)),
-                    Ty::u16(),
-                ),
+                rvalue: Rvalue::Cast(Operand::Constant(ConstValue::Int(0x1_FFFF)), Ty::u16()),
                 span: span(),
             }],
             terminator: Terminator::Return,
@@ -1066,18 +974,12 @@ mod tests {
     #[test]
     fn test_engine_cast_pointer_identity() {
         // Pointer casts should pass through unchanged.
-        let ptr_ty = Ty::RawPtr {
-            mutable: false,
-            pointee: Box::new(Ty::u8()),
-        };
+        let ptr_ty = Ty::RawPtr { mutable: false, pointee: Box::new(Ty::u8()) };
         let block = BasicBlock {
             id: BlockId(0),
             stmts: vec![Statement::Assign {
                 place: Place::local(1),
-                rvalue: Rvalue::Cast(
-                    Operand::Constant(ConstValue::Int(0xDEAD)),
-                    ptr_ty,
-                ),
+                rvalue: Rvalue::Cast(Operand::Constant(ConstValue::Int(0xDEAD)), ptr_ty),
                 span: span(),
             }],
             terminator: Terminator::Return,

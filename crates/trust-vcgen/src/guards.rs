@@ -17,15 +17,17 @@
 // solver timeouts on paths where guards would have simplified the formula.
 // See trust-types/src/model.rs path_map() for details.
 
-use trust_types::{BasicBlock, BinOp, Formula, GuardCondition, Rvalue, Sort, Statement, Terminator, VerifiableFunction};
-
-#[cfg(test)]
 use trust_types::{
-    AssertMessage, LocalDecl, Operand, Place, SourceSpan, Ty, VerifiableBody,
+    BasicBlock, BinOp, ConstValue, Formula, GuardCondition, Operand, Rvalue, Sort, Statement,
+    Terminator, Ty, VerifiableFunction,
 };
 
+#[cfg(test)]
+use trust_types::{AssertMessage, LocalDecl, Place, SourceSpan, VerifiableBody};
+
 use crate::range::{type_max_formula, type_min_formula};
-use crate::{operand_to_formula, operand_ty, u128_to_formula};
+use crate::u128_to_formula;
+use crate::{operand_to_formula, operand_ty, slice_len_formula};
 
 /// Convert a single GuardCondition into an SMT Formula.
 ///
@@ -36,12 +38,39 @@ use crate::{operand_to_formula, operand_ty, u128_to_formula};
 pub(crate) fn guard_to_formula(func: &VerifiableFunction, guard: &GuardCondition) -> Formula {
     match guard {
         GuardCondition::SwitchIntMatch { discr, value } => {
+            if matches!(operand_ty(func, discr), Some(Ty::Bool))
+                && let Some(formula) = bool_switch_semantics(func, discr, *value != 0)
+            {
+                return formula;
+            }
             let discr_f = operand_to_formula(func, discr);
-            // SwitchInt on booleans: value 0 = false, nonzero = true
-            let value_f = u128_to_formula(*value);
-            Formula::Eq(Box::new(discr_f), Box::new(value_f))
+            if matches!(operand_ty(func, discr), Some(Ty::Bool)) {
+                if *value == 0 { Formula::Not(Box::new(discr_f)) } else { discr_f }
+            } else {
+                let value_f = u128_to_formula(*value);
+                Formula::Eq(Box::new(discr_f), Box::new(value_f))
+            }
         }
         GuardCondition::SwitchIntOtherwise { discr, excluded_values } => {
+            if matches!(operand_ty(func, discr), Some(Ty::Bool)) {
+                let excludes_false = excluded_values.contains(&0);
+                let excludes_true = excluded_values.iter().any(|value| *value != 0);
+                if let Some(truth_value) = match (excludes_false, excludes_true) {
+                    (true, false) => Some(true),
+                    (false, true) => Some(false),
+                    _ => None,
+                } && let Some(formula) = bool_switch_semantics(func, discr, truth_value)
+                {
+                    return formula;
+                }
+                let discr_f = operand_to_formula(func, discr);
+                return match (excludes_false, excludes_true) {
+                    (false, false) => Formula::Bool(true),
+                    (true, false) => discr_f,
+                    (false, true) => Formula::Not(Box::new(discr_f)),
+                    (true, true) => Formula::Bool(false),
+                };
+            }
             let discr_f = operand_to_formula(func, discr);
             if excluded_values.is_empty() {
                 return Formula::Bool(true);
@@ -57,7 +86,9 @@ pub(crate) fn guard_to_formula(func: &VerifiableFunction, guard: &GuardCondition
                 .collect();
             if not_eqs.len() == 1 {
                 // SAFETY: len == 1 guarantees .next() returns Some.
-                not_eqs.into_iter().next()
+                not_eqs
+                    .into_iter()
+                    .next()
                     .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
             } else {
                 Formula::And(not_eqs)
@@ -88,6 +119,46 @@ pub(crate) fn guard_to_formula(func: &VerifiableFunction, guard: &GuardCondition
     }
 }
 
+fn bool_switch_semantics(
+    func: &VerifiableFunction,
+    discr: &Operand,
+    truth_value: bool,
+) -> Option<Formula> {
+    let len = is_empty_result_len(func, discr)?;
+    Some(if truth_value {
+        Formula::Eq(Box::new(len), Box::new(Formula::Int(0)))
+    } else {
+        Formula::Gt(Box::new(len), Box::new(Formula::Int(0)))
+    })
+}
+
+fn is_empty_result_len(func: &VerifiableFunction, discr: &Operand) -> Option<Formula> {
+    let local = match discr {
+        Operand::Copy(place) | Operand::Move(place) if place.projections.is_empty() => place.local,
+        _ => return None,
+    };
+    let (callee, arg) = call_defining_local(func, local)?;
+    if !callee.to_lowercase().contains("is_empty") {
+        return None;
+    }
+    slice_len_formula(func, arg)
+}
+
+fn call_defining_local<'a>(
+    func: &'a VerifiableFunction,
+    local: usize,
+) -> Option<(&'a str, &'a Operand)> {
+    for block in &func.body.blocks {
+        let Terminator::Call { func: callee, args, dest, .. } = &block.terminator else {
+            continue;
+        };
+        if dest.local == local && dest.projections.is_empty() {
+            return args.first().map(|arg| (callee.as_str(), arg));
+        }
+    }
+    None
+}
+
 /// Convert a sequence of guard conditions into a single conjunction Formula.
 ///
 /// An empty guard list yields `true` (no assumptions).
@@ -101,8 +172,7 @@ pub(crate) fn guards_to_assumption(
     let formulas: Vec<Formula> = guards.iter().map(|g| guard_to_formula(func, g)).collect();
     if formulas.len() == 1 {
         // SAFETY: len == 1 guarantees .next() returns Some.
-        formulas.into_iter().next()
-            .unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
+        formulas.into_iter().next().unwrap_or_else(|| unreachable!("empty iter despite len == 1"))
     } else {
         Formula::And(formulas)
     }
@@ -214,14 +284,15 @@ pub(crate) fn extract_assert_passed_semantics(
         // tRust #621: Also define _N.0 = result_formula. This connects the
         // tuple's result field to the actual arithmetic expression, enabling
         // dataflow tracking when _N.0 is read in subsequent blocks.
-        let tuple_name = func.body.locals.get(tuple_local)
+        let tuple_name = func
+            .body
+            .locals
+            .get(tuple_local)
             .and_then(|d| d.name.as_deref())
             .map_or_else(|| format!("_{tuple_local}"), |n| n.to_string());
         let result_field_name = format!("{tuple_name}.0");
-        let result_def = Formula::Eq(
-            Box::new(Formula::Var(result_field_name, Sort::Int)),
-            Box::new(result),
-        );
+        let result_def =
+            Formula::Eq(Box::new(Formula::Var(result_field_name, Sort::Int)), Box::new(result));
 
         // tRust #621: Include input range constraints for the operands of the
         // CheckedBinaryOp. Without these, variables like `hi` that appear in the
@@ -261,16 +332,48 @@ pub(crate) fn extract_block_definitions(
         }
 
         let dest_name = crate::place_to_var_name(func, place);
+        let dest_sort = func
+            .body
+            .locals
+            .get(place.local)
+            .map(|decl| match &decl.ty {
+                Ty::Int { .. } => Sort::Int,
+                ty => Sort::from_ty(ty),
+            })
+            .unwrap_or(Sort::Int);
         let rvalue_formula = match rvalue {
             Rvalue::Use(operand) => operand_to_formula(func, operand),
             Rvalue::BinaryOp(op, lhs, rhs) => {
-                let l = operand_to_formula(func, lhs);
-                let r = operand_to_formula(func, rhs);
-                // tRust #782: Pass signedness for correct right-shift selection.
-                let ty = operand_ty(func, lhs);
-                let width = ty.as_ref().and_then(|t| t.int_width());
-                let signed = ty.as_ref().is_some_and(|t| t.is_signed());
-                crate::chc::binop_to_formula(*op, l, r, width, signed)
+                let lhs_ty = operand_ty(func, lhs);
+                if lhs_ty.as_ref().is_some_and(|ty| matches!(ty, Ty::Bool)) {
+                    let l = operand_to_formula(func, lhs);
+                    let r = operand_to_formula(func, rhs);
+                    match op {
+                        BinOp::BitAnd => Formula::And(vec![l, r]),
+                        BinOp::BitOr => Formula::Or(vec![l, r]),
+                        BinOp::BitXor => {
+                            Formula::Not(Box::new(Formula::Eq(Box::new(l), Box::new(r))))
+                        }
+                        _ => {
+                            // tRust #782: Pass signedness for correct right-shift selection.
+                            let width = lhs_ty.as_ref().and_then(|ty| ty.int_width());
+                            let signed = lhs_ty.as_ref().is_some_and(|ty| ty.is_signed());
+                            crate::chc::binop_to_formula(*op, l, r, width, signed)
+                        }
+                    }
+                } else if let Some(Ty::Float { width }) = lhs_ty {
+                    match float_binop_to_formula(func, *op, lhs, rhs, width) {
+                        Some(formula) => formula,
+                        None => continue,
+                    }
+                } else {
+                    let l = operand_to_formula(func, lhs);
+                    let r = operand_to_formula(func, rhs);
+                    // tRust #782: Pass signedness for correct right-shift selection.
+                    let width = lhs_ty.as_ref().and_then(|ty| ty.int_width());
+                    let signed = lhs_ty.as_ref().is_some_and(|ty| ty.is_signed());
+                    crate::chc::binop_to_formula(*op, l, r, width, signed)
+                }
             }
             Rvalue::UnaryOp(trust_types::UnOp::Neg, op) => {
                 Formula::Neg(Box::new(operand_to_formula(func, op)))
@@ -278,18 +381,103 @@ pub(crate) fn extract_block_definitions(
             Rvalue::UnaryOp(trust_types::UnOp::Not, op) => {
                 Formula::Not(Box::new(operand_to_formula(func, op)))
             }
+            Rvalue::UnaryOp(trust_types::UnOp::PtrMetadata, op) => match slice_len_formula(func, op)
+            {
+                Some(formula) => formula,
+                None => continue,
+            },
             Rvalue::Cast(op, _ty) => operand_to_formula(func, op),
             // Skip complex rvalues — not needed for basic dataflow tracking.
             _ => continue,
         };
 
         defs.push(Formula::Eq(
-            Box::new(Formula::Var(dest_name, Sort::Int)),
+            Box::new(Formula::Var(dest_name, dest_sort)),
             Box::new(rvalue_formula),
         ));
     }
 
     defs
+}
+
+fn float_binop_to_formula(
+    func: &VerifiableFunction,
+    op: BinOp,
+    lhs: &Operand,
+    rhs: &Operand,
+    width: u32,
+) -> Option<Formula> {
+    match op {
+        BinOp::Eq => Some(float_eq_formula(func, lhs, rhs, width)),
+        BinOp::Ne => Some(Formula::Not(Box::new(float_eq_formula(func, lhs, rhs, width)))),
+        BinOp::Lt => Some(Formula::BvULt(
+            Box::new(float_magnitude_formula(func, lhs, width)),
+            Box::new(float_magnitude_formula(func, rhs, width)),
+            width - 1,
+        )),
+        BinOp::Le => Some(Formula::BvULe(
+            Box::new(float_magnitude_formula(func, lhs, width)),
+            Box::new(float_magnitude_formula(func, rhs, width)),
+            width - 1,
+        )),
+        BinOp::Gt => Some(Formula::BvULt(
+            Box::new(float_magnitude_formula(func, rhs, width)),
+            Box::new(float_magnitude_formula(func, lhs, width)),
+            width - 1,
+        )),
+        BinOp::Ge => Some(Formula::BvULe(
+            Box::new(float_magnitude_formula(func, rhs, width)),
+            Box::new(float_magnitude_formula(func, lhs, width)),
+            width - 1,
+        )),
+        _ => None,
+    }
+}
+
+fn float_eq_formula(
+    func: &VerifiableFunction,
+    lhs: &Operand,
+    rhs: &Operand,
+    width: u32,
+) -> Formula {
+    if float_is_zero_operand(lhs) || float_is_zero_operand(rhs) {
+        let nonzero_side = if float_is_zero_operand(lhs) { rhs } else { lhs };
+        Formula::Eq(
+            Box::new(float_magnitude_formula(func, nonzero_side, width)),
+            Box::new(Formula::BitVec { value: 0, width: width - 1 }),
+        )
+    } else {
+        Formula::Eq(
+            Box::new(float_operand_formula(func, lhs, width)),
+            Box::new(float_operand_formula(func, rhs, width)),
+        )
+    }
+}
+
+fn float_magnitude_formula(func: &VerifiableFunction, operand: &Operand, width: u32) -> Formula {
+    Formula::BvExtract {
+        inner: Box::new(float_operand_formula(func, operand, width)),
+        high: width - 2,
+        low: 0,
+    }
+}
+
+fn float_operand_formula(func: &VerifiableFunction, operand: &Operand, width: u32) -> Formula {
+    match operand {
+        Operand::Constant(ConstValue::Float(value)) => Formula::BitVec {
+            value: match width {
+                32 => i128::from(((*value) as f32).to_bits()),
+                64 => i128::from(value.to_bits()),
+                _ => i128::from(value.to_bits()),
+            },
+            width,
+        },
+        _ => operand_to_formula(func, operand),
+    }
+}
+
+fn float_is_zero_operand(operand: &Operand) -> bool {
+    matches!(operand, Operand::Constant(ConstValue::Float(value)) if *value == 0.0)
 }
 
 #[cfg(test)]
@@ -321,14 +509,13 @@ mod tests {
     #[test]
     fn test_guard_switch_int_match_to_formula() {
         let func = test_func();
-        let guard = GuardCondition::SwitchIntMatch {
-            discr: Operand::Copy(Place::local(1)),
-            value: 42,
-        };
+        let guard =
+            GuardCondition::SwitchIntMatch { discr: Operand::Copy(Place::local(1)), value: 42 };
         let formula = guard_to_formula(&func, &guard);
+        // tRust #883: Match both Var and SymVar via var_name().
         assert!(
             matches!(&formula, Formula::Eq(lhs, rhs)
-                if matches!(lhs.as_ref(), Formula::Var(name, _) if name == "x")
+                if lhs.var_name() == Some("x")
                 && matches!(rhs.as_ref(), Formula::Int(42))
             ),
             "SwitchIntMatch should produce discr == value, got: {formula:?}"
@@ -383,29 +570,24 @@ mod tests {
     #[test]
     fn test_guard_assert_holds_expected_true() {
         let func = test_func();
-        let guard = GuardCondition::AssertHolds {
-            cond: Operand::Copy(Place::local(2)),
-            expected: true,
-        };
+        let guard =
+            GuardCondition::AssertHolds { cond: Operand::Copy(Place::local(2)), expected: true };
         let formula = guard_to_formula(&func, &guard);
         // expected=true: cond holds, so formula is just the condition var
-        assert!(
-            matches!(&formula, Formula::Var(name, _) if name == "flag"),
-            "expected flag var, got: {formula:?}"
-        );
+        // tRust #883: Formula::var() now creates SymVar; match both Var and SymVar.
+        assert!(formula.var_name() == Some("flag"), "expected flag var, got: {formula:?}");
     }
 
     #[test]
     fn test_guard_assert_holds_expected_false() {
         let func = test_func();
-        let guard = GuardCondition::AssertHolds {
-            cond: Operand::Copy(Place::local(2)),
-            expected: false,
-        };
+        let guard =
+            GuardCondition::AssertHolds { cond: Operand::Copy(Place::local(2)), expected: false };
         let formula = guard_to_formula(&func, &guard);
         // expected=false: assert passes when cond is false, so NOT(cond)
+        // tRust #883: Match both Var and SymVar via var_name().
         assert!(
-            matches!(&formula, Formula::Not(inner) if matches!(inner.as_ref(), Formula::Var(name, _) if name == "flag")),
+            matches!(&formula, Formula::Not(inner) if inner.var_name() == Some("flag")),
             "expected Not(flag), got: {formula:?}"
         );
     }
@@ -420,8 +602,9 @@ mod tests {
         };
         let formula = guard_to_formula(&func, &guard);
         // Assert failed: expected true but got false => NOT(cond)
+        // tRust #883: Match both Var and SymVar via var_name().
         assert!(
-            matches!(&formula, Formula::Not(inner) if matches!(inner.as_ref(), Formula::Var(name, _) if name == "flag")),
+            matches!(&formula, Formula::Not(inner) if inner.var_name() == Some("flag")),
             "expected Not(flag), got: {formula:?}"
         );
     }
@@ -449,14 +632,8 @@ mod tests {
     fn test_guards_to_assumption_multiple() {
         let func = test_func();
         let guards = vec![
-            GuardCondition::SwitchIntMatch {
-                discr: Operand::Copy(Place::local(1)),
-                value: 1,
-            },
-            GuardCondition::AssertHolds {
-                cond: Operand::Copy(Place::local(2)),
-                expected: true,
-            },
+            GuardCondition::SwitchIntMatch { discr: Operand::Copy(Place::local(1)), value: 1 },
+            GuardCondition::AssertHolds { cond: Operand::Copy(Place::local(2)), expected: true },
         ];
         let assumption = guards_to_assumption(&func, &guards);
         match &assumption {

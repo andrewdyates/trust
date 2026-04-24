@@ -374,8 +374,8 @@ impl<G: EmissionGuarantee> Diagnostic<'_, G> for LinkingFailed<'_> {
                     }
                 } else if arg.as_encoded_bytes().ends_with(b".rlib") {
                     let rlib_path = Path::new(&arg);
-                    let dir = rlib_path.parent().expect("invariant: item must have parent");
-                    let filename = rlib_path.file_stem().expect("invariant: path must have file stem").to_owned();
+                    let dir = rlib_path.parent().unwrap();
+                    let filename = rlib_path.file_stem().unwrap().to_owned();
                     if let Some(ArgGroup::Rlibs(parent, rlibs)) = args.last_mut() {
                         if parent == dir {
                             rlibs.push(filename);
@@ -389,7 +389,7 @@ impl<G: EmissionGuarantee> Diagnostic<'_, G> for LinkingFailed<'_> {
                     args.push(ArgGroup::Regular(arg));
                 }
             }
-            let crate_hash = regex::bytes::Regex::new(r"-[0-9a-f]+").expect("invariant: regex pattern is valid");
+            let crate_hash = regex::bytes::Regex::new(r"-[0-9a-f]+").unwrap();
             self.command.args(args.into_iter().map(|arg_group| {
                 match arg_group {
                     // SAFETY: we are only matching on ASCII, not any surrogate pairs, so any replacements we do will still be valid.

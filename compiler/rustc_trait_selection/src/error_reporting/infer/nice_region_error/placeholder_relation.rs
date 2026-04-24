@@ -35,7 +35,6 @@ impl<'tcx> NiceRegionError<'_, 'tcx> {
                     }
                     ty::BoundRegionKind::Anon | ty::BoundRegionKind::ClosureEnv => (None, None),
                     ty::BoundRegionKind::NamedForPrinting(_) => {
-                        // tRust: invariant — this method is only used for pretty printing and must not be called in other contexts
                         bug!("only used for pretty printing")
                     }
                 };
@@ -45,7 +44,6 @@ impl<'tcx> NiceRegionError<'_, 'tcx> {
                     }
                     ty::BoundRegionKind::Anon | ty::BoundRegionKind::ClosureEnv => (None, None),
                     ty::BoundRegionKind::NamedForPrinting(_) => {
-                        // tRust: invariant — this method is only used for pretty printing and must not be called in other contexts
                         bug!("only used for pretty printing")
                     }
                 };

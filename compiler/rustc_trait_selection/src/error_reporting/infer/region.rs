@@ -163,7 +163,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             guar = Some(e)
         }
 
-        guar.expect("invariant: value is present")
+        guar.unwrap()
     }
 
     // This method goes through all the errors and try to group certain types
@@ -573,7 +573,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         impl_item_def_id: LocalDefId,
         err: &mut Diag<'_>,
     ) {
-        // tRust: known issue (compiler-errors) — Right now this is only being used for region
+        // FIXME(compiler-errors): Right now this is only being used for region
         // predicate mismatches. Ideally, we'd use it for *all* predicate mismatches,
         // but right now it's not really very smart when it comes to implicit `Sized`
         // predicates and bounds on the trait itself.
@@ -779,7 +779,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     // Get the `hir::Param` to verify whether it already has any bounds.
                     // We do this to avoid suggesting code that ends up as `T: 'a'b`,
                     // instead we suggest `T: 'a + 'b` in that case.
-                    let hir_generics = self.tcx.hir_get_generics(scope).expect("invariant: item has generics");
+                    let hir_generics = self.tcx.hir_get_generics(scope).unwrap();
                     let sugg_span = match hir_generics.bounds_span_for_suggestions(def_id) {
                         Some((span, open_paren_sp)) => {
                             Some((span, LifetimeSuggestion::NeedsPlus(open_paren_sp)))
@@ -970,12 +970,11 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
             hir::OwnerNode::ForeignItem(i) => visitor.visit_foreign_item(i),
             hir::OwnerNode::ImplItem(i) => visitor.visit_impl_item(i),
             hir::OwnerNode::TraitItem(i) => visitor.visit_trait_item(i),
-            // tRust: invariant — the crate root node does not have generics and should not reach this code path
             hir::OwnerNode::Crate(_) => bug!("OwnerNode::Crate doesn't not have generics"),
             hir::OwnerNode::Synthetic => unreachable!(),
         }
 
-        let ast_generics = self.tcx.hir_get_generics(lifetime_scope).expect("invariant: item has generics");
+        let ast_generics = self.tcx.hir_get_generics(lifetime_scope).unwrap();
         let sugg = ast_generics
             .span_for_lifetime_suggestion()
             .map(|span| (span, format!("{new_lt}, ")))
@@ -1102,7 +1101,6 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 let var_name = self.tcx.hir_name(upvar_id.var_path.hir_id);
                 format!(" for capture of `{var_name}` by closure")
             }
-            // tRust: invariant — NLL-only region variables must not appear during the lexical region resolution phase
             RegionVariableOrigin::Nll(..) => bug!("NLL variable found in lexical phase"),
         };
 
@@ -1138,11 +1136,10 @@ pub(super) fn note_and_explain_region<'tcx>(
 
         ty::ReError(_) => return,
 
-        // tRust: known issue (#125431) — `ReVar` shouldn't reach here.
+        // FIXME(#125431): `ReVar` shouldn't reach here.
         ty::ReVar(_) => (format!("lifetime `{region}`"), alt_span),
 
         ty::ReBound(..) | ty::ReErased => {
-            // tRust: invariant — all region kinds should be handled by the preceding match arms for diagnostic display
             bug!("unexpected region for note_and_explain_region: {:?}", region);
         }
     };
@@ -1220,7 +1217,6 @@ fn msg_span_from_named_region<'tcx>(
             bound: ty::BoundRegion { kind: ty::BoundRegionKind::Anon, .. },
             ..
         }) => ("an anonymous lifetime".to_owned(), None),
-        // tRust: invariant — this code path should be unreachable in msg_span_from_named_region
         _ => bug!("{:?}", region),
     }
 }
@@ -1440,7 +1436,7 @@ fn suggest_precise_capturing<'tcx>(
                     .map(sym::character)
                     .chain((0..).map(|i| Symbol::intern(&format!("T{i}"))))
                     .find(|s| captured_non_lifetimes.insert(*s))
-                    .expect("invariant: value is present")
+                    .unwrap()
             };
 
             let mut new_params = String::new();

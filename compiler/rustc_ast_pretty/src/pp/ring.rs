@@ -66,12 +66,12 @@ impl<T> RingBuffer<T> {
 impl<T> Index<usize> for RingBuffer<T> {
     type Output = T;
     fn index(&self, index: usize) -> &Self::Output {
-        &self.data[index.checked_sub(self.offset).expect("invariant: index >= offset for valid ring access")] // tRust: unwrap -> expect
+        &self.data[index.checked_sub(self.offset).unwrap()]
     }
 }
 
 impl<T> IndexMut<usize> for RingBuffer<T> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.data[index.checked_sub(self.offset).expect("invariant: index >= offset for valid ring access")] // tRust: unwrap -> expect
+        &mut self.data[index.checked_sub(self.offset).unwrap()]
     }
 }

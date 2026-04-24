@@ -7,11 +7,11 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-mod types;
 mod checkers;
-mod modular;
 mod dag;
 mod manifest;
+mod modular;
+mod types;
 // tRust #793: Portfolio certificate composition for multi-backend proof results.
 pub(crate) mod portfolio;
 
@@ -42,11 +42,11 @@ pub use dag::{
 
 // --- Re-exports: manifest ---
 pub use manifest::{
-    generate_manifest, CompositionManifest, FunctionSpec, ManifestEntry, ManifestError,
+    CompositionManifest, FunctionSpec, ManifestEntry, ManifestError, generate_manifest,
 };
 
 // --- Re-exports: portfolio (#793) ---
 pub use portfolio::{
-    compose_certificates, make_component, CertificateComponent, ComposedCertificate,
-    CompositionMethod,
+    CertificateComponent, ComposedCertificate, CompositionMethod, compose_certificates,
+    make_component,
 };

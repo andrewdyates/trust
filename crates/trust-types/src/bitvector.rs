@@ -87,10 +87,7 @@ impl BitVector {
         if width == 0 || width > 128 {
             return Err(BvError::InvalidWidth(width));
         }
-        Ok(Self {
-            width,
-            value: mask(value, width),
-        })
+        Ok(Self { width, value: mask(value, width) })
     }
 
     /// Bit width.
@@ -127,38 +124,24 @@ impl BitVector {
         if width == 0 || width > 128 {
             return Err(BvError::InvalidWidth(width));
         }
-        Ok(Self {
-            width,
-            value: mask_all(width),
-        })
+        Ok(Self { width, value: mask_all(width) })
     }
 }
 
 /// Mask a value to `width` bits.
 fn mask(value: u128, width: u32) -> u128 {
-    if width >= 128 {
-        value
-    } else {
-        value & ((1u128 << width) - 1)
-    }
+    if width >= 128 { value } else { value & ((1u128 << width) - 1) }
 }
 
 /// All-ones mask for `width` bits.
 fn mask_all(width: u32) -> u128 {
-    if width >= 128 {
-        u128::MAX
-    } else {
-        (1u128 << width) - 1
-    }
+    if width >= 128 { u128::MAX } else { (1u128 << width) - 1 }
 }
 
 /// Validate that two bitvectors have the same width.
 pub fn bv_width_check(a: &BitVector, b: &BitVector) -> Result<(), BvError> {
     if a.width() != b.width() {
-        Err(BvError::WidthMismatch {
-            left: a.width(),
-            right: b.width(),
-        })
+        Err(BvError::WidthMismatch { left: a.width(), right: b.width() })
     } else {
         Ok(())
     }
@@ -217,29 +200,17 @@ pub fn bv_eval(op: BvOp, lhs: &BitVector, rhs: &BitVector) -> Result<BitVector, 
         }
         BvOp::Shl => {
             let shift = b as u32;
-            if shift >= w {
-                0
-            } else {
-                a << shift
-            }
+            if shift >= w { 0 } else { a << shift }
         }
         BvOp::LShr => {
             let shift = b as u32;
-            if shift >= w {
-                0
-            } else {
-                a >> shift
-            }
+            if shift >= w { 0 } else { a >> shift }
         }
         BvOp::AShr => {
             let shift = b as u32;
             let sa = lhs.signed_value();
             if shift >= w {
-                if sa < 0 {
-                    mask_all(w)
-                } else {
-                    0
-                }
+                if sa < 0 { mask_all(w) } else { 0 }
             } else {
                 // Perform arithmetic shift on the sign-extended value,
                 // then mask back to width.
@@ -283,10 +254,7 @@ pub fn zero_extend(bv: &BitVector, target_width: u32) -> Result<BitVector, BvErr
         return Err(BvError::InvalidWidth(target_width));
     }
     if target_width < bv.width() {
-        return Err(BvError::ExtendNarrowing {
-            target: target_width,
-            current: bv.width(),
-        });
+        return Err(BvError::ExtendNarrowing { target: target_width, current: bv.width() });
     }
     BitVector::new(target_width, bv.value())
 }
@@ -297,10 +265,7 @@ pub fn sign_extend(bv: &BitVector, target_width: u32) -> Result<BitVector, BvErr
         return Err(BvError::InvalidWidth(target_width));
     }
     if target_width < bv.width() {
-        return Err(BvError::ExtendNarrowing {
-            target: target_width,
-            current: bv.width(),
-        });
+        return Err(BvError::ExtendNarrowing { target: target_width, current: bv.width() });
     }
     // The signed_value() already has proper sign extension to i128.
     // Mask to target width to get the correct representation.
@@ -312,11 +277,7 @@ pub fn sign_extend(bv: &BitVector, target_width: u32) -> Result<BitVector, BvErr
 /// Returns a new bitvector of width `high - low + 1`.
 pub fn extract(bv: &BitVector, high: u32, low: u32) -> Result<BitVector, BvError> {
     if high < low || high >= bv.width() {
-        return Err(BvError::InvalidExtract {
-            high,
-            low,
-            width: bv.width(),
-        });
+        return Err(BvError::InvalidExtract { high, low, width: bv.width() });
     }
     let new_width = high - low + 1;
     let shifted = bv.value() >> low;
@@ -329,10 +290,7 @@ pub fn extract(bv: &BitVector, high: u32, low: u32) -> Result<BitVector, BvError
 pub fn concat(lhs: &BitVector, rhs: &BitVector) -> Result<BitVector, BvError> {
     let new_width = lhs.width() + rhs.width();
     if new_width > 128 {
-        return Err(BvError::ConcatOverflow {
-            left_width: lhs.width(),
-            right_width: rhs.width(),
-        });
+        return Err(BvError::ConcatOverflow { left_width: lhs.width(), right_width: rhs.width() });
     }
     let combined = (lhs.value() << rhs.width()) | rhs.value();
     BitVector::new(new_width, combined)
@@ -356,10 +314,7 @@ mod tests {
 
     #[test]
     fn test_bitvector_invalid_width_over_128() {
-        assert!(matches!(
-            BitVector::new(129, 0),
-            Err(BvError::InvalidWidth(129))
-        ));
+        assert!(matches!(BitVector::new(129, 0), Err(BvError::InvalidWidth(129))));
     }
 
     #[test]
@@ -410,10 +365,7 @@ mod tests {
         assert_eq!(r.value(), 14); // 100 / 7 = 14
 
         let zero = BitVector::new(32, 0).expect("valid");
-        assert!(matches!(
-            bv_eval(BvOp::UDiv, &a, &zero),
-            Err(BvError::DivisionByZero(32))
-        ));
+        assert!(matches!(bv_eval(BvOp::UDiv, &a, &zero), Err(BvError::DivisionByZero(32))));
     }
 
     #[test]
@@ -476,10 +428,7 @@ mod tests {
         let b = BitVector::new(16, 1).expect("valid");
         assert!(matches!(
             bv_eval(BvOp::Add, &a, &b),
-            Err(BvError::WidthMismatch {
-                left: 8,
-                right: 16
-            })
+            Err(BvError::WidthMismatch { left: 8, right: 16 })
         ));
     }
 
@@ -536,17 +485,11 @@ mod tests {
         let bv = BitVector::new(16, 0).expect("valid");
         assert!(matches!(
             zero_extend(&bv, 8),
-            Err(BvError::ExtendNarrowing {
-                target: 8,
-                current: 16
-            })
+            Err(BvError::ExtendNarrowing { target: 8, current: 16 })
         ));
         assert!(matches!(
             sign_extend(&bv, 8),
-            Err(BvError::ExtendNarrowing {
-                target: 8,
-                current: 16
-            })
+            Err(BvError::ExtendNarrowing { target: 8, current: 16 })
         ));
     }
 
@@ -562,14 +505,8 @@ mod tests {
     #[test]
     fn test_extract_invalid() {
         let bv = BitVector::new(8, 0xFF).expect("valid");
-        assert!(matches!(
-            extract(&bv, 8, 0),
-            Err(BvError::InvalidExtract { .. })
-        ));
-        assert!(matches!(
-            extract(&bv, 2, 5),
-            Err(BvError::InvalidExtract { .. })
-        ));
+        assert!(matches!(extract(&bv, 8, 0), Err(BvError::InvalidExtract { .. })));
+        assert!(matches!(extract(&bv, 2, 5), Err(BvError::InvalidExtract { .. })));
     }
 
     #[test]
@@ -585,10 +522,7 @@ mod tests {
     fn test_concat_overflow() {
         let a = BitVector::new(64, 0).expect("valid");
         let b = BitVector::new(65, 0).expect("valid");
-        assert!(matches!(
-            concat(&a, &b),
-            Err(BvError::ConcatOverflow { .. })
-        ));
+        assert!(matches!(concat(&a, &b), Err(BvError::ConcatOverflow { .. })));
     }
 
     #[test]

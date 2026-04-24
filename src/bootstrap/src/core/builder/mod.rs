@@ -765,6 +765,7 @@ impl<'a> Builder<'a> {
                 tool::RustInstaller,
                 tool::FeaturesStatusDump,
                 tool::Cargo,
+                tool::CargoTrust,
                 tool::RustAnalyzer,
                 tool::RustAnalyzerProcMacroSrv,
                 tool::Rustdoc,
@@ -963,6 +964,8 @@ impl<'a> Builder<'a> {
                 dist::LlvmBitcodeLinker,
                 dist::RustDev,
                 dist::Enzyme,
+                dist::CargoTrust,
+                dist::Llvm2CodegenBackend,
                 dist::Bootstrap,
                 dist::Extended,
                 // It seems that PlainSourceTarball somehow changes how some of the tools
@@ -992,7 +995,9 @@ impl<'a> Builder<'a> {
                 install::Miri,
                 install::LlvmTools,
                 install::Src,
+                install::CargoTrust,
                 install::RustcCodegenCranelift,
+                install::RustcCodegenLlvm2,
                 install::LlvmBitcodeLinker
             ),
             Kind::Run => describe!(
@@ -1400,6 +1405,16 @@ Alternatively, you can set `build.local-rebuild=true` and use a stage0 compiler 
     /// `target_compiler`.
     pub fn rustdoc_for_compiler(&self, target_compiler: Compiler) -> PathBuf {
         self.ensure(tool::Rustdoc { target_compiler })
+    }
+
+    pub fn cargo_trust_cmd(&self, run_compiler: Compiler) -> BootstrapCommand {
+        assert!(run_compiler.stage > 0, "cargo-trust can not be invoked at stage 0");
+
+        let cargo_trust = self.ensure(tool::CargoTrust::from_target_compiler(self, run_compiler));
+        let mut cmd = command(cargo_trust.tool_path);
+        cmd.env("TRUST_RUSTC", self.rustc(run_compiler));
+        self.add_rustc_lib_path(run_compiler, &mut cmd);
+        cmd
     }
 
     pub fn cargo_miri_cmd(&self, run_compiler: Compiler) -> BootstrapCommand {

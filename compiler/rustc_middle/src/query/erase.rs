@@ -42,7 +42,7 @@ unsafe impl<Storage: Copy> DynSend for ErasedData<Storage> {}
 ///
 /// Erasing and unerasing values is performed by [`erase_val`] and [`restore_val`].
 ///
-/// tRust: known issue — This whole trait could potentially be replaced by `T: Copy` and the
+/// FIXME: This whole trait could potentially be replaced by `T: Copy` and the
 /// storage type `[u8; size_of::<T>()]` when support for that is more mature.
 pub trait Erasable: Copy {
     /// Storage type to used for erased values of this type.
@@ -109,7 +109,7 @@ pub fn restore_val<T: Erasable>(erased_value: Erased<T>) -> T {
     unsafe { transmute_unchecked::<MaybeUninit<T::Storage>, T>(data) }
 }
 
-// tRust: known issue (#151565) — Using `T: ?Sized` here should let us remove the separate
+// FIXME(#151565): Using `T: ?Sized` here should let us remove the separate
 // impls for fat reference types.
 impl<T> Erasable for &'_ T {
     type Storage = [u8; size_of::<&'_ ()>()];

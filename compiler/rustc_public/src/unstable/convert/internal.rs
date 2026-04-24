@@ -51,7 +51,7 @@ impl RustcInternal for DefId {
         tables: &mut Tables<'_, BridgeTys>,
         tcx: impl InternalCx<'tcx>,
     ) -> Self::T<'tcx> {
-        tcx.lift(tables.def_ids[*self]).expect("invariant: DefId liftable to current tcx") // tRust: unwrap -> expect
+        tcx.lift(tables.def_ids[*self]).unwrap()
     }
 }
 
@@ -78,7 +78,7 @@ impl RustcInternal for GenericArgKind {
             GenericArgKind::Type(ty) => ty.internal(tables, tcx).into(),
             GenericArgKind::Const(cnst) => cnst.internal(tables, tcx).into(),
         };
-        tcx.lift(arg).expect("invariant: GenericArg must be liftable to current context") // tRust: unwrap -> expect
+        tcx.lift(arg).unwrap()
     }
 }
 
@@ -101,7 +101,7 @@ impl RustcInternal for Ty {
         tables: &mut Tables<'_, BridgeTys>,
         tcx: impl InternalCx<'tcx>,
     ) -> Self::T<'tcx> {
-        tcx.lift(tables.types[*self]).expect("invariant: Ty must be liftable to current context") // tRust: unwrap -> expect
+        tcx.lift(tables.types[*self]).unwrap()
     }
 }
 
@@ -112,7 +112,7 @@ impl RustcInternal for TyConst {
         tables: &mut Tables<'_, BridgeTys>,
         tcx: impl InternalCx<'tcx>,
     ) -> Self::T<'tcx> {
-        tcx.lift(tables.ty_consts[self.id]).expect("invariant: TyConst must be liftable to current context") // tRust: unwrap -> expect
+        tcx.lift(tables.ty_consts[self.id]).unwrap()
     }
 }
 
@@ -125,8 +125,8 @@ impl RustcInternal for Pattern {
     ) -> Self::T<'tcx> {
         tcx.mk_pat(match self {
             Pattern::Range { start, end, include_end: _ } => rustc_ty::PatternKind::Range {
-                start: start.as_ref().expect("invariant: range pattern must have start bound").internal(tables, tcx), // tRust: unwrap -> expect
-                end: end.as_ref().expect("invariant: range pattern must have end bound").internal(tables, tcx), // tRust: unwrap -> expect
+                start: start.as_ref().unwrap().internal(tables, tcx),
+                end: end.as_ref().unwrap().internal(tables, tcx),
             },
         })
     }
@@ -314,7 +314,7 @@ impl RustcInternal for FnSig {
             safety: self.safety.internal(tables, tcx),
             abi: self.abi.internal(tables, tcx),
         })
-        .expect("invariant: FnSig must be liftable to current context") // tRust: unwrap -> expect
+        .unwrap()
     }
 }
 
@@ -352,16 +352,16 @@ impl RustcInternal for MirConst {
         let constant = tables.mir_consts[self.id];
         match constant {
             rustc_middle::mir::Const::Ty(ty, ct) => {
-                rustc_middle::mir::Const::Ty(tcx.lift(ty).expect("invariant: Const::Ty type must be liftable"), tcx.lift(ct).expect("invariant: Const::Ty const must be liftable")) // tRust: unwrap -> expect
+                rustc_middle::mir::Const::Ty(tcx.lift(ty).unwrap(), tcx.lift(ct).unwrap())
             }
             rustc_middle::mir::Const::Unevaluated(uneval, ty) => {
                 rustc_middle::mir::Const::Unevaluated(
-                    tcx.lift(uneval).expect("invariant: UnevaluatedConst must be liftable"), // tRust: unwrap -> expect
-                    tcx.lift(ty).expect("invariant: Unevaluated type must be liftable"), // tRust: unwrap -> expect
+                    tcx.lift(uneval).unwrap(),
+                    tcx.lift(ty).unwrap(),
                 )
             }
             rustc_middle::mir::Const::Val(const_val, ty) => {
-                rustc_middle::mir::Const::Val(tcx.lift(const_val).expect("invariant: ConstValue must be liftable"), tcx.lift(ty).expect("invariant: ConstValue type must be liftable")) // tRust: unwrap -> expect
+                rustc_middle::mir::Const::Val(tcx.lift(const_val).unwrap(), tcx.lift(ty).unwrap())
             }
         }
     }
@@ -394,7 +394,7 @@ impl RustcInternal for Instance {
         tables: &mut Tables<'_, BridgeTys>,
         tcx: impl InternalCx<'tcx>,
     ) -> Self::T<'tcx> {
-        tcx.lift(tables.instances[self.def]).expect("invariant: Instance must be liftable to current context") // tRust: unwrap -> expect
+        tcx.lift(tables.instances[self.def]).unwrap()
     }
 }
 
@@ -549,7 +549,7 @@ impl RustcInternal for AllocId {
         tables: &mut Tables<'_, BridgeTys>,
         tcx: impl InternalCx<'tcx>,
     ) -> Self::T<'tcx> {
-        tcx.lift(tables.alloc_ids[*self]).expect("invariant: AllocId must be liftable to current context") // tRust: unwrap -> expect
+        tcx.lift(tables.alloc_ids[*self]).unwrap()
     }
 }
 
@@ -655,7 +655,7 @@ impl RustcInternal for Layout {
         tables: &mut Tables<'_, BridgeTys>,
         tcx: impl InternalCx<'tcx>,
     ) -> Self::T<'tcx> {
-        tcx.lift(tables.layouts[*self]).expect("invariant: Layout must be liftable to current context") // tRust: unwrap -> expect
+        tcx.lift(tables.layouts[*self]).unwrap()
     }
 }
 

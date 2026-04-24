@@ -4,7 +4,7 @@
 //! For all the gory details, see the provider of the `dependency_formats`
 //! query.
 
-// tRust: known issue — move this file to rustc_metadata::dependency_format, but
+// FIXME: move this file to rustc_metadata::dependency_format, but
 // this will introduce circular dependency between rustc_metadata and rustc_middle
 
 use rustc_data_structures::fx::FxIndexMap;

@@ -26,7 +26,7 @@ impl<'a, 'tcx> Diagnostic<'a, ()> for UnusedImport<'tcx> {
 pub(super) fn check_unused_traits(tcx: TyCtxt<'_>, (): ()) {
     let mut used_trait_imports = UnordSet::<LocalDefId>::default();
 
-    // tRust: known issue — Use `tcx.hir_par_body_owners()` when we implement creating `DefId`s
+    // FIXME: Use `tcx.hir_par_body_owners()` when we implement creating `DefId`s
     // for anon constants during their parents' typeck.
     // Doing so at current will produce queries cycle errors because it may typeck
     // on anon constants directly.

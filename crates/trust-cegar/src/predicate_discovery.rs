@@ -196,7 +196,7 @@ fn discover_from_counterexample(cex: &Counterexample, out: &mut BTreeSet<Predica
                 // Float predicates are limited; add sign predicates.
                 out.insert(Predicate::comparison(name, CmpOp::Ge, "0"));
             }
-            _ => {},
+            _ => {}
         }
     }
 }
@@ -397,9 +397,7 @@ mod tests {
     use trust_types::Sort;
 
     fn make_cex(assignments: Vec<(&str, CounterexampleValue)>) -> Counterexample {
-        Counterexample::new(
-            assignments.into_iter().map(|(n, v)| (n.to_string(), v)).collect(),
-        )
+        Counterexample::new(assignments.into_iter().map(|(n, v)| (n.to_string(), v)).collect())
     }
 
     #[test]
@@ -473,14 +471,8 @@ mod tests {
     fn test_discover_predicates_from_formula() {
         let cex = make_cex(vec![]);
         let program = Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("a".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
-            Formula::Ge(
-                Box::new(Formula::Var("b".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("a".into(), Sort::Int)), Box::new(Formula::Int(100))),
+            Formula::Ge(Box::new(Formula::Var("b".into(), Sort::Int)), Box::new(Formula::Int(0))),
         ]);
         let preds = discover_predicates(&cex, &program);
         assert!(preds.contains(&Predicate::comparison("a", CmpOp::Lt, "100")));
@@ -507,13 +499,12 @@ mod tests {
     #[test]
     fn test_discover_predicates_deduplicates() {
         let cex = make_cex(vec![("x", CounterexampleValue::Int(0))]);
-        let program = Formula::Ge(
-            Box::new(Formula::Var("x".into(), Sort::Int)),
-            Box::new(Formula::Int(0)),
-        );
+        let program =
+            Formula::Ge(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0)));
         let preds = discover_predicates(&cex, &program);
         // "x >= 0" should appear exactly once.
-        let count = preds.iter().filter(|p| **p == Predicate::comparison("x", CmpOp::Ge, "0")).count();
+        let count =
+            preds.iter().filter(|p| **p == Predicate::comparison("x", CmpOp::Ge, "0")).count();
         assert_eq!(count, 1);
     }
 
@@ -566,10 +557,7 @@ mod tests {
     #[test]
     fn test_formula_variable_count() {
         let f = Formula::And(vec![
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(10)),
-            ),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(10))),
             Formula::Ge(
                 Box::new(Formula::Var("y".into(), Sort::Int)),
                 Box::new(Formula::Var("x".into(), Sort::Int)),

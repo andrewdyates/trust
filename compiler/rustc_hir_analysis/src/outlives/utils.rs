@@ -80,7 +80,6 @@ pub(crate) fn insert_outlives_predicate<'tcx>(
                     }
 
                     Component::Placeholder(_) => {
-                        // tRust: invariant — placeholder regions should not appear in outlives deduction
                         span_bug!(span, "Should not deduce placeholder outlives component");
                     }
 
@@ -126,7 +125,6 @@ pub(crate) fn insert_outlives_predicate<'tcx>(
                         // do anything here, ignore it.
                     }
 
-                    // tRust: invariant — inference variables should not appear without an infcx
                     Component::UnresolvedInferenceVariable(_) => bug!("not using infcx"),
                 }
             }
@@ -179,7 +177,6 @@ fn is_free_region(region: Region<'_>) -> bool {
 
         // These regions don't appear in types from type declarations:
         ty::ReErased | ty::ReVar(..) | ty::RePlaceholder(..) | ty::ReLateParam(..) => {
-            // tRust: invariant — only early-bound or late-bound regions expected in outlives inference
             bug!("unexpected region in outlives inference: {:?}", region);
         }
     }

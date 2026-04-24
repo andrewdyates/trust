@@ -14,8 +14,8 @@
 
 use std::io::{BufRead, BufReader, Write as _};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
 use std::sync::Mutex;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use trust_types::*;
@@ -157,7 +157,7 @@ impl IncrementalSmtLibBackend {
                     Ok(0) => {
                         // EOF: solver closed stdout.
                         let _ = tx.send(Err(
-                            "solver closed stdout (process may have crashed)".to_string(),
+                            "solver closed stdout (process may have crashed)".to_string()
                         ));
                         break;
                     }
@@ -175,11 +175,7 @@ impl IncrementalSmtLibBackend {
             }
         });
 
-        let mut proc = SolverProcess {
-            child,
-            stdin,
-            line_rx: rx,
-        };
+        let mut proc = SolverProcess { child, stdin, line_rx: rx };
 
         // Use a generous timeout for initial setup commands (5s).
         let setup_timeout = Duration::from_secs(5);
@@ -196,10 +192,7 @@ impl IncrementalSmtLibBackend {
     }
 
     /// Ensure a live solver process exists, spawning one if needed.
-    fn ensure_process(
-        &self,
-        state: &mut SessionState,
-    ) -> Result<(), String> {
+    fn ensure_process(&self, state: &mut SessionState) -> Result<(), String> {
         if state.process.is_some() {
             return Ok(());
         }
@@ -269,7 +262,7 @@ impl IncrementalSmtLibBackend {
             send_command(proc, "(pop 1)")?;
             read_response_line(proc, remaining_timeout(timeout, start))?;
             VerificationResult::Proved {
-                solver: "z4-smtlib-incremental".to_string(),
+                solver: "z4-smtlib-incremental".into(),
                 time_ms: elapsed,
                 strength: ProofStrength::smt_unsat(),
                 proof_certificate: None,
@@ -278,8 +271,7 @@ impl IncrementalSmtLibBackend {
         } else if sat_line.trim() == "sat" {
             // Get model for counterexample.
             send_command(proc, "(get-model)")?;
-            let model_output =
-                read_model_response(proc, remaining_timeout(timeout, start))?;
+            let model_output = read_model_response(proc, remaining_timeout(timeout, start))?;
 
             // Pop scope.
             send_command(proc, "(pop 1)")?;
@@ -293,7 +285,7 @@ impl IncrementalSmtLibBackend {
             send_command(proc, "(pop 1)")?;
             read_response_line(proc, remaining_timeout(timeout, start))?;
             VerificationResult::Unknown {
-                solver: "z4-smtlib-incremental".to_string(),
+                solver: "z4-smtlib-incremental".into(),
                 time_ms: elapsed,
                 reason: "solver returned unknown".to_string(),
             }
@@ -364,7 +356,7 @@ impl VerificationBackend for IncrementalSmtLibBackend {
                 // (likely still expensive) query.
                 if is_timeout {
                     return VerificationResult::Timeout {
-                        solver: "z4-smtlib-incremental".to_string(),
+                        solver: "z4-smtlib-incremental".into(),
                         timeout_ms: self.query_timeout_ms,
                     };
                 }
@@ -381,12 +373,8 @@ impl VerificationBackend for IncrementalSmtLibBackend {
 
 /// Send a command string to the solver's stdin, followed by a newline.
 fn send_command(proc: &mut SolverProcess, cmd: &str) -> Result<(), String> {
-    proc.stdin
-        .write_all(cmd.as_bytes())
-        .map_err(|e| format!("write to solver: {e}"))?;
-    proc.stdin
-        .write_all(b"\n")
-        .map_err(|e| format!("write newline: {e}"))?;
+    proc.stdin.write_all(cmd.as_bytes()).map_err(|e| format!("write to solver: {e}"))?;
+    proc.stdin.write_all(b"\n").map_err(|e| format!("write newline: {e}"))?;
     proc.stdin.flush().map_err(|e| format!("flush solver stdin: {e}"))?;
     Ok(())
 }
@@ -397,11 +385,7 @@ fn send_command(proc: &mut SolverProcess, cmd: &str) -> Result<(), String> {
 /// be an instant failure).
 fn remaining_timeout(total: Duration, start: Instant) -> Duration {
     let elapsed = start.elapsed();
-    if elapsed >= total {
-        Duration::from_millis(1)
-    } else {
-        total - elapsed
-    }
+    if elapsed >= total { Duration::from_millis(1) } else { total - elapsed }
 }
 
 /// Read a single response line from the solver's stdout.
@@ -416,24 +400,23 @@ fn read_response_line(proc: &mut SolverProcess, timeout: Duration) -> Result<Str
                 Err(SolverProcessError::ProcessCrashed {
                     solver: "z4-smtlib-incremental",
                     detail: "solver closed stdout".to_string(),
-                }.to_string())
+                }
+                .to_string())
             } else {
                 Ok(line)
             }
         }
         Ok(Err(e)) => Err(e),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            Err(SolverProcessError::Timeout {
-                solver: "z4-smtlib-incremental",
-                detail: "no response within deadline".to_string(),
-            }.to_string())
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(SolverProcessError::Timeout {
+            solver: "z4-smtlib-incremental",
+            detail: "no response within deadline".to_string(),
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => {
-            Err(SolverProcessError::Disconnected {
-                solver: "z4-smtlib-incremental",
-                detail: "reader thread disconnected (process may have crashed)".to_string(),
-            }.to_string())
+        .to_string()),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(SolverProcessError::Disconnected {
+            solver: "z4-smtlib-incremental",
+            detail: "reader thread disconnected (process may have crashed)".to_string(),
         }
+        .to_string()),
     }
 }
 
@@ -459,13 +442,15 @@ fn read_model_response(proc: &mut SolverProcess, timeout: Duration) -> Result<St
                 return Err(SolverProcessError::Timeout {
                     solver: "z4-smtlib-incremental",
                     detail: "timeout during model read".to_string(),
-                }.to_string());
+                }
+                .to_string());
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Err(SolverProcessError::Disconnected {
                     solver: "z4-smtlib-incremental",
                     detail: "disconnected during model read".to_string(),
-                }.to_string());
+                }
+                .to_string());
             }
         };
 
@@ -473,7 +458,8 @@ fn read_model_response(proc: &mut SolverProcess, timeout: Duration) -> Result<St
             return Err(SolverProcessError::ProcessCrashed {
                 solver: "z4-smtlib-incremental",
                 detail: "solver closed stdout during model read".to_string(),
-            }.to_string());
+            }
+            .to_string());
         }
 
         // Track parenthesis depth.
@@ -496,7 +482,8 @@ fn read_model_response(proc: &mut SolverProcess, timeout: Duration) -> Result<St
                 solver: "z4-smtlib-incremental",
                 bytes: output.len(),
                 limit: MAX_MODEL_OUTPUT_BYTES,
-            }.to_string());
+            }
+            .to_string());
         }
 
         // Model is complete when we've started reading parens and depth returns to 0.
@@ -536,8 +523,7 @@ pub fn benchmark_incremental_vs_process(
     timeout_ms: u64,
 ) -> (u64, u64) {
     // Incremental backend.
-    let incr = IncrementalSmtLibBackend::with_solver_path(solver_path)
-        .with_timeout(timeout_ms);
+    let incr = IncrementalSmtLibBackend::with_solver_path(solver_path).with_timeout(timeout_ms);
     let start = Instant::now();
     for vc in vcs {
         incr.verify(vc);
@@ -545,8 +531,7 @@ pub fn benchmark_incremental_vs_process(
     let incremental_ms = start.elapsed().as_millis() as u64;
 
     // Per-process backend.
-    let pp = SmtLibBackend::with_solver_path(solver_path)
-        .with_timeout(timeout_ms);
+    let pp = SmtLibBackend::with_solver_path(solver_path).with_timeout(timeout_ms);
     let start = Instant::now();
     for vc in vcs {
         pp.verify(vc);
@@ -565,7 +550,7 @@ mod tests {
     fn make_vc(formula: Formula) -> VerificationCondition {
         VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "test_fn".to_string(),
+            function: "test_fn".into(),
             location: SourceSpan::default(),
             formula,
             contract_metadata: None,
@@ -602,7 +587,7 @@ mod tests {
         let backend = IncrementalSmtLibBackend::new();
         let vc = VerificationCondition {
             kind: VcKind::Postcondition,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -615,7 +600,7 @@ mod tests {
         let backend = IncrementalSmtLibBackend::new();
         let vc = VerificationCondition {
             kind: VcKind::Deadlock,
-            function: "test".to_string(),
+            function: "test".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(false),
             contract_metadata: None,
@@ -625,8 +610,8 @@ mod tests {
 
     #[test]
     fn test_incremental_backend_builder() {
-        let backend = IncrementalSmtLibBackend::with_solver_path("/usr/bin/z4")
-            .with_timeout(60_000);
+        let backend =
+            IncrementalSmtLibBackend::with_solver_path("/usr/bin/z4").with_timeout(60_000);
         assert_eq!(backend.solver_path, "/usr/bin/z4");
         assert_eq!(backend.query_timeout_ms, 60_000);
     }
@@ -669,7 +654,10 @@ mod tests {
         }
 
         let (_, _, fallen_back) = backend.stats();
-        assert!(fallen_back, "should permanently fall back after {MAX_CONSECUTIVE_FAILURES} failures");
+        assert!(
+            fallen_back,
+            "should permanently fall back after {MAX_CONSECUTIVE_FAILURES} failures"
+        );
     }
 
     // --- I/O helper tests ---
@@ -746,9 +734,7 @@ mod tests {
         // Create a channel but never send anything -- simulates a hung solver.
         let (_tx, rx) = mpsc::channel::<Result<String, String>>();
         let mut proc = SolverProcess {
-            child: Command::new("true")
-                .spawn()
-                .expect("spawn true"),
+            child: Command::new("true").spawn().expect("spawn true"),
             stdin: Command::new("true")
                 .stdin(Stdio::piped())
                 .spawn()
@@ -764,14 +750,8 @@ mod tests {
         let elapsed = start.elapsed();
 
         assert!(result.is_err(), "should timeout");
-        assert!(
-            result.unwrap_err().contains("timeout"),
-            "error should mention timeout"
-        );
-        assert!(
-            elapsed.as_millis() < 2000,
-            "should timeout quickly, took {elapsed:?}"
-        );
+        assert!(result.unwrap_err().contains("timeout"), "error should mention timeout");
+        assert!(elapsed.as_millis() < 2000, "should timeout quickly, took {elapsed:?}");
 
         // Cleanup.
         let _ = proc.child.kill();
@@ -784,9 +764,7 @@ mod tests {
         tx.send(Ok("success\n".to_string())).unwrap();
 
         let mut proc = SolverProcess {
-            child: Command::new("true")
-                .spawn()
-                .expect("spawn true"),
+            child: Command::new("true").spawn().expect("spawn true"),
             stdin: Command::new("true")
                 .stdin(Stdio::piped())
                 .spawn()
@@ -827,8 +805,7 @@ mod tests {
         // Note: on macOS, `cat -smt2 -in` exits immediately with "illegal option",
         // causing fallback to non-incremental which returns Unknown. Both outcomes
         // are acceptable: the solver did not produce a proof.
-        let backend = IncrementalSmtLibBackend::with_solver_path("cat")
-            .with_timeout(200);
+        let backend = IncrementalSmtLibBackend::with_solver_path("cat").with_timeout(200);
         let vc = make_vc(Formula::Bool(false));
 
         let start = Instant::now();
@@ -838,14 +815,14 @@ mod tests {
         // Should get Timeout (solver hung) or Unknown (solver crashed on bad args).
         // Both are valid: the solver failed to produce a proof within the timeout.
         assert!(
-            matches!(result, VerificationResult::Timeout { .. } | VerificationResult::Unknown { .. }),
+            matches!(
+                result,
+                VerificationResult::Timeout { .. } | VerificationResult::Unknown { .. }
+            ),
             "expected Timeout or Unknown, got {:?}",
             result
         );
-        assert!(
-            elapsed.as_secs() < 10,
-            "should not take more than 10s, took {elapsed:?}"
-        );
+        assert!(elapsed.as_secs() < 10, "should not take more than 10s, took {elapsed:?}");
     }
 
     // --- Batch function tests ---
@@ -875,10 +852,7 @@ mod tests {
     #[test]
     fn test_push_pop_script_generation() {
         // Verify that the commands we would send follow the incremental protocol.
-        let vc = make_vc(Formula::Lt(
-            Box::new(int_var("x")),
-            Box::new(Formula::Int(10)),
-        ));
+        let vc = make_vc(Formula::Lt(Box::new(int_var("x")), Box::new(Formula::Int(10))));
 
         let logic = smt2_export::detect_logic(&vc.formula);
         let decls = smt2_export::emit_declarations(&vc.formula);
@@ -916,7 +890,11 @@ mod tests {
             all_commands.push("(push 1)");
 
             let logic = smt2_export::detect_logic(&vc.formula);
-            all_commands.push(if logic == "QF_LIA" { "(set-logic QF_LIA)" } else { "(set-logic ALL)" });
+            all_commands.push(if logic == "QF_LIA" {
+                "(set-logic QF_LIA)"
+            } else {
+                "(set-logic ALL)"
+            });
 
             // Declarations and assertion would go here.
             all_commands.push("(check-sat)");

@@ -121,7 +121,8 @@ fn find_row_for_address<'a>(rows: &'a [LineRow], address: u64) -> Option<&'a Lin
     for row in rows {
         if row.end_sequence {
             if let Some(current) = candidate
-                && address >= current.address && address < row.address
+                && address >= current.address
+                && address < row.address
             {
                 return Some(current);
             }
@@ -157,7 +158,7 @@ fn format_file_path(header: &LineProgramHeader, file: &crate::dwarf::line::FileE
 mod tests {
     use super::*;
     use crate::dwarf::info::{Attribute, AttributeValue, CompilationUnit, Die};
-    use crate::dwarf::line::{FileEntry, LineRow, LineProgramHeader};
+    use crate::dwarf::line::{FileEntry, LineProgramHeader, LineRow};
 
     fn make_header(dirs: Vec<String>, files: Vec<FileEntry>) -> LineProgramHeader {
         LineProgramHeader {
@@ -214,19 +215,13 @@ mod tests {
 
     #[test]
     fn test_find_row_for_address_before_first_returns_none() {
-        let rows = vec![
-            make_row(0x1000, 1, 10, false),
-            make_row(0x1010, 1, 0, true),
-        ];
+        let rows = vec![make_row(0x1000, 1, 10, false), make_row(0x1010, 1, 0, true)];
         assert!(find_row_for_address(&rows, 0x0FFF).is_none());
     }
 
     #[test]
     fn test_find_row_for_address_at_end_sequence_boundary_returns_none() {
-        let rows = vec![
-            make_row(0x1000, 1, 10, false),
-            make_row(0x1010, 1, 0, true),
-        ];
+        let rows = vec![make_row(0x1000, 1, 10, false), make_row(0x1010, 1, 0, true)];
         // Address exactly at end_sequence boundary is outside the range
         assert!(find_row_for_address(&rows, 0x1010).is_none());
     }
@@ -268,48 +263,32 @@ mod tests {
     #[test]
     fn test_format_file_path_directory_index_zero_returns_name() {
         let header = make_header(vec!["src".into()], vec![]);
-        let file = FileEntry {
-            name: "main.rs".into(),
-            directory_index: 0,
-            last_modified: 0,
-            size: 0,
-        };
+        let file =
+            FileEntry { name: "main.rs".into(), directory_index: 0, last_modified: 0, size: 0 };
         assert_eq!(format_file_path(&header, &file), "main.rs");
     }
 
     #[test]
     fn test_format_file_path_with_directory_returns_joined() {
         let header = make_header(vec!["src".into()], vec![]);
-        let file = FileEntry {
-            name: "main.rs".into(),
-            directory_index: 1,
-            last_modified: 0,
-            size: 0,
-        };
+        let file =
+            FileEntry { name: "main.rs".into(), directory_index: 1, last_modified: 0, size: 0 };
         assert_eq!(format_file_path(&header, &file), "src/main.rs");
     }
 
     #[test]
     fn test_format_file_path_out_of_range_directory_returns_name() {
         let header = make_header(vec!["src".into()], vec![]);
-        let file = FileEntry {
-            name: "main.rs".into(),
-            directory_index: 99,
-            last_modified: 0,
-            size: 0,
-        };
+        let file =
+            FileEntry { name: "main.rs".into(), directory_index: 99, last_modified: 0, size: 0 };
         assert_eq!(format_file_path(&header, &file), "main.rs");
     }
 
     #[test]
     fn test_format_file_path_no_directories_returns_name() {
         let header = make_header(vec![], vec![]);
-        let file = FileEntry {
-            name: "main.rs".into(),
-            directory_index: 1,
-            last_modified: 0,
-            size: 0,
-        };
+        let file =
+            FileEntry { name: "main.rs".into(), directory_index: 1, last_modified: 0, size: 0 };
         assert_eq!(format_file_path(&header, &file), "main.rs");
     }
 
@@ -381,11 +360,7 @@ mod tests {
 
     #[test]
     fn test_dwarf_info_find_line_info_no_programs_returns_none() {
-        let info = DwarfInfo {
-            units: Vec::new(),
-            line_programs: Vec::new(),
-            types: Vec::new(),
-        };
+        let info = DwarfInfo { units: Vec::new(), line_programs: Vec::new(), types: Vec::new() };
         assert!(info.find_line_info(0x1000).is_none());
     }
 
@@ -400,15 +375,9 @@ mod tests {
                 size: 0,
             }],
         );
-        let rows = vec![
-            make_row(0x1000, 1, 42, false),
-            make_row(0x1010, 1, 0, true),
-        ];
-        let info = DwarfInfo {
-            units: Vec::new(),
-            line_programs: vec![(header, rows)],
-            types: Vec::new(),
-        };
+        let rows = vec![make_row(0x1000, 1, 42, false), make_row(0x1010, 1, 0, true)];
+        let info =
+            DwarfInfo { units: Vec::new(), line_programs: vec![(header, rows)], types: Vec::new() };
         let (path, line) = info.find_line_info(0x1004).unwrap();
         assert_eq!(path, "src/main.rs");
         assert_eq!(line, 42);
@@ -425,25 +394,15 @@ mod tests {
                 size: 0,
             }],
         );
-        let rows = vec![
-            make_row(0x1000, 1, 42, false),
-            make_row(0x1010, 1, 0, true),
-        ];
-        let info = DwarfInfo {
-            units: Vec::new(),
-            line_programs: vec![(header, rows)],
-            types: Vec::new(),
-        };
+        let rows = vec![make_row(0x1000, 1, 42, false), make_row(0x1010, 1, 0, true)];
+        let info =
+            DwarfInfo { units: Vec::new(), line_programs: vec![(header, rows)], types: Vec::new() };
         assert!(info.find_line_info(0x2000).is_none());
     }
 
     #[test]
     fn test_dwarf_info_resolve_type_not_found_returns_error() {
-        let info = DwarfInfo {
-            units: Vec::new(),
-            line_programs: Vec::new(),
-            types: Vec::new(),
-        };
+        let info = DwarfInfo { units: Vec::new(), line_programs: Vec::new(), types: Vec::new() };
         assert!(info.resolve_type(0x999).is_err());
     }
 }

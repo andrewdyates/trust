@@ -268,7 +268,6 @@ impl<'a, 'b, 'tcx> NllTypeRelating<'a, 'b, 'tcx> {
             ty::BoundRegionKind::Anon => sym::anon,
             ty::BoundRegionKind::Named(def_id) => self.type_checker.tcx().item_name(def_id),
             ty::BoundRegionKind::ClosureEnv => sym::env,
-            // tRust: invariant: pretty-printing only — NamedForPrinting variant never appears in bound regions during analysis
             ty::BoundRegionKind::NamedForPrinting(_) => bug!("only used for pretty printing"),
         };
 
@@ -372,7 +371,6 @@ impl<'b, 'tcx> TypeRelation<TyCtxt<'tcx>> for NllTypeRelating<'_, 'b, 'tcx> {
 
         match (a.kind(), b.kind()) {
             (_, &ty::Infer(ty::TyVar(_))) => {
-                // tRust: invariant: structural invariant — region relation should produce NLL-compatible constraints
                 span_bug!(
                     self.span(),
                     "should not be relating type variables on the right in MIR typeck"

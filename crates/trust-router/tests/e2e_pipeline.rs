@@ -135,15 +135,18 @@ fn checked_add_function(name: &str, def_path: &str) -> VerifiableFunction {
 
 fn proved_result() -> VerificationResult {
     VerificationResult::Proved {
-        solver: "mock".to_string(),
+        solver: "mock".into(),
         time_ms: 1,
-        strength: ProofStrength::smt_unsat(), proof_certificate: None, solver_warnings: None, }
+        strength: ProofStrength::smt_unsat(),
+        proof_certificate: None,
+        solver_warnings: None,
+    }
 }
 
 fn solver_info(result: &VerificationResult) -> SolverInfo {
     match result {
         VerificationResult::Proved { solver, time_ms, strength, .. } => SolverInfo {
-            name: solver.clone(),
+            name: solver.to_string(),
             version: "test".to_string(),
             time_ms: *time_ms,
             strength: strength.clone(),

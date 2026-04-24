@@ -45,8 +45,7 @@ impl IntervalDomain {
         if other.is_unreachable {
             return self.clone();
         }
-        let all_keys: FxHashSet<&String> =
-            self.vars.keys().chain(other.vars.keys()).collect();
+        let all_keys: FxHashSet<&String> = self.vars.keys().chain(other.vars.keys()).collect();
         let mut vars = BTreeMap::new();
         for key in all_keys {
             let a = self.get(key);
@@ -76,8 +75,7 @@ impl AbstractDomain for IntervalDomain {
         if other.is_unreachable {
             return self.clone();
         }
-        let all_keys: FxHashSet<&String> =
-            self.vars.keys().chain(other.vars.keys()).collect();
+        let all_keys: FxHashSet<&String> = self.vars.keys().chain(other.vars.keys()).collect();
         let mut vars = BTreeMap::new();
         for key in all_keys {
             let a = self.get(key);
@@ -95,8 +93,7 @@ impl AbstractDomain for IntervalDomain {
         if self.is_unreachable || other.is_unreachable {
             return Self::bottom();
         }
-        let all_keys: FxHashSet<&String> =
-            self.vars.keys().chain(other.vars.keys()).collect();
+        let all_keys: FxHashSet<&String> = self.vars.keys().chain(other.vars.keys()).collect();
         let mut vars = BTreeMap::new();
         for key in all_keys {
             let a = self.get(key);
@@ -119,8 +116,7 @@ impl AbstractDomain for IntervalDomain {
         if other.is_unreachable {
             return self.clone();
         }
-        let all_keys: FxHashSet<&String> =
-            self.vars.keys().chain(other.vars.keys()).collect();
+        let all_keys: FxHashSet<&String> = self.vars.keys().chain(other.vars.keys()).collect();
         let mut vars = BTreeMap::new();
         for key in all_keys {
             let a = self.get(key);
@@ -137,8 +133,7 @@ impl AbstractDomain for IntervalDomain {
         if self.is_unreachable || other.is_unreachable {
             return Self::bottom();
         }
-        let all_keys: FxHashSet<&String> =
-            self.vars.keys().chain(other.vars.keys()).collect();
+        let all_keys: FxHashSet<&String> = self.vars.keys().chain(other.vars.keys()).collect();
         let mut vars = BTreeMap::new();
         for key in all_keys {
             let a = self.get(key);
@@ -174,4 +169,3 @@ impl AbstractDomain for IntervalDomain {
         true
     }
 }
-

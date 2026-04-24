@@ -15,7 +15,6 @@ pub(crate) fn inferred_outlives(tcx: TyCtxt<'_>) {
             .map(|(pred, _)| match pred.kind().skip_binder() {
                 ty::ClauseKind::RegionOutlives(p) => p.to_string(),
                 ty::ClauseKind::TypeOutlives(p) => p.to_string(),
-                // tRust: invariant — outlives predicates should only contain region outlives or type outlives clauses
                 err => bug!("unexpected clause {:?}", err),
             })
             .collect();

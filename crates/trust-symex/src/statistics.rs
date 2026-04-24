@@ -199,28 +199,16 @@ pub fn format_stats_report(stats: &ExecutionStats) -> String {
     lines.push("Path metrics:".to_owned());
     lines.push(format!("  Avg length:        {:.1}", stats.avg_path_length));
     lines.push(format!("  Max length:        {}", stats.max_path_length));
-    lines.push(format!(
-        "  Avg constraints:   {:.1}",
-        stats.avg_constraint_count
-    ));
+    lines.push(format!("  Avg constraints:   {:.1}", stats.avg_constraint_count));
     lines.push(String::new());
 
     // Solver performance.
     lines.push("Solver:".to_owned());
     lines.push(format!("  Calls:             {}", stats.solver_calls));
     lines.push(format!("  Cache hits:        {}", stats.cache_hits));
-    lines.push(format!(
-        "  Cache hit rate:    {:.1}%",
-        stats.cache_hit_rate()
-    ));
-    lines.push(format!(
-        "  Total time:        {} ms",
-        stats.total_solver_time_ms
-    ));
-    lines.push(format!(
-        "  Avg time/call:     {:.1} ms",
-        stats.avg_solver_time_ms()
-    ));
+    lines.push(format!("  Cache hit rate:    {:.1}%", stats.cache_hit_rate()));
+    lines.push(format!("  Total time:        {} ms", stats.total_solver_time_ms));
+    lines.push(format!("  Avg time/call:     {:.1} ms", stats.avg_solver_time_ms()));
 
     lines.join("\n")
 }
@@ -253,11 +241,7 @@ mod tests {
 
     #[test]
     fn test_stats_cache_hit_rate_with_hits() {
-        let stats = ExecutionStats {
-            solver_calls: 10,
-            cache_hits: 3,
-            ..Default::default()
-        };
+        let stats = ExecutionStats { solver_calls: 10, cache_hits: 3, ..Default::default() };
         assert!((stats.cache_hit_rate() - 30.0).abs() < f64::EPSILON);
     }
 
@@ -269,11 +253,8 @@ mod tests {
 
     #[test]
     fn test_stats_avg_solver_time_with_calls() {
-        let stats = ExecutionStats {
-            solver_calls: 4,
-            total_solver_time_ms: 100,
-            ..Default::default()
-        };
+        let stats =
+            ExecutionStats { solver_calls: 4, total_solver_time_ms: 100, ..Default::default() };
         assert!((stats.avg_solver_time_ms() - 25.0).abs() < f64::EPSILON);
     }
 

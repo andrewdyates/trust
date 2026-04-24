@@ -70,7 +70,6 @@ fn write_output_file<'ll>(
     } else {
         std::ptr::null()
     };
-    // SAFETY: The target machine and module are valid, the output path is a valid C string, and the file type specifies a valid output format.
     let result = unsafe {
         let pm = llvm::LLVMCreatePassManager();
         llvm::LLVMAddAnalysisPasses(target, pm);
@@ -225,7 +224,7 @@ pub(crate) fn target_machine_factory(
 
     let triple = SmallCStr::new(&versioned_llvm_target(sess));
     let cpu = SmallCStr::new(llvm_util::target_cpu(sess));
-    let features = CString::new(target_features.join(",")).expect("invariant: CString::new failed - input contains null byte");
+    let features = CString::new(target_features.join(",")).unwrap();
     let abi = SmallCStr::new(sess.target.llvm_abiname.desc());
     let trap_unreachable =
         sess.opts.unstable_opts.trap_unreachable.unwrap_or(sess.target.trap_unreachable);
@@ -279,7 +278,7 @@ pub(crate) fn target_machine_factory(
                 .path(RemapPathScopeComponents::DEBUGINFO)
                 .to_string_lossy()
                 .into_owned();
-            CString::new(path).expect("invariant: CString::new failed - input contains null byte")
+            CString::new(path).unwrap()
         };
 
         let split_dwarf_file = path_to_cstring_helper(config.split_dwarf_file);
@@ -332,7 +331,6 @@ pub(crate) fn save_temp_bitcode(
 }
 
 fn write_bitcode_to_file(module: &ModuleLlvm, path: &Path) {
-    // SAFETY: The module is a valid LLVM module reference, and the path is a valid C string for the output file.
     unsafe {
         let path = path_to_c_string(&path);
         let llmod = module.llmod();
@@ -374,7 +372,7 @@ impl<'a> DiagnosticHandlers<'a> {
             Passes::Some(passes) => {
                 remark_passes_all = false;
                 remark_passes =
-                    passes.iter().map(|name| CString::new(name.as_str()).expect("invariant: CString::new failed - input contains null byte")).collect();
+                    passes.iter().map(|name| CString::new(name.as_str()).unwrap()).collect();
             }
         };
         let remark_passes: Vec<*const c_char> =
@@ -395,7 +393,6 @@ impl<'a> DiagnosticHandlers<'a> {
 
         let pgo_available = cgcx.module_config.pgo_use.is_some();
         let data = Box::into_raw(Box::new((cgcx, shared_emitter)));
-        // SAFETY: The context is valid, and the configuration parameters are valid.
         unsafe {
             let old_handler = llvm::LLVMRustContextGetDiagnosticHandler(llcx);
             llvm::LLVMRustContextConfigureDiagnosticHandler(
@@ -417,7 +414,6 @@ impl<'a> DiagnosticHandlers<'a> {
 
 impl<'a> Drop for DiagnosticHandlers<'a> {
     fn drop(&mut self) {
-        // SAFETY: The context is valid, the handler function pointer is valid, and the user data pointer will remain valid for the context's lifetime.
         unsafe {
             llvm::LLVMRustContextSetDiagnosticHandler(self.llcx, self.old_handler);
             drop(Box::from_raw(self.data));
@@ -458,16 +454,14 @@ unsafe extern "C" fn diagnostic_handler(info: &DiagnosticInfo, user: *mut c_void
     if user.is_null() {
         return;
     }
-    // SAFETY: The pointer cast is valid because the source and target types have compatible layouts, and the resulting pointer is only used within this scope.
     let (cgcx, shared_emitter) = unsafe { *(user as *const (&CodegenContext, &SharedEmitter)) };
 
     let dcx = DiagCtxt::new(Box::new(shared_emitter.clone()));
     let dcx = dcx.handle();
 
-    // SAFETY: The diagnostic info pointer is a valid reference provided by LLVM's diagnostic handler callback.
     match unsafe { llvm::diagnostic::Diagnostic::unpack(info) } {
         llvm::diagnostic::InlineAsm(inline) => {
-            // tRust: known issue — use dcx
+            // FIXME use dcx
             shared_emitter.inline_asm_error(report_inline_asm(
                 cgcx,
                 inline.message,
@@ -495,7 +489,6 @@ unsafe extern "C" fn diagnostic_handler(info: &DiagnosticInfo, user: *mut c_void
             });
         }
         llvm::diagnostic::PGO(diagnostic_ref) | llvm::diagnostic::Linker(diagnostic_ref) => {
-            // SAFETY: The diagnostic reference is a valid LLVM diagnostic info pointer, and the output buffer is valid.
             let message = llvm::build_string(|s| unsafe {
                 llvm::LLVMRustWriteDiagnosticInfoToString(diagnostic_ref, s)
             })
@@ -503,7 +496,6 @@ unsafe extern "C" fn diagnostic_handler(info: &DiagnosticInfo, user: *mut c_void
             dcx.emit_warn(FromLlvmDiag { message });
         }
         llvm::diagnostic::Unsupported(diagnostic_ref) => {
-            // SAFETY: The diagnostic reference is a valid LLVM diagnostic info pointer, and the output buffer is valid.
             let message = llvm::build_string(|s| unsafe {
                 llvm::LLVMRustWriteDiagnosticInfoToString(diagnostic_ref, s)
             })
@@ -523,7 +515,7 @@ fn get_pgo_gen_path(config: &ModuleConfig) -> Option<CString> {
                 PathBuf::from("default_%m.profraw")
             };
 
-            Some(CString::new(format!("{}", path.display())).expect("invariant: CString::new failed - input contains null byte"))
+            Some(CString::new(format!("{}", path.display())).unwrap())
         }
         SwitchWithOptPath::Disabled => None,
     }
@@ -533,14 +525,14 @@ fn get_pgo_use_path(config: &ModuleConfig) -> Option<CString> {
     config
         .pgo_use
         .as_ref()
-        .map(|path_buf| CString::new(path_buf.to_string_lossy().as_bytes()).expect("invariant: CString::new failed - input contains null byte"))
+        .map(|path_buf| CString::new(path_buf.to_string_lossy().as_bytes()).unwrap())
 }
 
 fn get_pgo_sample_use_path(config: &ModuleConfig) -> Option<CString> {
     config
         .pgo_sample_use
         .as_ref()
-        .map(|path_buf| CString::new(path_buf.to_string_lossy().as_bytes()).expect("invariant: CString::new failed - input contains null byte"))
+        .map(|path_buf| CString::new(path_buf.to_string_lossy().as_bytes()).unwrap())
 }
 
 fn get_instr_profile_output_path(config: &ModuleConfig) -> Option<CString> {
@@ -574,7 +566,7 @@ pub(crate) unsafe fn llvm_optimize(
     // source code. However, benchmarks show that optimizations increasing the code size
     // tend to reduce AD performance. Therefore deactivate them before AD, then differentiate the code
     // and finally re-optimize the module, now with all optimizations available.
-    // tRust: known issue — (ZuseZ4): In a future update we could figure out how to only optimize individual functions getting
+    // FIXME(ZuseZ4): In a future update we could figure out how to only optimize individual functions getting
     // differentiated.
 
     let consider_ad = config.autodiff.contains(&config::AutoDiff::Enable);
@@ -627,7 +619,7 @@ pub(crate) unsafe fn llvm_optimize(
     let sanitize_dataflow_abilist: Vec<_> = config
         .sanitizer_dataflow_abilist
         .iter()
-        .map(|file| CString::new(file.as_str()).expect("invariant: CString::new failed - input contains null byte"))
+        .map(|file| CString::new(file.as_str()).unwrap())
         .collect();
     let sanitize_dataflow_abilist_ptrs: Vec<_> =
         sanitize_dataflow_abilist.iter().map(|file| file.as_ptr()).collect();
@@ -671,10 +663,10 @@ pub(crate) unsafe fn llvm_optimize(
 
         let first_param = llvm::get_param(old_fn, 0);
         let c_name = llvm::get_value_name(first_param);
-        let first_arg_name = str::from_utf8(&c_name).expect("invariant: bytes are valid UTF-8");
+        let first_arg_name = str::from_utf8(&c_name).unwrap();
         // We might call llvm_optimize (and thus this code) multiple times on the same IR,
         // but we shouldn't add this helper ptr multiple times.
-        // tRust: known issue — (offload): This could break if the user calls his first argument `dyn_ptr`.
+        // FIXME(offload): This could break if the user calls his first argument `dyn_ptr`.
         if first_arg_name == "dyn_ptr" {
             return;
         }
@@ -695,16 +687,15 @@ pub(crate) unsafe fn llvm_optimize(
         }
 
         // Create the new function type
-        // SAFETY: The type reference is a valid LLVM function type.
         let ret_ty = unsafe { llvm::LLVMGetReturnType(old_fn_ty) };
         let new_fn_ty = cx.type_func(&new_param_types, ret_ty);
 
         // Create the new function, with a temporary .offload name to avoid a name collision.
-        let old_fn_name = String::from_utf8(llvm::get_value_name(old_fn)).expect("invariant: bytes are valid UTF-8");
+        let old_fn_name = String::from_utf8(llvm::get_value_name(old_fn)).unwrap();
         let new_fn_name = format!("{}.offload", &old_fn_name);
         let new_fn = cx.add_func(&new_fn_name, new_fn_ty);
         let a0 = llvm::get_param(new_fn, 0);
-        llvm::set_value_name(a0, CString::new("dyn_ptr").expect("invariant: CString::new failed - input contains null byte").as_bytes());
+        llvm::set_value_name(a0, CString::new("dyn_ptr").unwrap().as_bytes());
 
         let bb = SBuilder::append_block(cx, new_fn, "entry");
         let mut builder = SBuilder::build(cx, bb);
@@ -731,7 +722,6 @@ pub(crate) unsafe fn llvm_optimize(
 
         // Here we map the old arguments to the new arguments, with an offset of 1 to make sure
         // that we don't use the newly added `%dyn_ptr`.
-        // SAFETY: Both values are valid LLVM references with compatible types.
         unsafe {
             llvm::LLVMRustOffloadMapper(old_fn, new_fn, old_args_rebuilt.as_ptr());
         }
@@ -740,12 +730,10 @@ pub(crate) unsafe fn llvm_optimize(
         llvm::set_visibility(new_fn, llvm::get_visibility(old_fn));
 
         // Replace all uses of old_fn with new_fn (RAUW)
-        // SAFETY: Both values are valid LLVM references with compatible types.
         unsafe {
             llvm::LLVMReplaceAllUsesWith(old_fn, new_fn);
         }
         let name = llvm::get_value_name(old_fn);
-        // SAFETY: The function value is a valid LLVM reference whose uses have been replaced, so it is safe to delete.
         unsafe {
             llvm::LLVMDeleteFunction(old_fn);
         }
@@ -767,7 +755,7 @@ pub(crate) unsafe fn llvm_optimize(
 
     let mut llvm_profiler = prof
         .llvm_recording_enabled()
-        .then(|| LlvmSelfProfiler::new(prof.get_self_profiler().expect("invariant: then returned a valid value")));
+        .then(|| LlvmSelfProfiler::new(prof.get_self_profiler().unwrap()));
 
     let llvm_selfprofiler =
         llvm_profiler.as_mut().map(|s| s as *mut _ as *mut c_void).unwrap_or(std::ptr::null_mut());
@@ -783,7 +771,6 @@ pub(crate) unsafe fn llvm_optimize(
         std::ptr::null()
     };
 
-    // SAFETY: The module, target machine, and all configuration parameters are valid. The module will be consumed/modified in place by the optimization pipeline.
     let result = unsafe {
         llvm::LLVMRustOptimize(
             module.module_llvm.llmod(),
@@ -825,10 +812,9 @@ pub(crate) unsafe fn llvm_optimize(
 
     if cgcx.target_is_like_gpu && config.offload.contains(&config::Offload::Device) {
         let device_path = cgcx.output_filenames.path(OutputType::Object);
-        let device_dir = device_path.parent().expect("invariant: path has parent");
+        let device_dir = device_path.parent().unwrap();
         let device_out = device_dir.join("host.out");
         let device_out_c = path_to_c_string(device_out.as_path());
-        // SAFETY: The module and target machine are valid. The device image data has been written to disk and the paths are valid.
         unsafe {
             // 1) Bundle device module into offload image host.out (device TM)
             let ok = llvm::LLVMRustBundleImages(
@@ -866,7 +852,7 @@ pub(crate) unsafe fn llvm_optimize(
                 dcx.emit_err(crate::errors::OffloadNonexistingPath);
             }
             let host_path = cgcx.output_filenames.path(OutputType::Object);
-            let host_dir = host_path.parent().expect("invariant: path has parent");
+            let host_dir = host_path.parent().unwrap();
             let out_obj = host_dir.join("host.o");
             let host_out_c = path_to_c_string(device_pathbuf.as_path());
 
@@ -875,7 +861,6 @@ pub(crate) unsafe fn llvm_optimize(
             // into it, and this might break caching or incremental compilation otherwise.
             let llmod2 = llvm::LLVMCloneModule(module.module_llvm.llmod());
             let ok =
-                // SAFETY: The module is valid, and the file path is a valid null-terminated C string.
                 unsafe { llvm::LLVMRustOffloadEmbedBufferInModule(llmod2, host_out_c.as_ptr()) };
             if !ok {
                 dcx.emit_err(crate::errors::OffloadEmbedFailed);
@@ -920,7 +905,7 @@ pub(crate) fn optimize(
         save_temp_bitcode(cgcx, module, "no-opt");
     }
 
-    // tRust: known issue — (ZuseZ4): support SanitizeHWAddress and prevent illegal/unsupported opts
+    // FIXME(ZuseZ4): support SanitizeHWAddress and prevent illegal/unsupported opts
 
     if let Some(opt_level) = config.opt_level {
         let opt_stage = match cgcx.lto {
@@ -947,7 +932,6 @@ pub(crate) fn optimize(
         } else {
             (None, None)
         };
-        // SAFETY: The module, configuration, and optimization parameters are valid. The module will be modified in place by the optimization pipeline.
         unsafe {
             llvm_optimize(
                 cgcx,
@@ -963,7 +947,7 @@ pub(crate) fn optimize(
             )
         };
         if let Some(thin_lto_buffer) = thin_lto_buffer {
-            let thin_lto_buffer = thin_lto_buffer.expect("invariant: thin LTO buffer is present");
+            let thin_lto_buffer = thin_lto_buffer.unwrap();
             module.thin_lto_buffer = Some(thin_lto_buffer.data().to_vec());
             let bc_summary_out = cgcx.output_filenames.temp_path_for_cgu(
                 OutputType::ThinLinkBitcode,
@@ -973,7 +957,7 @@ pub(crate) fn optimize(
             if let Some(thin_lto_summary_buffer) = thin_lto_summary_buffer
                 && let Some(thin_link_bitcode_filename) = bc_summary_out.file_name()
             {
-                let thin_lto_summary_buffer = thin_lto_summary_buffer.expect("invariant: thin LTO summary buffer is present");
+                let thin_lto_summary_buffer = thin_lto_summary_buffer.unwrap();
                 let summary_data = thin_lto_summary_buffer.data();
                 prof.artifact_size(
                     "llvm_bitcode_summary",
@@ -1085,12 +1069,10 @@ pub(crate) fn codegen(
                 output_len: size_t,
             ) -> size_t {
                 let input =
-                    // SAFETY: The pointer is valid for `len` elements, the data is properly aligned, and the lifetime of the resulting slice does not exceed the source's.
                     unsafe { slice::from_raw_parts(input_ptr as *const u8, input_len as usize) };
 
                 let Ok(input) = str::from_utf8(input) else { return 0 };
 
-                // SAFETY: The pointer is valid for `len` elements, the data is properly aligned, and the lifetime of the resulting slice does not exceed the source's.
                 let output = unsafe {
                     slice::from_raw_parts_mut(output_ptr as *mut u8, output_len as usize)
                 };
@@ -1107,7 +1089,6 @@ pub(crate) fn codegen(
             }
 
             let result =
-                // SAFETY: The value/module is a valid LLVM reference, and the output function pointer is valid.
                 unsafe { llvm::LLVMRustPrintModule(llmod, out_c.as_ptr(), demangle_callback) };
 
             if result == llvm::LLVMRustResult::Success {
@@ -1368,7 +1349,7 @@ fn create_msvc_imps(cgcx: &CodegenContext, llcx: &llvm::Context, llmod: &llvm::M
         .map(move |(val, name)| {
             let mut imp_name = prefix.as_bytes().to_vec();
             imp_name.extend(name);
-            let imp_name = CString::new(imp_name).expect("invariant: CString::new failed - input contains null byte");
+            let imp_name = CString::new(imp_name).unwrap();
             (imp_name, val)
         })
         .collect::<Vec<_>>();
@@ -1408,7 +1389,6 @@ fn record_llvm_cgu_instructions_stats(prof: &SelfProfilerRef, name: &str, llmod:
         return;
     }
 
-    // SAFETY: The module is a valid LLVM module reference.
     let total = unsafe { llvm::LLVMRustModuleInstructionStats(llmod) };
     prof.artifact_size("cgu_instructions", name, total);
 }

@@ -19,7 +19,7 @@ use crate::type_check::{Locations, MirTypeckRegionConstraints, constraint_conver
 use crate::universal_regions::UniversalRegions;
 
 #[derive(Debug)]
-#[derive(Clone)] // Accepted: Clone derive needed for free region relations (upstream #146079)
+#[derive(Clone)] // FIXME(#146079)
 pub(crate) struct UniversalRegionRelations<'tcx> {
     pub(crate) universal_regions: UniversalRegions<'tcx>,
 
@@ -388,7 +388,7 @@ impl<'tcx> UniversalRegionRelationsBuilder<'_, 'tcx> {
             .ok()?;
         debug!(?bounds, ?constraints);
         // Because of #109628, we may have unexpected placeholders. Ignore them!
-        // // NOTE(#109628): panic in this case once the issue is fixed..
+        // FIXME(#109628): panic in this case once the issue is fixed.
         let bounds = bounds.into_iter().filter(|bound| !bound.has_placeholders());
         self.add_outlives_bounds(bounds);
         constraints

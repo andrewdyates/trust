@@ -55,7 +55,7 @@ pub(crate) fn finalize(cx: &mut CodegenCx<'_, '_>) {
 
     debug!("Generating coverage map for CodegenUnit: `{}`", cx.codegen_unit.name());
 
-    // tRust: known issue (#132395) — Can this be none even when coverage is enabled?
+    // FIXME(#132395): Can this be none even when coverage is enabled?
     let Some(ref coverage_cx) = cx.coverage_cx else { return };
 
     let mut covfun_records = coverage_cx
@@ -141,7 +141,7 @@ impl GlobalFileTable {
             });
         }
 
-        // tRust: known issue — Consider sorting the file table here, but maybe
+        // FIXME(Zalathar): Consider sorting the file table here, but maybe
         // only after adding filename support to coverage-dump, so that the
         // table order isn't directly visible in `.coverage-map` snapshots.
 

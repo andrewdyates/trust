@@ -528,7 +528,7 @@ pub enum ExprKind<'tcx> {
         param: ty::ParamConst,
         def_id: DefId,
     },
-    // tRust: known issue — improve docs for `StaticRef` by distinguishing it from `NamedConst`
+    // FIXME improve docs for `StaticRef` by distinguishing it from `NamedConst`
     /// A literal containing the address of a `static`.
     ///
     /// This is only distinguished from `Literal` so that we can register some
@@ -1034,11 +1034,11 @@ impl<'tcx> PatRangeBoundary<'tcx> {
             Self::Finite(value) => value.to_leaf().to_bits_unchecked(),
             Self::NegInfinity => {
                 // Unwrap is ok because the type is known to be numeric.
-                ty.numeric_min_and_max_as_bits(tcx).expect("invariant: numeric_min_and_max_as_bits returned a valid value").0
+                ty.numeric_min_and_max_as_bits(tcx).unwrap().0
             }
             Self::PosInfinity => {
                 // Unwrap is ok because the type is known to be numeric.
-                ty.numeric_min_and_max_as_bits(tcx).expect("invariant: numeric_min_and_max_as_bits returned a valid value").1
+                ty.numeric_min_and_max_as_bits(tcx).unwrap().1
             }
         }
     }
@@ -1107,7 +1107,6 @@ impl<'tcx> PatRangeBoundary<'tcx> {
                 Some(a.cmp(&b))
             }
             ty::Uint(_) | ty::Char => Some(a.cmp(&b)),
-            // tRust: invariant: unexpected state reached in 
             _ => bug!(),
         }
     }

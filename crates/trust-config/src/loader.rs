@@ -7,8 +7,8 @@
 //! Author: Andrew Yates <andrew@andrewdyates.com>
 //! Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use trust_types::fx::FxHashMap;
 use std::path::{Path, PathBuf};
+use trust_types::fx::FxHashMap;
 
 use crate::TrustConfig;
 use crate::env_override::apply_env_overrides;
@@ -372,6 +372,8 @@ mod tests {
             "TRUST_DISABLE_TV",
         ];
         let saved: Vec<_> = trust_vars.iter().map(|k| (*k, std::env::var(k).ok())).collect();
+        // SAFETY: test-only env var manipulation; tests are serialized via TEST_ENV_LOCK
+        // so no concurrent access to the environment occurs. // tRust:
         for k in &trust_vars {
             unsafe { env::remove_var(k) };
         }
@@ -379,6 +381,7 @@ mod tests {
             unsafe { env::set_var(k, v) };
         }
         f();
+        // SAFETY: test-only env var cleanup and restoration; serialized via TEST_ENV_LOCK // tRust:
         for (k, _) in vars {
             unsafe { env::remove_var(k) };
         }
@@ -408,6 +411,8 @@ mod tests {
             "TRUST_DISABLE_TV",
         ];
         let saved: Vec<_> = trust_vars.iter().map(|k| (*k, std::env::var(k).ok())).collect();
+        // SAFETY: test-only env var manipulation; tests are serialized via TEST_ENV_LOCK
+        // so no concurrent access to the environment occurs. // tRust:
         for k in &trust_vars {
             unsafe { env::remove_var(k) };
         }

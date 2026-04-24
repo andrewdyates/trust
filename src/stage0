@@ -3,6 +3,8 @@ artifacts_server=https://ci-artifacts.rust-lang.org/rustc-builds
 artifacts_with_llvm_assertions_server=https://ci-artifacts.rust-lang.org/rustc-builds-alt
 git_merge_commit_email=bors@rust-lang.org
 nightly_branch=main
+compiler_dist_channel=beta
+rustfmt_dist_channel=nightly
 
 # The configuration above this comment is editable, and can be changed
 # by forks of the repository if they have alternate values.

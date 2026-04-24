@@ -136,7 +136,7 @@ fn build_poll_switch<'tcx>(
     ready_block: BasicBlock,
     yield_block: BasicBlock,
 ) -> BasicBlock {
-    let poll_enum_adt = poll_enum.ty_adt_def().expect("invariant: Poll must be an ADT"); // tRust: unwrap elimination
+    let poll_enum_adt = poll_enum.ty_adt_def().unwrap();
 
     let Discr { val: poll_ready_discr, ty: poll_discr_ty } = poll_enum
         .discriminant_for_variant(
@@ -144,14 +144,14 @@ fn build_poll_switch<'tcx>(
             poll_enum_adt
                 .variant_index_with_id(tcx.require_lang_item(LangItem::PollReady, DUMMY_SP)),
         )
-        .expect("invariant: Poll::Ready variant must have a discriminant"); // tRust: unwrap elimination
+        .unwrap();
     let poll_pending_discr = poll_enum
         .discriminant_for_variant(
             tcx,
             poll_enum_adt
                 .variant_index_with_id(tcx.require_lang_item(LangItem::PollPending, DUMMY_SP)),
         )
-        .expect("invariant: Poll::Pending variant must have a discriminant") // tRust: unwrap elimination
+        .unwrap()
         .val;
     let source_info = SourceInfo::outermost(body.span);
     let poll_discr_place =
@@ -317,7 +317,7 @@ pub(super) fn expand_async_drops<'tcx>(
         //  pending => return rv (yield)
         //  ready => *continue_bb|drop_bb*
 
-        let source_info = body[bb].terminator.as_ref().expect("invariant: basic block must have a terminator").source_info; // tRust: unwrap elimination
+        let source_info = body[bb].terminator.as_ref().unwrap().source_info;
 
         // Compute Poll<> (aka Poll with void return)
         let poll_adt_ref = tcx.adt_def(tcx.require_lang_item(LangItem::Poll, source_info.span));
@@ -374,7 +374,7 @@ pub(super) fn expand_async_drops<'tcx>(
                 poll_enum,
                 &poll_unit_place,
                 &fut_pin_place2,
-                drop.expect("invariant: async drop coroutine must have drop target"), // tRust: unwrap elimination
+                drop.unwrap(),
                 drop_yield_block,
             );
             let drop_call_bb = build_poll_call(
@@ -397,10 +397,8 @@ pub(super) fn expand_async_drops<'tcx>(
             if matches!(coroutine_kind, CoroutineKind::Desugared(CoroutineDesugaring::AsyncGen, _))
             {
                 // For AsyncGen we need `yield Poll<OptRet>::Pending`
-                let full_yield_ty = body.yield_ty().expect("invariant: coroutine body must have a yield type"); // tRust: unwrap elimination
-                // tRust: invariant: structural invariant — coroutine state machine invariant constrains this path
+                let full_yield_ty = body.yield_ty().unwrap();
                 let ty::Adt(_poll_adt, args) = *full_yield_ty.kind() else { bug!() };
-                // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                 let ty::Adt(_option_adt, args) = *args.type_at(0).kind() else { bug!() };
                 let yield_ty = args.type_at(0);
                 Operand::Constant(Box::new(ConstOperand {
@@ -440,10 +438,10 @@ pub(super) fn expand_async_drops<'tcx>(
                 resume_arg: context_ref_place,
                 drop: dropline_transition_bb,
             };
-            body[dropline_yield_bb.expect("invariant: dropline yield block must exist for async drop")].terminator_mut().kind = TerminatorKind::Yield { // tRust: unwrap elimination
+            body[dropline_yield_bb.unwrap()].terminator_mut().kind = TerminatorKind::Yield {
                 value,
                 resume: panic_bb,
-                resume_arg: dropline_context_ref.expect("invariant: dropline context ref must exist for async drop"), // tRust: unwrap elimination
+                resume_arg: dropline_context_ref.unwrap(),
                 drop: dropline_transition_bb,
             };
         }
@@ -451,16 +449,14 @@ pub(super) fn expand_async_drops<'tcx>(
         if let TerminatorKind::Call { ref mut target, .. } = body[pin_bb].terminator_mut().kind {
             *target = Some(call_bb);
         } else {
-            // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
             bug!()
         }
         if !is_dropline_bb {
             if let TerminatorKind::Call { ref mut target, .. } =
-                body[dropline_transition_bb.expect("invariant: dropline transition block must exist")].terminator_mut().kind // tRust: unwrap elimination
+                body[dropline_transition_bb.unwrap()].terminator_mut().kind
             {
                 *target = dropline_call_bb;
             } else {
-                // tRust: invariant: structural invariant — terminator kind is constrained by the match context in this MIR pass
                 bug!()
             }
         }
@@ -541,8 +537,9 @@ pub(super) fn insert_clean_drop<'tcx>(
         insert_term_block(body, TerminatorKind::Return)
     };
 
-    // NOTE: Dropline is None because insert_clean_drop + elaborate_coroutine_drops
-    // runs after async drops expansion. Setting dropline requires reordering.
+    // FIXME: When move insert_clean_drop + elaborate_coroutine_drops before async drops expand,
+    // also set dropline here:
+    // let dropline = if has_async_drops { Some(return_block) } else { None };
     let dropline = None;
 
     let term = TerminatorKind::Drop {

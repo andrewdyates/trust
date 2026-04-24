@@ -34,18 +34,28 @@ fn arb_verdict() -> impl Strategy<Value = FunctionVerdict> {
 /// Generate an arbitrary CacheEntry with realistic field values.
 fn arb_cache_entry() -> impl Strategy<Value = CacheEntry> {
     (
-        "[0-9a-f]{64}",          // content_hash (SHA-256 hex)
-        arb_verdict(),           // verdict
-        0..1000usize,            // total_obligations
-        0..1000usize,            // proved
-        0..1000usize,            // failed
-        0..1000usize,            // unknown
-        0..1000usize,            // runtime_checked
-        0..u64::MAX,             // cached_at
-        "[0-9a-f]{0,64}",       // spec_hash
+        "[0-9a-f]{64}",   // content_hash (SHA-256 hex)
+        arb_verdict(),    // verdict
+        0..1000usize,     // total_obligations
+        0..1000usize,     // proved
+        0..1000usize,     // failed
+        0..1000usize,     // unknown
+        0..1000usize,     // runtime_checked
+        0..u64::MAX,      // cached_at
+        "[0-9a-f]{0,64}", // spec_hash
     )
         .prop_map(
-            |(content_hash, verdict, total_obligations, proved, failed, unknown, runtime_checked, cached_at, spec_hash)| {
+            |(
+                content_hash,
+                verdict,
+                total_obligations,
+                proved,
+                failed,
+                unknown,
+                runtime_checked,
+                cached_at,
+                spec_hash,
+            )| {
                 CacheEntry {
                     content_hash,
                     verdict,
@@ -56,6 +66,7 @@ fn arb_cache_entry() -> impl Strategy<Value = CacheEntry> {
                     runtime_checked,
                     cached_at,
                     spec_hash,
+                    obligation_results: vec![],
                 }
             },
         )
@@ -63,10 +74,8 @@ fn arb_cache_entry() -> impl Strategy<Value = CacheEntry> {
 
 /// Generate an arbitrary ResultCacheKey.
 fn arb_result_cache_key() -> impl Strategy<Value = ResultCacheKey> {
-    ("[0-9a-f]{16}", "[a-z]{3,10}").prop_map(|(formula_hash, solver_name)| ResultCacheKey {
-        formula_hash,
-        solver_name,
-    })
+    ("[0-9a-f]{16}", "[a-z]{3,10}")
+        .prop_map(|(formula_hash, solver_name)| ResultCacheKey { formula_hash, solver_name })
 }
 
 /// Generate an arbitrary CachedResult.
@@ -96,9 +105,9 @@ fn arb_sort() -> impl Strategy<Value = Sort> {
         prop::sample::select(vec![8u32, 16, 32, 64, 128]).prop_map(Sort::BitVec),
     ];
     leaf.prop_recursive(
-        2,  // max depth
-        8,  // max nodes
-        2,  // items per collection
+        2, // max depth
+        8, // max nodes
+        2, // items per collection
         |inner| {
             (inner.clone(), inner)
                 .prop_map(|(idx, elem)| Sort::Array(Box::new(idx), Box::new(elem)))
@@ -121,9 +130,9 @@ fn arb_formula() -> impl Strategy<Value = Formula> {
     ];
 
     leaf.prop_recursive(
-        3,   // max depth
-        24,  // max nodes
-        4,   // items per collection
+        3,  // max depth
+        24, // max nodes
+        4,  // items per collection
         |inner| {
             prop_oneof![
                 // Unary
@@ -142,24 +151,35 @@ fn arb_formula() -> impl Strategy<Value = Formula> {
                 prop::collection::vec(inner.clone(), 0..4).prop_map(Formula::And),
                 prop::collection::vec(inner.clone(), 0..4).prop_map(Formula::Or),
                 // Ite
-                (inner.clone(), inner.clone(), inner.clone())
-                    .prop_map(|(c, t, e)| Formula::Ite(Box::new(c), Box::new(t), Box::new(e))),
+                (inner.clone(), inner.clone(), inner.clone()).prop_map(|(c, t, e)| Formula::Ite(
+                    Box::new(c),
+                    Box::new(t),
+                    Box::new(e)
+                )),
                 // BV ops
                 (inner.clone(), inner.clone(), prop::sample::select(vec![8u32, 16, 32, 64]))
                     .prop_map(|(a, b, w)| Formula::BvAdd(Box::new(a), Box::new(b), w)),
                 (inner.clone(), inner.clone(), prop::sample::select(vec![8u32, 16, 32, 64]))
                     .prop_map(|(a, b, w)| Formula::BvSLe(Box::new(a), Box::new(b), w)),
                 // Quantifiers (critical for alpha_normalize testing)
-                (
-                    prop::collection::vec(("[a-z]{1,4}", arb_sort()), 1..3),
-                    inner.clone(),
-                )
-                    .prop_map(|(bindings, body)| Formula::Forall(bindings, Box::new(body))),
-                (
-                    prop::collection::vec(("[a-z]{1,4}", arb_sort()), 1..3),
-                    inner.clone(),
-                )
-                    .prop_map(|(bindings, body)| Formula::Exists(bindings, Box::new(body))),
+                (prop::collection::vec(("[a-z]{1,4}", arb_sort()), 1..3), inner.clone(),).prop_map(
+                    |(bindings, body)| Formula::Forall(
+                        bindings
+                            .into_iter()
+                            .map(|(s, sort)| (trust_types::Symbol::intern(&s), sort))
+                            .collect(),
+                        Box::new(body)
+                    )
+                ),
+                (prop::collection::vec(("[a-z]{1,4}", arb_sort()), 1..3), inner.clone(),).prop_map(
+                    |(bindings, body)| Formula::Exists(
+                        bindings
+                            .into_iter()
+                            .map(|(s, sort)| (trust_types::Symbol::intern(&s), sort))
+                            .collect(),
+                        Box::new(body)
+                    )
+                ),
                 // Select
                 (inner.clone(), inner.clone())
                     .prop_map(|(arr, idx)| Formula::Select(Box::new(arr), Box::new(idx))),

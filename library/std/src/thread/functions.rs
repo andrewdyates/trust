@@ -441,6 +441,7 @@ impl Drop for PanicGuard {
 /// Note that the coordination via the shared data structure is crucial: If you `unpark` a thread
 /// without first establishing that it is about to be `park`ing within your code, that `unpark` may
 /// get consumed by a *different* `park` in the same thread, leading to a deadlock. This also means
+
 /// if you invoke `println!`, that may itself call `park` and thus consume your `unpark` and cause a
 /// deadlock.
 ///

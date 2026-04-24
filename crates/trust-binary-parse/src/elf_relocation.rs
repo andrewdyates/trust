@@ -32,55 +32,79 @@ const ELF64_DYN_SIZE: usize = 16;
 // --- x86_64 relocation types ---
 
 /// No relocation.
+#[cfg(test)]
 pub const R_X86_64_NONE: u32 = 0;
 /// Direct 64-bit.
+#[cfg(test)]
 pub const R_X86_64_64: u32 = 1;
 /// PC-relative 32-bit.
+#[cfg(test)]
 pub const R_X86_64_PC32: u32 = 2;
 /// 32-bit GOT entry.
+#[cfg(test)]
 pub const R_X86_64_GOT32: u32 = 3;
 /// 32-bit PLT address.
+#[cfg(test)]
 pub const R_X86_64_PLT32: u32 = 4;
 /// Copy symbol at runtime.
+#[cfg(test)]
 pub const R_X86_64_COPY: u32 = 5;
 /// Create GOT entry.
+#[cfg(test)]
 pub const R_X86_64_GLOB_DAT: u32 = 6;
 /// Create PLT entry (jump slot).
+#[cfg(test)]
 pub const R_X86_64_JUMP_SLOT: u32 = 7;
 /// Adjust by program base.
+#[cfg(test)]
 pub const R_X86_64_RELATIVE: u32 = 8;
 /// 32-bit PC-relative offset to GOT.
+#[cfg(test)]
 pub const R_X86_64_GOTPCREL: u32 = 9;
 /// Direct 32-bit zero-extended.
+#[cfg(test)]
 pub const R_X86_64_32: u32 = 10;
 /// Direct 32-bit sign-extended.
+#[cfg(test)]
 pub const R_X86_64_32S: u32 = 11;
 
 // --- AArch64 relocation types ---
 
 /// No relocation.
+#[cfg(test)]
 pub const R_AARCH64_NONE: u32 = 0;
 /// Direct 64-bit.
+#[cfg(test)]
 pub const R_AARCH64_ABS64: u32 = 257;
 /// Direct 32-bit.
+#[cfg(test)]
 pub const R_AARCH64_ABS32: u32 = 258;
 /// PC-relative 32-bit.
+#[cfg(test)]
 pub const R_AARCH64_PREL32: u32 = 261;
 /// Page-relative ADRP (bits [32:12] of offset).
+#[cfg(test)]
 pub const R_AARCH64_ADR_PREL_PG_HI21: u32 = 275;
 /// ADD immediate (bits [11:0] of offset).
+#[cfg(test)]
 pub const R_AARCH64_ADD_ABS_LO12_NC: u32 = 277;
 /// B/BL 26-bit jump.
+#[cfg(test)]
 pub const R_AARCH64_JUMP26: u32 = 282;
 /// BL 26-bit call.
+#[cfg(test)]
 pub const R_AARCH64_CALL26: u32 = 283;
 /// LDR/STR 64-bit (bits [11:3] of offset).
+#[cfg(test)]
 pub const R_AARCH64_LDST64_ABS_LO12_NC: u32 = 286;
 /// Create GOT entry.
+#[cfg(test)]
 pub const R_AARCH64_GLOB_DAT: u32 = 1025;
 /// Create PLT entry (jump slot).
+#[cfg(test)]
 pub const R_AARCH64_JUMP_SLOT: u32 = 1026;
 /// Adjust by program base.
+#[cfg(test)]
 pub const R_AARCH64_RELATIVE: u32 = 1027;
 
 // --- Dynamic section tag constants ---
@@ -90,42 +114,13 @@ pub const DT_NULL: i64 = 0;
 /// Name of needed library (string table offset).
 pub const DT_NEEDED: i64 = 1;
 /// Size in bytes of PLT relocation entries.
-pub const DT_PLTRELSZ: i64 = 2;
-/// Processor-defined value (PLT/GOT address).
-pub const DT_PLTGOT: i64 = 3;
-/// Address of symbol hash table.
-pub const DT_HASH: i64 = 4;
 /// Address of string table.
 pub const DT_STRTAB: i64 = 5;
-/// Address of symbol table.
-pub const DT_SYMTAB: i64 = 6;
-/// Address of Rela relocation table.
-pub const DT_RELA: i64 = 7;
-/// Size in bytes of the Rela relocation table.
-pub const DT_RELASZ: i64 = 8;
-/// Size of each Rela entry.
-pub const DT_RELAENT: i64 = 9;
-/// Size of the string table.
-pub const DT_STRSZ: i64 = 10;
-/// Size of each symbol table entry.
-pub const DT_SYMENT: i64 = 11;
-/// Address of initialization function.
-pub const DT_INIT: i64 = 12;
 /// Address of termination function.
+#[cfg(test)]
 pub const DT_FINI: i64 = 13;
-/// Name of shared object (string table offset).
-pub const DT_SONAME: i64 = 14;
-/// Library search path (string table offset).
-pub const DT_RPATH: i64 = 15;
-/// Address of Rel relocation table.
-pub const DT_REL: i64 = 17;
-/// Size in bytes of the Rel relocation table.
-pub const DT_RELSZ: i64 = 18;
-/// Size of each Rel entry.
-pub const DT_RELENT: i64 = 19;
-/// Type of PLT relocations (DT_REL or DT_RELA).
-pub const DT_PLTREL: i64 = 20;
 /// Address of PLT relocation entries.
+#[cfg(test)]
 pub const DT_JMPREL: i64 = 23;
 
 // --- Parsed structures ---
@@ -227,11 +222,7 @@ pub fn parse_rela_entries(data: &[u8], swap: bool) -> Result<Vec<Elf64Rela>, Par
         let r_offset = cursor.read_u64()?;
         let r_info = cursor.read_u64()?;
         let r_addend = cursor.read_i64()?;
-        entries.push(Elf64Rela {
-            r_offset,
-            r_info,
-            r_addend,
-        });
+        entries.push(Elf64Rela { r_offset, r_info, r_addend });
     }
 
     Ok(entries)
@@ -258,10 +249,7 @@ pub fn parse_rel_entries(data: &[u8], swap: bool) -> Result<Vec<Elf64Rel>, Parse
 /// Parse Elf64_Dyn entries from a section's raw data.
 ///
 /// Parsing stops at DT_NULL or end of data.
-pub fn parse_dynamic_entries(
-    data: &[u8],
-    swap: bool,
-) -> Result<Vec<Elf64Dyn>, ParseError> {
+pub fn parse_dynamic_entries(data: &[u8], swap: bool) -> Result<Vec<Elf64Dyn>, ParseError> {
     if data.is_empty() {
         return Ok(Vec::new());
     }
@@ -283,6 +271,7 @@ pub fn parse_dynamic_entries(
 
 /// Human-readable name for an x86_64 ELF relocation type.
 #[must_use]
+#[cfg(test)]
 pub fn x86_64_reloc_name(r_type: u32) -> &'static str {
     match r_type {
         R_X86_64_NONE => "R_X86_64_NONE",
@@ -303,6 +292,7 @@ pub fn x86_64_reloc_name(r_type: u32) -> &'static str {
 
 /// Human-readable name for an AArch64 ELF relocation type.
 #[must_use]
+#[cfg(test)]
 pub fn aarch64_reloc_name(r_type: u32) -> &'static str {
     match r_type {
         R_AARCH64_NONE => "R_AARCH64_NONE",
@@ -340,10 +330,7 @@ mod tests {
 
     #[test]
     fn test_elf64_rel_methods() {
-        let rel = Elf64Rel {
-            r_offset: 0x1000,
-            r_info: (3u64 << 32) | R_X86_64_GLOB_DAT as u64,
-        };
+        let rel = Elf64Rel { r_offset: 0x1000, r_info: (3u64 << 32) | R_X86_64_GLOB_DAT as u64 };
         assert_eq!(rel.sym(), 3);
         assert_eq!(rel.reloc_type(), R_X86_64_GLOB_DAT);
     }
@@ -372,15 +359,9 @@ mod tests {
     #[test]
     fn test_aarch64_reloc_names() {
         assert_eq!(aarch64_reloc_name(R_AARCH64_NONE), "R_AARCH64_NONE");
-        assert_eq!(
-            aarch64_reloc_name(R_AARCH64_JUMP_SLOT),
-            "R_AARCH64_JUMP_SLOT"
-        );
+        assert_eq!(aarch64_reloc_name(R_AARCH64_JUMP_SLOT), "R_AARCH64_JUMP_SLOT");
         assert_eq!(aarch64_reloc_name(R_AARCH64_CALL26), "R_AARCH64_CALL26");
-        assert_eq!(
-            aarch64_reloc_name(R_AARCH64_ABS64),
-            "R_AARCH64_ABS64"
-        );
+        assert_eq!(aarch64_reloc_name(R_AARCH64_ABS64), "R_AARCH64_ABS64");
         assert_eq!(aarch64_reloc_name(9999), "UNKNOWN");
     }
 

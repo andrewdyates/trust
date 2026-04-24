@@ -84,7 +84,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             ty::Adt(adt_def, _) if adt_def.repr().transparent() && may_unfold(*adt_def) => {
                 assert!(!adt_def.is_enum());
                 // Find the non-1-ZST field, and recurse.
-                let (_, field) = layout.non_1zst_field(self).expect("invariant: ScalarPair ABI type must have exactly one non-1-ZST field");
+                let (_, field) = layout.non_1zst_field(self).unwrap();
                 self.unfold_transparent(field, may_unfold)
             }
             ty::Pat(base, _) => self.layout_of(*base).expect(
@@ -286,7 +286,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         if callee_abi.is_ignore() {
             // This one is skipped. Still must be made live though!
             if !already_live {
-                self.storage_live(callee_arg.as_local().expect("invariant: callee arg destination is a local place"))?;
+                self.storage_live(callee_arg.as_local().unwrap())?;
             }
             return interp_ok(());
         }
@@ -312,7 +312,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // did in-place of by-copy argument passing, except for pointer equality tests.
         let caller_arg_copy = caller_arg.copy_fn_arg();
         if !already_live {
-            let local = callee_arg.as_local().expect("invariant: callee arg destination is a local place");
+            let local = callee_arg.as_local().unwrap();
             let meta = caller_arg_copy.meta();
             // `check_argument_compat` ensures that if metadata is needed, both have the same type,
             // so we know they will use the metadata the same way.
@@ -323,7 +323,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // Now we can finally actually evaluate the callee place.
         let callee_arg = self.eval_place(*callee_arg)?;
         // We allow some transmutes here.
-        // tRust: known issue — Depending on the PassMode, this should reset some padding to uninitialized. (This
+        // FIXME: Depending on the PassMode, this should reset some padding to uninitialized. (This
         // is true for all `copy_op`, but there are a lot of special cases for argument passing
         // specifically.)
         self.copy_op_allow_transmute(&caller_arg_copy, &callee_arg)?;
@@ -354,7 +354,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // We use the *caller* information to determine where to split the list of arguments,
         // and then later check that the callee indeed has the same number of fixed arguments.
         let extra_tys = if caller_fn_abi.c_variadic {
-            let fixed_count = usize::try_from(caller_fn_abi.fixed_count).expect("invariant: ABI fixed_count fits in usize");
+            let fixed_count = usize::try_from(caller_fn_abi.fixed_count).unwrap();
             let extra_tys = args[fixed_count..].iter().map(|arg| arg.layout().ty);
             self.tcx.mk_type_list_from_iter(extra_tys)
         } else {
@@ -423,7 +423,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             "spread_arg: {:?}, locals: {:#?}",
             body.spread_arg,
             body.args_iter()
-                .map(|local| (local, self.layout_of_local(self.frame(), local, None).expect("invariant: layout_of_local succeeds for valid frame locals").ty,))
+                .map(|local| (local, self.layout_of_local(self.frame(), local, None).unwrap().ty,))
                 .collect::<Vec<_>>()
         );
 
@@ -494,7 +494,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 self.storage_live(local)?;
                 // Must be a tuple
                 let ty::Tuple(fields) = ty.kind() else {
-                    // tRust: invariant — spread_arg (used for calling conventions) must be a tuple type
                     span_bug!(self.cur_span(), "non-tuple type for `spread_arg`: {ty}")
                 };
                 for (i, field_ty) in fields.iter().enumerate() {
@@ -502,7 +501,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         &[mir::ProjectionElem::Field(FieldIdx::from_usize(i), field_ty)],
                         *self.tcx,
                     );
-                    let (idx, callee_abi) = callee_args_abis.next().expect("invariant: callee_args_abis has enough entries for each caller arg");
+                    let (idx, callee_abi) = callee_args_abis.next().unwrap();
                     self.pass_argument(
                         &mut caller_args,
                         callee_abi,
@@ -514,7 +513,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 }
             } else {
                 // Normal argument. Cannot mark it as live yet, it might be unsized!
-                let (idx, callee_abi) = callee_args_abis.next().expect("invariant: callee_args_abis has enough entries for each caller arg");
+                let (idx, callee_abi) = callee_args_abis.next().unwrap();
                 self.pass_argument(
                     &mut caller_args,
                     callee_abi,
@@ -544,7 +543,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         self.frame_mut().loc = Right(preamble_span);
         // If the callee needs a caller location, pretend we consume one more argument from the ABI.
         if instance.def.requires_caller_location(*self.tcx) {
-            callee_args_abis.next().expect("invariant: callee_args_abis has a return-place entry");
+            callee_args_abis.next().unwrap();
         }
         // Now we should have no more caller args or callee arg ABIs.
         assert!(
@@ -599,7 +598,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         match instance.def {
             ty::InstanceKind::Intrinsic(def_id) => {
                 assert!(self.tcx.intrinsic(def_id).is_some());
-                // tRust: known issue — Should `InPlace` arguments be reset to uninit?
+                // FIXME: Should `InPlace` arguments be reset to uninit?
                 if let Some(fallback) = M::call_intrinsic(
                     self,
                     instance,
@@ -608,7 +607,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     target,
                     unwind,
                 )? {
-                    assert!(!self.tcx.intrinsic(fallback.def_id()).expect("invariant: fallback body def_id is a known intrinsic").must_be_overridden);
+                    assert!(!self.tcx.intrinsic(fallback.def_id()).unwrap().must_be_overridden);
                     assert_matches!(fallback.def, ty::InstanceKind::Item(_));
                     return self.init_fn_call(
                         FnVal::Instance(fallback),
@@ -655,9 +654,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let args: Cow<'_, [FnArg<'tcx, M::Provenance>]> =
                     if caller_abi == ExternAbi::RustCall && !args.is_empty() {
                         // Untuple
-                        let (untuple_arg, args) = args.split_last().expect("invariant: args is non-empty when untupling is needed");
+                        let (untuple_arg, args) = args.split_last().unwrap();
                         let ty::Tuple(untuple_fields) = untuple_arg.layout().ty.kind() else {
-                            // tRust: invariant — untuple calling convention requires tuple-typed argument
                             span_bug!(self.cur_span(), "untuple argument must be a tuple")
                         };
                         trace!("init_fn_call: Will pass last argument by untupling");
@@ -726,7 +724,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let receiver_tail =
                     self.tcx.struct_tail_for_codegen(receiver_place.layout.ty, self.typing_env);
                 let ty::Dynamic(receiver_trait, _) = receiver_tail.kind() else {
-                    // tRust: invariant — virtual dispatch receiver must have a trait object (dyn) type
                     span_bug!(self.cur_span(), "dynamic call on non-`dyn` type {}", receiver_tail)
                 };
                 assert!(receiver_place.layout.is_unsized());
@@ -740,7 +737,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 // looking up the method at index `idx`.
                 let vtable_entries = self.vtable_entries(receiver_trait.principal(), dyn_ty);
                 let Some(ty::VtblEntry::Method(fn_inst)) = vtable_entries.get(idx).copied() else {
-                    // tRust: known issue (fee1-dead) — these could be variants of the UB info enum instead of this
+                    // FIXME(fee1-dead) these could be variants of the UB info enum instead of this
                     throw_ub_format!("`dyn` call trying to call something that is not a method");
                 };
                 trace!("Virtual call dispatches to {fn_inst:#?}");
@@ -827,18 +824,18 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         // The arguments need to all be copied since the current stack frame will be removed
         // before the callee even starts executing.
-        // tRust: known issue (explicit_tail_calls,#144855) — does this match what codegen does?
+        // FIXME(explicit_tail_calls,#144855): does this match what codegen does?
         let args = args.iter().map(|fn_arg| FnArg::Copy(fn_arg.copy_fn_arg())).collect::<Vec<_>>();
         // Remove the frame from the stack.
         let frame = self.pop_stack_frame_raw()?;
         // Remember where this frame would have returned to.
         let ReturnContinuation::Goto { ret, unwind } = frame.return_cont() else {
-            // tRust: invariant — tail calls require at least one frame on the call stack
             bug!("can't tailcall as root of the stack");
         };
         // There's no return value to deal with! Instead, we forward the old return place
         // to the new function.
-        // tRust: known issue (explicit_tail_calls) — //   we should check if both caller&callee can/n't unwind,
+        // FIXME(explicit_tail_calls):
+        //   we should check if both caller&callee can/n't unwind,
         //   see <https://github.com/rust-lang/rust/pull/113128#issuecomment-1614979803>
 
         // Now push the new stack frame.
@@ -854,7 +851,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         // Finally, clear the local variables. Has to be done after pushing to support
         // non-scalar arguments.
-        // tRust: known issue (explicit_tail_calls,#144855) — revisit this once codegen supports indirect
+        // FIXME(explicit_tail_calls,#144855): revisit this once codegen supports indirect
         // arguments, to ensure the semantics are compatible.
         let return_action = self.cleanup_stack_frame(/* unwinding */ false, frame)?;
         assert_eq!(return_action, ReturnAction::Normal);

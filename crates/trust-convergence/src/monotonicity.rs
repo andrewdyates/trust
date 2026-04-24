@@ -126,7 +126,6 @@ fn check_relaxed(delta: &FrontierDelta) -> MonotonicityResult {
     MonotonicityResult { is_monotonic: true, policy, delta: *delta, violation_reason: None }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

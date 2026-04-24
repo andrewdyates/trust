@@ -120,7 +120,7 @@ pub struct Memory<'tcx, M: Machine<'tcx>> {
     /// the wrong type), so we let the machine override this type.
     /// Either way, if the machine allows writing to a global, doing so will
     /// create a copy of the global allocation here.
-    // tRust: known issue — this should not be public, but interning currently needs access to it
+    // FIXME: this should not be public, but interning currently needs access to it
     pub(super) alloc_map: M::MemoryMap,
 
     /// Map for "extra" function pointers.
@@ -132,7 +132,7 @@ pub struct Memory<'tcx, M: Machine<'tcx>> {
     /// To be able to compare pointers with null, and to check alignment for accesses
     /// to ZSTs (where pointers may dangle), we keep track of the size even for allocations
     /// that do not exist any more.
-    // tRust: known issue — this should not be public, but interning currently needs access to it
+    // FIXME: this should not be public, but interning currently needs access to it
     pub(super) dead_alloc_map: FxIndexMap<AllocId, (Size, Align)>,
 
     /// This stores whether we are currently doing reads purely for the purpose of validation.
@@ -197,7 +197,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             Some(GlobalAlloc::Static(def_id)) if self.tcx.is_thread_local_static(def_id) => {
                 // Thread-local statics do not have a constant address. They *must* be accessed via
                 // `ThreadLocalRef`; we can never have a pointer to them as a regular constant value.
-                // tRust: invariant — global allocations never reference thread-local statics
                 bug!("global memory cannot point to thread-local static")
             }
             Some(GlobalAlloc::Static(def_id)) if self.tcx.is_foreign_item(def_id) => {
@@ -224,7 +223,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 self.tcx.reserve_and_set_fn_alloc(instance, salt)
             }
             FnVal::Other(extra) => {
-                // tRust: known issue (RalfJung) — Should we have a cache here?
+                // FIXME(RalfJung): Should we have a cache here?
                 let id = self.tcx.reserve_alloc_id();
                 let old = self.memory.extra_fn_ptr_map.insert(id, extra);
                 assert!(old.is_none());
@@ -233,7 +232,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         };
         // Functions are global allocations, so make sure we get the right root pointer.
         // We know this is not an `extern static` so this cannot fail.
-        self.global_root_pointer(Pointer::from(id)).expect("invariant: function alloc is not an extern static, global_root_pointer cannot fail")
+        self.global_root_pointer(Pointer::from(id)).unwrap()
     }
 
     /// Insert a new variable argument list in the global map of variable argument lists.
@@ -246,7 +245,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         assert!(old.is_none());
         // Variable argument lists are global allocations, so make sure we get the right root
         // pointer. We know this is not an `extern static` so this cannot fail.
-        self.global_root_pointer(Pointer::from(id)).expect("invariant: va_list alloc is not an extern static, global_root_pointer cannot fail")
+        self.global_root_pointer(Pointer::from(id)).unwrap()
     }
 
     pub fn allocate_ptr(
@@ -449,7 +448,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // Don't forget to remember size and align of this now-dead allocation
         let old = self.memory.dead_alloc_map.insert(alloc_id, (size, alloc.align));
         if old.is_some() {
-            // tRust: invariant — double-free is prevented by removing allocation from map on first dealloc
             bug!("Nothing can be deallocated twice");
         }
 
@@ -463,7 +461,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         ptr: Pointer<Option<M::Provenance>>,
         size: Size,
     ) -> InterpResult<'tcx, Option<(AllocId, Size, M::ProvenanceExtra)>> {
-        let size = i64::try_from(size.bytes()).expect("invariant: allocation size cannot exceed isize::MAX bytes"); // it would be an error to even ask for more than isize::MAX bytes
+        let size = i64::try_from(size.bytes()).unwrap(); // it would be an error to even ask for more than isize::MAX bytes
         Self::check_and_deref_ptr(
             self,
             ptr,
@@ -486,7 +484,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         size: Size,
         msg: CheckInAllocMsg,
     ) -> InterpResult<'tcx> {
-        let size = i64::try_from(size.bytes()).expect("invariant: allocation size cannot exceed isize::MAX bytes"); // it would be an error to even ask for more than isize::MAX bytes
+        let size = i64::try_from(size.bytes()).unwrap(); // it would be an error to even ask for more than isize::MAX bytes
         Self::check_and_deref_ptr(self, ptr, size, msg, |this, alloc_id, _, _| {
             let (size, align) = this.get_live_alloc_size_and_align(alloc_id, msg)?;
             interp_ok((size, align, ()))
@@ -594,7 +592,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             } else {
                 // The biggest power of two through which `offset` is divisible.
                 let offset_pow2 = 1 << offset.trailing_zeros();
-                Some(Misalignment { has: Align::from_bytes(offset_pow2).expect("invariant: offset_pow2 is a power of two from trailing_zeros"), required: align })
+                Some(Misalignment { has: Align::from_bytes(offset_pow2).unwrap(), required: align })
             }
         }
 
@@ -757,7 +755,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         size: Size,
     ) -> InterpResult<'tcx, Option<AllocRef<'a, 'tcx, M::Provenance, M::AllocExtra, M::Bytes>>>
     {
-        let size_i64 = i64::try_from(size.bytes()).expect("invariant: allocation size cannot exceed isize::MAX bytes"); // it would be an error to even ask for more than isize::MAX bytes
+        let size_i64 = i64::try_from(size.bytes()).unwrap(); // it would be an error to even ask for more than isize::MAX bytes
         let ptr_and_alloc = Self::check_and_deref_ptr(
             self,
             ptr,
@@ -834,7 +832,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             self.memory.alloc_map.insert(id, (MemoryKind::Machine(kind), alloc.into_owned()));
         }
 
-        let (_kind, alloc) = self.memory.alloc_map.get_mut(id).expect("invariant: alloc was just inserted into alloc_map on slow path or already existed");
+        let (_kind, alloc) = self.memory.alloc_map.get_mut(id).unwrap();
         if alloc.mutability.is_not() {
             throw_ub!(WriteToReadOnly(id))
         }
@@ -861,7 +859,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         let tcx = self.tcx;
         let validation_in_progress = self.memory.validation_in_progress.get();
 
-        let size_i64 = i64::try_from(size.bytes()).expect("invariant: allocation size cannot exceed isize::MAX bytes"); // it would be an error to even ask for more than isize::MAX bytes
+        let size_i64 = i64::try_from(size.bytes()).unwrap(); // it would be an error to even ask for more than isize::MAX bytes
         let ptr_and_alloc = Self::check_and_deref_ptr(
             self,
             ptr,
@@ -936,7 +934,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         if let Some(fn_val) = self.get_fn_alloc(id) {
             let align = match fn_val {
                 FnVal::Instance(_instance) => {
-                    // tRust: known issue — Until we have a clear design for the effects of align(N) functions
+                    // FIXME: Until we have a clear design for the effects of align(N) functions
                     // on the address of function pointers, we don't consider the align(N)
                     // attribute on functions in the interpreter.
                     // See <https://github.com/rust-lang/rust/issues/144661> for more context.
@@ -961,7 +959,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             let mutbl = global_alloc.mutability(*self.tcx, self.typing_env);
             let kind = match global_alloc {
                 GlobalAlloc::Static { .. } | GlobalAlloc::Memory { .. } => AllocKind::LiveData,
-                // tRust: invariant — function pointer allocations are filtered in a preceding branch
                 GlobalAlloc::Function { .. } => bug!("We already checked function pointers above"),
                 GlobalAlloc::VTable { .. } => AllocKind::VTable,
                 GlobalAlloc::TypeId { .. } => AllocKind::TypeId,
@@ -1148,13 +1145,13 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     pub fn print_alloc_bytes_for_diagnostics(&self, id: AllocId) -> String {
         // Using the "raw" access to avoid the `before_alloc_read` hook, we specifically
         // want to be able to read all memory for diagnostics, even if that is cyclic.
-        let alloc = self.get_alloc_raw(id).expect("invariant: diagnostic alloc read uses valid alloc_id from dump_allocs");
+        let alloc = self.get_alloc_raw(id).unwrap();
         let mut bytes = String::new();
         if alloc.size() != Size::ZERO {
             bytes = "\n".into();
-            // tRust: known issue (translation) — there might be pieces that are translatable.
+            // FIXME(translation) there might be pieces that are translatable.
             rustc_middle::mir::pretty::write_allocation_bytes(*self.tcx, alloc, &mut bytes, "    ")
-                .expect("invariant: write_allocation_bytes writing to String cannot fail");
+                .unwrap();
         }
         bytes
     }
@@ -1199,7 +1196,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         });
         let mut result = Vec::new();
         for &id in leaked.iter() {
-            let (kind, alloc) = self.memory.alloc_map.remove(&id).expect("invariant: leaked alloc id was found in alloc_map by filter_map_collect");
+            let (kind, alloc) = self.memory.alloc_map.remove(&id).unwrap();
             result.push((id, kind, alloc));
         }
         result
@@ -1502,12 +1499,12 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // Similar to `get_ptr_alloc`, we need to call `before_alloc_access` even for zero-sized
         // reads. However, just like in `get_ptr_alloc_mut`, the write part is okay to skip for
         // zero-sized writes.
-        if let Ok((alloc_id, ..)) = self.ptr_try_get_alloc_id(src, size.bytes().try_into().expect("invariant: allocation size cannot exceed isize::MAX bytes"))
+        if let Ok((alloc_id, ..)) = self.ptr_try_get_alloc_id(src, size.bytes().try_into().unwrap())
         {
             M::before_alloc_access(tcx, &self.machine, alloc_id)?;
         }
 
-        // tRust: known issue — we look up both allocations twice here, once before for the `check_ptr_access`
+        // FIXME: we look up both allocations twice here, once before for the `check_ptr_access`
         // and once below to get the underlying `&[mut] Allocation`.
 
         // Source alloc preparations and access hooks.
@@ -1575,13 +1572,11 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             return interp_ok(());
         }
 
-        // SAFETY: The above indexing would have panicked if there weren't at least `size` bytes
+        // SAFE: The above indexing would have panicked if there weren't at least `size` bytes
         // behind `src` and `dest`. Also, we use the overlapping-safe `ptr::copy` if `src` and
         // `dest` could possibly overlap.
         // The pointers above remain valid even if the `HashMap` table is moved around because they
         // point into the `Vec` storing the bytes.
-        // SAFETY: `src_bytes` and `dest_bytes` each cover at least `size` readable/writable
-        // bytes, and overlap is checked before any non-overlapping copy requirement is assumed.
         unsafe {
             if src_alloc_id == dest_alloc_id {
                 if nonoverlapping {
@@ -1668,7 +1663,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         // We don't know enough, this might be null.
                         interp_ok(true)
                     }
-                    // tRust: invariant — non-integer scalars must be valid pointers with provenance
                     Err(_offset) => bug!("a non-int scalar is always a pointer"),
                 }
             }

@@ -26,11 +26,9 @@ use crate::{errors, llvm};
 static INIT: Once = Once::new();
 
 pub(crate) fn init(sess: &Session) {
-    // SAFETY: LLVM global initialization functions are safe to call; they are idempotent and thread-safe.
     unsafe {
         // Before we touch LLVM, make sure that multithreading is enabled.
         if !llvm::LLVMIsMultithreaded().is_true() {
-            // tRust: invariant — the configured LLVM must be built with multithreading support
             bug!("LLVM compiled without support for threads");
         }
         INIT.call_once(|| {
@@ -41,7 +39,6 @@ pub(crate) fn init(sess: &Session) {
 
 fn require_inited() {
     if !INIT.is_completed() {
-        // tRust: invariant — LLVM must be initialized before `rustc_codegen_llvm` queries backend state
         bug!("LLVM is not initialized");
     }
 }
@@ -51,7 +48,6 @@ unsafe fn configure_llvm(sess: &Session) {
     let mut llvm_c_strs = Vec::with_capacity(n_args + 1);
     let mut llvm_args = Vec::with_capacity(n_args + 1);
 
-    // SAFETY: The error handler function pointer is valid and will remain valid for the lifetime of the LLVM process state.
     unsafe {
         llvm::LLVMRustInstallErrorHandlers();
     }
@@ -59,7 +55,6 @@ unsafe fn configure_llvm(sess: &Session) {
     // box for the purpose of launching a debugger. However, on CI this will
     // cause it to hang until it times out, which can take several hours.
     if std::env::var_os("CI").is_some() {
-        // SAFETY: Calling a stateless LLVM configuration function that disables crash dialog popups.
         unsafe {
             llvm::LLVMRustDisableSystemDialogsOnCrash();
         }
@@ -81,7 +76,7 @@ unsafe fn configure_llvm(sess: &Session) {
         // user specified arguments are *not* overridden.
         let mut add = |arg: &str, force: bool| {
             if force || !user_specified_args.contains(llvm_arg_to_arg_name(arg)) {
-                let s = CString::new(arg).expect("invariant: CString::new failed - input contains null byte");
+                let s = CString::new(arg).unwrap();
                 llvm_args.push(s.as_ptr());
                 llvm_c_strs.push(s);
             }
@@ -118,19 +113,9 @@ unsafe fn configure_llvm(sess: &Session) {
             add("-enable-emscripten-cxx-exceptions", false);
         }
 
-        // tRust: known issue — (eddyb) LLVM inserts `llvm.assume` calls to preserve align attributes
+        // HACK(eddyb) LLVM inserts `llvm.assume` calls to preserve align attributes
         // during inlining. Unfortunately these may block other optimizations.
         add("-preserve-alignment-assumptions-during-inlining=false", false);
-
-        // tRust: Workaround for LLVM IndVarSimplify miscompilation (llvm/llvm-project#183906).
-        // LLVM's predicateLoopExits() fails to account for divergence effects from
-        // infinite inner loops (normal control flow, not non-willreturn calls).
-        // This causes incorrect loop exit predication, producing NonZero(0) in safe
-        // Rust (rust-lang/rust#153222). Disable loop predication until LLVM fixes
-        // the divergence check in predicateLoopExits().
-        // See: https://github.com/llvm/llvm-project/issues/183906
-        // See: https://github.com/rust-lang/rust/issues/153222
-        add("--indvars-predicate-loops=false", false);
 
         // Use non-zero `import-instr-limit` multiplier for cold callsites.
         add("-import-cold-multiplier=0.1", false);
@@ -157,18 +142,15 @@ unsafe fn configure_llvm(sess: &Session) {
     }
 
     if sess.opts.unstable_opts.llvm_time_trace {
-        // SAFETY: The arguments array contains valid C string pointers, and the count matches the array length.
         unsafe { llvm::LLVMRustTimeTraceProfilerInitialize() };
     }
 
     rustc_llvm::initialize_available_targets();
 
-    // SAFETY: The arguments array contains valid C string pointers, and the count matches the array length.
     unsafe { llvm::LLVMRustSetLLVMOptions(llvm_args.len() as c_int, llvm_args.as_ptr()) };
 }
 
 pub(crate) fn time_trace_profiler_finish(file_name: &Path) {
-    // SAFETY: The file path is a valid C string. The time trace profiler was previously initialized.
     unsafe {
         let file_name = path_to_c_string(file_name);
         llvm::LLVMRustTimeTraceProfilerFinish(file_name.as_ptr());
@@ -354,7 +336,6 @@ pub(crate) fn target_config(sess: &Session) -> TargetConfig {
                     // `LLVMRustHasFeature` is moderately expensive. On targets with many
                     // features (e.g. x86) these calls take a non-trivial fraction of runtime
                     // when compiling very small programs.
-                    // SAFETY: The target machine is valid, and the feature name is a valid C string.
                     if !unsafe { llvm::LLVMRustHasFeature(target_machine.raw(), cstr.as_ptr()) } {
                         return false;
                     }
@@ -458,7 +439,6 @@ pub(crate) fn print_version() {
 
 pub(crate) fn get_version() -> (u32, u32, u32) {
     // Can be called without initializing LLVM
-    // SAFETY: Calling stateless LLVM functions that return version number constants.
     unsafe {
         (llvm::LLVMRustVersionMajor(), llvm::LLVMRustVersionMinor(), llvm::LLVMRustVersionPatch())
     }
@@ -466,32 +446,26 @@ pub(crate) fn get_version() -> (u32, u32, u32) {
 
 pub(crate) fn print_passes() {
     // Can be called without initializing LLVM
-    // SAFETY: No preconditions — prints available LLVM passes to stderr.
     unsafe {
         llvm::LLVMRustPrintPasses();
     }
 }
 
 fn llvm_target_features(tm: &llvm::TargetMachine) -> Vec<(&str, &str)> {
-    // SAFETY: The target is valid, and the index is within the feature count.
     let len = unsafe { llvm::LLVMRustGetTargetFeaturesCount(tm) };
     let mut ret = Vec::with_capacity(len);
     for i in 0..len {
-        // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
         unsafe {
             let mut feature = ptr::null();
             let mut desc = ptr::null();
             llvm::LLVMRustGetTargetFeature(tm, i, &mut feature, &mut desc);
             if feature.is_null() || desc.is_null() {
-                // tRust: invariant — LLVM must return non-null feature names and descriptions for every reported target feature
                 bug!("LLVM returned a `null` target feature string");
             }
             let feature = CStr::from_ptr(feature).to_str().unwrap_or_else(|e| {
-                // tRust: invariant — LLVM target feature names must be valid UTF-8
                 bug!("LLVM returned a non-utf8 feature string: {}", e);
             });
             let desc = CStr::from_ptr(desc).to_str().unwrap_or_else(|e| {
-                // tRust: invariant — LLVM target feature descriptions must be valid UTF-8
                 bug!("LLVM returned a non-utf8 feature string: {}", e);
             });
             ret.push((feature, desc));
@@ -506,18 +480,15 @@ pub(crate) fn print(req: &PrintRequest, out: &mut String, sess: &Session) {
     match req.kind {
         PrintKind::TargetCPUs => print_target_cpus(sess, tm.raw(), out),
         PrintKind::TargetFeatures => print_target_features(sess, tm.raw(), out),
-        _ =>
-            // tRust: invariant — this backend print entry point must only be called for target CPU or target feature requests
-            bug!("rustc_codegen_llvm can't handle print request: {:?}", req),
+        _ => bug!("rustc_codegen_llvm can't handle print request: {:?}", req),
     }
 }
 
 fn print_target_cpus(sess: &Session, tm: &llvm::TargetMachine, out: &mut String) {
-    // SAFETY: The target machine is a valid reference, and the output function pointer is valid.
     let cpu_names = llvm::build_string(|s| unsafe {
         llvm::LLVMRustPrintTargetCPUs(&tm, s);
     })
-    .expect("invariant: LLVM target CPU listing succeeds");
+    .unwrap();
 
     struct Cpu<'a> {
         cpu_name: &'a str,
@@ -527,7 +498,7 @@ fn print_target_cpus(sess: &Session, tm: &llvm::TargetMachine, out: &mut String)
     let target_cpu = handle_native(&sess.target.cpu);
     let make_remark = |cpu_name| {
         if cpu_name == target_cpu {
-            // tRust: known issue — (#132514): This prints the LLVM target string, which can be
+            // FIXME(#132514): This prints the LLVM target string, which can be
             // different from the Rust target string. Is that intended?
             let target = &sess.target.llvm_target;
             format!(
@@ -553,11 +524,11 @@ fn print_target_cpus(sess: &Session, tm: &llvm::TargetMachine, out: &mut String)
     }
 
     let max_name_width = cpus.iter().map(|cpu| cpu.cpu_name.len()).max().unwrap_or(0);
-    writeln!(out, "Available CPUs for this target:").expect("invariant: write to string/buffer succeeds");
+    writeln!(out, "Available CPUs for this target:").unwrap();
     for Cpu { cpu_name, remark } in cpus {
         // Only pad the CPU name if there's a remark to print after it.
         let width = if remark.is_empty() { 0 } else { max_name_width };
-        writeln!(out, "    {cpu_name:<width$}{remark}").expect("invariant: write to string/buffer succeeds");
+        writeln!(out, "    {cpu_name:<width$}{remark}").unwrap();
     }
 }
 
@@ -606,23 +577,23 @@ fn print_target_features(sess: &Session, tm: &llvm::TargetMachine, out: &mut Str
         .max()
         .unwrap_or(0);
 
-    writeln!(out, "Features supported by rustc for this target:").expect("invariant: write to string/buffer succeeds");
+    writeln!(out, "Features supported by rustc for this target:").unwrap();
     for (feature, desc) in &rustc_target_features {
-        writeln!(out, "    {feature:max_feature_len$} - {desc}.").expect("invariant: write to string/buffer succeeds");
+        writeln!(out, "    {feature:max_feature_len$} - {desc}.").unwrap();
     }
-    writeln!(out, "\nCode-generation features supported by LLVM for this target:").expect("invariant: write to string/buffer succeeds");
+    writeln!(out, "\nCode-generation features supported by LLVM for this target:").unwrap();
     for (feature, desc) in &llvm_target_features {
-        writeln!(out, "    {feature:max_feature_len$} - {desc}.").expect("invariant: write to string/buffer succeeds");
+        writeln!(out, "    {feature:max_feature_len$} - {desc}.").unwrap();
     }
     if llvm_target_features.is_empty() {
         writeln!(out, "    Target features listing is not supported by this LLVM version.")
-            .expect("invariant: write to string/buffer succeeds");
+            .unwrap();
     }
-    writeln!(out, "\nUse +feature to enable a feature, or -feature to disable it.").expect("invariant: write to string/buffer succeeds");
+    writeln!(out, "\nUse +feature to enable a feature, or -feature to disable it.").unwrap();
     writeln!(out, "For example, rustc -C target-cpu=mycpu -C target-feature=+feature1,-feature2\n")
-        .expect("invariant: write to string/buffer succeeds");
-    writeln!(out, "Code-generation features cannot be used in cfg or #[target_feature],").expect("invariant: write to string/buffer succeeds");
-    writeln!(out, "and may be renamed or removed in a future version of LLVM or rustc.\n").expect("invariant: write to string/buffer succeeds");
+        .unwrap();
+    writeln!(out, "Code-generation features cannot be used in cfg or #[target_feature],").unwrap();
+    writeln!(out, "and may be renamed or removed in a future version of LLVM or rustc.\n").unwrap();
 }
 
 /// Returns the host CPU name, according to LLVM.
@@ -684,7 +655,7 @@ pub(crate) fn global_llvm_features(sess: &Session, only_base_features: bool) -> 
     // [^1]: target-cpu=native is handled here, other target-cpu values are handled implicitly
     // through LLVM TargetMachine implementation.
     //
-    // tRust: known issue — (nagisa): it isn't clear what's the best interaction between features implied by
+    // FIXME(nagisa): it isn't clear what's the best interaction between features implied by
     // `-Ctarget-cpu` and `--target` are. On one hand, you'd expect CLI arguments to always
     // override anything that's implicit, so e.g. when there's no `--target` flag, features implied
     // the host target are overridden by `-Ctarget-cpu=*`. On the other hand, what about when both
@@ -701,19 +672,16 @@ pub(crate) fn global_llvm_features(sess: &Session, only_base_features: bool) -> 
             // However, that is not sufficient: e.g. `skylake` alone is not sufficient to tell if
             // some of the instructions are available or not. So we have to also explicitly ask for
             // the exact set of features available on the host, and enable all of them.
-            // SAFETY: The pointer is a valid null-terminated C string returned by LLVM.
             let features_string = unsafe {
                 let ptr = llvm::LLVMGetHostCPUFeatures();
                 let features_string = if !ptr.is_null() {
                     CStr::from_ptr(ptr)
                         .to_str()
                         .unwrap_or_else(|e| {
-                            // tRust: invariant — the host CPU features string returned by LLVM must be valid UTF-8
                             bug!("LLVM returned a non-utf8 features string: {}", e);
                         })
                         .to_owned()
                 } else {
-                    // tRust: invariant — LLVM must allocate and return a host CPU features string when queried
                     bug!("could not allocate host CPU features, LLVM returned a `null` string");
                 };
 

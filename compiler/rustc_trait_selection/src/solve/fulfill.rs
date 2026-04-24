@@ -29,7 +29,7 @@ use crate::traits::{FulfillmentError, ScrubbedTraitError};
 
 mod derive_errors;
 
-// tRust: known issue — Do we need to use a `ThinVec` here?
+// FIXME: Do we need to use a `ThinVec` here?
 type PendingObligations<'tcx> =
     ThinVec<(PredicateObligation<'tcx>, Option<GoalStalledOn<TyCtxt<'tcx>>>)>;
 
@@ -103,7 +103,7 @@ impl<'tcx> ObligationStorage<'tcx> {
             // we get all obligations involved in the overflow. We pretty much check: if
             // we were to do another step of `try_evaluate_obligations`, which goals would
             // change.
-            // tRust: known issue — <https://github.com/Gankra/thin-vec/pull/66> is merged, this can be removed.
+            // FIXME: <https://github.com/Gankra/thin-vec/pull/66> is merged, this can be removed.
             self.overflowed.extend(
                 ExtractIf::new(&mut self.pending, |(o, stalled_on)| {
                     let goal = o.as_goal();
@@ -248,7 +248,7 @@ where
                         // While we uniquify root goals in HIR this does not handle cases where
                         // regions are hidden inside of a type or const inference variable.
                         //
-                        // tRust: known issue (-Znext-solver) — This does not handle inference variables hidden
+                        // FIXME(-Znext-solver): This does not handle inference variables hidden
                         // inside of an opaque type, e.g. if there's `Opaque = (?x, ?x)` in the
                         // storage, we can also rely on structural identity of `?x` even if we
                         // later uniquify it in MIR borrowck.

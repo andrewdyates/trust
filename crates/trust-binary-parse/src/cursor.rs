@@ -21,7 +21,8 @@ impl<'a> Cursor<'a> {
 
     /// Read a single byte.
     pub fn read_u8(&mut self) -> Result<u8, DwarfError> {
-        let byte = *self.data.get(self.pos).ok_or(DwarfError::UnexpectedEof { offset: self.pos })?;
+        let byte =
+            *self.data.get(self.pos).ok_or(DwarfError::UnexpectedEof { offset: self.pos })?;
         self.pos += 1;
         Ok(byte)
     }
@@ -59,7 +60,8 @@ impl<'a> Cursor<'a> {
     /// Read a fixed number of raw bytes.
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], DwarfError> {
         let end = self.pos.checked_add(n).ok_or(DwarfError::UnexpectedEof { offset: self.pos })?;
-        let bytes = self.data.get(self.pos..end).ok_or(DwarfError::UnexpectedEof { offset: self.pos })?;
+        let bytes =
+            self.data.get(self.pos..end).ok_or(DwarfError::UnexpectedEof { offset: self.pos })?;
         self.pos = end;
         Ok(bytes)
     }
@@ -222,10 +224,11 @@ mod tests {
     fn test_cursor_read_uint_supported_widths() {
         // Little-endian encoding: least significant byte first
         let data = [
-            0x42,                                           // 1-byte: 0x42
-            0x34, 0x12,                                     // 2-byte LE: 0x1234
-            0x78, 0x56, 0x34, 0x12,                         // 4-byte LE: 0x1234_5678
-            0xEF, 0xCD, 0xAB, 0x90, 0x78, 0x56, 0x34, 0x12 // 8-byte LE: 0x1234_5678_90AB_CDEF
+            0x42, // 1-byte: 0x42
+            0x34, 0x12, // 2-byte LE: 0x1234
+            0x78, 0x56, 0x34, 0x12, // 4-byte LE: 0x1234_5678
+            0xEF, 0xCD, 0xAB, 0x90, 0x78, 0x56, 0x34,
+            0x12, // 8-byte LE: 0x1234_5678_90AB_CDEF
         ];
         let mut cursor = Cursor::new(&data);
         assert_eq!(cursor.read_uint(1).unwrap(), 0x42);

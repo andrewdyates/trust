@@ -207,7 +207,6 @@ impl LintStore {
 
             let id = LintId::of(lint);
             if self.by_name.insert(lint.name_lower(), Id(id)).is_some() {
-                // tRust: invariant — lint names must be unique within the lint registry
                 bug!("duplicate specification of lint {}", lint.name_lower())
             }
 
@@ -243,14 +242,12 @@ impl LintStore {
     fn insert_group(&mut self, name: &'static str, group: LintGroup) {
         let previous = self.lint_groups.insert(name, group);
         if previous.is_some() {
-            // tRust: invariant — lint group names must be unique within the registry
             bug!("group {name:?} already exists");
         }
     }
 
     pub fn register_group_alias(&mut self, group_name: &'static str, alias: &'static str) {
         let Some(LintGroup { lint_ids, .. }) = self.lint_groups.get(group_name) else {
-            // tRust: invariant — group alias must reference an already-registered lint group
             bug!("group alias {alias:?} points to unregistered group {group_name:?}")
         };
 
@@ -290,7 +287,6 @@ impl LintStore {
     #[track_caller]
     pub fn register_ignored(&mut self, name: &str) {
         if self.by_name.insert(name.to_string(), Ignored).is_some() {
-            // tRust: invariant — ignored lint names must be unique within the registry
             bug!("duplicate specification of lint {}", name);
         }
     }
@@ -299,7 +295,6 @@ impl LintStore {
     #[track_caller]
     pub fn register_renamed(&mut self, old_name: &str, new_name: &str) {
         let Some(&Id(target)) = self.by_name.get(new_name) else {
-            // tRust: invariant — lint rename target must already exist in the registry
             bug!("invalid lint renaming of {} to {}", old_name, new_name);
         };
         self.by_name.insert(old_name.to_string(), Renamed(new_name.to_string(), target));
@@ -350,7 +345,7 @@ impl LintStore {
         registered_tools: &RegisteredTools,
     ) -> CheckLintNameResult<'_> {
         if let Some(tool_name) = tool_name {
-            // tRust: known issue — rustc and rustdoc are considered tools for lints, but not for attributes.
+            // FIXME: rustc and rustdoc are considered tools for lints, but not for attributes.
             if tool_name != sym::rustc
                 && tool_name != sym::rustdoc
                 && !registered_tools.contains(&Ident::with_dummy_span(tool_name))
@@ -371,7 +366,7 @@ impl LintStore {
                     // If the lint isn't registered, there are two possibilities:
                     None => {
                         // 1. The tool is currently running, so this lint really doesn't exist.
-                        // tRust: known issue — should this handle tools that never register a lint, like rustfmt?
+                        // FIXME: should this handle tools that never register a lint, like rustfmt?
                         debug!("lints={:?}", self.by_name);
                         let tool_prefix = format!("{tool_name}::");
 
@@ -487,7 +482,7 @@ pub struct LateContext<'tcx> {
 
     /// Type-checking results for the current body. Access using the `typeck_results`
     /// and `maybe_typeck_results` methods, which handle querying the typeck results on demand.
-    // tRust: known issue — (eddyb) move all the code accessing internal fields like this,
+    // FIXME(eddyb) move all the code accessing internal fields like this,
     // to this module, to avoid exposing it to lint logic.
     pub(super) cached_typeck_results: Cell<Option<&'tcx ty::TypeckResults<'tcx>>>,
 
@@ -515,7 +510,7 @@ pub struct EarlyContext<'a> {
 pub trait LintContext {
     fn sess(&self) -> &Session;
 
-    // tRust: known issue — These methods should not take an Into<MultiSpan> -- instead, callers should need to
+    // FIXME: These methods should not take an Into<MultiSpan> -- instead, callers should need to
     // set the span in their `decorate` function (preferably using set_span).
     /// Emit a lint at the appropriate level, with an optional associated span.
     ///
@@ -636,7 +631,7 @@ impl<'tcx> LateContext<'tcx> {
     /// The typing mode of the currently visited node. Use this when
     /// building a new `InferCtxt`.
     pub fn typing_mode(&self) -> TypingMode<'tcx> {
-        // tRust: known issue — (#132279) In case we're in a body, we should use a typing
+        // FIXME(#132279): In case we're in a body, we should use a typing
         // mode which reveals the opaque types defined by that body.
         TypingMode::non_body_analysis()
     }
@@ -701,7 +696,7 @@ impl<'tcx> LateContext<'tcx> {
     /// diagnostic item. If you're only interested in given sections, use more
     /// specific functions, such as [`TyCtxt::crate_name`]
     ///
-    /// tRust: known issue — It would be great if this could be optimized.
+    /// FIXME: It would be great if this could be optimized.
     ///
     /// # Examples
     ///
@@ -821,7 +816,7 @@ impl<'tcx> LateContext<'tcx> {
         }
 
         let mut p = LintPathPrinter { tcx: self.tcx, path: vec![] };
-        p.print_def_path(def_id, &[]).expect("invariant: print_def_path to String never fails"); // tRust: unwrap -> expect
+        p.print_def_path(def_id, &[]).unwrap();
         p.path
     }
 
@@ -939,7 +934,7 @@ impl<'tcx> LateContext<'tcx> {
                     ..
                 }) => *init,
                 hir::Node::Item(item) => match item.kind {
-                    // tRust: known issue — (mgca) figure out how to handle ConstArgKind::Path (or don't but add warning in docs here)
+                    // FIXME(mgca): figure out how to handle ConstArgKind::Path (or don't but add warning in docs here)
                     hir::ItemKind::Const(.., hir::ConstItemRhs::Body(body_id))
                     | hir::ItemKind::Static(.., body_id) => Some(self.tcx.hir_body(body_id).value),
                     _ => None,

@@ -41,7 +41,6 @@ unsafe extern "C" fn _Unwind_Resume() {
 #[no_mangle]
 extern "C" fn main(_argc: core::ffi::c_int, _argv: *const *const u8) -> core::ffi::c_int {
     let world: Box<&str> = Box::new("Hello World!\0");
-    // SAFETY: the raw pointer is valid and properly aligned; the referenced data has the correct type.
     unsafe {
         puts(*world as *const str as *const u8);
     }

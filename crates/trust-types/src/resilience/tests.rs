@@ -1,5 +1,5 @@
-use super::*;
 use super::helpers::detect_panic_call;
+use super::*;
 use crate::{BlockId, SourceSpan, VerifiableFunction};
 
 #[test]
@@ -81,10 +81,7 @@ fn test_failure_scenarios_generation() {
     assert!(scenarios.contains(&vec![None, None]));
     assert!(scenarios.contains(&vec![None, Some(FailureMode::Error)]));
     assert!(scenarios.contains(&vec![Some(FailureMode::Timeout), None]));
-    assert!(scenarios.contains(&vec![
-        Some(FailureMode::Timeout),
-        Some(FailureMode::Error),
-    ]));
+    assert!(scenarios.contains(&vec![Some(FailureMode::Timeout), Some(FailureMode::Error),]));
 }
 
 #[test]
@@ -200,11 +197,7 @@ fn test_extract_failure_model() {
                     },
                 },
                 // bb2: return
-                BasicBlock {
-                    id: BlockId(2),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,
@@ -414,11 +407,7 @@ fn test_analyze_function_with_overflow_assert() {
                         span: SourceSpan::default(),
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 2,
             return_ty: Ty::usize(),
@@ -468,11 +457,7 @@ fn test_analyze_function_with_unwrap_call() {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,
@@ -531,10 +516,7 @@ fn test_analyze_function_with_unchecked_arithmetic() {
 
     assert_eq!(report.unchecked_arithmetic.len(), 1);
     assert_eq!(report.unchecked_arithmetic[0].op, BinOp::Add);
-    assert!(report
-        .recommendations
-        .iter()
-        .any(|r| r.contains("checked arithmetic")));
+    assert!(report.recommendations.iter().any(|r| r.contains("checked arithmetic")));
 }
 
 #[test]
@@ -575,10 +557,7 @@ fn test_analyze_function_detects_division_risk() {
 
     let report = ResilienceAnalysis::analyze_function(&func);
 
-    assert!(report
-        .unchecked_arithmetic
-        .iter()
-        .any(|u| u.op == BinOp::Div));
+    assert!(report.unchecked_arithmetic.iter().any(|u| u.op == BinOp::Div));
 }
 
 #[test]
@@ -661,11 +640,7 @@ fn test_analyze_function_with_external_deps_and_unwrap() {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(2),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(2), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,
@@ -684,10 +659,9 @@ fn test_analyze_function_with_external_deps_and_unwrap() {
     assert!(!report.failure_model.is_empty());
     assert_eq!(report.failure_model.dependencies[0].name, "redis");
     // Has error handling pattern classified as panicking
-    assert!(report
-        .error_handling
-        .iter()
-        .any(|e| matches!(e, ErrorHandlingPattern::Panicking { .. })));
+    assert!(
+        report.error_handling.iter().any(|e| matches!(e, ErrorHandlingPattern::Panicking { .. }))
+    );
     // Fault model should be PanicOnError
     assert_eq!(report.fault_model, FaultModel::PanicOnError);
     // Risk score should be notable
@@ -770,11 +744,7 @@ fn test_error_handling_swallowing_detected() {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,
@@ -786,10 +756,9 @@ fn test_error_handling_swallowing_detected() {
     };
 
     let report = ResilienceAnalysis::analyze_function(&func);
-    assert!(report
-        .error_handling
-        .iter()
-        .any(|e| matches!(e, ErrorHandlingPattern::Swallowing { .. })));
+    assert!(
+        report.error_handling.iter().any(|e| matches!(e, ErrorHandlingPattern::Swallowing { .. }))
+    );
     assert_eq!(report.fault_model, FaultModel::SilentCorruption);
 }
 
@@ -916,10 +885,7 @@ fn test_fault_assumptions_tolerate_and_query() {
         fa.recovery_for(&FailureMode::Timeout),
         Some(RecoveryStrategy::Retry { max_retries: 3 })
     ));
-    assert!(matches!(
-        fa.recovery_for(&FailureMode::Unavailable),
-        Some(RecoveryStrategy::Fallback)
-    ));
+    assert!(matches!(fa.recovery_for(&FailureMode::Unavailable), Some(RecoveryStrategy::Fallback)));
     assert!(fa.recovery_for(&FailureMode::Error).is_none());
 }
 
@@ -961,11 +927,7 @@ fn test_classify_achieved_level_fragile_with_panics() {
                         atomic: None,
                     },
                 },
-                BasicBlock {
-                    id: BlockId(1),
-                    stmts: vec![],
-                    terminator: Terminator::Return,
-                },
+                BasicBlock { id: BlockId(1), stmts: vec![], terminator: Terminator::Return },
             ],
             arg_count: 0,
             return_ty: Ty::Unit,

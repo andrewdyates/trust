@@ -44,7 +44,6 @@ pub(super) fn build_enum_type_di_node<'ll, 'tcx>(
 ) -> DINodeCreationResult<'ll> {
     let enum_type = unique_type_id.expect_ty();
     let &ty::Adt(enum_adt_def, _) = enum_type.kind() else {
-        // tRust: invariant — the native enum debuginfo builder only runs on ADT enum types
         bug!("build_enum_type_di_node() called with non-enum type: `{:?}`", enum_type)
     };
 
@@ -145,7 +144,6 @@ pub(super) fn build_coroutine_di_node<'ll, 'tcx>(
 ) -> DINodeCreationResult<'ll> {
     let coroutine_type = unique_type_id.expect_ty();
     let &ty::Coroutine(coroutine_def_id, coroutine_args) = coroutine_type.kind() else {
-        // tRust: invariant — the native coroutine debuginfo builder only runs on coroutine types
         bug!("build_coroutine_di_node() called with non-coroutine type: `{:?}`", coroutine_type)
     };
 
@@ -176,12 +174,11 @@ pub(super) fn build_coroutine_di_node<'ll, 'tcx>(
         ),
         |cx, coroutine_type_di_node| {
             let coroutine_layout =
-                cx.tcx.coroutine_layout(coroutine_def_id, coroutine_args).expect("invariant: coroutine has a layout");
+                cx.tcx.coroutine_layout(coroutine_def_id, coroutine_args).unwrap();
 
             let Variants::Multiple { tag_encoding: TagEncoding::Direct, ref variants, .. } =
                 coroutine_type_and_layout.variants
             else {
-                // tRust: invariant — native coroutine debuginfo emission only supports layouts with a directly encoded discriminant
                 bug!(
                     "Encountered coroutine with non-direct-tag layout: {:?}",
                     coroutine_type_and_layout
@@ -195,7 +192,7 @@ pub(super) fn build_coroutine_di_node<'ll, 'tcx>(
             let variant_struct_type_di_nodes: SmallVec<_> = variants
                 .indices()
                 .map(|variant_index| {
-                    // tRust: known issue — This is problematic because just a number is not a valid identifier.
+                    // FIXME: This is problematic because just a number is not a valid identifier.
                     //        CoroutineArgs::variant_name(variant_index), would be consistent
                     //        with enums?
                     let variant_name = format!("{}", variant_index.as_usize()).into();
@@ -281,7 +278,6 @@ fn build_enum_variant_part_di_node<'ll, 'tcx>(
     let stub = StubInfo::new(
         cx,
         variant_part_unique_type_id,
-        // SAFETY: The `DIBuilder` is valid, all references are valid, and string buffers have correct lengths.
         |cx, variant_part_unique_type_id_str| unsafe {
             let variant_part_name = "";
             llvm::LLVMRustDIBuilderCreateVariantPart(
@@ -443,7 +439,6 @@ fn build_enum_variant_member_di_node<'ll, 'tcx>(
         cx.const_uint_big(cx.type_ix(size.bits()), value)
     });
 
-    // SAFETY: The `DIBuilder` is valid, all references are valid, and string buffers have correct lengths.
     unsafe {
         llvm::LLVMRustDIBuilderCreateVariantMemberType(
             DIB(cx),

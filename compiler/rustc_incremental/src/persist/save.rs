@@ -63,7 +63,7 @@ pub(crate) fn save_dep_graph(tcx: TyCtxt<'_>) {
                 sess.time("incr_comp_persist_result_cache", || {
                     // The on-disk cache struct is always present in incremental mode,
                     // even if there was no previous session.
-                    let on_disk_cache = tcx.query_system.on_disk_cache.as_ref().expect("invariant: on_disk_cache is always present in incremental mode"); // tRust: unwrap -> expect
+                    let on_disk_cache = tcx.query_system.on_disk_cache.as_ref().unwrap();
 
                     // For every green dep node that has a disk-cached value from the
                     // previous session, make sure the value is loaded into the memory
@@ -72,7 +72,7 @@ pub(crate) fn save_dep_graph(tcx: TyCtxt<'_>) {
                     // This reads data from the previous session, so it needs to happen
                     // before dropping the mmap.
                     //
-                    // tRust: known issue (Zalathar) -- This step is intended to be cheap, but still does
+                    // FIXME(Zalathar): This step is intended to be cheap, but still does
                     // quite a lot of work, especially in builds with few or no changes.
                     // Can we be smarter about how we identify values that need promotion?
                     // Can we promote values without decoding them into the memory cache?

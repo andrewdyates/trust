@@ -64,19 +64,11 @@ where
         self.iter.find_map(&mut self.f)
     }
 
-    // tRust: fix for rust-lang#153803 — buffer overrun in FilterMap::next_chunk.
-    // Ported from upstream PR #153813.
     #[inline]
     fn next_chunk<const N: usize>(
         &mut self,
     ) -> Result<[Self::Item; N], array::IntoIter<Self::Item, N>> {
         let mut array: [MaybeUninit<Self::Item>; N] = [const { MaybeUninit::uninit() }; N];
-
-        // tRust: early return for zero-length chunks (rust-lang#153803)
-        if N == 0 {
-            // SAFETY: the array is empty, vacuously initialized.
-            return Ok(unsafe { MaybeUninit::array_assume_init(array) });
-        }
 
         struct Guard<'a, T> {
             array: &'a mut [MaybeUninit<T>],
@@ -99,15 +91,10 @@ where
 
         let result = self.iter.try_for_each(|element| {
             let idx = guard.initialized;
-            // tRust: bounds check guards against malicious try_for_each that
-            // continues calling the closure after ControlFlow::Break (rust-lang#153803)
-            if idx >= N {
-                panic!("closure called after `ControlFlow::Break` was returned");
-            }
             let val = (self.f)(element);
             guard.initialized = idx + val.is_some() as usize;
 
-            // SAFETY: idx < N is guaranteed by the check above.
+            // SAFETY: Loop conditions ensure the index is in bounds.
 
             unsafe {
                 let opt_payload_at: *const MaybeUninit<B> =
@@ -124,12 +111,12 @@ where
 
         match result {
             ControlFlow::Break(()) => {
-                // SAFETY: The loop breaks only when initialized == N.
+                // SAFETY: The loop above is only explicitly broken when the array has been fully initialized
                 Ok(unsafe { MaybeUninit::array_assume_init(array) })
             }
             ControlFlow::Continue(()) => {
                 let initialized = guard.initialized;
-                // SAFETY: The range is in bounds: initialized <= N.
+                // SAFETY: The range is in bounds since the loop breaks when reaching N elements.
                 Err(unsafe { array::IntoIter::new_unchecked(array, 0..initialized) })
             }
         }

@@ -330,7 +330,7 @@ where
         span: Span,
         ts: TokenStream,
     ) -> Result<TokenStream, ErrorGuaranteed> {
-        // tRust: known issue — setup implicit context in TLS before calling self.
+        // FIXME setup implicit context in TLS before calling self.
         self(ecx, span, ts)
     }
 }
@@ -371,7 +371,7 @@ where
         annotation: TokenStream,
         annotated: TokenStream,
     ) -> Result<TokenStream, ErrorGuaranteed> {
-        // tRust: known issue — setup implicit context in TLS before calling self.
+        // FIXME setup implicit context in TLS before calling self.
         Ok(self(annotation, annotated))
     }
 }
@@ -680,7 +680,7 @@ impl MacResult for DummyResult {
     }
 
     fn make_ty(self: Box<DummyResult>) -> Option<Box<ast::Ty>> {
-        // tRust: known issue —(nnethercote): you might expect `ast::TyKind::Dummy` to be used here, but some
+        // FIXME(nnethercote): you might expect `ast::TyKind::Dummy` to be used here, but some
         // values produced here end up being lowered to HIR, which `ast::TyKind::Dummy` does not
         // support, so we use an empty tuple instead.
         Some(Box::new(ast::Ty {
@@ -775,7 +775,7 @@ pub enum SyntaxExtensionKind {
         /// An expander with signature TokenStream -> TokenStream.
         /// The produced TokenStream is appended to the input TokenStream.
         ///
-        /// tRust: known issue —: The text above describes how this should work. Currently it
+        /// FIXME: The text above describes how this should work. Currently it
         /// is handled identically to `LegacyDerive`. It should be migrated to
         /// a token-based representation like `Bang` and `Attr`, instead of
         /// using `MultiItemModifier`.
@@ -916,7 +916,7 @@ impl SyntaxExtension {
     }
 
     fn get_hide_backtrace(attrs: &[hir::Attribute]) -> bool {
-        // tRust: known issue —(estebank): instead of reusing `#[rustc_diagnostic_item]` as a proxy, introduce a
+        // FIXME(estebank): instead of reusing `#[rustc_diagnostic_item]` as a proxy, introduce a
         // new attribute purely for this under the `#[diagnostic]` namespace.
         find_attr!(attrs, RustcDiagnosticItem(..))
     }
@@ -970,7 +970,7 @@ impl SyntaxExtension {
             kind,
             span,
             allow_internal_unstable: (!allow_internal_unstable.is_empty())
-                // tRust: known issue —(jdonszelmann): avoid the into_iter/collect?
+                // FIXME(jdonszelmann): avoid the into_iter/collect?
                 .then(|| allow_internal_unstable.iter().map(|i| i.0).collect::<Vec<_>>().into()),
             stability,
             deprecation: find_attr!(
@@ -1074,8 +1074,8 @@ pub struct Indeterminate;
 pub struct DeriveResolution {
     pub path: ast::Path,
     pub item: Annotatable,
-    // tRust: known issue —: currently this field is only used in `is_none`/`is_some` conditions. However, the
-    // `Arc<SyntaxExtension>` will be used if the tRust: known issue — in `MacroExpander::fully_expand_fragment`
+    // FIXME: currently this field is only used in `is_none`/`is_some` conditions. However, the
+    // `Arc<SyntaxExtension>` will be used if the FIXME in `MacroExpander::fully_expand_fragment`
     // is completed.
     pub exts: Option<Arc<SyntaxExtension>>,
     pub is_const: bool,

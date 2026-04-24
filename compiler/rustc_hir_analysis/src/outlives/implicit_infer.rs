@@ -218,7 +218,7 @@ fn insert_required_predicates_to_be_wf<'tcx>(
                 );
             }
 
-            // tRust: known issue — (inherent_associated_types): Use the explicit predicates from the parent impl.
+            // FIXME(inherent_associated_types): Use the explicit predicates from the parent impl.
             ty::Alias(ty::Inherent, _) => {}
 
             _ => {}

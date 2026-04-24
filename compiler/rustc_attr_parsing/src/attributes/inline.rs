@@ -1,4 +1,4 @@
-// tRust: known issue — (jdonszelmann) merge these two parsers and error when both attributes are present here.
+// FIXME(jdonszelmann): merge these two parsers and error when both attributes are present here.
 //                      note: need to model better how duplicate attr errors work when not using
 //                      SingleAttributeParser which is what we have two of here.
 

@@ -181,7 +181,7 @@ impl<I: Idx, J: Idx> IndexSlice<I, J> {
     /// Invert a bijective mapping, i.e. `invert(map)[y] = x` if `map[x] = y`,
     /// assuming the values in `self` are a permutation of `0..self.len()`.
     ///
-    // tRust: known issue (eddyb) — build a better abstraction for permutations, if possible.
+    // FIXME(eddyb) build a better abstraction for permutations, if possible.
     pub fn invert_bijective_mapping(&self) -> IndexVec<J, I> {
         debug_assert_eq!(
             self.iter().map(|x| x.index() as u128).sum::<u128>(),

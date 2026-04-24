@@ -22,8 +22,8 @@
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
 use std::collections::VecDeque;
-use trust_types::fx::{FxHashMap, FxHashSet};
 use std::fmt::Write;
+use trust_types::fx::{FxHashMap, FxHashSet};
 
 use serde::{Deserialize, Serialize};
 use trust_types::{Formula, Ty, VcKind, VerificationCondition};
@@ -49,7 +49,6 @@ pub enum ConcolicStrategy {
     /// Breadth-first: explore shallowest branches first.
     BreadthFirst,
 }
-
 
 // ---------------------------------------------------------------------------
 // BugKind + BugReport: classification of discovered bugs
@@ -160,9 +159,7 @@ impl BugOracle {
     ) -> Option<BugReport> {
         if execute_concrete(formula, inputs) {
             Some(BugReport {
-                kind: BugKind::AssertionFailure {
-                    message: message.to_string(),
-                },
+                kind: BugKind::AssertionFailure { message: message.to_string() },
                 inputs: inputs.clone(),
                 iteration,
                 path_depth: 0,
@@ -182,14 +179,15 @@ impl BugOracle {
     ) -> Option<BugReport> {
         for vc in &self.vcs {
             if matches!(vc.kind, VcKind::DivisionByZero | VcKind::RemainderByZero)
-                && execute_concrete(&vc.formula, inputs) {
-                    return Some(BugReport {
-                        kind: BugKind::DivisionByZero,
-                        inputs: inputs.clone(),
-                        iteration,
-                        path_depth: 0,
-                    });
-                }
+                && execute_concrete(&vc.formula, inputs)
+            {
+                return Some(BugReport {
+                    kind: BugKind::DivisionByZero,
+                    inputs: inputs.clone(),
+                    iteration,
+                    path_depth: 0,
+                });
+            }
         }
         None
     }
@@ -351,15 +349,10 @@ impl ConcolicFuzzTarget {
         params: &[FuzzParam],
         vcs: &[VerificationCondition],
     ) -> Self {
-        let preconditions: Vec<Formula> = vcs
-            .iter()
-            .filter_map(|vc| extract_precondition(&vc.formula))
-            .collect();
+        let preconditions: Vec<Formula> =
+            vcs.iter().filter_map(|vc| extract_precondition(&vc.formula)).collect();
 
-        let target_vc_kinds: Vec<String> = vcs
-            .iter()
-            .map(|vc| format!("{:?}", vc.kind))
-            .collect();
+        let target_vc_kinds: Vec<String> = vcs.iter().map(|vc| format!("{:?}", vc.kind)).collect();
 
         let harness_code = generate_harness(function_name, params, &preconditions);
 
@@ -391,21 +384,15 @@ impl ConcolicFuzzTarget {
         let mut seeds = Vec::new();
 
         // Seed 1: all zeros.
-        let zero_seed: FxHashMap<String, i128> = self
-            .params
-            .iter()
-            .map(|p| (p.name.clone(), 0i128))
-            .collect();
+        let zero_seed: FxHashMap<String, i128> =
+            self.params.iter().map(|p| (p.name.clone(), 0i128)).collect();
         seeds.push(zero_seed);
 
         // Seed 2: boundary values per parameter type.
         for param in &self.params {
             for val in boundary_values_for_param(&param.ty) {
-                let mut seed: FxHashMap<String, i128> = self
-                    .params
-                    .iter()
-                    .map(|p| (p.name.clone(), 0i128))
-                    .collect();
+                let mut seed: FxHashMap<String, i128> =
+                    self.params.iter().map(|p| (p.name.clone(), 0i128)).collect();
                 seed.insert(param.name.clone(), val);
                 seeds.push(seed);
             }
@@ -413,9 +400,10 @@ impl ConcolicFuzzTarget {
 
         // Seed 3: try to satisfy preconditions directly.
         if !self.preconditions.is_empty()
-            && let Some(sat_inputs) = generate_test_input(&self.preconditions) {
-                seeds.push(sat_inputs);
-            }
+            && let Some(sat_inputs) = generate_test_input(&self.preconditions)
+        {
+            seeds.push(sat_inputs);
+        }
 
         seeds
     }
@@ -443,16 +431,11 @@ fn generate_harness(
     preconditions: &[Formula],
 ) -> String {
     let mut code = String::new();
-    let _ = writeln!(code, 
-        "// Concolic fuzz target for `{function_name}`"
-    );
+    let _ = writeln!(code, "// Concolic fuzz target for `{function_name}`");
     let _ = writeln!(code, "// Parameters: {}", params.len());
 
     if !preconditions.is_empty() {
-        let _ = writeln!(code, 
-            "// Preconditions: {}",
-            preconditions.len()
-        );
+        let _ = writeln!(code, "// Preconditions: {}", preconditions.len());
     }
 
     code.push_str("//\n");
@@ -465,23 +448,17 @@ fn generate_harness(
     }
 
     let _ = write!(code, "\nfn fuzz_{function_name}(");
-    let param_list: Vec<String> = params
-        .iter()
-        .map(|p| format!("{}: {}", p.name, ty_to_name(&p.ty)))
-        .collect();
+    let param_list: Vec<String> =
+        params.iter().map(|p| format!("{}: {}", p.name, ty_to_name(&p.ty))).collect();
     code.push_str(&param_list.join(", "));
     code.push_str(") {\n");
 
     // Precondition guards
     for (i, pre) in preconditions.iter().enumerate() {
-        let _ = writeln!(code, 
-            "    // Precondition [{i}]: {pre:?}"
-        );
+        let _ = writeln!(code, "    // Precondition [{i}]: {pre:?}");
     }
 
-    let _ = writeln!(code, 
-        "    // PLACEHOLDER: call `{function_name}` and check postconditions"
-    );
+    let _ = writeln!(code, "    // PLACEHOLDER: call `{function_name}` and check postconditions");
     code.push_str("}\n");
 
     code
@@ -598,10 +575,7 @@ pub struct ConcolicFuzzExecutor {
 impl ConcolicFuzzExecutor {
     /// Create a new executor for the given VCs and configuration.
     #[must_use]
-    pub fn new(
-        vcs: Vec<VerificationCondition>,
-        config: ConcolicFuzzConfig,
-    ) -> Self {
+    pub fn new(vcs: Vec<VerificationCondition>, config: ConcolicFuzzConfig) -> Self {
         // Collect all free variable names across VCs.
         let mut var_set: FxHashSet<String> = FxHashSet::default();
         for vc in &vcs {
@@ -636,11 +610,8 @@ impl ConcolicFuzzExecutor {
     /// Seed the worklist with default inputs (zeros + boundary values).
     pub fn seed_defaults(&mut self) {
         // Zero seed.
-        let zero: FxHashMap<String, i128> = self
-            .var_names
-            .iter()
-            .map(|v| (v.clone(), 0i128))
-            .collect();
+        let zero: FxHashMap<String, i128> =
+            self.var_names.iter().map(|v| (v.clone(), 0i128)).collect();
         self.worklist.push_back(ConcolicState::with_values(zero));
 
         // Try direct VC satisfaction.
@@ -685,11 +656,8 @@ impl ConcolicFuzzExecutor {
             self.iteration += 1;
 
             // Check VCs via the oracle.
-            let found_bugs = self.oracle.check_inputs(
-                &state.concrete_values,
-                self.iteration,
-                state.depth(),
-            );
+            let found_bugs =
+                self.oracle.check_inputs(&state.concrete_values, self.iteration, state.depth());
             self.bugs.extend(found_bugs);
 
             // Build path constraints from VC formulas.
@@ -708,8 +676,8 @@ impl ConcolicFuzzExecutor {
             self.coverage.record_run(&branches);
 
             // Negate constraints to generate new inputs.
-            let max_neg = self.config.max_negations_per_iter
-                .min(path_state.symbolic_constraints.len());
+            let max_neg =
+                self.config.max_negations_per_iter.min(path_state.symbolic_constraints.len());
             for idx in 0..max_neg {
                 if let Some(negated) = negate_branch(&path_state, idx) {
                     let constraints = match &negated {
@@ -786,11 +754,8 @@ impl ConcolicFuzzExecutor {
         // Reward deeper paths (more constraints to negate = more exploration).
         score += state.depth() as i64;
         // Reward novelty: penalize states whose path signature was already seen.
-        let sig: Vec<i128> = self
-            .var_names
-            .iter()
-            .map(|v| *state.concrete_values.get(v).unwrap_or(&0))
-            .collect();
+        let sig: Vec<i128> =
+            self.var_names.iter().map(|v| *state.concrete_values.get(v).unwrap_or(&0)).collect();
         if self.coverage.explored_paths.contains(&sig) {
             score -= 1000;
         }
@@ -922,7 +887,7 @@ mod tests {
     fn test_bug_report_fields() {
         let report = BugReport {
             kind: BugKind::DivisionByZero,
-            inputs: FxHashMap::from([("x".into(), 0)]),
+            inputs: [("x".into(), 0)].into_iter().collect(),
             iteration: 5,
             path_depth: 3,
         };
@@ -954,13 +919,13 @@ mod tests {
         assert_eq!(oracle.vc_count(), 1);
 
         // x=42 should violate the VC.
-        let inputs = FxHashMap::from([("x".into(), 42)]);
+        let inputs: FxHashMap<String, i128> = [("x".into(), 42)].into_iter().collect();
         let bugs = oracle.check_inputs(&inputs, 1, 0);
         assert_eq!(bugs.len(), 1);
         assert!(matches!(&bugs[0].kind, BugKind::VcViolation { vc_index: 0, .. }));
 
         // x=0 should not violate.
-        let inputs_ok = FxHashMap::from([("x".into(), 0)]);
+        let inputs_ok: FxHashMap<String, i128> = [("x".into(), 0)].into_iter().collect();
         let bugs_ok = oracle.check_inputs(&inputs_ok, 2, 0);
         assert!(bugs_ok.is_empty());
     }
@@ -997,13 +962,13 @@ mod tests {
         let oracle = BugOracle::new(vec![vc]);
 
         // divisor=0 triggers the bug.
-        let inputs = FxHashMap::from([("divisor".into(), 0)]);
+        let inputs: FxHashMap<String, i128> = [("divisor".into(), 0)].into_iter().collect();
         let bug = oracle.check_division_by_zero(&inputs, 1);
         assert!(bug.is_some());
         assert!(matches!(&bug.unwrap().kind, BugKind::DivisionByZero));
 
         // divisor=5 is safe.
-        let inputs_safe = FxHashMap::from([("divisor".into(), 5)]);
+        let inputs_safe: FxHashMap<String, i128> = [("divisor".into(), 5)].into_iter().collect();
         assert!(oracle.check_division_by_zero(&inputs_safe, 2).is_none());
     }
 
@@ -1021,7 +986,7 @@ mod tests {
         assert_eq!(oracle.vc_count(), 2);
 
         // x=10 violates only vc1.
-        let inputs = FxHashMap::from([("x".into(), 10)]);
+        let inputs: FxHashMap<String, i128> = [("x".into(), 10)].into_iter().collect();
         let bugs = oracle.check_inputs(&inputs, 0, 0);
         assert_eq!(bugs.len(), 1);
         assert!(matches!(&bugs[0].kind, BugKind::VcViolation { vc_index: 0, .. }));
@@ -1125,10 +1090,7 @@ mod tests {
 
     #[test]
     fn test_fuzz_target_from_vcs_no_vcs() {
-        let params = vec![FuzzParam {
-            name: "x".into(),
-            ty: Ty::i32(),
-        }];
+        let params = vec![FuzzParam { name: "x".into(), ty: Ty::i32() }];
         let target = ConcolicFuzzTarget::from_vcs("compute", &params, &[]);
         assert_eq!(target.function_name, "compute");
         assert_eq!(target.param_count(), 1);
@@ -1157,10 +1119,7 @@ mod tests {
 
     #[test]
     fn test_fuzz_target_generate_seeds() {
-        let params = vec![FuzzParam {
-            name: "x".into(),
-            ty: Ty::i32(),
-        }];
+        let params = vec![FuzzParam { name: "x".into(), ty: Ty::i32() }];
         let target = ConcolicFuzzTarget::from_vcs("f", &params, &[]);
         let seeds = target.generate_seeds();
         // At least the zero seed + boundary values for i32.
@@ -1171,10 +1130,7 @@ mod tests {
 
     #[test]
     fn test_fuzz_target_generate_seeds_with_preconditions() {
-        let params = vec![FuzzParam {
-            name: "x".into(),
-            ty: Ty::i32(),
-        }];
+        let params = vec![FuzzParam { name: "x".into(), ty: Ty::i32() }];
         let vc = make_vc(Formula::Implies(
             Box::new(Formula::Eq(
                 Box::new(Formula::Var("x".into(), Sort::Int)),
@@ -1220,10 +1176,7 @@ mod tests {
 
     #[test]
     fn test_executor_no_vcs_no_bugs() {
-        let config = ConcolicFuzzConfig {
-            max_iterations: 10,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 10, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![], config);
         let result = executor.run();
         assert!(result.bugs.is_empty());
@@ -1237,10 +1190,7 @@ mod tests {
             Box::new(Formula::Var("x".into(), Sort::Int)),
             Box::new(Formula::Int(42)),
         ));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 100,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 100, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         let result = executor.run();
         assert!(!result.bugs.is_empty(), "should find x=42 bug");
@@ -1256,16 +1206,11 @@ mod tests {
             Box::new(Formula::Var("x".into(), Sort::Int)),
             Box::new(Formula::Int(0)),
         ));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 50,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 50, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         let result = executor.run();
         assert!(!result.bugs.is_empty(), "should find x<0 bug");
-        let has_negative = result.bugs.iter().any(|b| {
-            b.inputs.get("x").is_some_and(|&x| x < 0)
-        });
+        let has_negative = result.bugs.iter().any(|b| b.inputs.get("x").is_some_and(|&x| x < 0));
         assert!(has_negative, "bug should have negative x");
     }
 
@@ -1273,10 +1218,7 @@ mod tests {
     fn test_executor_no_bug_for_unsatisfiable_vc() {
         // VC: Bool(false) -- never violated.
         let vc = make_vc(Formula::Bool(false));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 20, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         let result = executor.run();
         assert!(result.bugs.is_empty());
@@ -1295,7 +1237,7 @@ mod tests {
         };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         // Provide the exact bug-triggering input.
-        executor.add_seed(FxHashMap::from([("x".into(), 999)]));
+        executor.add_seed([("x".into(), 999)].into_iter().collect());
         let result = executor.run();
         assert!(!result.bugs.is_empty());
     }
@@ -1353,19 +1295,10 @@ mod tests {
     #[test]
     fn test_executor_coverage_tracking() {
         let vc = make_vc(Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 20,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 20, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         let result = executor.run();
         assert!(result.covered_edges > 0);
@@ -1374,10 +1307,7 @@ mod tests {
 
     #[test]
     fn test_executor_result_fields() {
-        let config = ConcolicFuzzConfig {
-            max_iterations: 5,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 5, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![], config);
         let result = executor.run();
         assert!(result.iterations <= 5);
@@ -1389,10 +1319,7 @@ mod tests {
     fn test_executor_respects_iteration_limit() {
         // VC that is never violated: Bool(false).
         let vc = make_vc(Formula::Bool(false));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 3,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 3, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         let result = executor.run();
         assert!(result.iterations <= 3);
@@ -1476,10 +1403,7 @@ mod tests {
 
     #[test]
     fn test_generate_harness_basic() {
-        let params = vec![FuzzParam {
-            name: "x".into(),
-            ty: Ty::i32(),
-        }];
+        let params = vec![FuzzParam { name: "x".into(), ty: Ty::i32() }];
         let code = generate_harness("test_fn", &params, &[]);
         assert!(code.contains("fuzz_test_fn"));
         assert!(code.contains("x: i32"));
@@ -1488,19 +1412,10 @@ mod tests {
 
     #[test]
     fn test_fuzz_target_with_conjunction_vc() {
-        let params = vec![FuzzParam {
-            name: "x".into(),
-            ty: Ty::i32(),
-        }];
+        let params = vec![FuzzParam { name: "x".into(), ty: Ty::i32() }];
         let vc = make_vc(Formula::And(vec![
-            Formula::Gt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(0)),
-            ),
-            Formula::Lt(
-                Box::new(Formula::Var("x".into(), Sort::Int)),
-                Box::new(Formula::Int(100)),
-            ),
+            Formula::Gt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(0))),
+            Formula::Lt(Box::new(Formula::Var("x".into(), Sort::Int)), Box::new(Formula::Int(100))),
         ]));
         let target = ConcolicFuzzTarget::from_vcs("bounded", &params, &[vc]);
         // A conjunction with >= 2 clauses extracts the first as precondition.
@@ -1517,10 +1432,7 @@ mod tests {
             Box::new(Formula::Var("x".into(), Sort::Int)),
             Box::new(Formula::Int(20)),
         ));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 100,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 100, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc1, vc2], config);
         let result = executor.run();
         // Should find both x=10 and x=20 bugs.
@@ -1540,13 +1452,10 @@ mod tests {
             )),
             Box::new(Formula::Int(100)),
         ));
-        let config = ConcolicFuzzConfig {
-            max_iterations: 50,
-            ..Default::default()
-        };
+        let config = ConcolicFuzzConfig { max_iterations: 50, ..Default::default() };
         let mut executor = ConcolicFuzzExecutor::new(vec![vc], config);
         // Seed with a satisfying input.
-        executor.add_seed(FxHashMap::from([("x".into(), 50), ("y".into(), 50)]));
+        executor.add_seed([("x".into(), 50), ("y".into(), 50)].into_iter().collect());
         let result = executor.run();
         // Should find a bug where x+y == 100.
         assert!(!result.bugs.is_empty());

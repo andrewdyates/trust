@@ -1,6 +1,3 @@
-//! tRust: MIR rvalue lowering for binary operations, casts, aggregates, and other
-//! tRust: value-producing expressions.
-
 use itertools::Itertools as _;
 use rustc_abi::{self as abi, BackendRepr, FIRST_VARIANT};
 use rustc_middle::ty::adjustment::PointerCoercion;
@@ -43,7 +40,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 ) {
                     debug_assert!(!matches!(cg_operand.val, OperandValue::Ref(..)));
                 }
-                // NOTE: Constants are copied through stack; could be optimized by codegen'ing
+                // FIXME: consider not copying constants through stack. (Fixable by codegen'ing
                 // constants into `OperandValue::Ref`; why don’t we do that yet if we don’t?)
                 cg_operand.store_with_annotation(bx, dest);
             }
@@ -85,13 +82,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     }
                     OperandValue::Ref(val) => {
                         if val.llextra.is_some() {
-                            // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                             bug!("unsized coercion on an unsized rvalue");
                         }
                         base::coerce_unsized_into(bx, val.with_type(operand.layout), dest);
                     }
                     OperandValue::ZeroSized => {
-                        // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                         bug!("unsized coercion on a ZST rvalue");
                     }
                 }
@@ -249,7 +244,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         if let abi::BackendRepr::Memory { .. } = cast.backend_repr
             && !cast.is_zst()
         {
-            // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
             span_bug!(self.mir.span, "Use `codegen_transmute` to transmute to {cast:?}");
         }
 
@@ -420,10 +414,9 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                                     def_id,
                                     args,
                                 )
-                                .expect("invariant: definition must exist");
+                                .unwrap();
                                 OperandValue::Immediate(bx.get_fn_addr(instance))
                             }
-                            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                             _ => bug!("{} cannot be reified to a fn ptr", operand.layout.ty),
                         }
                     }
@@ -438,7 +431,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                                 );
                                 OperandValue::Immediate(bx.cx().get_fn_addr(instance))
                             }
-                            // tRust: invariant: type system guarantee — type kind is constrained by prior type checking to a specific variant
                             _ => bug!("{} cannot be cast to a fn ptr", operand.layout.ty),
                         }
                     }
@@ -456,7 +448,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     mir::CastKind::PointerCoercion(
                         PointerCoercion::MutToConstPointer | PointerCoercion::ArrayToPointer, _
                     ) => {
-                        // tRust: invariant: type system guarantee — cast kind is validated during type checking
                         bug!("{kind:?} is for borrowck, and should never appear in codegen");
                     }
                     mir::CastKind::PtrToPtr
@@ -470,7 +461,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                                 OperandValue::Immediate(data_ptr)
                             }
                         } else {
-                            // tRust: invariant: type system guarantee — cast kind is validated during type checking
                             bug!("unexpected non-pair operand");
                         }
                     }
@@ -486,7 +476,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     | mir::CastKind::PointerWithExposedProvenance => {
                         let imm = operand.immediate();
                         let abi::BackendRepr::Scalar(from_scalar) = operand.layout.backend_repr else {
-                            // tRust: invariant: type system guarantee — cast kind is validated during type checking
                             bug!("Found non-scalar for operand {operand:?}");
                         };
                         let from_backend_ty = bx.cx().immediate_backend_type(operand.layout);
@@ -498,14 +487,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             return OperandRef { val, layout: cast, move_annotation: None };
                         }
                         let abi::BackendRepr::Scalar(to_scalar) = cast.layout.backend_repr else {
-                            // tRust: invariant: type system guarantee — cast kind is validated during type checking
                             bug!("Found non-scalar for cast {cast:?}");
                         };
 
                         self.cast_immediate(bx, imm, from_scalar, from_backend_ty, to_scalar, to_backend_ty)
                             .map(OperandValue::Immediate)
                             .unwrap_or_else(|| {
-                                // tRust: invariant: structural invariant — this state should be unreachable given prior compiler validation
                                 bug!("Unsupported cast of {operand:?} to {cast:?}");
                             })
                     }
@@ -577,7 +564,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             rhs.layout.ty,
                         ),
 
-                    // tRust: invariant: structural invariant — match arm should be unreachable given prior validation of the matched value
                     _ => bug!(),
                 };
                 OperandRef {
@@ -723,7 +709,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 let layout = bx.cx().layout_of(binder_ty);
                 OperandRef { val: operand.val, layout, move_annotation: None }
             }
-            // tRust: invariant: structural invariant — rvalue variant is constrained by the match context
             mir::Rvalue::CopyForDeref(_) => bug!("`CopyForDeref` in codegen"),
         }
     }
@@ -833,7 +818,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             mir::BinOp::Offset => {
                 let pointee_type = lhs_ty
                     .builtin_deref(true)
-                    // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
                     .unwrap_or_else(|| bug!("deref of non-pointer {:?}", lhs_ty));
                 let pointee_layout = bx.cx().layout_of(pointee_type);
                 if pointee_layout.is_zst() {
@@ -876,7 +860,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             mir::BinOp::AddWithOverflow
             | mir::BinOp::SubWithOverflow
             | mir::BinOp::MulWithOverflow => {
-                // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
                 bug!("{op:?} needs to return a pair, so call codegen_scalar_checked_binop instead")
             }
         }
@@ -910,7 +893,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     mir::BinOp::Le => (IntPredicate::IntULE, IntPredicate::IntULT),
                     mir::BinOp::Gt => (IntPredicate::IntUGT, IntPredicate::IntUGT),
                     mir::BinOp::Ge => (IntPredicate::IntUGE, IntPredicate::IntUGT),
-                    // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
                     _ => bug!(),
                 };
                 let lhs = bx.icmp(strict_op, lhs_addr, rhs_addr);
@@ -920,7 +902,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 bx.or(lhs, rhs)
             }
             _ => {
-                // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
                 bug!("unexpected wide ptr binop");
             }
         }
@@ -945,7 +926,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 };
                 bx.checked_binop(oop, input_ty, lhs, rhs)
             }
-            // tRust: invariant: type system guarantee — binary/unary operation is validated by type checking for these operand types
             _ => bug!("Operator `{:?}` is not a checkable operator", op),
         };
 
@@ -1004,7 +984,7 @@ pub(super) fn transmute_scalar<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         (Pointer(..), Pointer(..)) => bx.pointercast(imm, to_backend_ty),
         (Int(..), Pointer(..)) => bx.inttoptr(imm, to_backend_ty),
         (Pointer(..), Int(..)) => {
-            // NOTE: This exposes provenance, which shouldn't be necessary.
+            // FIXME: this exposes the provenance, which shouldn't be necessary.
             bx.ptrtoint(imm, to_backend_ty)
         }
         (Float(_), Pointer(..)) => {
@@ -1012,7 +992,7 @@ pub(super) fn transmute_scalar<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             bx.inttoptr(int_imm, to_backend_ty)
         }
         (Pointer(..), Float(_)) => {
-            // NOTE: This exposes provenance, which shouldn't be necessary.
+            // FIXME: this exposes the provenance, which shouldn't be necessary.
             let int_imm = bx.ptrtoint(imm, bx.cx().type_isize());
             bx.bitcast(int_imm, to_backend_ty)
         }

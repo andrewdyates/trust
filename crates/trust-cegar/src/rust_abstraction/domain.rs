@@ -133,10 +133,7 @@ impl RustAbstractionDomain {
     /// # Returns
     /// New predicates discovered through Rust-specific refinement.
     #[must_use]
-    pub fn refine_from_counterexample(
-        &mut self,
-        var_values: &[(&str, i128)],
-    ) -> Vec<Predicate> {
+    pub fn refine_from_counterexample(&mut self, var_values: &[(&str, i128)]) -> Vec<Predicate> {
         let mut new_preds = Vec::new();
 
         for &(var, value) in var_values {
@@ -155,9 +152,11 @@ impl RustAbstractionDomain {
                     new_preds.push(Predicate::range(var, min, max));
                 }
                 if let Some(discs) = self.type_info.discriminants(var)
-                    && let (Some(&min), Some(&max)) = (discs.iter().next(), discs.iter().next_back()) {
-                        new_preds.push(Predicate::range(var, min, max));
-                    }
+                    && let (Some(&min), Some(&max)) =
+                        (discs.iter().next(), discs.iter().next_back())
+                {
+                    new_preds.push(Predicate::range(var, min, max));
+                }
                 continue;
             }
 
@@ -343,16 +342,20 @@ fn extract_refinement_predicates(
             }
             // If the variable has enum discriminant constraints, add range.
             if let Some(discs) = domain.type_info.discriminants(name)
-                && let (Some(&min), Some(&max)) = (discs.iter().next(), discs.iter().next_back()) {
-                    let pred = Predicate::range(name, min, max);
-                    if seen.insert(pred.clone()) {
-                        out.push(pred);
-                    }
+                && let (Some(&min), Some(&max)) = (discs.iter().next(), discs.iter().next_back())
+            {
+                let pred = Predicate::range(name, min, max);
+                if seen.insert(pred.clone()) {
+                    out.push(pred);
                 }
+            }
         }
         // Recurse into comparisons to find constrained variables.
-        Formula::Eq(a, b) | Formula::Lt(a, b) | Formula::Le(a, b)
-        | Formula::Gt(a, b) | Formula::Ge(a, b) => {
+        Formula::Eq(a, b)
+        | Formula::Lt(a, b)
+        | Formula::Le(a, b)
+        | Formula::Gt(a, b)
+        | Formula::Ge(a, b) => {
             extract_refinement_predicates(a, domain, out, seen);
             extract_refinement_predicates(b, domain, out, seen);
         }

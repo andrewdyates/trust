@@ -61,7 +61,7 @@ pub(crate) fn make_coords(source_map: &SourceMap, file: &SourceFile, span: Span)
     let (mut end_line, end_col) = line_and_byte_column(hi)?;
 
     // Apply an offset so that code in doctests has correct line numbers.
-    // tRust: known issue (#79417) — Currently we have no way to offset doctest _columns_.
+    // FIXME(#79417): Currently we have no way to offset doctest _columns_.
     start_line = source_map.doctest_offset_line(&file.name, start_line);
     end_line = source_map.doctest_offset_line(&file.name, end_line);
 

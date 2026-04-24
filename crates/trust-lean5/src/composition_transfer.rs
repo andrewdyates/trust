@@ -82,9 +82,7 @@ impl ProofStatusRegistry {
     /// Create an empty registry.
     #[must_use]
     pub fn new() -> Self {
-        ProofStatusRegistry {
-            statuses: FxHashMap::default(),
-        }
+        ProofStatusRegistry { statuses: FxHashMap::default() }
     }
 
     /// Build a registry from a `ProofComposition` DAG.
@@ -117,9 +115,7 @@ impl ProofStatusRegistry {
     /// Returns `true` if the function has an assumable (Certified) proof.
     #[must_use]
     pub fn is_assumable(&self, function: &str) -> bool {
-        self.statuses
-            .get(function)
-            .is_some_and(ProofStatus::is_assumable)
+        self.statuses.get(function).is_some_and(ProofStatus::is_assumable)
     }
 
     /// Return all functions with assumable proofs.
@@ -259,10 +255,8 @@ impl<'a> Lean5ProofTransfer<'a> {
     ) -> ProofObligation {
         let assumptions = self.generate_assumptions(node, postconditions);
 
-        let hypotheses: Vec<Formula> = assumptions
-            .iter()
-            .map(|a| a.assumed_postcondition.clone())
-            .collect();
+        let hypotheses: Vec<Formula> =
+            assumptions.iter().map(|a| a.assumed_postcondition.clone()).collect();
 
         let source = ObligationSource {
             vc_kind: trust_types::VcKind::Assertion {
@@ -275,11 +269,7 @@ impl<'a> Lean5ProofTransfer<'a> {
             function: node.function.clone(),
             description: format!(
                 "proof obligation with transferred assumptions from: {}",
-                assumptions
-                    .iter()
-                    .map(|a| a.callee.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                assumptions.iter().map(|a| a.callee.as_str()).collect::<Vec<_>>().join(", ")
             ),
         };
 
@@ -297,7 +287,8 @@ impl<'a> Lean5ProofTransfer<'a> {
         &self,
         composition: &ProofComposition,
         postconditions: &FxHashMap<String, Formula>,
-    ) -> Result<FxHashMap<String, Vec<TransferObligation>>, trust_proof_cert::CompositionError> {
+    ) -> Result<FxHashMap<String, Vec<TransferObligation>>, trust_proof_cert::CompositionError>
+    {
         let order = composition.topological_order()?;
         let mut result: FxHashMap<String, Vec<TransferObligation>> = FxHashMap::default();
 
@@ -322,12 +313,10 @@ impl<'a> Lean5ProofTransfer<'a> {
 mod tests {
     use trust_proof_cert::composition::CompositionNode;
     use trust_proof_cert::{
-        CompositionNodeStatus, FunctionHash, ProofCertificate,
-        ProofComposition, SolverInfo, VcSnapshot,
+        CompositionNodeStatus, FunctionHash, ProofCertificate, ProofComposition, SolverInfo,
+        VcSnapshot,
     };
-    use trust_types::{
-        Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition,
-    };
+    use trust_types::{Formula, ProofStrength, Sort, SourceSpan, VcKind, VerificationCondition};
 
     use super::*;
 
@@ -337,10 +326,8 @@ mod tests {
 
     fn sample_vc(function: &str) -> VerificationCondition {
         VerificationCondition {
-            kind: VcKind::Assertion {
-                message: "must hold".to_string(),
-            },
-            function: function.to_string(),
+            kind: VcKind::Assertion { message: "must hold".to_string() },
+            function: function.into(),
             location: SourceSpan {
                 file: "src/lib.rs".to_string(),
                 line_start: 10,
@@ -426,22 +413,10 @@ mod tests {
 
     #[test]
     fn test_proof_status_from_composition_node_status() {
-        assert_eq!(
-            ProofStatus::from(CompositionNodeStatus::Valid),
-            ProofStatus::Certified
-        );
-        assert_eq!(
-            ProofStatus::from(CompositionNodeStatus::ChainBroken),
-            ProofStatus::Trusted
-        );
-        assert_eq!(
-            ProofStatus::from(CompositionNodeStatus::Stale),
-            ProofStatus::Stale
-        );
-        assert_eq!(
-            ProofStatus::from(CompositionNodeStatus::Missing),
-            ProofStatus::Missing
-        );
+        assert_eq!(ProofStatus::from(CompositionNodeStatus::Valid), ProofStatus::Certified);
+        assert_eq!(ProofStatus::from(CompositionNodeStatus::ChainBroken), ProofStatus::Trusted);
+        assert_eq!(ProofStatus::from(CompositionNodeStatus::Stale), ProofStatus::Stale);
+        assert_eq!(ProofStatus::from(CompositionNodeStatus::Missing), ProofStatus::Missing);
     }
 
     // -----------------------------------------------------------------------
@@ -548,7 +523,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -577,7 +552,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -586,10 +561,7 @@ mod tests {
         let postconditions = postconditions_map();
         let obligations = transfer.generate_assumptions(&node, &postconditions);
 
-        assert!(
-            obligations.is_empty(),
-            "Trusted callee should not generate assumptions"
-        );
+        assert!(obligations.is_empty(), "Trusted callee should not generate assumptions");
     }
 
     #[test]
@@ -600,7 +572,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: None,
             dependencies: vec!["crate::bar".to_string()],
             status: CompositionNodeStatus::Missing,
@@ -620,7 +592,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -645,7 +617,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string(), "crate::baz".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -666,7 +638,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::leaf".to_string(),
+            function: "crate::leaf".into(),
             cert_id: Some("cert-leaf".to_string()),
             dependencies: vec![],
             status: CompositionNodeStatus::Valid,
@@ -687,7 +659,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string(), "crate::baz".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -714,7 +686,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string(), "crate::baz".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -735,11 +707,7 @@ mod tests {
 
         assert_eq!(obl.id, ObligationId(1));
         assert_eq!(obl.goal, goal);
-        assert_eq!(
-            obl.hypotheses.len(),
-            2,
-            "should have 2 assumed postconditions"
-        );
+        assert_eq!(obl.hypotheses.len(), 2, "should have 2 assumed postconditions");
         assert!(obl.status.is_pending());
         assert_eq!(obl.source.function, "crate::foo");
         assert!(obl.source.description.contains("crate::bar"));
@@ -754,7 +722,7 @@ mod tests {
         let transfer = Lean5ProofTransfer::new(&reg);
 
         let node = CompositionNode {
-            function: "crate::foo".to_string(),
+            function: "crate::foo".into(),
             cert_id: Some("cert-foo".to_string()),
             dependencies: vec!["crate::bar".to_string()],
             status: CompositionNodeStatus::Valid,
@@ -796,9 +764,7 @@ mod tests {
         postconditions.insert("a".to_string(), Formula::Bool(true));
         postconditions.insert("b".to_string(), Formula::Bool(false));
 
-        let result = transfer
-            .transfer_all(&comp, &postconditions)
-            .expect("should succeed");
+        let result = transfer.transfer_all(&comp, &postconditions).expect("should succeed");
 
         // tRust: #758 — make_cert creates trusted (not kernel-checked) certificates.
         // Only Certified proofs are assumable for transfer. If the composition layer
@@ -877,9 +843,7 @@ mod tests {
         let mut postconditions = FxHashMap::default();
         postconditions.insert("b".to_string(), Formula::Bool(true));
 
-        let result = transfer
-            .transfer_all(&comp, &postconditions)
-            .expect("should succeed");
+        let result = transfer.transfer_all(&comp, &postconditions).expect("should succeed");
 
         // 'a' depends on 'b' which is Missing -> no transfer
         assert!(

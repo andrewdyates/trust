@@ -342,7 +342,7 @@ fn write_path(out: &mut String, path: &[PathElem<'_>]) {
             DynDowncast(ty) => write!(out, ".<dyn-downcast({ty})>"),
             Vtable => write!(out, ".<vtable>"),
         }
-        .expect("invariant: PathElem has a valid Display representation")
+        .unwrap()
     }
 }
 
@@ -432,7 +432,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
                     return match layout.ty.kind() {
                         ty::Adt(def, ..) if def.is_enum() => PathElem::EnumTag,
                         ty::Coroutine(..) => PathElem::CoroutineTag,
-                        // tRust: invariant — variant path element only appears for types with variants (enums/coroutines)
                         _ => bug!("non-variant type {:?}", layout.ty),
                     };
                 }
@@ -445,7 +444,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
             // coroutines, closures, and coroutine-closures all have upvars that may be named.
             ty::Closure(def_id, _) | ty::Coroutine(def_id, _) | ty::CoroutineClosure(def_id, _) => {
                 let mut name = None;
-                // tRust: known issue — this should be more descriptive i.e. CapturePlace instead of CapturedVar
+                // FIXME this should be more descriptive i.e. CapturePlace instead of CapturedVar
                 // https://github.com/rust-lang/project-rfc-2229/issues/46
                 if let Some(local_def_id) = def_id.as_local() {
                     let captures = self.ecx.tcx.closure_captures(local_def_id);
@@ -480,7 +479,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
                         PathElem::Field(def.variant(index).fields[FieldIdx::from_usize(field)].name)
                     }
                     Variants::Empty => panic!("there is no field in Variants::Empty types"),
-                    // tRust: invariant — Multi-variant case is handled in the preceding branch
                     Variants::Multiple { .. } => bug!("we handled variants above"),
                 }
             }
@@ -500,7 +498,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
             }
 
             // nothing else has an aggregate layout
-            // tRust: invariant — field path elements only appear for aggregate types (ADT, tuple, array, closure)
             _ => bug!("aggregate_field_path_elem: got non-aggregate type {:?}", layout.ty),
         }
     }
@@ -606,7 +603,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
             ty::Foreign(..) => {
                 // Unsized, but not wide.
             }
-            // tRust: invariant — unsized type tail must be a slice, str, or trait object
             _ => bug!("Unexpected unsized type tail: {:?}", tail),
         }
 
@@ -744,7 +740,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
                     match global_alloc {
                         GlobalAlloc::Static(did) => {
                             let DefKind::Static { nested, .. } = self.ecx.tcx.def_kind(did) else {
-                                // tRust: invariant — preceding match/if arms cover all valid cases
                                 bug!()
                             };
                             assert!(!self.ecx.tcx.is_thread_local_static(did));
@@ -813,7 +808,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
                 }
             } else {
                 // This is not CTFE, so it's Miri with recursive checking.
-                // tRust: known issue — should we skip `UnsafeCell` behind shared references? Currently that is
+                // FIXME: should we skip `UnsafeCell` behind shared references? Currently that is
                 // not needed since validation reads bypass Stacked Borrows and data race checks,
                 // but is that really coherent?
             }
@@ -910,7 +905,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
                         Ub(DanglingIntPointer{ .. } | InvalidFunctionPointer(..)) =>
                             format!("encountered {ptr}, but expected a function pointer"),
                     );
-                    // tRust: known issue — Check if the signature matches
+                    // FIXME: Check if the signature matches
                 } else {
                     // Otherwise (for standalone Miri and for `-Zextra-const-ub-checks`),
                     // we have to still check it to be non-null.
@@ -946,11 +941,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
                 // Nothing to check.
                 interp_ok(true)
             }
-            // tRust: UnsafeBinder validity checking is not yet implemented
-            ty::UnsafeBinder(_) => {
-                // tRust: invariant — match covers all implemented fields for this type info struct
-                bug!("unimplemented: UnsafeBinder validity checking is not yet supported")
-            }
+            ty::UnsafeBinder(_) => todo!("FIXME(unsafe_binder)"),
             // The above should be all the primitive types. The rest is compound, we
             // check them by visiting their fields/variants.
             ty::Adt(..)
@@ -971,7 +962,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValidityVisitor<'rt, 'tcx, M> {
             | ty::Bound(..)
             | ty::Param(..)
             | ty::Alias(..)
-            // tRust: invariant — validity checking covers all valid concrete types; these types cannot appear in values
             | ty::CoroutineWitness(..) => bug!("Encountered invalid type {:?}", ty),
         }
     }
@@ -1265,7 +1255,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
             ty::Adt(adt, _) => PathElem::Variant(adt.variant(variant_id).name),
             // Coroutines also have variants
             ty::Coroutine(..) => PathElem::CoroutineState(variant_id),
-            // tRust: invariant — only ADTs and coroutines can have variant layouts
             _ => bug!("Unexpected type with variant: {:?}", old_val.layout.ty),
         };
         self.with_elem(name, move |this| this.visit_value(new_val))
@@ -1363,7 +1352,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
             ty::Array(tys, ..) | ty::Slice(tys)
                 // This optimization applies for types that can hold arbitrary non-provenance bytes (such as
                 // integer and floating point types).
-                // tRust: known issue (wesleywiser) — This logic could be extended further to arbitrary structs or
+                // FIXME(wesleywiser) This logic could be extended further to arbitrary structs or
                 // tuples made up of integer/floating point types or inhabited ZSTs with no padding.
                 if matches!(tys.kind(), ty::Int(..) | ty::Uint(..) | ty::Float(..))
                 =>
@@ -1393,7 +1382,6 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
                                 Uninit { expected }
                             ),
                         Immediate::Scalar(..) | Immediate::ScalarPair(..) =>
-                            // tRust: invariant — arrays and slices always use Aggregate backend repr, never Scalar/ScalarPair
                             bug!("arrays/slices can never have Scalar/ScalarPair layout"),
                     }
                 };
@@ -1416,7 +1404,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
                             let i = usize::try_from(
                                 access.bad.start.bytes() / layout.size.bytes(),
                             )
-                            .expect("invariant: PathElem has a valid Display representation");
+                            .unwrap();
                             self.path.projs.push(PathElem::ArrayElem(i));
 
                             if matches!(kind, Ub(InvalidUninitBytes(_))) {
@@ -1461,7 +1449,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
                     ty::PatternKind::Range { .. } => {},
                     ty::PatternKind::NotNull => {},
 
-                    // tRust: known issue (pattern_types) — check that the value is covered by one of the variants.
+                    // FIXME(pattern_types): check that the value is covered by one of the variants.
                     // For now, we rely on layout computation setting the scalar's `valid_range` to
                     // match the pattern. However, this cannot always work; the layout may
                     // pessimistically cover actually illegal ranges and Miri would miss that UB.
@@ -1497,7 +1485,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
         // just propagate what the fields say, and then we want the error to point at the field --
         // so, we first recurse, then we do this check.
         //
-        // tRust: known issue — We could avoid some redundant checks here. For newtypes wrapping
+        // FIXME: We could avoid some redundant checks here. For newtypes wrapping
         // scalars, we do the same check on every "level" (e.g., first we check
         // MyNewtype and then the scalar in there).
         if val.layout.is_uninhabited() {
@@ -1519,7 +1507,7 @@ impl<'rt, 'tcx, M: Machine<'tcx>> ValueVisitor<'tcx, M> for ValidityVisitor<'rt,
             }
             BackendRepr::ScalarPair(a_layout, b_layout) => {
                 // We can only proceed if *both* scalars need to be initialized.
-                // tRust: known issue — find a way to also check ScalarPair when one side can be uninit but
+                // FIXME: find a way to also check ScalarPair when one side can be uninit but
                 // the other must be init.
                 if !a_layout.is_uninit_valid() && !b_layout.is_uninit_valid() {
                     // We read directly via `ecx` since the read cannot fail -- we already read
@@ -1583,7 +1571,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     | InterpErrorKind::InvalidProgram(_)
                     | InterpErrorKind::Unsupported(UnsupportedOpInfo::ExternTypeField)
             ) {
-                // tRust: invariant — validation errors are fully handled; unexpected errors indicate interpreter bug
                 bug!("Unexpected error during validation: {}", format_interp_error(err));
             }
             err

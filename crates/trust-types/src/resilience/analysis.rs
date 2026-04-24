@@ -3,9 +3,7 @@
 // Author: Andrew Yates <andrew@andrewdyates.com>
 // Copyright 2026 Andrew Yates | License: Apache 2.0
 
-use crate::{
-    BinOp, Rvalue, SourceSpan, Statement, Terminator, VerifiableFunction,
-};
+use crate::{BinOp, Rvalue, SourceSpan, Statement, Terminator, VerifiableFunction};
 
 use super::external_patterns::extract_failure_model;
 use super::helpers::{assert_msg_description, classify_error_handling, detect_panic_call};
@@ -26,7 +24,8 @@ impl ResilienceAnalysis {
         let failure_model = extract_failure_model(func);
         let fault_model = Self::classify_fault_model(&panic_paths, &error_handling);
         let properties = Self::detect_properties(func, &panic_paths);
-        let risk_score = Self::compute_risk_score(&panic_paths, &unchecked_arithmetic, &failure_model);
+        let risk_score =
+            Self::compute_risk_score(&panic_paths, &unchecked_arithmetic, &failure_model);
         let recommendations =
             Self::generate_recommendations(&panic_paths, &unchecked_arithmetic, &error_handling);
 
@@ -137,15 +136,12 @@ impl ResilienceAnalysis {
             {
                 // If the call target block exists, check how the result is used.
                 if let Some(target_block_id) = target
-                    && let Some(target_block) = func.body.blocks.iter().find(|b| b.id == *target_block_id) {
-                        let pattern = classify_error_handling(
-                            call_func,
-                            block.id,
-                            dest,
-                            target_block,
-                        );
-                        patterns.push(pattern);
-                    }
+                    && let Some(target_block) =
+                        func.body.blocks.iter().find(|b| b.id == *target_block_id)
+                {
+                    let pattern = classify_error_handling(call_func, block.id, dest, target_block);
+                    patterns.push(pattern);
+                }
             }
         }
 
@@ -160,15 +156,12 @@ impl ResilienceAnalysis {
         let has_panics = panic_paths.iter().any(|p| {
             matches!(p.kind, PanicKind::Unwrap | PanicKind::Expect | PanicKind::ExplicitPanic)
         });
-        let has_panicking_handler = error_handling
-            .iter()
-            .any(|e| matches!(e, ErrorHandlingPattern::Panicking { .. }));
-        let has_propagation = error_handling
-            .iter()
-            .any(|e| matches!(e, ErrorHandlingPattern::Propagation { .. }));
-        let has_swallowing = error_handling
-            .iter()
-            .any(|e| matches!(e, ErrorHandlingPattern::Swallowing { .. }));
+        let has_panicking_handler =
+            error_handling.iter().any(|e| matches!(e, ErrorHandlingPattern::Panicking { .. }));
+        let has_propagation =
+            error_handling.iter().any(|e| matches!(e, ErrorHandlingPattern::Propagation { .. }));
+        let has_swallowing =
+            error_handling.iter().any(|e| matches!(e, ErrorHandlingPattern::Swallowing { .. }));
 
         // Panics are the most dangerous: if the function can panic, that dominates.
         if has_panics || has_panicking_handler {
@@ -210,14 +203,26 @@ impl ResilienceAnalysis {
                         stmt,
                         Statement::Assign {
                             rvalue: Rvalue::BinaryOp(
-                                BinOp::Add | BinOp::Mul | BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Eq | BinOp::Ne,
+                                BinOp::Add
+                                    | BinOp::Mul
+                                    | BinOp::BitAnd
+                                    | BinOp::BitOr
+                                    | BinOp::BitXor
+                                    | BinOp::Eq
+                                    | BinOp::Ne,
                                 _,
                                 _
                             ),
                             ..
                         } | Statement::Assign {
                             rvalue: Rvalue::CheckedBinaryOp(
-                                BinOp::Add | BinOp::Mul | BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Eq | BinOp::Ne,
+                                BinOp::Add
+                                    | BinOp::Mul
+                                    | BinOp::BitAnd
+                                    | BinOp::BitOr
+                                    | BinOp::BitXor
+                                    | BinOp::Eq
+                                    | BinOp::Ne,
                                 _,
                                 _
                             ),

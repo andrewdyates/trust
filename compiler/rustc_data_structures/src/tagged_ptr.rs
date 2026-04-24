@@ -155,8 +155,6 @@ where
         // Safety:
         // The shift retrieves the original value from `T::into_usize`,
         // satisfying `T::from_usize`'s preconditions.
-        // SAFETY: `tag` came from packing a `T` via `T::into_usize`, so
-        // `T::from_usize(tag)` reconstructs the original valid tag value.
         unsafe { T::from_usize(tag) }
     }
 
@@ -188,9 +186,6 @@ where
             // `{non_zero} | packed_tag` can't make the value zero.
 
             let packed = (addr.get() >> T::BITS) | packed_tag;
-            // SAFETY: The invariants required by this unsafe operation are
-            // satisfied because the computation above guarantees `packed != 0`,
-            // so constructing `NonZero<usize>` from it is valid.
             unsafe { NonZero::new_unchecked(packed) }
         })
     }
@@ -198,9 +193,6 @@ where
     /// Retrieves the original raw pointer from `self.packed`.
     #[inline]
     pub(super) fn pointer_raw(&self) -> NonNull<P> {
-        // SAFETY: The invariants required by this unsafe operation are
-        // satisfied because `self.packed` was created by `pack`, so shifting
-        // left by `T::BITS` restores the original non-zero pointer address.
         self.packed.map_addr(|addr| unsafe { NonZero::new_unchecked(addr.get() << T::BITS) })
     }
 }

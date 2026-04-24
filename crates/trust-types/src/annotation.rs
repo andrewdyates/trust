@@ -215,8 +215,10 @@ fn vc_kind_tag(kind: &VcKind) -> String {
         VcKind::FloatOverflowToInfinity { .. } => "float_overflow_to_infinity".to_string(),
         // tRust #438: Rvalue safety VCs.
         VcKind::InvalidDiscriminant { .. } => "invalid_discriminant".to_string(),
-        VcKind::AggregateArrayLengthMismatch { .. } => "aggregate_array_length_mismatch".to_string(),
-// tRust #463: Unsafe operation tag.
+        VcKind::AggregateArrayLengthMismatch { .. } => {
+            "aggregate_array_length_mismatch".to_string()
+        }
+        // tRust #463: Unsafe operation tag.
         VcKind::UnsafeOperation { .. } => "unsafe_operation".to_string(),
         // tRust #460: FFI boundary violation tag.
         VcKind::FfiBoundaryViolation { .. } => "ffi_boundary_violation".to_string(),
@@ -284,8 +286,9 @@ mod tests {
             kind: "arithmetic_overflow_add".to_string(),
             proof_level: ProofLevel::L0Safety,
             status,
-            strength: matches!(status, AnnotationStatus::Proved).then_some(ProofStrength::smt_unsat()),
-            solver: "z4".to_string(),
+            strength: matches!(status, AnnotationStatus::Proved)
+                .then_some(ProofStrength::smt_unsat()),
+            solver: "z4".into(),
             time_ms: 12,
             location: Some(SourceSpan {
                 file: "src/lib.rs".to_string(),
@@ -454,14 +457,14 @@ mod tests {
                 op: BinOp::Add,
                 operand_tys: (Ty::u32(), Ty::u32()),
             },
-            function: "checked_add".to_string(),
+            function: "checked_add".into(),
             location: SourceSpan::default(),
             formula: Formula::Bool(true),
             contract_metadata: None,
         };
         let failed_vc = VerificationCondition {
             kind: VcKind::DivisionByZero,
-            function: "checked_add".to_string(),
+            function: "checked_add".into(),
             location: SourceSpan {
                 file: "src/math.rs".to_string(),
                 line_start: 42,
@@ -477,17 +480,17 @@ mod tests {
             (
                 proved_vc,
                 VerificationResult::Proved {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 17,
                     strength: ProofStrength::smt_unsat(),
                     proof_certificate: None,
-                solver_warnings: None,
+                    solver_warnings: None,
                 },
             ),
             (
                 failed_vc,
                 VerificationResult::Failed {
-                    solver: "z4".to_string(),
+                    solver: "z4".into(),
                     time_ms: 31,
                     counterexample: Some(Counterexample::new(vec![(
                         "denominator".to_string(),

@@ -13,6 +13,20 @@ pub(crate) fn count_occurrences(source: &str, pattern: &str) -> usize {
     source.matches(pattern).count()
 }
 
+fn spec_attr_kind(line: &str) -> Option<&str> {
+    let inner = line.strip_prefix("#[")?.trim_start();
+    let name_end = inner.find(['(', '=', ' ', ']']).unwrap_or(inner.len());
+    let name = inner[..name_end].trim();
+    let name = name.rsplit("::").next().unwrap_or(name);
+
+    match name {
+        "requires" | "contracts_requires" | "trust_requires" => Some("requires"),
+        "ensures" | "contracts_ensures" | "trust_ensures" => Some("ensures"),
+        "invariant" | "trust_invariant" => Some("invariant"),
+        _ => None,
+    }
+}
+
 /// Extract the body string from a spec attribute line.
 ///
 /// Given `#[requires("x > 0")]`, returns `Some("x > 0")`.
@@ -36,9 +50,7 @@ pub(crate) fn strip_spec_lines(source: &str) -> String {
         .lines()
         .filter(|line| {
             let t = line.trim();
-            !t.starts_with("#[requires(")
-                && !t.starts_with("#[ensures(")
-                && !t.starts_with("#[invariant(")
+            spec_attr_kind(t).is_none()
                 && !t.starts_with("assert!(")
                 && !t.starts_with("debug_assert!(")
         })
@@ -57,7 +69,8 @@ pub(crate) fn extract_all_param_names(source: &str) -> Vec<String> {
                 // Extract the name part before the `:` type annotation
                 if let Some(name) = param.split(':').next() {
                     let name = name.trim().trim_start_matches('&').trim_start_matches("mut ");
-                    if !name.is_empty() && name != "self" && name != "&self" && name != "&mut self" {
+                    if !name.is_empty() && name != "self" && name != "&self" && name != "&mut self"
+                    {
                         names.push(name.to_string());
                     }
                 }
@@ -93,11 +106,8 @@ pub(crate) fn extract_identifiers(expr: &str) -> Vec<String> {
 pub(crate) fn is_type_constant(ident: &str) -> bool {
     // Common Rust type-associated constants
     let type_patterns = [
-        "u8", "u16", "u32", "u64", "u128", "usize",
-        "i8", "i16", "i32", "i64", "i128", "isize",
-        "f32", "f64", "bool", "char",
-        "MAX", "MIN", "INFINITY", "NAN",
-        "len", "is_empty",
+        "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize",
+        "f32", "f64", "bool", "char", "MAX", "MIN", "INFINITY", "NAN", "len", "is_empty",
     ];
     type_patterns.contains(&ident)
 }
@@ -154,14 +164,7 @@ pub(crate) fn extract_spec_attributes(source: &str) -> Vec<String> {
         .lines()
         .filter_map(|line| {
             let trimmed = line.trim();
-            if trimmed.starts_with("#[requires(")
-                || trimmed.starts_with("#[ensures(")
-                || trimmed.starts_with("#[invariant(")
-            {
-                Some(trimmed.to_string())
-            } else {
-                None
-            }
+            if spec_attr_kind(trimmed).is_some() { Some(trimmed.to_string()) } else { None }
         })
         .collect()
 }

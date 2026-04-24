@@ -138,7 +138,8 @@ pub fn format_unified(diff: &UnifiedDiff) -> String {
     let _ = writeln!(out, "+++ {}", diff.modified_path);
 
     for hunk in &diff.hunks {
-        let _ = writeln!(out, 
+        let _ = writeln!(
+            out,
             "@@ -{},{} +{},{} @@",
             hunk.old_start, hunk.old_count, hunk.new_start, hunk.new_count,
         );
@@ -173,7 +174,8 @@ pub fn format_colored(diff: &UnifiedDiff) -> String {
     let _ = writeln!(out, "{GREEN}+++ {}{RESET}", diff.modified_path);
 
     for hunk in &diff.hunks {
-        let _ = writeln!(out, 
+        let _ = writeln!(
+            out,
             "{CYAN}@@ -{},{} +{},{} @@{RESET}",
             hunk.old_start, hunk.old_count, hunk.new_start, hunk.new_count,
         );
@@ -344,11 +346,7 @@ pub fn merge_diffs(diffs: &[UnifiedDiff]) -> Result<UnifiedDiff, DiffApplyError>
         }
     }
 
-    Ok(UnifiedDiff {
-        original_path,
-        modified_path,
-        hunks: all_hunks,
-    })
+    Ok(UnifiedDiff { original_path, modified_path, hunks: all_hunks })
 }
 
 // ---------------------------------------------------------------------------
@@ -361,18 +359,10 @@ pub fn merge_diffs(diffs: &[UnifiedDiff]) -> Result<UnifiedDiff, DiffApplyError>
 pub enum DiffApplyError {
     /// A context line did not match the source.
     #[error("context mismatch in hunk {hunk_index}: expected `{expected}`, got `{actual}`")]
-    ContextMismatch {
-        hunk_index: usize,
-        expected: String,
-        actual: String,
-    },
+    ContextMismatch { hunk_index: usize, expected: String, actual: String },
     /// A removed line did not match the source.
     #[error("removed line mismatch in hunk {hunk_index}: expected `{expected}`, got `{actual}`")]
-    RemovedLineMismatch {
-        hunk_index: usize,
-        expected: String,
-        actual: String,
-    },
+    RemovedLineMismatch { hunk_index: usize, expected: String, actual: String },
     /// Hunks overlap and cannot be applied sequentially.
     #[error("overlapping hunks at index {hunk_index}")]
     OverlappingHunks { hunk_index: usize },
@@ -383,12 +373,7 @@ pub enum DiffApplyError {
 // ---------------------------------------------------------------------------
 
 /// Simple LCS-based line diff.
-fn generate_diff_inner(
-    original: &str,
-    rewritten: &str,
-    path: &str,
-    context: usize,
-) -> UnifiedDiff {
+fn generate_diff_inner(original: &str, rewritten: &str, path: &str, context: usize) -> UnifiedDiff {
     let old_lines: Vec<&str> = original.lines().collect();
     let new_lines: Vec<&str> = rewritten.lines().collect();
 
@@ -398,11 +383,7 @@ fn generate_diff_inner(
     // Group edits into hunks with context.
     let hunks = group_into_hunks(&old_lines, &new_lines, &edits, context);
 
-    UnifiedDiff {
-        original_path: format!("a/{path}"),
-        modified_path: format!("b/{path}"),
-        hunks,
-    }
+    UnifiedDiff { original_path: format!("a/{path}"), modified_path: format!("b/{path}"), hunks }
 }
 
 /// An edit operation in the diff.
@@ -497,13 +478,11 @@ fn group_into_hunks(
         let ctx_before_start = start.saturating_sub(context);
         let context_before: Vec<String> = edits[ctx_before_start..start]
             .iter()
-            .filter_map(|(op, line)| {
-                if *op == EditOp::Equal {
-                    line.map(|l| l.to_owned())
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(op, line)| {
+                    if *op == EditOp::Equal { line.map(|l| l.to_owned()) } else { None }
+                },
+            )
             .collect();
 
         // Gather removed and added.
@@ -529,13 +508,11 @@ fn group_into_hunks(
         let ctx_after_end = (end + context).min(edits.len());
         let context_after: Vec<String> = edits[end..ctx_after_end]
             .iter()
-            .filter_map(|(op, line)| {
-                if *op == EditOp::Equal {
-                    line.map(|l| l.to_owned())
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(op, line)| {
+                    if *op == EditOp::Equal { line.map(|l| l.to_owned()) } else { None }
+                },
+            )
             .collect();
 
         // Compute line numbers.

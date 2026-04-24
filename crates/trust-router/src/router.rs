@@ -5,13 +5,12 @@
 
 use std::sync::Arc;
 
-use trust_types::*;
 use trust_types::formula_arena::{FormulaArena, FormulaRef};
+use trust_types::*;
 
 use crate::{
-    ArenaVc, BackendSelection, IndependenceResult, VerificationBackend,
-    cegar_backend, independence, mock_backend, parallel, portfolio,
-    routing, tla2_backend,
+    ArenaVc, BackendSelection, IndependenceResult, VerificationBackend, cegar_backend,
+    independence, memory_guard::MemoryGuard, mock_backend, routing, tla2_backend,
 };
 
 /// Routes VCs to appropriate backends.
@@ -36,7 +35,7 @@ use crate::{
 /// // Build a VC and verify it
 /// let vc = VerificationCondition {
 ///     kind: VcKind::DivisionByZero,
-///     function: "my_fn".to_string(),
+///     function: "my_fn".into(),
 ///     location: SourceSpan::default(),
 ///     formula: Formula::Bool(false),
 ///     contract_metadata: None,
@@ -54,6 +53,8 @@ pub struct Router {
     backends: Vec<Arc<dyn VerificationBackend>>,
     // tRust #676: Shared rayon thread pool for parallel dispatch and portfolio racing.
     thread_pool: Option<Arc<rayon::ThreadPool>>,
+    // tRust #882: Process memory guard — checks RSS before each solver dispatch.
+    memory_guard: MemoryGuard,
 }
 
 impl Router {
@@ -62,7 +63,11 @@ impl Router {
     /// For real verification, use `Router::with_backends()` and pass in
     /// concrete backend implementations (e.g., Z4Backend from trust-driver).
     pub fn new() -> Self {
-        Router { backends: vec![Arc::new(mock_backend::MockBackend)], thread_pool: None }
+        Router {
+            backends: vec![Arc::new(mock_backend::MockBackend)],
+            thread_pool: None,
+            memory_guard: MemoryGuard::default(),
+        }
     }
 
     /// Create a router with specific backends.
@@ -70,7 +75,11 @@ impl Router {
     /// Accepts `Box<dyn VerificationBackend>` for backward compatibility.
     /// Converts to Arc internally to support parallel verification.
     pub fn with_backends(backends: Vec<Box<dyn VerificationBackend>>) -> Self {
-        Router { backends: backends.into_iter().map(Arc::from).collect(), thread_pool: None }
+        Router {
+            backends: backends.into_iter().map(Arc::from).collect(),
+            thread_pool: None,
+            memory_guard: MemoryGuard::default(),
+        }
     }
 
     /// tRust: Create a router that includes the CEGAR predicate abstraction backend.
@@ -87,7 +96,7 @@ impl Router {
             Vec::with_capacity(1 + other_backends.len());
         backends.push(Arc::new(cegar_backend::CegarBackend::with_config(cegar_config)));
         backends.extend(other_backends.into_iter().map(Arc::from));
-        Router { backends, thread_pool: None }
+        Router { backends, thread_pool: None, memory_guard: MemoryGuard::default() }
     }
 
     // tRust #798: with_z4_direct() removed — z4 integration now via trust-zani-lib (Pipeline v2).
@@ -98,7 +107,7 @@ impl Router {
     /// Use this when you already have Arc-wrapped backends (e.g., when
     /// sharing backends between a Router and standalone parallel functions).
     pub fn with_arc_backends(backends: Vec<Arc<dyn VerificationBackend>>) -> Self {
-        Router { backends, thread_pool: None }
+        Router { backends, thread_pool: None, memory_guard: MemoryGuard::default() }
     }
 
     /// tRust #676: Set a shared rayon thread pool on this router.
@@ -110,6 +119,23 @@ impl Router {
     pub fn with_thread_pool(mut self, pool: Arc<rayon::ThreadPool>) -> Self {
         self.thread_pool = Some(pool);
         self
+    }
+
+    /// tRust #882: Set a custom memory guard on this router.
+    ///
+    /// The guard's `check_memory()` is called before each solver dispatch.
+    /// Use `MemoryGuard::new(limit_mb)` to set the limit, or
+    /// `MemoryGuard::new(0)` to disable enforcement.
+    #[must_use]
+    pub fn with_memory_guard(mut self, guard: MemoryGuard) -> Self {
+        self.memory_guard = guard;
+        self
+    }
+
+    /// tRust #882: Get a reference to the router's memory guard.
+    #[must_use]
+    pub fn memory_guard(&self) -> &MemoryGuard {
+        &self.memory_guard
     }
 
     /// tRust #676: Get the shared thread pool, if configured.
@@ -149,13 +175,22 @@ impl Router {
     }
 
     /// Verify a single VC by finding an appropriate backend.
+    ///
+    /// tRust #882: Checks process RSS against the configured memory limit
+    /// before dispatching to a solver backend. Returns an Unknown result
+    /// with the memory error reason if the limit is exceeded.
     pub fn verify_one(&self, vc: &VerificationCondition) -> VerificationResult {
+        // tRust #882: Pre-dispatch memory check.
+        if let Some(result) = self.check_memory_limit() {
+            return result;
+        }
+
         if let Some(backend) = routing::select_backend(&self.backends, vc) {
             return backend.verify(vc);
         }
 
         VerificationResult::Unknown {
-            solver: "none".to_string(),
+            solver: "none".into(),
             time_ms: 0,
             reason: "no backend can handle this VC".to_string(),
         }
@@ -164,8 +199,8 @@ impl Router {
     /// tRust: Verify all VCs using bounded thread parallelism.
     ///
     /// For a single VC or `max_threads <= 1`, falls back to sequential
-    /// `verify_all` to avoid thread overhead. Otherwise delegates to
-    /// `parallel::verify_concurrent` with Arc-shared backends.
+    /// `verify_all` to avoid thread overhead. Otherwise splits VCs into
+    /// chunks and verifies each chunk on a separate thread.
     ///
     /// `max_threads` bounds concurrency (clamped to `1..=vcs.len()`).
     pub fn verify_all_parallel(
@@ -174,66 +209,58 @@ impl Router {
         max_threads: usize,
     ) -> Vec<(VerificationCondition, VerificationResult)> {
         // tRust: Sequential fallback for trivial cases.
+        if vcs.is_empty() {
+            return Vec::new();
+        }
         if vcs.len() <= 1 || max_threads <= 1 {
             return self.verify_all(vcs);
         }
 
-        // tRust: Arc backends enable zero-copy sharing across threads.
-        parallel::verify_concurrent(vcs.to_vec(), self.backends.clone(), max_threads)
+        // tRust #970: Inlined from deleted parallel.rs — simple chunked threading.
+        let max_threads = max_threads.min(vcs.len()).max(1);
+        let backends = Arc::new(self.backends.clone());
+        let chunk_size = vcs.len().div_ceil(max_threads);
+        let chunks: Vec<Vec<VerificationCondition>> =
+            vcs.chunks(chunk_size).map(|c| c.to_vec()).collect();
+
+        let mut handles = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            let backends = Arc::clone(&backends);
+            let handle = std::thread::spawn(move || {
+                let mut results = Vec::with_capacity(chunk.len());
+                for vc in &chunk {
+                    let result = crate::select_backend(backends.as_slice(), vc)
+                        .map(|backend| backend.verify(vc))
+                        .unwrap_or_else(|| VerificationResult::Unknown {
+                            solver: "none".into(),
+                            time_ms: 0,
+                            reason: "no backend can handle this VC".to_string(),
+                        });
+                    results.push((vc.clone(), result));
+                }
+                results
+            });
+            handles.push(handle);
+        }
+
+        let mut all_results = Vec::with_capacity(vcs.len());
+        for handle in handles {
+            if let Ok(chunk_results) = handle.join() {
+                all_results.extend(chunk_results);
+            }
+        }
+        all_results
     }
 
     /// tRust #529: Verify all VCs using portfolio dispatch.
     ///
-    /// For each VC, races all capable backends in parallel using
-    /// `portfolio::run_portfolio` with `ResultPolicy::FirstAny`. The first
-    /// solver to produce a definitive result (Proved or Failed) wins.
-    ///
-    /// When only one backend is registered, falls back to sequential
-    /// `verify_all` to avoid thread overhead.
+    /// For each VC, selects the first capable backend and verifies sequentially.
+    /// tRust #970: Portfolio racing removed — pipeline-v2 uses MirRouter instead.
     pub fn verify_all_portfolio(
         &self,
         vcs: &[VerificationCondition],
     ) -> Vec<(VerificationCondition, VerificationResult)> {
-        // tRust #529: Fall back to sequential when portfolio racing has no benefit.
-        if self.backends.len() <= 1 {
-            return self.verify_all(vcs);
-        }
-
-        vcs.iter()
-            .map(|vc| {
-                // tRust #529: Filter backends that can handle this VC.
-                let capable: Vec<Arc<dyn VerificationBackend>> = self
-                    .backends
-                    .iter()
-                    .filter(|b| b.can_handle(vc))
-                    .cloned()
-                    .collect();
-
-                if capable.is_empty() {
-                    return (
-                        vc.clone(),
-                        VerificationResult::Unknown {
-                            solver: "none".to_string(),
-                            time_ms: 0,
-                            reason: "no backend can handle this VC".to_string(),
-                        },
-                    );
-                }
-
-                if capable.len() == 1 {
-                    // tRust #529: Single capable backend — no racing needed.
-                    return (vc.clone(), capable[0].verify(vc));
-                }
-
-                // tRust #529: Race capable backends with FirstAny policy.
-                let (result, _solver) = portfolio::run_portfolio(
-                    vc,
-                    &capable,
-                    portfolio::ResultPolicy::FirstAny,
-                );
-                (vc.clone(), result)
-            })
-            .collect()
+        self.verify_all(vcs)
     }
 
     /// tRust #441: Verify a single VC with constraint independence optimization.
@@ -249,10 +276,7 @@ impl Router {
     ///
     /// Falls back to `verify_one` when the formula is not a conjunction or
     /// all conjuncts share variables (single partition).
-    pub fn verify_with_independence(
-        &self,
-        vc: &VerificationCondition,
-    ) -> IndependenceResult {
+    pub fn verify_with_independence(&self, vc: &VerificationCondition) -> IndependenceResult {
         let conjuncts = match &vc.formula {
             Formula::And(children) if children.len() > 1 => children.as_slice(),
             _ => {
@@ -277,7 +301,7 @@ impl Router {
 
         // Solve each independent partition as a sub-VC.
         let mut total_time_ms: u64 = 0;
-        let mut last_solver = String::new();
+        let mut last_solver = trust_types::Symbol::intern("");
 
         for group in &groups {
             let sub_formula = match group.len() {
@@ -288,7 +312,7 @@ impl Router {
             let sub_vc = VerificationCondition {
                 formula: sub_formula,
                 kind: vc.kind.clone(),
-                function: vc.function.clone(),
+                function: vc.function,
                 location: vc.location.clone(),
                 contract_metadata: vc.contract_metadata,
             };
@@ -298,7 +322,7 @@ impl Router {
             match &sub_result {
                 VerificationResult::Proved { time_ms, solver, .. } => {
                     total_time_ms += time_ms;
-                    last_solver.clone_from(solver);
+                    last_solver = *solver;
                     // This partition proved, continue to next.
                 }
                 VerificationResult::Failed { .. }
@@ -326,11 +350,7 @@ impl Router {
         // All partitions proved.
         IndependenceResult {
             result: VerificationResult::Proved {
-                solver: if last_solver.is_empty() {
-                    "independence".to_string()
-                } else {
-                    last_solver
-                },
+                solver: if last_solver.is_empty() { "independence".into() } else { last_solver },
                 time_ms: total_time_ms,
                 strength: ProofStrength::smt_unsat(),
                 proof_certificate: None,
@@ -354,7 +374,8 @@ impl Router {
         vc: &VerificationCondition,
         blocks: Option<&[BasicBlock]>,
         replay_config: &crate::replay::ReplayConfig,
-    ) -> (VerificationResult, Option<Result<crate::replay::ReplayResult, crate::replay::ReplayError>>) {
+    ) -> (VerificationResult, Option<Result<crate::replay::ReplayResult, crate::replay::ReplayError>>)
+    {
         let result = self.verify_one(vc);
 
         // Only replay when we have a counterexample and blocks.
@@ -406,11 +427,16 @@ impl Router {
         root: FormulaRef,
         arena: &FormulaArena,
     ) -> VerificationResult {
+        // tRust #882: Pre-dispatch memory check.
+        if let Some(result) = self.check_memory_limit() {
+            return result;
+        }
+
         if let Some(backend) = routing::select_backend(&self.backends, vc) {
             return backend.verify_arena(vc, root, arena);
         }
         VerificationResult::Unknown {
-            solver: "none".to_string(),
+            solver: "none".into(),
             time_ms: 0,
             reason: "no backend can handle this VC".to_string(),
         }
@@ -469,7 +495,7 @@ impl Router {
                     let result = match backend {
                         Some(b) => b.verify_arena(&avc.vc, avc.root, &arena),
                         None => VerificationResult::Unknown {
-                            solver: "none".to_string(),
+                            solver: "none".into(),
                             time_ms: 0,
                             reason: "no backend can handle this VC".to_string(),
                         },
@@ -507,10 +533,39 @@ impl Router {
         mir_router: &crate::mir_router::MirRouter,
         funcs: &[trust_types::VerifiableFunction],
     ) -> Vec<crate::verification_obligation::VerificationObligation> {
-        funcs
-            .iter()
-            .map(|func| Self::verify_function_v2(mir_router, func))
-            .collect()
+        funcs.iter().map(|func| Self::verify_function_v2(mir_router, func)).collect()
+    }
+
+    // -------------------------------------------------------------------
+    // tRust #882: Memory guard integration
+    // -------------------------------------------------------------------
+
+    /// tRust #882: Check process memory before solver dispatch.
+    ///
+    /// Returns `Some(VerificationResult::Unknown { .. })` if the memory
+    /// limit is exceeded, or `None` if the check passes (or if the guard
+    /// has no limit / query fails gracefully).
+    fn check_memory_limit(&self) -> Option<VerificationResult> {
+        match self.memory_guard.check_memory() {
+            Ok(_snapshot) => None,
+            Err(crate::memory_guard::MemoryGuardError::LimitExceeded {
+                current_mb,
+                limit_mb,
+                peak_mb,
+            }) => Some(VerificationResult::Unknown {
+                solver: "memory-guard".into(),
+                time_ms: 0,
+                reason: format!(
+                    "memory limit exceeded: {current_mb}MB used, {limit_mb}MB limit \
+                     (peak: {peak_mb}MB) — skipping solver dispatch"
+                ),
+            }),
+            Err(_query_err) => {
+                // Query failure is non-fatal: proceed with dispatch.
+                // The guard already logs warnings to stderr.
+                None
+            }
+        }
     }
 }
 

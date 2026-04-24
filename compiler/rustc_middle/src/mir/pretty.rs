@@ -242,10 +242,9 @@ impl<'dis, 'de, 'tcx> MirDumper<'dis, 'de, 'tcx> {
             }
             ty::InstanceKind::AsyncDropGlue(_, ty) => {
                 let ty::Coroutine(_, args) = ty.kind() else {
-                    // tRust: invariant: unexpected state reached in dump_path
                     bug!();
                 };
-                let ty = args.first().expect("invariant: collection is non-empty").expect_ty();
+                let ty = args.first().unwrap().expect_ty();
                 let mut s = ".".to_owned();
                 s.extend(ty.to_string().chars().filter_map(|c| match c {
                     ' ' => None,
@@ -454,7 +453,7 @@ fn write_scope_tree(
         ));
         if let Some(user_ty) = &local_decl.user_ty {
             for user_ty in user_ty.projections() {
-                write!(indented_decl, " as {user_ty:?}").expect("invariant: write to string/buffer succeeds");
+                write!(indented_decl, " as {user_ty:?}").unwrap();
             }
         }
         indented_decl.push(';');
@@ -636,7 +635,6 @@ fn write_mir_sig(tcx: TyCtxt<'_>, body: &Body<'_>, w: &mut dyn io::Write) -> io:
         (DefKind::AnonConst | DefKind::InlineConst, _) => {}
         // `global_asm!` have fake bodies, which we may dump after mir-build
         (DefKind::GlobalAsm, _) => {}
-        // tRust: invariant: Unexpected def kind <...>
         _ => bug!("Unexpected def kind {:?}", kind),
     }
 
@@ -904,7 +902,7 @@ impl<'tcx> Debug for TerminatorKind<'tcx> {
                 write!(fmt, " -> ")?;
                 fmt_unwind(fmt)
             }
-            (1, false) => write!(fmt, " -> {:?}", self.successors().next().expect("invariant: iterator has next element")),
+            (1, false) => write!(fmt, " -> {:?}", self.successors().next().unwrap()),
             _ => {
                 write!(fmt, " -> [")?;
                 for (i, target) in self.successors().enumerate() {
@@ -1110,7 +1108,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
             UnaryOp(ref op, ref a) => write!(fmt, "{op:?}({a:?})"),
             Discriminant(ref place) => write!(fmt, "discriminant({place:?})"),
             ThreadLocalRef(did) => ty::tls::with(|tcx| {
-                let muta = tcx.static_mutability(did).expect("invariant: static_mutability returned a valid value").prefix_str();
+                let muta = tcx.static_mutability(did).unwrap().prefix_str();
                 write!(fmt, "&/*tls*/ {}{}", muta, tcx.def_path_str(did))
             }),
             Ref(region, borrow_kind, ref place) => {
@@ -1189,7 +1187,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                     AggregateKind::Closure(def_id, args)
                     | AggregateKind::CoroutineClosure(def_id, args) => ty::tls::with(|tcx| {
                         let name = if tcx.sess.opts.unstable_opts.span_free_formats {
-                            let args = tcx.lift(args).expect("invariant: lift returned a valid value");
+                            let args = tcx.lift(args).unwrap();
                             format!("{{closure@{}}}", tcx.def_path_str_with_args(def_id, args),)
                         } else {
                             let span = tcx.def_span(def_id);
@@ -1200,7 +1198,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                         };
                         let mut struct_fmt = fmt.debug_struct(&name);
 
-                        // tRust: known issue (project-rfc-2229#48) — This should be a list of capture names/places
+                        // FIXME(project-rfc-2229#48): This should be a list of capture names/places
                         if let Some(def_id) = def_id.as_local()
                             && let Some(upvars) = tcx.upvars_mentioned(def_id)
                         {
@@ -1221,7 +1219,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                         let name = format!("{{coroutine@{:?}}}", tcx.def_span(def_id));
                         let mut struct_fmt = fmt.debug_struct(&name);
 
-                        // tRust: known issue (project-rfc-2229#48) — This should be a list of capture names/places
+                        // FIXME(project-rfc-2229#48): This should be a list of capture names/places
                         if let Some(def_id) = def_id.as_local()
                             && let Some(upvars) = tcx.upvars_mentioned(def_id)
                         {
@@ -1435,7 +1433,7 @@ impl<'tcx> Visitor<'tcx> for ExtraComments<'tcx> {
 
             let fmt_valtree = |cv: &ty::Value<'tcx>| {
                 let mut p = FmtPrinter::new(self.tcx, Namespace::ValueNS);
-                p.pretty_print_const_valtree(*cv, /*print_ty*/ true).expect("invariant: pretty_print_const_valtree returned a valid value");
+                p.pretty_print_const_valtree(*cv, /*print_ty*/ true).unwrap();
                 p.into_buffer()
             };
 
@@ -1454,7 +1452,6 @@ impl<'tcx> Visitor<'tcx> for ExtraComments<'tcx> {
                     ty::ConstKind::Placeholder(_)
                     | ty::ConstKind::Infer(_)
                     | ty::ConstKind::Expr(_)
-                    // tRust: invariant: unexpected MIR constant: <...>
                     | ty::ConstKind::Bound(..) => bug!("unexpected MIR constant: {:?}", const_),
                 },
                 Const::Unevaluated(uv, _) => {
@@ -1530,7 +1527,7 @@ pub fn write_allocations<'tcx>(
             ConstValue::Scalar(interpret::Scalar::Int { .. }) => None,
             ConstValue::ZeroSized => None,
             ConstValue::Slice { alloc_id, .. } | ConstValue::Indirect { alloc_id, .. } => {
-                // tRust: known issue — we don't actually want to print all of these, since some are printed nicely directly as values inline in MIR.
+                // FIXME: we don't actually want to print all of these, since some are printed nicely directly as values inline in MIR.
                 // Really we'd want `pretty_print_const_value` to decide which allocations to print, instead of having a separate visitor.
                 Some(alloc_id)
             }
@@ -1718,7 +1715,7 @@ pub fn write_allocation_bytes<'tcx, Prov: Provenance, Extra, Bytes: AllocBytes>(
 
     let oversized_ptr = |target: &mut String, width| {
         if target.len() > width {
-            write!(target, " ({} ptr bytes)", ptr_size.bytes()).expect("invariant: write to string/buffer succeeds");
+            write!(target, " ({} ptr bytes)", ptr_size.bytes()).unwrap();
         }
     };
 
@@ -1735,7 +1732,7 @@ pub fn write_allocation_bytes<'tcx, Prov: Provenance, Extra, Bytes: AllocBytes>(
             let j = i.bytes_usize();
             let offset = alloc
                 .inspect_with_uninit_and_ptr_outside_interpreter(j..j + ptr_size.bytes_usize());
-            let offset = read_target_uint(tcx.data_layout.endian, offset).expect("invariant: byte slice has valid length for target uint");
+            let offset = read_target_uint(tcx.data_layout.endian, offset).unwrap();
             let offset = Size::from_bytes(offset);
             let provenance_width = |bytes| bytes * 3;
             let ptr = Pointer::new(prov, offset);
@@ -1798,7 +1795,7 @@ pub fn write_allocation_bytes<'tcx, Prov: Provenance, Extra, Bytes: AllocBytes>(
             // Format is similar to "oversized" above.
             let j = i.bytes_usize();
             let c = alloc.inspect_with_uninit_and_ptr_outside_interpreter(j..j + 1)[0];
-            // tRust: known issue — Find a way to print `frag.offset` that does not look terrible...
+            // FIXME: Find a way to print `frag.offset` that does not look terrible...
             write!(w, "╾{c:02x}{prov:#?} (ptr fragment {idx})╼", prov = frag.prov, idx = frag.idx)?;
             i += Size::from_bytes(1);
         } else if alloc
@@ -1896,11 +1893,11 @@ fn pretty_print_const_value_tcx<'tcx>(
             }
         }
         (ConstValue::Indirect { alloc_id, offset }, ty::Array(t, n)) if *t == u8_type => {
-            let n = n.try_to_target_usize(tcx).expect("invariant: try_to_target_usize returned a valid value");
+            let n = n.try_to_target_usize(tcx).unwrap();
             let alloc = tcx.global_alloc(alloc_id).unwrap_memory();
             // cast is ok because we already checked for pointer size (32 or 64 bit) above
             let range = AllocRange { start: offset, size: Size::from_bytes(n) };
-            let byte_str = alloc.inner().get_bytes_strip_provenance(&tcx, range).expect("invariant: get_bytes_strip_provenance returned a valid value");
+            let byte_str = alloc.inner().get_bytes_strip_provenance(&tcx, range).unwrap();
             fmt.write_str("*")?;
             pretty_print_byte_str(fmt, byte_str)?;
             return Ok(());
@@ -1914,8 +1911,8 @@ fn pretty_print_const_value_tcx<'tcx>(
         // E.g. `transmute([0usize; 2]): (u8, *mut T)` needs to know `T: Sized`
         // to be able to destructure the tuple into `(0u8, *mut T)`
         (_, ty::Array(..) | ty::Tuple(..) | ty::Adt(..)) if !ty.has_non_region_param() => {
-            let ct = tcx.lift(ct).expect("invariant: lift returned a valid value");
-            let ty = tcx.lift(ty).expect("invariant: lift returned a valid value");
+            let ct = tcx.lift(ct).unwrap();
+            let ty = tcx.lift(ty).unwrap();
             if let Some(contents) = tcx.try_destructure_mir_constant_for_user_output(ct, ty) {
                 let fields: Vec<(ConstValue, Ty<'_>)> = contents.fields.to_vec();
                 match *ty.kind() {
@@ -1940,7 +1937,7 @@ fn pretty_print_const_value_tcx<'tcx>(
                             .variant
                             .expect("destructed mir constant of adt without variant idx");
                         let variant_def = &def.variant(variant_idx);
-                        let args = tcx.lift(args).expect("invariant: lift returned a valid value");
+                        let args = tcx.lift(args).unwrap();
                         let mut p = FmtPrinter::new(tcx, Namespace::ValueNS);
                         p.print_alloc_ids = true;
                         p.pretty_print_value_path(variant_def.def_id, args)?;
@@ -1977,7 +1974,7 @@ fn pretty_print_const_value_tcx<'tcx>(
         (ConstValue::Scalar(scalar), _) => {
             let mut p = FmtPrinter::new(tcx, Namespace::ValueNS);
             p.print_alloc_ids = true;
-            let ty = tcx.lift(ty).expect("invariant: lift returned a valid value");
+            let ty = tcx.lift(ty).unwrap();
             p.pretty_print_const_scalar(scalar, ty)?;
             fmt.write_str(&p.into_buffer())?;
             return Ok(());
@@ -1989,7 +1986,7 @@ fn pretty_print_const_value_tcx<'tcx>(
             fmt.write_str(&p.into_buffer())?;
             return Ok(());
         }
-        // tRust: known issue (oli-obk) — also pretty print arrays and other aggregate constants by reading
+        // FIXME(oli-obk): also pretty print arrays and other aggregate constants by reading
         // their fields instead of just dumping the memory.
         _ => {}
     }
@@ -2003,8 +2000,8 @@ pub(crate) fn pretty_print_const_value<'tcx>(
     fmt: &mut Formatter<'_>,
 ) -> fmt::Result {
     ty::tls::with(|tcx| {
-        let ct = tcx.lift(ct).expect("invariant: lift returned a valid value");
-        let ty = tcx.lift(ty).expect("invariant: lift returned a valid value");
+        let ct = tcx.lift(ct).unwrap();
+        let ty = tcx.lift(ty).unwrap();
         pretty_print_const_value_tcx(tcx, ct, ty, fmt)
     })
 }

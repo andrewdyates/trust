@@ -50,7 +50,6 @@ declare_lint! {
     ///     // Lifetime elision results in the output lifetime becoming
     ///     // `'static`, which is not what was intended.
     ///     pub fn get_mut(&'static self, x: &mut u8) -> &mut u8 {
-    ///         // SAFETY: This is illustrative code in the lint documentation and is not executed.
     ///         unsafe { &mut *(x as *mut _) }
     ///     }
     /// }
@@ -243,7 +242,7 @@ impl std::ops::Add for LifetimeSyntaxCategories<usize> {
 }
 
 fn lifetimes_use_matched_syntax(input_info: &[Info<'_>], output_info: &[Info<'_>]) -> bool {
-    let (first, inputs) = input_info.split_first().expect("invariant: input_info is non-empty"); // tRust: unwrap -> expect
+    let (first, inputs) = input_info.split_first().unwrap();
     std::iter::chain(inputs, output_info).all(|info| info.syntax_category == first.syntax_category)
 }
 
@@ -520,7 +519,7 @@ impl<'tcx> Info<'tcx> {
     /// ```rust
     /// fn x(a: &u8) {}
     /// ```
-    // tRust: known issue — Ideally, we'd also remove the lifetime declaration.
+    // FIXME: Ideally, we'd also remove the lifetime declaration.
     fn removing_span(&self) -> Span {
         let mut span = self.lifetime.ident.span;
         if let hir::TyKind::Ref(_, mut_ty) = self.ty.kind {

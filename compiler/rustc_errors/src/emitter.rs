@@ -237,7 +237,7 @@ pub trait Emitter {
                 continue;
             }
 
-            // tRust: known issue — (eddyb) use `retain` on `macro_backtrace` to remove all the
+            // FIXME(eddyb) use `retain` on `macro_backtrace` to remove all the
             // entries we don't want to print, to make sure the indices being
             // printed are contiguous (or omitted if there's only one entry).
             let macro_backtrace: Vec<_> = sp.macro_backtrace().collect();
@@ -519,7 +519,7 @@ impl Write for Buffy {
 impl Drop for Buffy {
     fn drop(&mut self) {
         if !self.buffer.is_empty() {
-            self.flush().expect("invariant: flush to stderr must succeed"); // tRust: unwrap -> expect
+            self.flush().unwrap();
             panic!("buffers need to be flushed in order to print their contents");
         }
     }

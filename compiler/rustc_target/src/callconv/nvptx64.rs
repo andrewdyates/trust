@@ -62,7 +62,7 @@ where
         super::PassMode::Indirect { .. } => {}
     }
 
-    // tRust: known issue — only allow structs and wide pointers here
+    // FIXME only allow structs and wide pointers here
     // panic!(
     //     "`extern \"ptx-kernel\"` doesn't allow passing types other than primitives and structs"
     // );

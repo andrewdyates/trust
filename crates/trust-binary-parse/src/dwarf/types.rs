@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn test_types_resolve_typedef() {
-        use crate::dwarf::constants::{DW_TAG_TYPEDEF, DW_AT_NAME, DW_AT_TYPE};
+        use crate::dwarf::constants::{DW_AT_NAME, DW_AT_TYPE, DW_TAG_TYPEDEF};
         let base = Die {
             offset: 10,
             tag: DW_TAG_BASE_TYPE,
@@ -470,7 +470,10 @@ mod tests {
             attributes: vec![
                 Attribute { name: DW_AT_NAME, value: AttributeValue::String("int") },
                 Attribute { name: DW_AT_BYTE_SIZE, value: AttributeValue::Data1(4) },
-                Attribute { name: DW_AT_ENCODING, value: AttributeValue::Data1(DW_ATE_SIGNED as u8) },
+                Attribute {
+                    name: DW_AT_ENCODING,
+                    value: AttributeValue::Data1(DW_ATE_SIGNED as u8),
+                },
             ],
             children: Vec::new(),
         };
@@ -508,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_types_resolve_const_type() {
-        use crate::dwarf::constants::{DW_TAG_CONST_TYPE, DW_AT_TYPE};
+        use crate::dwarf::constants::{DW_AT_TYPE, DW_TAG_CONST_TYPE};
         let base = Die {
             offset: 10,
             tag: DW_TAG_BASE_TYPE,
@@ -524,9 +527,7 @@ mod tests {
             offset: 20,
             tag: DW_TAG_CONST_TYPE,
             has_children: false,
-            attributes: vec![
-                Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) },
-            ],
+            attributes: vec![Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) }],
             children: Vec::new(),
         };
         let unit = CompilationUnit {
@@ -546,14 +547,17 @@ mod tests {
 
     #[test]
     fn test_types_resolve_volatile_type() {
-        use crate::dwarf::constants::{DW_TAG_VOLATILE_TYPE, DW_AT_TYPE};
+        use crate::dwarf::constants::{DW_AT_TYPE, DW_TAG_VOLATILE_TYPE};
         let base = Die {
             offset: 10,
             tag: DW_TAG_BASE_TYPE,
             has_children: false,
             attributes: vec![
                 Attribute { name: DW_AT_BYTE_SIZE, value: AttributeValue::Data1(4) },
-                Attribute { name: DW_AT_ENCODING, value: AttributeValue::Data1(DW_ATE_SIGNED as u8) },
+                Attribute {
+                    name: DW_AT_ENCODING,
+                    value: AttributeValue::Data1(DW_ATE_SIGNED as u8),
+                },
             ],
             children: Vec::new(),
         };
@@ -561,9 +565,7 @@ mod tests {
             offset: 20,
             tag: DW_TAG_VOLATILE_TYPE,
             has_children: false,
-            attributes: vec![
-                Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) },
-            ],
+            attributes: vec![Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) }],
             children: Vec::new(),
         };
         let unit = CompilationUnit {
@@ -583,7 +585,10 @@ mod tests {
 
     #[test]
     fn test_types_resolve_enum_type() {
-        use crate::dwarf::constants::{DW_TAG_ENUMERATION_TYPE, DW_TAG_ENUMERATOR, DW_AT_NAME, DW_AT_CONST_VALUE, DW_AT_BYTE_SIZE};
+        use crate::dwarf::constants::{
+            DW_AT_BYTE_SIZE, DW_AT_CONST_VALUE, DW_AT_NAME, DW_TAG_ENUMERATION_TYPE,
+            DW_TAG_ENUMERATOR,
+        };
         let enum_type = Die {
             offset: 10,
             tag: DW_TAG_ENUMERATION_TYPE,
@@ -640,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_types_resolve_union_type() {
-        use crate::dwarf::constants::{DW_TAG_UNION_TYPE, DW_AT_NAME, DW_AT_BYTE_SIZE};
+        use crate::dwarf::constants::{DW_AT_BYTE_SIZE, DW_AT_NAME, DW_TAG_UNION_TYPE};
         let union_type = Die {
             offset: 10,
             tag: DW_TAG_UNION_TYPE,
@@ -716,14 +721,12 @@ mod tests {
     #[test]
     fn test_types_self_referencing_type_returns_void() {
         // A pointer that refers to itself should break the cycle
-        use crate::dwarf::constants::{DW_TAG_POINTER_TYPE, DW_AT_TYPE};
+        use crate::dwarf::constants::{DW_AT_TYPE, DW_TAG_POINTER_TYPE};
         let self_ref = Die {
             offset: 10,
             tag: DW_TAG_POINTER_TYPE,
             has_children: false,
-            attributes: vec![
-                Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) },
-            ],
+            attributes: vec![Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) }],
             children: Vec::new(),
         };
         let unit = CompilationUnit {
@@ -736,15 +739,14 @@ mod tests {
         };
         // Should not infinite loop; cycle detection returns Void
         let result = resolve_type(&[unit], 10).unwrap();
-        assert_eq!(
-            result,
-            DwarfType::Pointer { pointee: Some(Box::new(DwarfType::Void)) }
-        );
+        assert_eq!(result, DwarfType::Pointer { pointee: Some(Box::new(DwarfType::Void)) });
     }
 
     #[test]
     fn test_types_subroutine_type() {
-        use crate::dwarf::constants::{DW_TAG_SUBROUTINE_TYPE, DW_TAG_FORMAL_PARAMETER, DW_AT_TYPE};
+        use crate::dwarf::constants::{
+            DW_AT_TYPE, DW_TAG_FORMAL_PARAMETER, DW_TAG_SUBROUTINE_TYPE,
+        };
         let base = Die {
             offset: 10,
             tag: DW_TAG_BASE_TYPE,
@@ -752,7 +754,10 @@ mod tests {
             attributes: vec![
                 Attribute { name: DW_AT_NAME, value: AttributeValue::String("int") },
                 Attribute { name: DW_AT_BYTE_SIZE, value: AttributeValue::Data1(4) },
-                Attribute { name: DW_AT_ENCODING, value: AttributeValue::Data1(DW_ATE_SIGNED as u8) },
+                Attribute {
+                    name: DW_AT_ENCODING,
+                    value: AttributeValue::Data1(DW_ATE_SIGNED as u8),
+                },
             ],
             children: Vec::new(),
         };
@@ -763,17 +768,16 @@ mod tests {
             attributes: vec![
                 Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) }, // return type
             ],
-            children: vec![
-                Die {
-                    offset: 30,
-                    tag: DW_TAG_FORMAL_PARAMETER,
-                    has_children: false,
-                    attributes: vec![
-                        Attribute { name: DW_AT_TYPE, value: AttributeValue::Reference(10) },
-                    ],
-                    children: Vec::new(),
-                },
-            ],
+            children: vec![Die {
+                offset: 30,
+                tag: DW_TAG_FORMAL_PARAMETER,
+                has_children: false,
+                attributes: vec![Attribute {
+                    name: DW_AT_TYPE,
+                    value: AttributeValue::Reference(10),
+                }],
+                children: Vec::new(),
+            }],
         };
         let unit = CompilationUnit {
             unit_length: 0,
@@ -814,20 +818,24 @@ mod tests {
             dies: vec![base],
         };
         let result = resolve_type(&[unit], 10).unwrap();
-        assert_eq!(
-            result,
-            DwarfType::Base { name: None, byte_size: 1, encoding: 0x02 }
-        );
+        assert_eq!(result, DwarfType::Base { name: None, byte_size: 1, encoding: 0x02 });
     }
 
     #[test]
     fn test_is_type_tag_returns_true_for_all_type_tags() {
         use crate::dwarf::constants::*;
         let type_tags = [
-            DW_TAG_BASE_TYPE, DW_TAG_POINTER_TYPE, DW_TAG_STRUCTURE_TYPE,
-            DW_TAG_ARRAY_TYPE, DW_TAG_SUBROUTINE_TYPE, DW_TAG_TYPEDEF,
-            DW_TAG_CONST_TYPE, DW_TAG_VOLATILE_TYPE, DW_TAG_ENUMERATION_TYPE,
-            DW_TAG_UNION_TYPE, DW_TAG_UNSPECIFIED_TYPE,
+            DW_TAG_BASE_TYPE,
+            DW_TAG_POINTER_TYPE,
+            DW_TAG_STRUCTURE_TYPE,
+            DW_TAG_ARRAY_TYPE,
+            DW_TAG_SUBROUTINE_TYPE,
+            DW_TAG_TYPEDEF,
+            DW_TAG_CONST_TYPE,
+            DW_TAG_VOLATILE_TYPE,
+            DW_TAG_ENUMERATION_TYPE,
+            DW_TAG_UNION_TYPE,
+            DW_TAG_UNSPECIFIED_TYPE,
         ];
         for tag in type_tags {
             assert!(is_type_tag(tag), "expected true for tag 0x{tag:02x}");
@@ -838,8 +846,12 @@ mod tests {
     fn test_is_type_tag_returns_false_for_non_type_tags() {
         use crate::dwarf::constants::*;
         let non_type_tags = [
-            DW_TAG_COMPILE_UNIT, DW_TAG_SUBPROGRAM, DW_TAG_VARIABLE,
-            DW_TAG_FORMAL_PARAMETER, DW_TAG_LEXICAL_BLOCK, DW_TAG_NAMESPACE,
+            DW_TAG_COMPILE_UNIT,
+            DW_TAG_SUBPROGRAM,
+            DW_TAG_VARIABLE,
+            DW_TAG_FORMAL_PARAMETER,
+            DW_TAG_LEXICAL_BLOCK,
+            DW_TAG_NAMESPACE,
         ];
         for tag in non_type_tags {
             assert!(!is_type_tag(tag), "expected false for tag 0x{tag:02x}");

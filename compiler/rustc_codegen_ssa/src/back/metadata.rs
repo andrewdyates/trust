@@ -47,12 +47,6 @@ fn load_metadata_with(
     let file =
         File::open(path).map_err(|e| format!("failed to open file '{}': {}", path.display(), e))?;
 
-    // SAFETY: `file` is a valid, open `File` obtained from `File::open` above. // tRust:
-    // `Mmap::map` requires the file to remain open for the lifetime of the mapping;
-    // here the `Mmap` is immediately consumed by `try_slice_owned`, which copies the
-    // relevant slice into an `OwnedSlice`, so no dangling mapping persists.
-    // SAFETY: The opened file handle is valid, and the mapping is used only
-    // long enough to copy out the selected metadata slice.
     unsafe { Mmap::map(file) }
         .map_err(|e| format!("failed to mmap file '{}': {}", path.display(), e))
         .and_then(|mmap| try_slice_owned(mmap, |mmap| f(mmap)))
@@ -194,7 +188,7 @@ pub(super) fn get_metadata_xcoff<'a>(path: &Path, data: &'a [u8]) -> Result<&'a 
             return Err(format!("Invalid metadata symbol offset: {offset}"));
         }
         // XCOFF format uses big-endian byte order.
-        let len = u32::from_be_bytes(info_data[(offset - 4)..offset].try_into().expect("invariant: metadata slice length must be 4 bytes")) as usize;
+        let len = u32::from_be_bytes(info_data[(offset - 4)..offset].try_into().unwrap()) as usize;
         if offset + len > (info_data.len() as usize) {
             return Err(format!(
                 "Metadata at offset {offset} with size {len} is beyond .info section"
@@ -306,7 +300,6 @@ pub(super) fn elf_e_flags(architecture: Architecture, sess: &Session) -> u32 {
                 LlvmAbi::N32 if !is_32bit => e_flags |= elf::EF_MIPS_ABI2,
                 LlvmAbi::N64 if !is_32bit => {}
                 // The rest is invalid (which is already ensured by the target spec check).
-                // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                 s => bug!("invalid LLVM ABI `{}` for MIPS target", s),
             };
 
@@ -349,7 +342,6 @@ pub(super) fn elf_e_flags(architecture: Architecture, sess: &Session) -> u32 {
                 LlvmAbi::Ilp32d | LlvmAbi::Lp64d => e_flags |= elf::EF_RISCV_FLOAT_ABI_DOUBLE,
                 // Note that the `lp64e` is still unstable as it's not (yet) part of the ELF psABI.
                 LlvmAbi::Ilp32e | LlvmAbi::Lp64e => e_flags |= elf::EF_RISCV_RVE,
-                // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                 _ => bug!("unknown RISC-V ABI name"),
             }
 
@@ -365,7 +357,6 @@ pub(super) fn elf_e_flags(architecture: Architecture, sess: &Session) -> u32 {
                 LlvmAbi::Ilp32s | LlvmAbi::Lp64s => e_flags |= elf::EF_LARCH_ABI_SOFT_FLOAT,
                 LlvmAbi::Ilp32f | LlvmAbi::Lp64f => e_flags |= elf::EF_LARCH_ABI_SINGLE_FLOAT,
                 LlvmAbi::Ilp32d | LlvmAbi::Lp64d => e_flags |= elf::EF_LARCH_ABI_DOUBLE_FLOAT,
-                // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                 _ => bug!("unknown LoongArch ABI name"),
             }
 
@@ -377,7 +368,6 @@ pub(super) fn elf_e_flags(architecture: Architecture, sess: &Session) -> u32 {
             if let Some(ref cpu) = sess.opts.cg.target_cpu {
                 ef_avr_arch(cpu)
             } else {
-                // tRust: invariant: structural invariant — crate metadata format constrains valid states
                 bug!("AVR CPU not explicitly specified")
             }
         }
@@ -400,7 +390,6 @@ pub(super) fn elf_e_flags(architecture: Architecture, sess: &Session) -> u32 {
                 LlvmAbi::ElfV1 => EF_PPC64_ABI_ELF_V1,
                 LlvmAbi::ElfV2 => EF_PPC64_ABI_ELF_V2,
                 _ if sess.target.options.binary_format.to_object() == BinaryFormat::Elf => {
-                    // tRust: invariant: structural invariant — ABI calling convention constrains the argument passing mode
                     bug!("invalid ABI specified for this PPC64 ELF target");
                 }
                 // Fall back
@@ -536,10 +525,10 @@ pub(crate) fn create_wrapper_file(
             file.section_mut(section).flags =
                 SectionFlags::Xcoff { s_flags: xcoff::STYP_INFO as u32 };
             // Encode string stored in .info section of XCOFF.
-            // NOTE: Data length may exceed u32; truncation risk exists for very large metadata.
+            // FIXME: The length of data here is not guaranteed to fit in a u32.
             // We may have to split the data into multiple pieces in order to
             // store in .info section.
-            let len: u32 = data.len().try_into().expect("invariant: metadata length must fit in u32");
+            let len: u32 = data.len().try_into().unwrap();
             let offset = file.append_section_data(section, &len.to_be_bytes(), 1);
             // Add a symbol referring to the data in .info section.
             file.add_symbol(Symbol {
@@ -561,7 +550,7 @@ pub(crate) fn create_wrapper_file(
         _ => {}
     };
     file.append_section_data(section, data, 1);
-    (file.write().expect("invariant: object file serialization must succeed"), MetadataPosition::First)
+    (file.write().unwrap(), MetadataPosition::First)
 }
 
 // Historical note:
@@ -584,7 +573,7 @@ pub fn create_compressed_metadata_file(
     symbol_name: &str,
 ) -> Vec<u8> {
     let mut packed_metadata = rustc_metadata::METADATA_HEADER.to_vec();
-    packed_metadata.write_all(&(metadata.stub_or_full().len() as u64).to_le_bytes()).expect("invariant: writing metadata length must succeed");
+    packed_metadata.write_all(&(metadata.stub_or_full().len() as u64).to_le_bytes()).unwrap();
     packed_metadata.extend(metadata.stub_or_full());
 
     let Some(mut file) = create_object_file(sess) else {
@@ -623,7 +612,7 @@ pub fn create_compressed_metadata_file(
         flags: SymbolFlags::None,
     });
 
-    file.write().expect("invariant: object file serialization must succeed")
+    file.write().unwrap()
 }
 
 /// * Xcoff - On AIX, custom sections are merged into predefined sections,
@@ -662,7 +651,7 @@ pub fn create_compressed_metadata_file_for_xcoff(
         section: SymbolSection::Section(data_section),
         flags: SymbolFlags::None,
     });
-    let len: u32 = data.len().try_into().expect("invariant: metadata length must fit in u32");
+    let len: u32 = data.len().try_into().unwrap();
     let offset = file.append_section_data(section, &len.to_be_bytes(), 1);
     // Add a symbol referring to the rustc metadata.
     file.add_symbol(Symbol {
@@ -681,7 +670,7 @@ pub fn create_compressed_metadata_file_for_xcoff(
         },
     });
     file.append_section_data(section, data, 1);
-    file.write().expect("invariant: object file serialization must succeed")
+    file.write().unwrap()
 }
 
 /// Creates a simple WebAssembly object file, which is itself a wasm module,

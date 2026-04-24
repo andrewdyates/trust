@@ -145,13 +145,7 @@ impl MetricsBuilder {
     }
 
     /// Set the proof counts.
-    pub fn counts(
-        mut self,
-        proved: usize,
-        failed: usize,
-        unknown: usize,
-        timeout: usize,
-    ) -> Self {
+    pub fn counts(mut self, proved: usize, failed: usize, unknown: usize, timeout: usize) -> Self {
         self.proved = proved;
         self.failed = failed;
         self.unknown = unknown;
@@ -159,54 +153,18 @@ impl MetricsBuilder {
         self
     }
 
-    /// Set the number of strengthened VCs.
-    pub fn strengthened(mut self, n: usize) -> Self {
-        self.strengthened = n;
-        self
-    }
-
     /// Set the per-VC deltas.
-    pub fn deltas(
-        mut self,
-        newly_proved: usize,
-        newly_failed: usize,
-        regressions: usize,
-    ) -> Self {
+    pub fn deltas(mut self, newly_proved: usize, newly_failed: usize, regressions: usize) -> Self {
         self.newly_proved = newly_proved;
         self.newly_failed = newly_failed;
         self.regressions = regressions;
         self
     }
 
-    /// Set the strengthening proposal counts.
-    pub fn proposals(
-        mut self,
-        generated: usize,
-        applied: usize,
-        effective: usize,
-    ) -> Self {
-        self.proposals_generated = generated;
-        self.proposals_applied = applied;
-        self.proposals_effective = effective;
-        self
-    }
-
-    /// Set the cost accounting.
-    pub fn cost(mut self, solver_time_ms: u64, solver_calls: usize, wall_time_ms: u64) -> Self {
-        self.solver_time_ms = solver_time_ms;
-        self.solver_calls = solver_calls;
-        self.wall_time_ms = wall_time_ms;
-        self
-    }
-
     /// Build the final metrics, computing derived rates.
     pub fn build(self) -> IterationMetrics {
         let total = self.proved + self.failed + self.unknown + self.timeout;
-        let proof_rate = if total == 0 {
-            0.0
-        } else {
-            self.proved as f64 / total as f64
-        };
+        let proof_rate = if total == 0 { 0.0 } else { self.proved as f64 / total as f64 };
         let efficiency = if self.solver_calls == 0 {
             0.0
         } else {
@@ -240,13 +198,24 @@ mod tests {
     use super::*;
 
     fn sample_metrics() -> IterationMetrics {
-        MetricsBuilder::new(1)
-            .counts(5, 3, 1, 1)
-            .strengthened(2)
-            .deltas(2, 1, 0)
-            .proposals(4, 3, 2)
-            .cost(500, 10, 1000)
-            .build()
+        MetricsBuilder {
+            iteration: 1,
+            proved: 5,
+            failed: 3,
+            unknown: 1,
+            timeout: 1,
+            strengthened: 2,
+            newly_proved: 2,
+            newly_failed: 1,
+            regressions: 0,
+            proposals_generated: 4,
+            proposals_applied: 3,
+            proposals_effective: 2,
+            solver_time_ms: 500,
+            solver_calls: 10,
+            wall_time_ms: 1000,
+        }
+        .build()
     }
 
     #[test]
@@ -260,10 +229,7 @@ mod tests {
         let m = sample_metrics();
         assert!(m.made_progress());
 
-        let no_progress = MetricsBuilder::new(1)
-            .counts(5, 3, 1, 1)
-            .deltas(0, 0, 0)
-            .build();
+        let no_progress = MetricsBuilder::new(1).counts(5, 3, 1, 1).deltas(0, 0, 0).build();
         assert!(!no_progress.made_progress());
     }
 
@@ -272,28 +238,19 @@ mod tests {
         let m = sample_metrics();
         assert!(!m.had_regressions());
 
-        let with_regression = MetricsBuilder::new(1)
-            .counts(5, 3, 1, 1)
-            .deltas(0, 0, 1)
-            .build();
+        let with_regression = MetricsBuilder::new(1).counts(5, 3, 1, 1).deltas(0, 0, 1).build();
         assert!(with_regression.had_regressions());
     }
 
     #[test]
     fn test_net_progress() {
-        let m = MetricsBuilder::new(1)
-            .counts(5, 3, 1, 1)
-            .deltas(3, 0, 1)
-            .build();
+        let m = MetricsBuilder::new(1).counts(5, 3, 1, 1).deltas(3, 0, 1).build();
         assert_eq!(m.net_progress(), 2);
     }
 
     #[test]
     fn test_net_progress_negative() {
-        let m = MetricsBuilder::new(1)
-            .counts(5, 3, 1, 1)
-            .deltas(0, 2, 3)
-            .build();
+        let m = MetricsBuilder::new(1).counts(5, 3, 1, 1).deltas(0, 2, 3).build();
         assert_eq!(m.net_progress(), -3);
     }
 

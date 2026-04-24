@@ -11,19 +11,15 @@
 
 #![allow(rustc::default_hash_types, rustc::potential_query_instability)]
 
-use trust_types::{
-    BlockId, ConcurrencyPoint, HappensBeforeEdgeKind, SourceSpan, VcKind,
-};
+use trust_types::{BlockId, ConcurrencyPoint, HappensBeforeEdgeKind, SourceSpan, VcKind};
 use trust_vcgen::data_race::{
-    detect_potential_races, generate_race_vcs, AccessKind, MemoryOrdering, SharedAccess,
+    AccessKind, MemoryOrdering, SharedAccess, detect_potential_races, generate_race_vcs,
 };
 use trust_vcgen::memory_ordering::{
-    AtomicAccessEntry, AtomicAccessLog, DataRaceDetector, HappensBefore,
-    HappensBeforeGraph, MemoryModelChecker,
+    AtomicAccessEntry, AtomicAccessLog, DataRaceDetector, HappensBefore, HappensBeforeGraph,
+    MemoryModelChecker,
 };
-use trust_vcgen::send_sync::{
-    SendSyncChecker, TypeInfo, ViolationKind,
-};
+use trust_vcgen::send_sync::{SendSyncChecker, TypeInfo, ViolationKind};
 
 // ---------------------------------------------------------------------------
 // 1. Correct release-acquire pattern: no DataRace VCs
@@ -162,11 +158,7 @@ fn test_buggy_relaxed_pattern_produces_data_race_vcs() {
 
     // Verify the VC kind carries correct thread identifiers
     match &data_race_vcs[0].kind {
-        VcKind::DataRace {
-            variable,
-            thread_a,
-            thread_b,
-        } => {
+        VcKind::DataRace { variable, thread_a, thread_b } => {
             assert_eq!(variable, "data");
             assert_eq!(thread_a, "producer");
             assert_eq!(thread_b, "consumer");
@@ -220,9 +212,7 @@ fn test_send_sync_interior_mutability_requires_sync() {
 
     let violations = checker.check_all();
     assert!(
-        violations
-            .iter()
-            .any(|v| v.kind == ViolationKind::UnprotectedInteriorMutability),
+        violations.iter().any(|v| v.kind == ViolationKind::UnprotectedInteriorMutability),
         "Should detect interior mutability without Sync"
     );
 }
@@ -239,10 +229,7 @@ fn test_send_sync_safe_type_no_violations() {
     checker.register_type(arc_type);
 
     let violations = checker.check_all();
-    assert!(
-        violations.is_empty(),
-        "Arc<Mutex<i32>> should produce no Send/Sync violations"
-    );
+    assert!(violations.is_empty(), "Arc<Mutex<i32>> should produce no Send/Sync violations");
 }
 
 // ---------------------------------------------------------------------------
@@ -258,12 +245,8 @@ fn test_full_pipeline_detector_to_checker_to_router() {
     let mut detector = DataRaceDetector::new();
 
     // Producer thread: write data, then release-store flag
-    let write_data = detector.add_access(
-        "shared_buf",
-        AccessKind::Write,
-        "producer",
-        SourceSpan::default(),
-    );
+    let write_data =
+        detector.add_access("shared_buf", AccessKind::Write, "producer", SourceSpan::default());
     let release_flag = detector.add_access(
         "ready_flag",
         AccessKind::AtomicWrite(MemoryOrdering::Release),
@@ -279,12 +262,8 @@ fn test_full_pipeline_detector_to_checker_to_router() {
         "consumer",
         SourceSpan::default(),
     );
-    let read_data = detector.add_access(
-        "shared_buf",
-        AccessKind::Read,
-        "consumer",
-        SourceSpan::default(),
-    );
+    let read_data =
+        detector.add_access("shared_buf", AccessKind::Read, "consumer", SourceSpan::default());
     detector.add_happens_before(acquire_flag, read_data);
 
     // Establish release-acquire sync
@@ -292,14 +271,8 @@ fn test_full_pipeline_detector_to_checker_to_router() {
 
     // Check: no races on shared_buf
     let races = detector.detect_races();
-    let buf_races: Vec<_> = races
-        .iter()
-        .filter(|r| r.location == "shared_buf")
-        .collect();
-    assert!(
-        buf_races.is_empty(),
-        "shared_buf should be race-free with release-acquire sync"
-    );
+    let buf_races: Vec<_> = races.iter().filter(|r| r.location == "shared_buf").collect();
+    assert!(buf_races.is_empty(), "shared_buf should be race-free with release-acquire sync");
 
     // Phase 2: Use MemoryModelChecker for ordering analysis
     let mut log = AtomicAccessLog::new();
@@ -329,18 +302,12 @@ fn test_full_pipeline_detector_to_checker_to_router() {
 
     // Generate VCs from the checker -- should produce none
     let vcs = checker.generate_vcs("producer_consumer");
-    assert!(
-        vcs.is_empty(),
-        "sound memory model should produce no VCs"
-    );
+    assert!(vcs.is_empty(), "sound memory model should produce no VCs");
 
     // Phase 3: Route any VCs through the Router (verifying the empty case works)
     let router = trust_router::Router::new();
     let results = router.verify_all(&vcs);
-    assert!(
-        results.is_empty(),
-        "no VCs means no verification results"
-    );
+    assert!(results.is_empty(), "no VCs means no verification results");
 }
 
 /// End-to-end pipeline with a buggy scenario that produces VCs routed to the solver.
@@ -372,11 +339,7 @@ fn test_full_pipeline_buggy_ordering_produces_routed_vcs() {
     let vcs = checker.generate_vcs("buggy_consumer");
     assert_eq!(vcs.len(), 1);
     match &vcs[0].kind {
-        VcKind::InsufficientOrdering {
-            variable,
-            actual,
-            required,
-        } => {
+        VcKind::InsufficientOrdering { variable, actual, required } => {
             assert_eq!(variable, "flag");
             assert_eq!(actual, "Relaxed");
             assert_eq!(required, "Acquire");
@@ -487,14 +450,8 @@ fn test_happens_before_graph_spawn_join_concurrency() {
     );
 
     // --- Verify edge kinds ---
-    assert_eq!(
-        graph.edge_kind(&spawn_site, &child_entry),
-        Some(HappensBeforeEdgeKind::Spawn)
-    );
-    assert_eq!(
-        graph.edge_kind(&child_exit, &join_site),
-        Some(HappensBeforeEdgeKind::Join)
-    );
+    assert_eq!(graph.edge_kind(&spawn_site, &child_entry), Some(HappensBeforeEdgeKind::Spawn));
+    assert_eq!(graph.edge_kind(&child_exit, &join_site), Some(HappensBeforeEdgeKind::Join));
     assert_eq!(
         graph.edge_kind(&before_spawn, &spawn_site),
         Some(HappensBeforeEdgeKind::ProgramOrder)
@@ -531,20 +488,11 @@ fn test_happens_before_graph_release_acquire_sync() {
         graph.happens_before(&t1_write, &t2_read),
         "t1_write should HB t2_read via release-acquire sync"
     );
-    assert!(
-        graph.happens_before(&t1_release, &t2_acquire),
-        "release should HB acquire"
-    );
-    assert!(
-        !graph.happens_before(&t2_read, &t1_write),
-        "reverse should not hold"
-    );
+    assert!(graph.happens_before(&t1_release, &t2_acquire), "release should HB acquire");
+    assert!(!graph.happens_before(&t2_read, &t1_write), "reverse should not hold");
 
     // Edge kind verification
-    assert_eq!(
-        graph.edge_kind(&t1_release, &t2_acquire),
-        Some(HappensBeforeEdgeKind::SyncWith)
-    );
+    assert_eq!(graph.edge_kind(&t1_release, &t2_acquire), Some(HappensBeforeEdgeKind::SyncWith));
 }
 
 // ---------------------------------------------------------------------------
@@ -555,7 +503,7 @@ fn test_happens_before_graph_release_acquire_sync() {
 fn make_concurrency_vc(kind: VcKind, function: &str) -> trust_types::VerificationCondition {
     trust_types::VerificationCondition {
         kind,
-        function: function.to_string(),
+        function: function.into(),
         location: SourceSpan::default(),
         formula: trust_types::Formula::Bool(false),
         contract_metadata: None,
@@ -580,35 +528,19 @@ fn test_data_race_vc_pipeline_through_router_and_report() {
     );
 
     // Verify proof level classification
-    assert_eq!(
-        vc.kind.proof_level(),
-        ProofLevel::L0Safety,
-        "DataRace should be L0 Safety"
-    );
+    assert_eq!(vc.kind.proof_level(), ProofLevel::L0Safety, "DataRace should be L0 Safety");
 
     // Verify description content
     let desc = vc.kind.description();
-    assert!(
-        desc.contains("shared_counter"),
-        "description should mention the variable: {desc}"
-    );
-    assert!(
-        desc.contains("writer"),
-        "description should mention thread_a: {desc}"
-    );
-    assert!(
-        desc.contains("reader"),
-        "description should mention thread_b: {desc}"
-    );
+    assert!(desc.contains("shared_counter"), "description should mention the variable: {desc}");
+    assert!(desc.contains("writer"), "description should mention thread_a: {desc}");
+    assert!(desc.contains("reader"), "description should mention thread_b: {desc}");
 
     // Route through Router (MockBackend)
     let router = trust_router::Router::new();
     let result = router.verify_one(&vc);
     // MockBackend proves trivially false formulas
-    assert!(
-        result.is_proved(),
-        "MockBackend should prove trivially false formula"
-    );
+    assert!(result.is_proved(), "MockBackend should prove trivially false formula");
 
     // Build report and verify structure
     let results = vec![(vc.clone(), result)];
@@ -624,11 +556,7 @@ fn test_data_race_vc_pipeline_through_router_and_report() {
         ob.description.contains("shared_counter"),
         "report obligation should describe the data race variable"
     );
-    assert_eq!(
-        ob.proof_level,
-        ProofLevel::L0Safety,
-        "report obligation should be L0 Safety"
-    );
+    assert_eq!(ob.proof_level, ProofLevel::L0Safety, "report obligation should be L0 Safety");
 }
 
 // ---------------------------------------------------------------------------
@@ -661,26 +589,14 @@ fn test_insufficient_ordering_vc_pipeline_through_router_and_report() {
 
     // Verify description content
     let desc = vc.kind.description();
-    assert!(
-        desc.contains("ready_flag"),
-        "description should mention the variable: {desc}"
-    );
-    assert!(
-        desc.contains("Relaxed"),
-        "description should mention actual ordering: {desc}"
-    );
-    assert!(
-        desc.contains("Acquire"),
-        "description should mention required ordering: {desc}"
-    );
+    assert!(desc.contains("ready_flag"), "description should mention the variable: {desc}");
+    assert!(desc.contains("Relaxed"), "description should mention actual ordering: {desc}");
+    assert!(desc.contains("Acquire"), "description should mention required ordering: {desc}");
 
     // Route through Router (MockBackend)
     let router = trust_router::Router::new();
     let result = router.verify_one(&vc);
-    assert!(
-        result.is_proved(),
-        "MockBackend should prove trivially false formula"
-    );
+    assert!(result.is_proved(), "MockBackend should prove trivially false formula");
 
     // Build report and verify structure
     let results = vec![(vc.clone(), result)];
@@ -696,10 +612,7 @@ fn test_insufficient_ordering_vc_pipeline_through_router_and_report() {
         ob.description.contains("ready_flag"),
         "report obligation should describe the ordering variable"
     );
-    assert!(
-        ob.description.contains("Relaxed"),
-        "report obligation should mention actual ordering"
-    );
+    assert!(ob.description.contains("Relaxed"), "report obligation should mention actual ordering");
     assert_eq!(
         ob.proof_level,
         ProofLevel::L1Functional,
@@ -740,11 +653,7 @@ fn test_proof_level_filtering_concurrency_vcs() {
 
     // Filter to L0 Safety only
     let l0_vcs = trust_vcgen::filter_vcs_by_level(all_vcs.clone(), ProofLevel::L0Safety);
-    assert_eq!(
-        l0_vcs.len(),
-        1,
-        "L0 filter should keep only DataRace (1 VC)"
-    );
+    assert_eq!(l0_vcs.len(), 1, "L0 filter should keep only DataRace (1 VC)");
     assert!(
         matches!(l0_vcs[0].kind, VcKind::DataRace { .. }),
         "the retained VC should be DataRace"
@@ -766,10 +675,7 @@ fn test_proof_level_filtering_concurrency_vcs() {
 
     assert_eq!(l0_report.summary.functions_analyzed, 1);
     assert!(
-        l0_report.functions[0]
-            .obligations
-            .iter()
-            .all(|o| o.proof_level == ProofLevel::L0Safety),
+        l0_report.functions[0].obligations.iter().all(|o| o.proof_level == ProofLevel::L0Safety),
         "L0 report should only contain L0 obligations"
     );
 

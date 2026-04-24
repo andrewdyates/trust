@@ -35,7 +35,7 @@ fn overflow_vc() -> VerificationCondition {
             op: BinOp::Add,
             operand_tys: (Ty::usize(), Ty::usize()),
         },
-        function: "get_midpoint".to_string(),
+        function: "get_midpoint".into(),
         location: SourceSpan {
             file: "src/math.rs".to_string(),
             line_start: 15,
@@ -67,7 +67,7 @@ fn overflow_vc() -> VerificationCondition {
 fn divzero_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_div".to_string(),
+        function: "safe_div".into(),
         location: SourceSpan::default(),
         formula: Formula::Not(Box::new(Formula::Eq(
             Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -81,7 +81,7 @@ fn divzero_vc() -> VerificationCondition {
 fn bounds_check_vc() -> VerificationCondition {
     VerificationCondition {
         kind: VcKind::IndexOutOfBounds,
-        function: "get_element".to_string(),
+        function: "get_element".into(),
         location: SourceSpan {
             file: "src/container.rs".to_string(),
             line_start: 42,
@@ -99,10 +99,11 @@ fn bounds_check_vc() -> VerificationCondition {
 
 fn proved_result(solver: &str) -> VerificationResult {
     VerificationResult::Proved {
-        solver: solver.to_string(),
+        solver: solver.into(),
         time_ms: 8,
         strength: ProofStrength::smt_unsat(),
-        proof_certificate: None, solver_warnings: None,
+        proof_certificate: None,
+        solver_warnings: None,
     }
 }
 
@@ -112,9 +113,7 @@ fn mock_proof_term() -> Vec<u8> {
 
 /// Serialize a valid lean5 ProofCert to bytes.
 fn valid_lean5_proof_bytes() -> Vec<u8> {
-    let cert = ProofCert::Sort {
-        level: LeanLevel::zero(),
-    };
+    let cert = ProofCert::Sort { level: LeanLevel::zero() };
     bincode::serialize(&cert).expect("ProofCert should serialize")
 }
 
@@ -178,7 +177,8 @@ fn test_golden_reference_vc_to_lean5_pipeline() {
     // Phase 7: Certificate bundle roundtrip
     let bundle = TrustProofCertificateBundle::single("golden-test", cert.clone());
     let bytes = bundle.to_bytes().expect("bundle should serialize");
-    let recovered = TrustProofCertificateBundle::from_bytes(&bytes).expect("bundle should deserialize");
+    let recovered =
+        TrustProofCertificateBundle::from_bytes(&bytes).expect("bundle should deserialize");
     assert_eq!(recovered.len(), 1);
     let recovered_cert = recovered.iter().next().expect("one cert");
     assert_eq!(recovered_cert.vc_fingerprint, cert.vc_fingerprint);
@@ -197,10 +197,12 @@ fn test_golden_reference_vc_to_lean5_pipeline() {
 fn test_golden_reference_fingerprint_stability() {
     let vc = divzero_vc();
 
-    let cert1 = generate_certificate_unchecked(&vc, &proved_result("z4"), vec![1, 2, 3], "z4 1.0.0")
-        .expect("cert1");
-    let cert2 = generate_certificate_unchecked(&vc, &proved_result("z4"), vec![1, 2, 3], "z4 1.0.0")
-        .expect("cert2");
+    let cert1 =
+        generate_certificate_unchecked(&vc, &proved_result("z4"), vec![1, 2, 3], "z4 1.0.0")
+            .expect("cert1");
+    let cert2 =
+        generate_certificate_unchecked(&vc, &proved_result("z4"), vec![1, 2, 3], "z4 1.0.0")
+            .expect("cert2");
 
     assert_eq!(
         cert1.vc_fingerprint, cert2.vc_fingerprint,
@@ -243,7 +245,7 @@ fn test_full_bridge_pipeline_to_store() {
 
         if let PipelineOutput::Certified { certificate, chain } = &output {
             // Verify ProofCertificate
-            assert_eq!(certificate.function, vc.function);
+            assert_eq!(certificate.function, vc.function.as_str());
             assert_eq!(certificate.status, CertificationStatus::Trusted);
             assert_eq!(certificate.solver.name, "z4");
 
@@ -251,9 +253,7 @@ fn test_full_bridge_pipeline_to_store() {
             assert_eq!(chain.len(), 2, "unchecked path: VcGeneration + SolverProof");
             assert_eq!(chain.steps[0].step_type, ChainStepType::VcGeneration);
             assert_eq!(chain.steps[1].step_type, ChainStepType::SolverProof);
-            chain
-                .verify_integrity()
-                .expect("chain integrity must hold");
+            chain.verify_integrity().expect("chain integrity must hold");
 
             // ChainValidator should also pass
             let validation = ChainValidator::validate(chain);
@@ -330,10 +330,7 @@ fn test_bridge_checked_path_rejects_invalid_proof() {
 
     assert!(!output.is_certified());
     if let PipelineOutput::NoCertificate { reason } = &output {
-        assert!(
-            reason.contains("rejected"),
-            "reason should indicate rejection, got: {reason}"
-        );
+        assert!(reason.contains("rejected"), "reason should indicate rejection, got: {reason}");
     }
 }
 
@@ -391,16 +388,10 @@ fn test_invalid_lean5_bytes_produce_meaningful_error() {
     // Garbage bytes that are not a valid ProofCert
     let cert_result = pipeline.certify(&vc, &result, vec![0xBA, 0xAD, 0xF0, 0x0D]);
 
-    assert!(
-        cert_result.is_rejected(),
-        "garbage bytes should be rejected, got: {cert_result:?}"
-    );
+    assert!(cert_result.is_rejected(), "garbage bytes should be rejected, got: {cert_result:?}");
 
     if let CertificationResult::Rejected { reason, .. } = &cert_result {
-        assert!(
-            !reason.is_empty(),
-            "rejection reason should not be empty"
-        );
+        assert!(!reason.is_empty(), "rejection reason should not be empty");
     }
 }
 
@@ -410,16 +401,10 @@ fn test_non_proved_result_skipped_not_errored() {
     let pipeline = CertificationPipeline::new();
     let vc = overflow_vc();
 
-    let failed = VerificationResult::Failed {
-        solver: "z4".to_string(),
-        time_ms: 3,
-        counterexample: None,
-    };
+    let failed =
+        VerificationResult::Failed { solver: "z4".into(), time_ms: 3, counterexample: None };
     let cert_result = pipeline.certify(&vc, &failed, mock_proof_term());
-    assert!(
-        cert_result.is_skipped(),
-        "failed result should be skipped, got: {cert_result:?}"
-    );
+    assert!(cert_result.is_skipped(), "failed result should be skipped, got: {cert_result:?}");
 
     if let CertificationResult::Skipped { reason } = &cert_result {
         assert!(
@@ -433,13 +418,9 @@ fn test_non_proved_result_skipped_not_errored() {
 #[test]
 fn test_stale_certificate_detection_after_formula_change() {
     let vc_v1 = divzero_vc();
-    let cert = generate_certificate_unchecked(
-        &vc_v1,
-        &proved_result("z4"),
-        mock_proof_term(),
-        "z4 1.0.0",
-    )
-    .expect("cert generation should succeed");
+    let cert =
+        generate_certificate_unchecked(&vc_v1, &proved_result("z4"), mock_proof_term(), "z4 1.0.0")
+            .expect("cert generation should succeed");
 
     // Original VC: divisor != 0 (using Not(Eq(...)))
     assert!(cert.is_valid_for(&vc_v1), "cert should be valid for original VC");
@@ -447,7 +428,7 @@ fn test_stale_certificate_detection_after_formula_change() {
     // Modified VC: change formula to divisor > 0 (different semantics)
     let vc_v2 = VerificationCondition {
         kind: VcKind::DivisionByZero,
-        function: "safe_div".to_string(),
+        function: "safe_div".into(),
         location: SourceSpan::default(),
         formula: Formula::Gt(
             Box::new(Formula::Var("divisor".into(), Sort::Int)),
@@ -483,7 +464,7 @@ fn test_two_proofs_composed_in_store() {
     // VC 2: a different check for the same function (bounds check with different name)
     let vc2 = VerificationCondition {
         kind: VcKind::IndexOutOfBounds,
-        function: "get_midpoint".to_string(), // Same function, different VC kind
+        function: "get_midpoint".into(), // Same function, different VC kind
         location: SourceSpan {
             file: "src/math.rs".to_string(),
             line_start: 16,
@@ -524,12 +505,13 @@ fn test_two_proofs_composed_in_store() {
 
     // Verify chains for both are valid
     if let PipelineOutput::Certified { chain: chain1, .. } = &out1
-        && let PipelineOutput::Certified { chain: chain2, .. } = &out2 {
-            let v1 = ChainValidator::validate(chain1);
-            let v2 = ChainValidator::validate(chain2);
-            assert!(v1.valid, "chain1 should be valid: {:?}", v1.findings);
-            assert!(v2.valid, "chain2 should be valid: {:?}", v2.findings);
-        }
+        && let PipelineOutput::Certified { chain: chain2, .. } = &out2
+    {
+        let v1 = ChainValidator::validate(chain1);
+        let v2 = ChainValidator::validate(chain2);
+        assert!(v1.valid, "chain1 should be valid: {:?}", v1.findings);
+        assert!(v2.valid, "chain2 should be valid: {:?}", v2.findings);
+    }
 }
 
 // ===========================================================================
@@ -540,20 +522,15 @@ fn test_two_proofs_composed_in_store() {
 /// the lean5_bridge API (used in the pipeline for proof term storage).
 #[test]
 fn test_proof_cert_serialization_roundtrip() {
-    let cert = ProofCert::Sort {
-        level: LeanLevel::succ(LeanLevel::zero()),
-    };
+    let cert = ProofCert::Sort { level: LeanLevel::succ(LeanLevel::zero()) };
 
-    let bytes = lean5_bridge::serialize_proof_cert(&cert)
-        .expect("ProofCert serialization should succeed");
+    let bytes =
+        lean5_bridge::serialize_proof_cert(&cert).expect("ProofCert serialization should succeed");
     assert!(!bytes.is_empty(), "serialized bytes should be non-empty");
 
     let recovered = lean5_bridge::deserialize_proof_cert(&bytes)
         .expect("ProofCert deserialization should succeed");
-    assert_eq!(
-        cert, recovered,
-        "ProofCert should survive roundtrip through lean5_bridge"
-    );
+    assert_eq!(cert, recovered, "ProofCert should survive roundtrip through lean5_bridge");
 }
 
 /// Invalid bytes should produce InvalidProofTerm error from lean5_bridge.

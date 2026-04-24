@@ -252,15 +252,15 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
 
     fn ty_infer(&self, param: Option<&ty::GenericParamDef>, span: Span) -> Ty<'tcx> {
         match param {
-            Some(param) => self.var_for_def(span, param).as_type().expect("invariant: is a type variable"),
+            Some(param) => self.var_for_def(span, param).as_type().unwrap(),
             None => self.next_ty_var(span),
         }
     }
 
     fn ct_infer(&self, param: Option<&ty::GenericParamDef>, span: Span) -> Const<'tcx> {
-        // NOTE: ideally this shouldn't use unwrap
+        // FIXME ideally this shouldn't use unwrap
         match param {
-            Some(param) => self.var_for_def(span, param).as_const().expect("invariant: is a const variable"),
+            Some(param) => self.var_for_def(span, param).as_const().unwrap(),
             None => self.next_const_var(span),
         }
     }
@@ -299,7 +299,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
         let item_def_id = tcx.hir_ty_param_owner(def_id);
         let generics = tcx.generics_of(item_def_id);
         let index = generics.param_def_id_to_index[&def_id.to_def_id()];
-        // tRust: known issue — should get the original `Span`. (upstream HACK by eddyb)
+        // HACK(eddyb) should get the original `Span`.
         let span = tcx.def_span(def_id);
 
         ty::EarlyBinder::bind(tcx.arena.alloc_from_iter(
@@ -384,7 +384,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
     ) -> Result<(DefId, ty::GenericArgsRef<'tcx>), ErrorGuaranteed> {
         let trait_ref = self.instantiate_binder_with_fresh_vars(
             span,
-            // NOTE(mgca): `item_def_id` can be an AssocConst; rename this variant.
+            // FIXME(mgca): `item_def_id` can be an AssocConst; rename this variant.
             infer::BoundRegionConversionTime::AssocTypeProjection(item_def_id),
             poly_trait_ref,
         );
@@ -402,7 +402,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
     fn probe_adt(&self, span: Span, ty: Ty<'tcx>) -> Option<ty::AdtDef<'tcx>> {
         match ty.kind() {
             ty::Adt(adt_def, _) => Some(*adt_def),
-            // NOTE(#104767): Should we handle bound regions here?
+            // FIXME(#104767): Should we handle bound regions here?
             ty::Alias(ty::Projection | ty::Inherent | ty::Free, _)
                 if !ty.has_escaping_bound_vars() =>
             {
@@ -417,7 +417,7 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
     }
 
     fn record_ty(&self, hir_id: hir::HirId, ty: Ty<'tcx>, span: Span) {
-        // NOTE: normalization and escaping regions
+        // FIXME: normalization and escaping regions
         let ty = if !ty.has_escaping_bound_vars() {
             // NOTE: These obligations are 100% redundant and are implied by
             // WF obligations that are registered elsewhere, but they have a
@@ -477,7 +477,7 @@ pub(crate) struct LoweredTy<'tcx> {
 
 impl<'tcx> LoweredTy<'tcx> {
     fn from_raw(fcx: &FnCtxt<'_, 'tcx>, span: Span, raw: Ty<'tcx>) -> LoweredTy<'tcx> {
-        // NOTE(-Znext-solver=no): This is easier than requiring all uses of `LoweredTy`
+        // FIXME(-Znext-solver=no): This is easier than requiring all uses of `LoweredTy`
         // to call `try_structurally_resolve_type` instead. This seems like a lot of
         // effort, especially as we're still supporting the old solver. We may revisit
         // this in the future.

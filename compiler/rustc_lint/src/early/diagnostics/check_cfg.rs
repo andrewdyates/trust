@@ -298,7 +298,6 @@ pub(super) fn unexpected_cfg_value(
     value: Option<(Symbol, Span)>,
 ) -> lints::UnexpectedCfgValue {
     let Some(ExpectedValues::Some(values)) = &sess.psess.check_config.expecteds.get(&name) else {
-        // tRust: invariant — cfg diagnostic must only fire for names present in expected values
         bug!(
             "it shouldn't be possible to have a diagnostic on a value whose name is not in values"
         );

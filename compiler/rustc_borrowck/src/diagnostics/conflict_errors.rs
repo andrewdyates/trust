@@ -913,7 +913,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                         return;
                     }
 
-                    // // NOTE: we make sure that this is a normal top-level binding, binding,
+                    // FIXME: We make sure that this is a normal top-level binding,
                     // but we could suggest `todo!()` for all uninitialized bindings in the pattern
                     if let hir::StmtKind::Let(hir::LetStmt { span, ty, init: None, pat, .. }) =
                         &ex.kind
@@ -1150,7 +1150,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             if let Some(parent) = parent
                 && let hir::ExprKind::MethodCall(..) | hir::ExprKind::Call(..) = parent.kind
             {
-                // // NOTE: we could check that the call's *parent* takes `&mut val` to make the takes `&mut val` to make the
+                // FIXME: We could check that the call's *parent* takes `&mut val` to make the
                 // suggestion more targeted to the `mk_iter(val).next()` case. Maybe do that only to
                 // check for whether to suggest `let value` or `let mut value`.
 
@@ -1314,7 +1314,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             let mut span: MultiSpan = ty_span.into();
             let mut derive_clone = false;
             self.infcx.tcx.for_each_relevant_impl(
-                self.infcx.tcx.lang_items().clone_trait().expect("invariant: Clone trait must be defined"),
+                self.infcx.tcx.lang_items().clone_trait().unwrap(),
                 ty,
                 |def_id| {
                     if self.infcx.tcx.is_automatically_derived(def_id) {
@@ -1467,7 +1467,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             if let hir::Node::Expr(hir::Expr { kind: hir::ExprKind::Closure(closure), .. }) = node
                 && let hir::CaptureBy::Value { .. } = closure.capture_clause
             {
-                // `move || x.clone()` will not work. // NOTE: suggest `let y = x.clone(); move || y`
+                // `move || x.clone()` will not work. FIXME: suggest `let y = x.clone(); move || y`
                 return true;
             }
         }
@@ -1749,7 +1749,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         let explanation = self.explain_why_borrow_contains_point(location, issued_borrow, None);
         let second_borrow_desc = if explanation.is_explained() { "second " } else { "" };
 
-        // // NOTE: supply non-"" `opt_via` when appropriate when appropriate
+        // FIXME: supply non-"" `opt_via` when appropriate
         let first_borrow_desc;
         let mut err = match (gen_borrow_kind, issued_borrow.kind) {
             (
@@ -2210,7 +2210,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             None => outer_call_stmt.either(|s| s.source_info, |t| t.source_info).span,
         };
         if outer_call_span == inner_call_span || !outer_call_span.contains(inner_call_span) {
-            // // NOTE: this stops the suggestion in some cases where it should be emitted. where it should be emitted.
+            // FIXME: This stops the suggestion in some cases where it should be emitted.
             //        Fix the spans for those cases so it's emitted correctly.
             debug!(
                 "outer span {:?} does not strictly contain inner span {:?}",
@@ -2602,7 +2602,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                 if let hir::ExprKind::Closure(closure) = ex.kind
                     && ex.span.contains(self.borrow_span)
                     // To support cases like `|| { v.call(|this| v.get()) }`
-                    // // NOTE: actually supporting such cases (need to figure out how to move from the (need to figure out how to move from the
+                    // FIXME: actually support such cases (need to figure out how to move from the
                     // capture place to original local).
                     && self.res.as_ref().is_none_or(|(prev_res, _)| prev_res.span.contains(ex.span))
                 {
@@ -2640,14 +2640,14 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
         };
         let sig = args.as_closure().sig();
         let tupled_params = tcx.instantiate_bound_regions_with_erased(
-            sig.inputs().iter().next().expect("invariant: iterator must have next element").map_bound(|&b| b),
+            sig.inputs().iter().next().unwrap().map_bound(|&b| b),
         );
         let ty::Tuple(params) = tupled_params.kind() else { return };
 
         // Find the first argument with a matching type and get its identifier.
         let Some(this_name) = params.iter().zip(tcx.hir_body_param_idents(closure.body)).find_map(
             |(param_ty, ident)| {
-                // // NOTE: also supporting deref for stuff like `Rc` arguments arguments
+                // FIXME: also support deref for stuff like `Rc` arguments
                 if param_ty.peel_refs() == local_ty { ident } else { None }
             },
         ) else {
@@ -3119,7 +3119,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                                     "enclosing coroutine"
                                 }
                                 DefKind::Closure => "enclosing closure",
-                                // tRust: invariant — type system guarantee — coroutine type must be present for yield terminators
                                 kind => bug!("expected closure or coroutine, found {:?}", kind),
                             }
                             .to_string()
@@ -3444,7 +3443,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
             _ => return Ok(()),
         };
 
-        // // NOTE: using a better heuristic than Spans
+        // FIXME use a better heuristic than Spans
         let reference_desc = if return_span == self.body.source_info(borrow.reserve_location).span {
             "reference to"
         } else {
@@ -3464,7 +3463,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     }
                     LocalKind::Arg => "function parameter ",
                     LocalKind::ReturnPointer | LocalKind::Temp => {
-                        // tRust: invariant — type system guarantee
                         bug!("temporary or return pointer with a name")
                     }
                 }
@@ -3577,7 +3575,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     CoroutineSource::Block => "gen block",
                     CoroutineSource::Closure => "gen closure",
                     CoroutineSource::Fn => {
-                        // tRust: invariant — type system guarantee — closure type properties must be established before borrowck
                         bug!("gen block/closure expected, but gen function found.")
                     }
                 },
@@ -3585,7 +3582,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     CoroutineSource::Block => "async gen block",
                     CoroutineSource::Closure => "async gen closure",
                     CoroutineSource::Fn => {
-                        // tRust: invariant — type system guarantee — closure type properties must be established before borrowck
                         bug!("gen block/closure expected, but gen function found.")
                     }
                 },
@@ -3594,7 +3590,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                         CoroutineSource::Block => "async block",
                         CoroutineSource::Closure => "async closure",
                         CoroutineSource::Fn => {
-                            // tRust: invariant — type system guarantee — closure type properties must be established before borrowck
                             bug!("async block/closure expected, but async function found.")
                         }
                     }
@@ -3641,7 +3636,6 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     err.span_note(constraint_span, msg);
                 }
             }
-            // tRust: invariant — region inference guarantee — region constraints must be satisfiable
             _ => bug!(
                 "report_escaping_closure_capture called with unexpected constraint \
                  category: `{:?}`",
@@ -4725,7 +4719,7 @@ impl<'v, 'tcx> Visitor<'v> for ConditionVisitor<'tcx> {
                     }
                 }
             }
-            // // NOTE: should we also account for binops, particularly `&&` and `||`? `try` should, particularly `&&` and `||`? `try` should
+            // FIXME: should we also account for binops, particularly `&&` and `||`? `try` should
             // also be accounted for. For now it is fine, as if we don't find *any* relevant
             // branching code paths, we point at the places where the binding *is* initialized for
             // *some* context.

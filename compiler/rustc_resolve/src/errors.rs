@@ -1528,7 +1528,7 @@ pub(crate) struct UnknownDiagnosticAttributeTypoSugg {
     pub typo_name: Symbol,
 }
 
-// NOTE: make this properly translatable.
+// FIXME: Make this properly translatable.
 pub(crate) struct Ambiguity {
     pub ident: Ident,
     pub ambig_vis: Option<String>,

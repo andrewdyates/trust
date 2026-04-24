@@ -1,0 +1,30 @@
+error[E0277]: the trait bound `Ptr<T>: DispatchFromDyn<Ptr<U>>` is not satisfied
+  --> $DIR/dispatch-from-dyn-validation.rs:56:1
+   |
+LL | impl<T: ?Sized, U: ?Sized> DispatchFromDyn<*const Ptr<U>> for *const Ptr<T> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0277]: the trait bound `Ptr<T>: DispatchFromDyn<Ptr<U>>` is not satisfied
+  --> $DIR/dispatch-from-dyn-validation.rs:59:1
+   |
+LL | impl<'a, T: ?Sized, U: ?Sized> DispatchFromDyn<&'a mut Ptr<U>> for &'a mut Ptr<T> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0378]: structs implementing `DispatchFromDyn` may not have `#[repr(packed)]` or `#[repr(C)]`
+  --> $DIR/dispatch-from-dyn-validation.rs:70:1
+   |
+LL | impl<T: ?Sized + Unsize<U>, U: ?Sized> DispatchFromDyn<Packed<U>> for Packed<T> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0374]: implementing `DispatchFromDyn` requires a field to be coerced
+  --> $DIR/dispatch-from-dyn-validation.rs:75:1
+   |
+LL | impl<T: ?Sized, U: ?Sized> DispatchFromDyn<Marker<U>> for Marker<T> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected a single field to be coerced, none found
+
+error: aborting due to 4 previous errors
+
+Some errors have detailed explanations: E0277, E0374, E0378.
+For more information about an error, try `rustc --explain E0277`.

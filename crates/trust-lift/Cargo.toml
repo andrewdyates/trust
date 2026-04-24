@@ -31,7 +31,6 @@ thiserror = { workspace = true }
 z4 = { workspace = true, optional = true }
 
 [dev-dependencies]
-trust-decompile = { workspace = true }
 
 [[example]]
 name = "reverse_compile_poc"

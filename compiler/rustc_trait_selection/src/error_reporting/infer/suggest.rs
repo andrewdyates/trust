@@ -106,7 +106,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
                     if self.same_type_modulo_infer(sole_field_ty, exp_found.found) {
                         let variant_path =
                             with_no_trimmed_paths!(self.tcx.def_path_str(variant.def_id));
-                        // tRust: known issue — #56861: DRYer prelude filtering
+                        // FIXME #56861: DRYer prelude filtering
                         if let Some(path) = variant_path.strip_prefix("std::prelude::")
                             && let Some((_, path)) = path.split_once("::")
                         {
@@ -223,7 +223,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
                 _ => Some(ConsiderAddingAwait::BothFuturesHelp),
             },
             (_, Some(ty)) if self.same_type_modulo_infer(exp_found.expected, ty) => {
-                // tRust: known issue — Seems like we can't have a suggestion and a note with different spans in a single subdiagnostic
+                // FIXME: Seems like we can't have a suggestion and a note with different spans in a single subdiagnostic
                 diag.subdiagnostic(ConsiderAddingAwait::FutureSugg {
                     span: exp_span.shrink_to_hi(),
                 });
@@ -574,7 +574,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
         None
     }
 
-    // tRust: known issue — Remove once `rustc_hir_typeck` is migrated to diagnostic structs
+    // FIXME: Remove once `rustc_hir_typeck` is migrated to diagnostic structs
     pub fn should_suggest_as_ref(&self, expected: Ty<'tcx>, found: Ty<'tcx>) -> Option<&str> {
         match self.should_suggest_as_ref_kind(expected, found) {
             Some(SuggestAsRefKind::Option) => Some(
@@ -792,7 +792,7 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
                     ) if std::iter::zip(*last_bounds, *exp_bounds).all(|(left, right)| match (
                         left, right,
                     ) {
-                        // tRust: known issue — Suspicious
+                        // FIXME: Suspicious
                         (hir::GenericBound::Trait(tl), hir::GenericBound::Trait(tr))
                             if tl.trait_ref.trait_def_id() == tr.trait_ref.trait_def_id()
                                 && tl.modifiers == tr.modifiers =>

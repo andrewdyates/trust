@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use trust_types::{Formula, Sort};
 
 /// Return type for [`AlphaState::rename_bindings`]: (new_bindings, saved_old_mappings).
-type RenameBindingsResult = (Vec<(String, Sort)>, Vec<(String, Option<String>)>);
+type RenameBindingsResult = (Vec<(trust_types::Symbol, Sort)>, Vec<(String, Option<String>)>);
 
 /// Alpha-normalize a formula by renaming all bound variables to canonical names.
 ///
@@ -79,17 +79,15 @@ impl AlphaState {
             Formula::IntToBv(a, w) => Formula::IntToBv(Box::new(self.normalize(a)), *w),
             Formula::BvZeroExt(a, bits) => Formula::BvZeroExt(Box::new(self.normalize(a)), *bits),
             Formula::BvSignExt(a, bits) => Formula::BvSignExt(Box::new(self.normalize(a)), *bits),
-            Formula::BvExtract { inner, high, low } => {
-                Formula::BvExtract { inner: Box::new(self.normalize(inner)), high: *high, low: *low }
-            }
+            Formula::BvExtract { inner, high, low } => Formula::BvExtract {
+                inner: Box::new(self.normalize(inner)),
+                high: *high,
+                low: *low,
+            },
 
             // N-ary
-            Formula::And(terms) => {
-                Formula::And(terms.iter().map(|t| self.normalize(t)).collect())
-            }
-            Formula::Or(terms) => {
-                Formula::Or(terms.iter().map(|t| self.normalize(t)).collect())
-            }
+            Formula::And(terms) => Formula::And(terms.iter().map(|t| self.normalize(t)).collect()),
+            Formula::Or(terms) => Formula::Or(terms.iter().map(|t| self.normalize(t)).collect()),
 
             // Binary
             Formula::Implies(a, b) => {
@@ -218,18 +216,20 @@ impl AlphaState {
     ///
     /// Returns the new bindings and a list of (original_name, old_mapping) pairs
     /// so the caller can restore the rename_map after processing the body.
+    // tRust #883: Bindings use Symbol; resolve to String for rename_map.
     fn rename_bindings(
         &mut self,
-        bindings: &[(String, Sort)],
+        bindings: &[(trust_types::Symbol, Sort)],
     ) -> RenameBindingsResult {
         let mut new_bindings = Vec::with_capacity(bindings.len());
         let mut saved = Vec::with_capacity(bindings.len());
 
-        for (name, sort) in bindings {
+        for (sym, sort) in bindings {
+            let name = sym.as_str().to_string();
             let canonical = self.next_canonical_name();
             let old = self.rename_map.insert(name.clone(), canonical.clone());
-            saved.push((name.clone(), old));
-            new_bindings.push((canonical, sort.clone()));
+            saved.push((name, old));
+            new_bindings.push((trust_types::Symbol::intern(&canonical), sort.clone()));
         }
 
         (new_bindings, saved)
@@ -275,11 +275,7 @@ pub struct SubFormulaCache {
 impl SubFormulaCache {
     /// Create an empty sub-formula cache.
     pub fn new() -> Self {
-        SubFormulaCache {
-            entries: FxHashMap::default(),
-            hits: 0,
-            misses: 0,
-        }
+        SubFormulaCache { entries: FxHashMap::default(), hits: 0, misses: 0 }
     }
 
     /// Compute the SHA-256 hash of a formula, using the cache for sub-formulas.
@@ -536,10 +532,7 @@ mod tests {
     #[test]
     fn test_alpha_normalize_preserves_sort() {
         // Exists(x: BitVec(32), ...)
-        let f = Formula::Exists(
-            vec![("x".into(), Sort::BitVec(32))],
-            Box::new(bv_var("x", 32)),
-        );
+        let f = Formula::Exists(vec![("x".into(), Sort::BitVec(32))], Box::new(bv_var("x", 32)));
         let normalized = alpha_normalize(&f);
         match &normalized {
             Formula::Exists(bindings, body) => {
@@ -698,10 +691,7 @@ mod tests {
     #[test]
     fn test_alpha_normalized_hash_deterministic() {
         let f = Formula::And(vec![
-            Formula::Exists(
-                vec![("x".into(), Sort::Int)],
-                Box::new(var("x")),
-            ),
+            Formula::Exists(vec![("x".into(), Sort::Int)], Box::new(var("x"))),
             var("free"),
         ]);
         let h1 = alpha_normalized_hash(&f);
